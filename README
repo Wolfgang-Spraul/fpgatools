@@ -6,3 +6,8 @@ Design Goals
 - text-based file formats
 - no documentation - read the sources
 - automatic test suite
+
+Utilities
+
+- bit2txt dumps .bit bitstream as text
+- txt2bit parses a textual bitstream back into a binary .bit file
