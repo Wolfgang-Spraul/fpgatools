@@ -1,0 +1,8 @@
+Design Goals
+
+- small independent command line utilities
+- plain C, no C++
+- simple Makefiles
+- text-based file formats
+- no documentation - read the sources
+- automatic test suite
