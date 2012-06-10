@@ -10,15 +10,13 @@
 #
 
 CFLAGS = -Wall -g
-TARGETS = bit2txt
+TARGETS = bit2txt draw_fpga
 OBJS = $(TARGETS:=.o)
+LDLIBS = -lxml2
 
 .PHONY:	all clean
 
 all:		$(TARGETS)
-
-genex:		$(OBJS)
-		$(CC) $(CFLAGS) -o $@ $(OBJS) $(LDLIBS)
 
 clean:
 		rm -f $(OBJS) $(TARGETS)

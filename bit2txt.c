@@ -1,5 +1,5 @@
 //
-// Authors: Wolfgang Spraul <wspraul@q-ag.de>
+// Author: Wolfgang Spraul <wspraul@q-ag.de>
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -177,10 +177,11 @@ void hexdump(int offset, const uint8_t* data, int len)
 {
 	int i, j;
 	if (len) {
-		printf("#D hexdump offset %xh, len %i\n", offset, len);
+		printf("#D hexdump offset %xh, len 0x%x (%i)\n",
+			offset, len, len);
 		i = 0;
 		while (i < len) {
-			printf("#D %04x: %02x", i, data[i]);
+			printf("#D %05x: %02x", i, data[i]);
 			for (j = 1; (j < 8) && (i + j < len); j++) {
 				if (i + j >= len) break;
 				printf(" %02x", data[i+j]);
@@ -447,6 +448,11 @@ int main(int argc, char** argv)
 				u16 = __be16_to_cpu(*(uint16_t*)&bit_data[u16_off+2]);
 				u16_off+=2;
 				printf("T1 FLR %u\n", u16);
+				// There are 3 types of frames. Type0 (clb, ioi
+				// and special blocks), type1 (bram) and type2
+				// (iob). The size of a type0 and type1 is
+				// fixed, only the size of a type2 (iob) is
+				// specified with the FLR register.
 				continue;
 			}
 			if (packet_hdr_register == COR1) {
@@ -612,6 +618,151 @@ int main(int argc, char** argv)
 					goto fail;
 				}
 				printf("T1 MFWR\n");
+				continue;
+			}
+			if (packet_hdr_register == CTL) {
+				if (packet_hdr_wordcount != 1) {
+					fprintf(stderr, "#E 0x%x=0x%x Unexpected CTL"
+						" wordcount %u.\n", u16_off,
+					u16, packet_hdr_wordcount);
+					goto fail;
+				}
+				u16 = __be16_to_cpu(*(uint16_t*)&bit_data[u16_off+2]);
+				u16_off+=2;
+				printf("T1 CTL");
+				if (u16 & 0x0040) {
+					printf(" DECRYPT");
+					u16 &= ~0x0040;
+				}
+				if (u16 & 0x0020) {
+					if (u16 & 0x0010)
+						printf(" SBITS=NO_RW");
+					else
+						printf(" SBITS=NO_READ");
+					u16 &= ~0x0030;
+				} else if (u16 & 0x0010) {
+					printf(" SBITS=ICAP_READ");
+					u16 &= ~0x0010;
+				}
+				if (u16 & 0x0008) {
+					printf(" PERSIST");
+					u16 &= ~0x0008;
+				}
+				if (u16 & 0x0004) {
+					printf(" USE_EFUSE_KEY");
+					u16 &= ~0x0004;
+				}
+				if (u16 & 0x0002) {
+					printf(" CRC_EXTSTAT_DISABLE");
+					u16 &= ~0x0002;
+				}
+				if (u16)
+					printf(" 0x%x", u16);
+				printf("\n");
+				// bit0 is reserved as 1, and we have seen
+				// bit7 on as well.
+				if (u16 != 0x81)
+					printf("#W Expected reserved 0x%x, got 0x%x.\n", 0x0081, u16);
+				continue;
+			}
+			if (packet_hdr_register == MASK) {
+				if (packet_hdr_wordcount != 1) {
+					fprintf(stderr, "#E 0x%x=0x%x Unexpected MASK"
+						" wordcount %u.\n", u16_off,
+					u16, packet_hdr_wordcount);
+					goto fail;
+				}
+				u16 = __be16_to_cpu(*(uint16_t*)&bit_data[u16_off+2]);
+				u16_off+=2;
+				printf("T1 MASK");
+				if (u16 & 0x0040) {
+					printf(" DECRYPT");
+					u16 &= ~0x0040;
+				}
+				if ((u16 & 0x0030) == 0x0030) {
+					printf(" SECURITY");
+					u16 &= ~0x0030;
+				}
+				if (u16 & 0x0008) {
+					printf(" PERSIST");
+					u16 &= ~0x0008;
+				}
+				if (u16 & 0x0004) {
+					printf(" USE_EFUSE_KEY");
+					u16 &= ~0x0004;
+				}
+				if (u16 & 0x0002) {
+					printf(" CRC_EXTSTAT_DISABLE");
+					u16 &= ~0x0002;
+				}
+				if (u16)
+					printf(" 0x%x", u16);
+				printf("\n");
+				// It seems bit7 and bit0 are always masked in.
+				if (u16 != 0x81)
+					printf("#W Expected reserved 0x%x, got 0x%x.\n", 0x0081, u16);
+				continue;
+			}
+			if (packet_hdr_register == PWRDN_REG) {
+				if (packet_hdr_wordcount != 1) {
+					fprintf(stderr, "#E 0x%x=0x%x Unexpected PWRDN_REG"
+						" wordcount %u.\n", u16_off,
+					u16, packet_hdr_wordcount);
+					goto fail;
+				}
+				u16 = __be16_to_cpu(*(uint16_t*)&bit_data[u16_off+2]);
+				u16_off+=2;
+				printf("T1 PWRDN_REG");
+				if (u16 & 0x4000) {
+					printf(" EN_EYES");
+					u16 &= ~0x4000;
+				}
+				if (u16 & 0x0020) {
+					printf(" FILTER_B");
+					u16 &= ~0x0020;
+				}
+				if (u16 & 0x0010) {
+					printf(" EN_PGSR");
+					u16 &= ~0x0010;
+				}
+				if (u16 & 0x0004) {
+					printf(" EN_PWRDN");
+					u16 &= ~0x0004;
+				}
+				if (u16 & 0x0001) {
+					printf(" KEEP_SCLK");
+					u16 &= ~0x0001;
+				}
+				if (u16)
+					printf(" 0x%x", u16);
+				printf("\n");
+				// Reserved bits 13:6 should be 00100010
+				// according to documentation.
+				if (u16 != 0x0880)
+					printf("#W Expected reserved 0x%x, got 0x%x.\n", 0x0880, u16);
+				continue;
+			}
+			if (packet_hdr_register == HC_OPT_REG) {
+				if (packet_hdr_wordcount != 1) {
+					fprintf(stderr, "#E 0x%x=0x%x Unexpected HC_OPT_REG"
+						" wordcount %u.\n", u16_off,
+					u16, packet_hdr_wordcount);
+					goto fail;
+				}
+				u16 = __be16_to_cpu(*(uint16_t*)&bit_data[u16_off+2]);
+				u16_off+=2;
+				printf("T1 HC_OPT_REG");
+				if (u16 & 0x0040) {
+					printf(" INIT_SKIP");
+					u16 &= ~0x0040;
+				}
+				if (u16)
+					printf(" 0x%x", u16);
+				printf("\n");
+				// Reserved bits 5:0 should be 011111
+				// according to documentation.
+				if (u16 != 0x001F)
+					printf("#W Expected reserved 0x%x, got 0x%x.\n", 0x001F, u16);
 				continue;
 			}
 			printf("#W T1 %s (%u words)",

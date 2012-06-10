@@ -1,6 +1,6 @@
-Design Goals
+Design Principles
 
-- small independent command line utilities
+- small independent command line utilities, no GUI
 - plain C, no C++
 - simple Makefiles
 - text-based file formats
