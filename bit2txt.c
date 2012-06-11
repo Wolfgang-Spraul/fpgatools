@@ -173,22 +173,18 @@ static const char* bitstr(uint32_t value, int digits)
 	return str;
 }
 
-void hexdump(int offset, const uint8_t* data, int len)
+void hexdump(const uint8_t* data, int len)
 {
 	int i, j;
-	if (len) {
-		printf("#D hexdump offset %xh, len 0x%x (%i)\n",
-			offset, len, len);
-		i = 0;
-		while (i < len) {
-			printf("#D %05x: %02x", i, data[i]);
-			for (j = 1; (j < 8) && (i + j < len); j++) {
-				if (i + j >= len) break;
-				printf(" %02x", data[i+j]);
-			}
-			printf("\n");
-			i += 8;
+	i = 0;
+	while (i < len) {
+		printf("@%05x %02x", i, data[i]);
+		for (j = 1; (j < 8) && (i + j < len); j++) {
+			if (i + j >= len) break;
+			printf(" %02x", data[i+j]);
 		}
+		printf("\n");
+		i += 8;
 	}
 }
 
@@ -201,7 +197,7 @@ int main(int argc, char** argv)
 	uint16_t packet_hdr_register, packet_hdr_wordcount;
 	int info = 0; // whether to print #I info messages (offsets and others)
 	char* bit_path = 0;
-	int i;
+	int i, j;
 
 	//
 	// parse command line
@@ -791,8 +787,91 @@ int main(int argc, char** argv)
 
 		printf("T2 FDRI\n");
 		if (bit_cur + 2*u32 > bit_eof) goto fail_eof;
-		
-		hexdump(bit_cur, &bit_data[bit_cur], 2*u32);
+		if (!u32)
+			printf("#W Unexpected Type2 length 0.\n");	
+
+		// If the data size is a multiple of frame size (1 frame
+		// is 130 bytes), then hexdump frame by frame.
+		// Total frames on xc6slx4 is 2020. 505 per row (18
+		// columns (majors) with varying counts), 4 rows.
+		// Then there are an extra 5 frames before data starts (?)
+		if ((2*u32) % 130 == 0 || 2*u32 > 2025*130) {
+			int max_frames = 2*u32 / 130;
+			if (max_frames > 2025)
+				max_frames = 2025;
+
+			for (i = 0; i < max_frames; i++) {
+				int first64_all_zero, first64_all_one;
+				int last64_all_zero, last64_all_one;
+				uint16_t middle_word;
+
+				middle_word = __be16_to_cpu(*(uint16_t*)
+					&bit_data[bit_cur+i*130+64]);
+				first64_all_zero = 1; first64_all_one = 1;
+				last64_all_zero = 1; last64_all_one = 1;
+
+				for (j = 0; j < 64; j++) {
+					if (bit_data[bit_cur+i*130+j] != 0)
+						first64_all_zero = 0;
+					if (bit_data[bit_cur+i*130+j] != 0xff)
+						first64_all_one = 0;
+					if (!first64_all_zero && !first64_all_one)
+						break;
+				}
+				for (j = 66; j < 130; j++) {
+					if (bit_data[bit_cur+i*130+j] != 0)
+						last64_all_zero = 0;
+					if (bit_data[bit_cur+i*130+j] != 0xff)
+						last64_all_one = 0;
+					if (!last64_all_zero && !last64_all_one)
+						break;
+				}
+				if (first64_all_zero && !middle_word
+					&& last64_all_zero)
+					printf("frame_130 all_0\n");
+				else if (first64_all_one
+					&& (middle_word == 0xFFFF) &&
+					last64_all_one)
+					printf("frame_130 all_1\n");
+				else {
+
+				if (first64_all_zero)
+					printf("frame_64 all_0\n");
+				else if (first64_all_one)
+					printf("frame_64 all_1\n");
+				else {
+					printf("frame_64");
+					for (j = 0; j < 64; j++)
+						printf(" %02x", bit_data[bit_cur+i*130+j]);
+					printf("\n");
+				}
+
+				printf("frame_2 0x%04x\n", __be16_to_cpu(
+				  *(uint16_t*) &bit_data[bit_cur+i*130+64]));
+
+				if (last64_all_zero)
+					printf("frame_64 all_0\n");
+				else if (last64_all_one)
+					printf("frame_64 all_1\n");
+				else {
+					printf("frame_64");
+					for (j = 66; j < 130; j++)
+						printf(" %02x", bit_data[bit_cur+i*130+j]);
+					printf("\n");
+				}
+				}
+			}
+			if (2*u32 > 2025*130) {
+				int dump_len = 2*u32 - 2025*130;
+				printf("#D hexdump offset %xh, len 0x%x (%i)\n",
+					bit_cur+2025*130, dump_len, dump_len);
+				hexdump(&bit_data[bit_cur+2025*130], dump_len);
+			}
+		} else {
+			printf("#D hexdump offset %xh, len 0x%x (%i)\n",
+				bit_cur, 2*u32, 2*u32);
+			hexdump(&bit_data[bit_cur], 2*u32);
+		}
 		bit_cur += u32*2;
 
 		if (bit_cur + 4 > bit_eof) goto fail_eof;
