@@ -1,5 +1,5 @@
 //
-// Author: Wolfgang Spraul <wspraul@q-ag.de>
+// Author: Wolfgang Spraul
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -234,7 +234,7 @@ int main(int argc, char** argv)
 	uint16_t packet_hdr_register, packet_hdr_wordcount;
 	int info = 0; // whether to print #I info messages (offsets and others)
 	char* bit_path = 0;
-	int i, j, k, l, num_frames;
+	int i, j, k, l, num_frames, max_frames_to_scan;
 
 	//
 	// parse command line
@@ -840,7 +840,7 @@ int main(int argc, char** argv)
 			if (i >= 2020) break;
 
 			if (i%505 == 0)
-				printf("#D row %i\n", i/505);
+				printf("\n#D row %i\n", i/505);
 			count = 0;
 			for (j = 0; j < sizeof(majors)/sizeof(majors[0]); j++) {
 				if (i%505 == count) {
@@ -871,42 +871,77 @@ int main(int argc, char** argv)
 				if (!last64_all_zero && !last64_all_one)
 					break;
 			}
+
+			if (!(first64_all_zero && !middle_word && last64_all_zero)
+			    && !(first64_all_one && (middle_word == 0xFFFF) &&
+				last64_all_one)) {
+				// If the frame is neither all_0 nor all_1
+				if (first64_all_zero)
+					printf("frame_64 all_0\n");
+				else if (first64_all_one)
+					printf("frame_64 all_1\n");
+				else {
+					printf("frame_64\n");
+					hexdump(&bit_data[bit_cur+i*130], 64);
+				}
+
+				printf("frame_2 0x%04x\n", __be16_to_cpu(
+				  *(uint16_t*) &bit_data[bit_cur+i*130+64]));
+
+				if (last64_all_zero)
+					printf("frame_64 all_0\n");
+				else if (last64_all_one)
+					printf("frame_64 all_1\n");
+				else {
+					printf("frame_64\n");
+					hexdump(&bit_data[bit_cur+i*130+66], 64);
+				}
+				continue;
+			}
+
+			max_frames_to_scan = num_frames - i - 1;
+			if (i + 1 + max_frames_to_scan >= ((i / 505)+1) * 505)
+				max_frames_to_scan = ((i/505)+1)*505 - i - 1;
+			count = 0;
+			for (j = 0; j < sizeof(majors)/sizeof(majors[0]); j++) {
+				if ((i/505)*505 + count > i
+				    && (i/505)*505 + count <= i+1+max_frames_to_scan) {
+					max_frames_to_scan = (i/505)*505 + count - i - 1;
+					break;
+				}
+				count += majors[j].minors;
+			}
 			if (first64_all_zero && !middle_word
 				&& last64_all_zero) {
+				for (j = 0; j < max_frames_to_scan*130; j++) {
+					if (bit_data[bit_cur+i*130+130+j] != 0)
+						break;
+				}
+				if (j/130) {
+					printf("frame_130 times %i all_0\n", 1+j/130);
+					i += j/130;
+					continue;
+				}
 				printf("frame_130 all_0\n");
 				continue;
 			}
 			if (first64_all_one
 				&& (middle_word == 0xFFFF) &&
 				last64_all_one) {
+				for (j = 0; j < max_frames_to_scan*130; j++) {
+					if (bit_data[bit_cur+i*130+130+j] != 0xFF)
+						break;
+				}
+				if (j/130) {
+					printf("frame_130 times %i all_1\n", 1+j/130);
+					i += j/130;
+					continue;
+				}
 				printf("frame_130 all_1\n");
 				continue;
 			}
-
-			if (first64_all_zero)
-				printf("frame_64 all_0\n");
-			else if (first64_all_one)
-				printf("frame_64 all_1\n");
-			else {
-				printf("frame_64");
-				for (j = 0; j < 64; j++)
-					printf(" %02x", bit_data[bit_cur+i*130+j]);
-				printf("\n");
-			}
-
-			printf("frame_2 0x%04x\n", __be16_to_cpu(
-			  *(uint16_t*) &bit_data[bit_cur+i*130+64]));
-
-			if (last64_all_zero)
-				printf("frame_64 all_0\n");
-			else if (last64_all_one)
-				printf("frame_64 all_1\n");
-			else {
-				printf("frame_64");
-				for (j = 66; j < 130; j++)
-					printf(" %02x", bit_data[bit_cur+i*130+j]);
-				printf("\n");
-			}
+			fprintf(stderr, "#E Internal error %i.\n", __LINE__);
+			goto fail;
 		}
 		for (i = 2020; i < num_frames; i++) {
 			int all_zero, all_one;
@@ -916,7 +951,7 @@ int main(int argc, char** argv)
 				  440, 458, 476, 494 };
 
 			if (i == 2020)
-				printf("#D 2020 - content start\n");
+				printf("\n#D 2020 - content start\n");
 			for (j = 0; j < sizeof(ram_starts) / sizeof(ram_starts[0]); j++) {
 				if (i == 2020 + ram_starts[j]
 				    && num_frames >= i+18)
@@ -1002,17 +1037,53 @@ int main(int argc, char** argv)
 				if (!all_zero && !all_one)
 					break;
 			}
+			if (!all_zero && !all_one) {
+				printf("frame_130 %i off 0x%xh (%i)\n",
+					i-2020, bit_cur+i*130, bit_cur+i*130);
+				hexdump(&bit_data[bit_cur+i*130], 130);
+				continue;
+			}
+
+			// Check whether more all_0 or all_1 frames are
+			// following. That way we can make the output more
+			// readable.
+			max_frames_to_scan = num_frames - i - 1;
+			for (j = 0; j < sizeof(ram_starts) / sizeof(ram_starts[0]); j++) {
+				if ((2020 + ram_starts[j] > i)
+				    && (2020 + ram_starts[j] <= i+1+max_frames_to_scan)) {
+					max_frames_to_scan = 2020+ram_starts[j] - i - 1;
+					// ram_starts is sorted in ascending order
+					break;
+				}
+			}
 			if (all_zero) {
+				for (j = 0; j < max_frames_to_scan*130; j++) {
+					if (bit_data[bit_cur+i*130+130+j] != 0)
+						break;
+				}
+				if (j/130) {
+					printf("frame_130 times %i all_0\n", 1+j/130);
+					i += j/130;
+					continue;
+				}
 				printf("frame_130 all_0\n");
 				continue;
 			}
 			if (all_one) {
+				for (j = 0; j < max_frames_to_scan*130; j++) {
+					if (bit_data[bit_cur+i*130+130+j] != 0xFF)
+						break;
+				}
+				if (j/130) {
+					printf("frame_130 times %i all_1\n", 1+j/130);
+					i += j/130;
+					continue;
+				}
 				printf("frame_130 all_1\n");
 				continue;
 			}
-			printf("frame_130 %i off 0x%xh (%i)\n",
-				i-2020, bit_cur+i*130, bit_cur+i*130);
-			hexdump(&bit_data[bit_cur+i*130], 130);
+			fprintf(stderr, "#E Internal error %i.\n", __LINE__);
+			goto fail;
 		}
 		if (2*u32 > num_frames*130) {
 			int dump_len = 2*u32 - num_frames*130;
@@ -1041,7 +1112,7 @@ void help()
 {
 	printf("\n"
 	       "bit2txt %s - convert FPGA bitstream to text\n"
-	       "(c) 2012 Wolfgang Spraul <wspraul@q-ag.de>\n"
+	       "(c) 2012 Wolfgang Spraul\n"
 	       "\n"
 	       "bit2txt [options] <path to .bit file>\n"
 	       "  --help                  print help message\n"
