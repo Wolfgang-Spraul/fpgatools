@@ -168,14 +168,14 @@ typedef struct
 
 const MAJOR majors[] =
 {
-	/*  0 */ { "unknown", 4 },
+	/*  0 */ { "unknown", 4 }, // clock?
 	/*  1 */ { "unknown", 30 },
 	/*  2 */ { "unknown", 31 },
 	/*  3 */ { "unknown", 30 },
-	/*  4 */ { "unknown", 25 },
+	/*  4 */ { "unknown", 25 }, // bram?
 	/*  5 */ { "unknown", 31 },
 	/*  6 */ { "unknown", 30 },
-	/*  7 */ { "unknown", 24 },
+	/*  7 */ { "unknown", 24 }, // dsp?
 	/*  8 */ { "unknown", 31 },
 	/*  9 */ { "unknown", 31 },
 	/* 10 */ { "unknown", 31 },
@@ -201,21 +201,28 @@ static const char* bitstr(uint32_t value, int digits)
 	return str;
 }
 
-void hexdump(const uint8_t* data, int len)
+void hexdump(int indent, const uint8_t* data, int len)
 {
 	int i, j;
-	char fmt_str[16] = "@%05x %02x";
+	char fmt_str[16] = "%s@%05x %02x";
+	char indent_str[16];
+
+	if (indent > 15)
+		indent = 15;
+	for (i = 0; i < indent; i++)
+		indent_str[i] = ' ';
+	indent_str[i] = 0;
 
 	i = 0;
 	if (len <= 0x100)
-		fmt_str[3] = '2';
+		fmt_str[5] = '2';
 	else if (len <= 0x10000)
-		fmt_str[3] = '4';
+		fmt_str[5] = '4';
 	else
-		fmt_str[3] = '6';
+		fmt_str[5] = '6';
 
 	while (i < len) {
-		printf(fmt_str, i, data[i]);
+		printf(fmt_str, indent_str, i, data[i]);
 		for (j = 1; (j < 8) && (i + j < len); j++) {
 			if (i + j >= len) break;
 			printf(" %02x", data[i+j]);
@@ -223,6 +230,151 @@ void hexdump(const uint8_t* data, int len)
 		printf("\n");
 		i += 8;
 	}
+}
+
+typedef struct ramb16_cfg
+{
+	uint8_t byte[64];
+} __attribute((packed)) ramb16_cfg_t;
+
+static const int ramb_data_width_encoding[8] =
+{
+	/* 000 */  1,
+	/* 001 */  2,
+	/* 010 */  4,
+	/* 011 */  9,
+	/* 100 */ 18,
+	/* 101 */ 36,
+	/* 110 */ -1, // unsupported
+	/* 111 */  0
+};
+
+static const char* ramb16_cfg_str_min24[128] =
+{
+	[257 - 256] "WRITE_MODE_A_NO_CHANGE",
+	[258 - 256] "WRITE_MODE_B_NO_CHANGE",
+	[259 - 256] "WRITE_MODE_A_READ_FIRST",
+	[260 - 256] "WRITE_MODE_B_READ_FIRST",
+	[264 - 256] "RSTTYPE_ASYNC",
+	[265 - 256] "RST_PRIORITY_A_CE",
+	[266 - 256] "RST_PRIORITY_B_CE",
+	[277 - 256] "DOA_REG",
+	[278 - 256] "DOB_REG",
+	[279 - 256] "RSTTYPE_ASYNC",
+	[286 - 256] "EN_RSTRAM_A",
+	[337 - 256] "EN_RSTRAM_B",
+};
+
+void print_ramb16_cfg(ramb16_cfg_t* cfg)
+{
+	int i;
+	char forward_bits[128], reverse_bits[128];
+
+	printf("{\n");
+	// hexdump(1 /* indent */, &cfg->byte[0], 64 /* len */);
+
+	//
+	// Bits 0..255 come from minor 23, Bits 256..511 from minor 24.
+	// It looks like each set of 256 bits is divided into two halfs
+	// of 128 bits that are swept across the same memory locations
+	// in the chip. On the first sweep, some bits are turned on.
+	// On the second sweep, reverse from the end, most/all of the
+	// enabled bits stay on, some more are enabled, some disabled.
+	//
+		
+	for (i = 0; i < 128; i++) {
+		forward_bits[i] = (cfg->byte[i/8] & (1<<(i%8))) != 0;
+		reverse_bits[i] = (cfg->byte[(255-i)/8]
+			& (1<<(7-(i%8)))) != 0;
+	}
+	//
+	// "fe" = forward enable (enable in forward sweep)
+	// "re" = reverse enable (enable in reverse sweep)
+	// "rd" = reverse disable (disable in reverse sweep)
+	//
+	for (i = 0; i < 128; i++) {
+		if (forward_bits[i])
+			printf(" fe%i ?\n", i);
+	}
+	for (i = 127; i >= 0; i--) {
+		if (reverse_bits[i] != forward_bits[i]) {
+			printf(" r%c%i ?\n",
+				reverse_bits[i] ? 'e' : 'd', i);
+		}
+	}
+
+	// minor 24
+	printf("\n");
+	for (i = 0; i < 128; i++) {
+		forward_bits[i] = (cfg->byte[32+i/8] & (1<<(i%8))) != 0;
+		reverse_bits[i] = (cfg->byte[32+(255-i)/8]
+			& (1<<(7-(i%8)))) != 0;
+	}
+
+	// data width
+	{
+		int encoding;
+
+		if (forward_bits[267-256] == reverse_bits[267-256]
+		    && forward_bits[269-256] == reverse_bits[269-256]
+		    && forward_bits[271-256] == reverse_bits[271-256]) {
+			encoding = 0;
+			if (forward_bits[267-256])
+				encoding |= 0x04;
+			if (forward_bits[269-256])
+				encoding |= 0x02;
+			if (forward_bits[271-256])
+				encoding |= 0x01;
+			if (encoding < sizeof(ramb_data_width_encoding) / sizeof(ramb_data_width_encoding[0])
+			    && ramb_data_width_encoding[encoding] != -1) {
+				printf(" data_width_a %i\n", ramb_data_width_encoding[encoding]);
+				forward_bits[267-256] = 0;
+				reverse_bits[267-256] = 0;
+				forward_bits[269-256] = 0;
+				reverse_bits[269-256] = 0;
+				forward_bits[271-256] = 0;
+				reverse_bits[271-256] = 0;
+			}
+		}
+		if (forward_bits[268-256] == reverse_bits[268-256]
+		    && forward_bits[256-256] == reverse_bits[256-256]
+		    && forward_bits[270-256] == reverse_bits[270-256]) {
+			encoding = 0;
+			if (forward_bits[268-256])
+				encoding |= 0x04;
+			if (forward_bits[256-256])
+				encoding |= 0x02;
+			if (forward_bits[270-256])
+				encoding |= 0x01;
+			if (encoding < sizeof(ramb_data_width_encoding) / sizeof(ramb_data_width_encoding[0])
+			    && ramb_data_width_encoding[encoding] != -1) {
+				printf(" data_width_b %i\n",
+					ramb_data_width_encoding[encoding]);
+				forward_bits[268-256] = 0;
+				reverse_bits[268-256] = 0;
+				forward_bits[256-256] = 0;
+				reverse_bits[256-256] = 0;
+				forward_bits[270-256] = 0;
+				reverse_bits[270-256] = 0;
+			}
+		}
+	}
+
+	for (i = 0; i < 128; i++) {
+		if (forward_bits[i])
+			printf(" fe%i %s\n", 256+i, ramb16_cfg_str_min24[i] ?
+				ramb16_cfg_str_min24[i] : "?");
+	}
+	for (i = 127; i >= 0; i--) {
+		if (reverse_bits[i] != forward_bits[i]) {
+			printf(" r%c%i %s\n",
+				reverse_bits[i] ? 'e' : 'd', 256+i,
+				ramb16_cfg_str_min24[i]
+					? ramb16_cfg_str_min24[i] : "?");
+		}
+	}
+	printf("}\n");
+
 }
 
 int main(int argc, char** argv)
@@ -234,7 +386,7 @@ int main(int argc, char** argv)
 	uint16_t packet_hdr_register, packet_hdr_wordcount;
 	int info = 0; // whether to print #I info messages (offsets and others)
 	char* bit_path = 0;
-	int i, j, k, l, num_frames, max_frames_to_scan;
+	int i, j, k, l, num_frames, max_frames_to_scan, offset_in_frame;
 
 	//
 	// parse command line
@@ -380,6 +532,8 @@ int main(int argc, char** argv)
 	printf("sync_word\n");
 
 	while (bit_cur < bit_eof) {
+		// 8 is 2 padding frames between each row and 2 at the end
+		static const int content_start_frame = 4*505+8;
 
 		// packet header: ug380, Configuration Packets (p88)
 		if (info) printf("#I Packet header at off 0x%x.\n", bit_cur);
@@ -801,6 +955,10 @@ int main(int argc, char** argv)
 			printf("#W T1 %s (%u words)",
 				xc6_regs[packet_hdr_register].name,
 				packet_hdr_wordcount);
+			if (packet_hdr_register == CRC) {
+				printf("\n"); // omit CRC for diff beauty
+				continue;
+			}
 			for (i = 0; (i < 8) && (i < packet_hdr_wordcount); i++)
 				printf(" 0x%x", __be16_to_cpu(*(uint16_t*)
 					&bit_data[u16_off+2+i*2]));
@@ -835,19 +993,60 @@ int main(int argc, char** argv)
 			int first64_all_zero, first64_all_one;
 			int last64_all_zero, last64_all_one;
 			uint16_t middle_word;
-			int count;
+			int count, cur_row, cur_major, cur_minor;
 
-			if (i >= 2020) break;
+			if (i >= content_start_frame) break;
 
-			if (i%505 == 0)
+			if (i%(505+2) == 0)
 				printf("\n#D row %i\n", i/505);
+			cur_row = i/(505+2);
+			if (i%(505+2) == 505)
+				printf("\n#D padding\n");
+
+			cur_major = 0;
+			cur_minor = 0;
 			count = 0;
 			for (j = 0; j < sizeof(majors)/sizeof(majors[0]); j++) {
-				if (i%505 == count) {
-					printf("#D major %i (%i minors) %s\n", j, majors[j].minors, majors[j].name);
+				if (count == i%(505+2)) {
+					printf("\n#D major %i (%i minors) %s\n",
+					  j, majors[j].minors, majors[j].name);
+					cur_major = j;
+					cur_minor = 0;
+					break;
+				}
+				if (count + majors[j].minors > i%(505+2)) {
+					cur_major = j;
+					cur_minor = i%(505+2) - count;
 					break;
 				}
 				count += majors[j].minors;
+			}
+			if (cur_major == 4 && cur_minor == 23
+			    && i+1 < num_frames
+			    && !(__be16_to_cpu(*(uint16_t*)&bit_data[bit_cur+i*130+64]))
+			    && !(__be16_to_cpu(*(uint16_t*)&bit_data[bit_cur+i*130+130+64]))
+			    && (cur_row > 0)) {
+				ramb16_cfg_t ramb16_cfg;
+
+				for (j = 0; j < 4; j++) {
+					offset_in_frame = (3-j)*32;
+					if (offset_in_frame >= 64)
+						offset_in_frame += 2;
+
+					for (k = 0; k < 32; k++) {
+						ramb16_cfg.byte[k] = bit_data[bit_cur+i*130+offset_in_frame+k];
+						ramb16_cfg.byte[k+32] = bit_data[bit_cur+i*130+130+offset_in_frame+k];
+					}
+					for (k = 0; k < 64; k++) {
+						if (ramb16_cfg.byte[k])
+							break;
+					}
+					if (k >= 64) continue; // empty
+					printf("RAMB16_X0Y%i config\n", ((cur_row-1)*4 + j)*2);
+					print_ramb16_cfg(&ramb16_cfg);
+				}
+				i++; // we processed two frames
+				continue;
 			}
 
 			middle_word = __be16_to_cpu(*(uint16_t*)
@@ -882,7 +1081,7 @@ int main(int argc, char** argv)
 					printf("frame_64 all_1\n");
 				else {
 					printf("frame_64\n");
-					hexdump(&bit_data[bit_cur+i*130], 64);
+					hexdump(1, &bit_data[bit_cur+i*130], 64);
 				}
 
 				printf("frame_2 0x%04x\n", __be16_to_cpu(
@@ -894,19 +1093,19 @@ int main(int argc, char** argv)
 					printf("frame_64 all_1\n");
 				else {
 					printf("frame_64\n");
-					hexdump(&bit_data[bit_cur+i*130+66], 64);
+					hexdump(1, &bit_data[bit_cur+i*130+66], 64);
 				}
 				continue;
 			}
 
 			max_frames_to_scan = num_frames - i - 1;
-			if (i + 1 + max_frames_to_scan >= ((i / 505)+1) * 505)
-				max_frames_to_scan = ((i/505)+1)*505 - i - 1;
+			if (i + 1 + max_frames_to_scan >= ((i / 507)+1)*507 - 2)
+				max_frames_to_scan = ((i/507)+1)*507 - i - 3;
 			count = 0;
 			for (j = 0; j < sizeof(majors)/sizeof(majors[0]); j++) {
-				if ((i/505)*505 + count > i
-				    && (i/505)*505 + count <= i+1+max_frames_to_scan) {
-					max_frames_to_scan = (i/505)*505 + count - i - 1;
+				if ((i/507)*507 + count > i
+				    && (i/507)*507 + count <= i+1+max_frames_to_scan) {
+					max_frames_to_scan = (i/507)*507 + count - i - 1;
 					break;
 				}
 				count += majors[j].minors;
@@ -943,17 +1142,18 @@ int main(int argc, char** argv)
 			fprintf(stderr, "#E Internal error %i.\n", __LINE__);
 			goto fail;
 		}
-		for (i = 2020; i < num_frames; i++) {
+
+		for (i = content_start_frame; i < num_frames; i++) {
 			int all_zero, all_one;
 			static const int ram_starts[] =
-				{ 152, 170, 188, 206, 
-				  296, 314, 332, 350,
-				  440, 458, 476, 494 };
+				{ 144, 162, 180, 198, 
+				  288, 306, 324, 342,
+				  432, 450, 468, 486 };
 
-			if (i == 2020)
-				printf("\n#D 2020 - content start\n");
+			if (i == content_start_frame)
+				printf("\n#D %i - content start\n", i);
 			for (j = 0; j < sizeof(ram_starts) / sizeof(ram_starts[0]); j++) {
-				if (i == 2020 + ram_starts[j]
+				if (i == content_start_frame + ram_starts[j]
 				    && num_frames >= i+18)
 					break; 
 			}
@@ -1039,8 +1239,8 @@ int main(int argc, char** argv)
 			}
 			if (!all_zero && !all_one) {
 				printf("frame_130 %i off 0x%xh (%i)\n",
-					i-2020, bit_cur+i*130, bit_cur+i*130);
-				hexdump(&bit_data[bit_cur+i*130], 130);
+					i-content_start_frame, bit_cur+i*130, bit_cur+i*130);
+				hexdump(1, &bit_data[bit_cur+i*130], 130);
 				continue;
 			}
 
@@ -1049,9 +1249,9 @@ int main(int argc, char** argv)
 			// readable.
 			max_frames_to_scan = num_frames - i - 1;
 			for (j = 0; j < sizeof(ram_starts) / sizeof(ram_starts[0]); j++) {
-				if ((2020 + ram_starts[j] > i)
-				    && (2020 + ram_starts[j] <= i+1+max_frames_to_scan)) {
-					max_frames_to_scan = 2020+ram_starts[j] - i - 1;
+				if ((content_start_frame + ram_starts[j] > i)
+				    && (content_start_frame + ram_starts[j] <= i+1+max_frames_to_scan)) {
+					max_frames_to_scan = content_start_frame+ram_starts[j] - i - 1;
 					// ram_starts is sorted in ascending order
 					break;
 				}
@@ -1089,7 +1289,7 @@ int main(int argc, char** argv)
 			int dump_len = 2*u32 - num_frames*130;
 			printf("#D hexdump offset 0x%x, len 0x%x (%i)\n",
 				num_frames*130, dump_len, dump_len);
-			hexdump(&bit_data[bit_cur+num_frames*130], dump_len);
+			hexdump(1, &bit_data[bit_cur+num_frames*130], dump_len);
 		}
 		bit_cur += u32*2;
 
