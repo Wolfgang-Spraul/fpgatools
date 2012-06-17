@@ -265,6 +265,233 @@ static const char* ramb16_cfg_str_min24[128] =
 	[337 - 256] "EN_RSTRAM_B",
 };
 
+static const char* iob_xc6slx4_sitenames[896*2/8] =
+{
+	[0x0000/8] "P70",
+		   "P69",
+		   "P67",
+		   "P66",
+		   "P65",
+		   "P64",
+		   "P62",
+		   "P61",
+		   "P60",
+		   "P59",
+		   "P58",
+		   "P57",
+		   0,
+		   0,
+		   0,
+		   0,
+	[0x0080/8] 0,
+		   0,
+		   "P56",
+		   "P55",
+		   0,
+		   0,
+		   0,
+		   0,
+		   0,
+		   0,
+		   "P51",
+		   "P50",
+		   0,
+		   0,
+		   0,
+		   0,
+	[0x0100/8] 0,
+		   0,
+		   0,
+		   0,
+		   "UNB131",
+		   "UNB132",
+		   "P48",
+		   "P47",
+		   "P46",
+		   "P45",
+		   "P44",
+		   "P43",
+		   0,
+		   0,
+		   "P41",
+		   "P40",
+	[0x0180/8] "P39",
+		   "P38",
+		   "P35",
+		   "P34",
+		   "P33",
+		   "P32",
+		   0,
+		   0,
+		   0,
+		   0,
+		   0,
+		   0,
+		   0,
+		   0,
+		   0,
+		   0,
+	[0x0200/8] "P30",
+		   "P29",
+		   "P27",
+		   "P26",
+		   0,
+		   0,
+		   0,
+		   0,
+		   0,
+		   0,
+		   "P24",
+		   "P23",
+		   "P22",
+		   "P21",
+		   0,
+		   0,
+	[0x0280/8] 0,
+		   0,
+		   0,
+		   0,
+		   "P17",
+		   "P16",
+		   "P15",
+		   "P14",
+		   0,
+		   0,
+		   0,
+		   0,
+		   0,
+		   0,
+		   0,
+		   0,
+	[0x0300/8] "P12",
+		   "P11",
+		   "P10",
+		   "P9",
+		   "P8",
+		   "P7",
+		   "P6",
+		   "P5",
+		   0,
+		   0,
+		   0,
+		   0,
+		   0,
+		   0,
+		   "P2",
+		   "P1",
+	[0x0380/8] "P144",
+		   "P143",
+		   "P142",
+		   "P141",
+		   "P140",
+		   "P139",
+		   "P138",
+		   "P137",
+		   0,
+		   0,
+		   0,
+		   0,
+		   0,
+		   0,
+		   0,
+		   0,
+	[0x0400/8] 0,
+		   0,
+		   0,
+		   0,
+		   "P134",
+		   "P133",
+		   "P132",
+		   "P131",
+		   0,
+		   0,
+		   0,
+		   0,
+		   0,
+		   0,
+		   "P127",
+		   "P126",
+	[0x0480/8] "P124",
+		   "P123",
+		   0,
+		   0,
+		   0,
+		   0,
+		   0,
+		   0,
+		   "P121",
+		   "P120",
+		   "P119",
+		   "P118",
+		   "P117",
+		   "P116",
+		   "P115",
+		   "P114",
+	[0x0500/8] "P112",
+		   "P111",
+		   "P105",
+		   "P104",
+		   0,
+		   0,
+		   0,
+		   0,
+		   0,
+		   0,
+		   "P102",
+		   "P101",
+		   "P99",
+		   "P98",
+		   "P97",
+	[0x0580/8] 0,
+		   0,
+		   0,
+		   0,
+		   0,
+		   0,
+		   0,
+		   0,
+		   0,
+		   0,
+		   "P95",
+		   "P94",
+		   "P93",
+		   "P92",
+		   0,
+		   0,
+	[0x0600/8] 0,
+		   0,
+		   0,
+		   "P88",
+		   "P87",
+		   0,
+		   "P85",
+		   "P84",
+		   0,
+		   0,
+		   "P83",
+		   "P82",
+		   "P81",
+		   "P80",
+		   "P79",
+		   "P78",
+	[0x0680/8] 0,
+		   0,
+		   0,
+		   0,
+		   0,
+		   0,
+		   0,
+		   0,
+		   0,
+		   0,
+		   0,
+		   0,
+		   0,
+		   0,
+		   "P75",
+		   "P74"
+};
+
 void print_ramb16_cfg(ramb16_cfg_t* cfg)
 {
 	int i;
@@ -377,11 +604,14 @@ void print_ramb16_cfg(ramb16_cfg_t* cfg)
 
 }
 
+int g_FLR_value = -1;
+
 int main(int argc, char** argv)
 {
 	uint8_t* bit_data = 0;
 	FILE* bitf = 0;
 	uint32_t bit_cur, bit_eof, cmd_len, u32, u16_off, bit_off;
+	uint32_t last_processed_pos;
 	uint16_t str_len, u16, packet_hdr_type, packet_hdr_opcode;
 	uint16_t packet_hdr_register, packet_hdr_wordcount;
 	int info = 0; // whether to print #I info messages (offsets and others)
@@ -533,7 +763,8 @@ int main(int argc, char** argv)
 
 	while (bit_cur < bit_eof) {
 		// 8 is 2 padding frames between each row and 2 at the end
-		static const int content_start_frame = 4*505+8;
+		static const int type1_bram_data_start_frame = 4*505+8;
+		static const int type2_iob_start_frame = 4*505+8 + 4*144;
 
 		// packet header: ug380, Configuration Packets (p88)
 		if (info) printf("#I Packet header at off 0x%x.\n", bit_cur);
@@ -635,11 +866,15 @@ int main(int argc, char** argv)
 				u16 = __be16_to_cpu(*(uint16_t*)&bit_data[u16_off+2]);
 				u16_off+=2;
 				printf("T1 FLR %u\n", u16);
-				// There are 3 types of frames. Type0 (clb, ioi
-				// and special blocks), type1 (bram) and type2
-				// (iob). The size of a type0 and type1 is
-				// fixed, only the size of a type2 (iob) is
-				// specified with the FLR register.
+				g_FLR_value = u16;
+				if ((g_FLR_value*2) % 8)
+					printf("#W FLR*2 should be multiple of "
+					"8, but modulo 8 is %i\n", (g_FLR_value*2) % 8);
+				// First come the type 0 frames (clb, bram
+				// config, dsp, etc). Then type 1 (bram data),
+				// then type 2, the IOB config data block.
+				// FLR is counted in 16-bit words, and there is
+				// 1 extra dummy 0x0000 after that.
 				continue;
 			}
 			if (packet_hdr_register == COR1) {
@@ -995,7 +1230,7 @@ int main(int argc, char** argv)
 			uint16_t middle_word;
 			int count, cur_row, cur_major, cur_minor;
 
-			if (i >= content_start_frame) break;
+			if (i >= type1_bram_data_start_frame) break;
 
 			if (i%(505+2) == 0)
 				printf("\n#D row %i\n", i/505);
@@ -1008,8 +1243,9 @@ int main(int argc, char** argv)
 			count = 0;
 			for (j = 0; j < sizeof(majors)/sizeof(majors[0]); j++) {
 				if (count == i%(505+2)) {
-					printf("\n#D major %i (%i minors) %s\n",
-					  j, majors[j].minors, majors[j].name);
+					printf("\n#D r%i major %i (%i "
+					  "minors) %s\n", cur_row, j,
+					  majors[j].minors, majors[j].name);
 					cur_major = j;
 					cur_minor = 0;
 					break;
@@ -1143,17 +1379,22 @@ int main(int argc, char** argv)
 			goto fail;
 		}
 
-		for (i = content_start_frame; i < num_frames; i++) {
+		for (i = type1_bram_data_start_frame; i < num_frames; i++) {
 			int all_zero, all_one;
 			static const int ram_starts[] =
 				{ 144, 162, 180, 198, 
 				  288, 306, 324, 342,
 				  432, 450, 468, 486 };
 
-			if (i == content_start_frame)
-				printf("\n#D %i - content start\n", i);
+			if (i >= type2_iob_start_frame)
+				break;
+			if (i == type1_bram_data_start_frame)
+				printf("\n#D type 1 bram data start frame %i", i);
+			if (((i-type1_bram_data_start_frame) % 144) == 0)
+				printf("\n#D bram row %i\n", (i-type1_bram_data_start_frame)/144);
+
 			for (j = 0; j < sizeof(ram_starts) / sizeof(ram_starts[0]); j++) {
-				if (i == content_start_frame + ram_starts[j]
+				if (i == type1_bram_data_start_frame + ram_starts[j]
 				    && num_frames >= i+18)
 					break; 
 			}
@@ -1238,8 +1479,8 @@ int main(int argc, char** argv)
 					break;
 			}
 			if (!all_zero && !all_one) {
-				printf("frame_130 %i off 0x%xh (%i)\n",
-					i-content_start_frame, bit_cur+i*130, bit_cur+i*130);
+				printf("frame_130 %i frames into content, file off 0x%xh (%i)\n",
+					i-type1_bram_data_start_frame, bit_cur+i*130, bit_cur+i*130);
 				hexdump(1, &bit_data[bit_cur+i*130], 130);
 				continue;
 			}
@@ -1248,10 +1489,13 @@ int main(int argc, char** argv)
 			// following. That way we can make the output more
 			// readable.
 			max_frames_to_scan = num_frames - i - 1;
+			if (max_frames_to_scan > type2_iob_start_frame - i - 1)
+				max_frames_to_scan = type2_iob_start_frame - i - 1;
+
 			for (j = 0; j < sizeof(ram_starts) / sizeof(ram_starts[0]); j++) {
-				if ((content_start_frame + ram_starts[j] > i)
-				    && (content_start_frame + ram_starts[j] <= i+1+max_frames_to_scan)) {
-					max_frames_to_scan = content_start_frame+ram_starts[j] - i - 1;
+				if ((type1_bram_data_start_frame + ram_starts[j] > i)
+				    && (type1_bram_data_start_frame + ram_starts[j] <= i+1+max_frames_to_scan)) {
+					max_frames_to_scan = type1_bram_data_start_frame+ram_starts[j] - i - 1;
 					// ram_starts is sorted in ascending order
 					break;
 				}
@@ -1285,11 +1529,53 @@ int main(int argc, char** argv)
 			fprintf(stderr, "#E Internal error %i.\n", __LINE__);
 			goto fail;
 		}
-		if (2*u32 > num_frames*130) {
-			int dump_len = 2*u32 - num_frames*130;
+		last_processed_pos = i*130;
+		if (i == type2_iob_start_frame) {
+			int iob_end_pos;
+
+			printf("\n#D type 2 iob start frame %i\n", i);
+			iob_end_pos = (type2_iob_start_frame*130 + (g_FLR_value+1)*2);
+
+			if (g_FLR_value == -1)
+				printf("#W No FLR value set, cannot process IOB block.\n");
+			else if (iob_end_pos > 2*u32)
+				printf("#W Expected %i bytes IOB data, only got %i.\n",
+					(g_FLR_value+1)*2, 2*u32 - (g_FLR_value+1)*2);
+			else {
+				uint16_t post_iob_padding;
+
+				if (g_FLR_value*2/8 != sizeof(iob_xc6slx4_sitenames)/sizeof(iob_xc6slx4_sitenames[0]))
+					printf("#W Expected %li IOB entries but got %i.\n",
+						sizeof(iob_xc6slx4_sitenames)/sizeof(iob_xc6slx4_sitenames[0]),
+						g_FLR_value*2/8);
+				for (j = 0; j < g_FLR_value*2/8; j++) {
+					if (*(uint32_t*)&bit_data[bit_cur+type2_iob_start_frame*130+j*8]
+					    || *(uint32_t*)&bit_data[bit_cur+type2_iob_start_frame*130+j*8+4]) {
+						if (j < sizeof(iob_xc6slx4_sitenames)/sizeof(iob_xc6slx4_sitenames[0])
+						    && iob_xc6slx4_sitenames[j]) {
+							printf("iob %s", iob_xc6slx4_sitenames[j]);
+						} else
+							printf("iob %i", j);
+						for (k = 0; k < 8; k++)
+							printf(" %02X", bit_data[bit_cur+type2_iob_start_frame*130+j*8+k]);
+						printf("\n");
+					}
+				}
+				if (info) hexdump(1, &bit_data[bit_cur+type2_iob_start_frame*130], g_FLR_value*2);
+				post_iob_padding = __be16_to_cpu(*(uint16_t*)&bit_data[bit_cur+type2_iob_start_frame*130+g_FLR_value*2]);
+				if (post_iob_padding)
+					printf("#W Unexpected post IOB padding 0x%x.\n", post_iob_padding);
+				if (iob_end_pos < 2*u32)
+					printf("#W Extra data after IOB.\n");
+				last_processed_pos = iob_end_pos;
+			}
+		}
+
+		if (last_processed_pos < 2*u32) {
+			int dump_len = 2*u32 - last_processed_pos;
 			printf("#D hexdump offset 0x%x, len 0x%x (%i)\n",
-				num_frames*130, dump_len, dump_len);
-			hexdump(1, &bit_data[bit_cur+num_frames*130], dump_len);
+				last_processed_pos, dump_len, dump_len);
+			hexdump(1, &bit_data[bit_cur+last_processed_pos], dump_len);
 		}
 		bit_cur += u32*2;
 
@@ -1315,9 +1601,10 @@ void help()
 	       "(c) 2012 Wolfgang Spraul\n"
 	       "\n"
 	       "bit2txt [options] <path to .bit file>\n"
-	       "  --help                  print help message\n"
-	       "  --version               print version number\n"
-	       "  --info                  add extra info to output (marked #I)\n"
-	       "  <path to .bit file>     bitstream to print on stdout\n"
+	       "  --help                 print help message\n"
+	       "  --version              print version number\n"
+	       "  --info                 add extra info to output (marked #I)\n"
+	       "  <path to .bit file>    bitstream to print on stdout\n"
+	       "                         (proposing extension .b2t)\n"
 	       "\n", PROGRAM_REVISION);
 }
