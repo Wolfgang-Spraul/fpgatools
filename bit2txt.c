@@ -168,24 +168,24 @@ typedef struct
 
 const MAJOR majors[] =
 {
-	/*  0 */ { "unknown", 4 }, // clock?
-	/*  1 */ { "unknown", 30 },
-	/*  2 */ { "unknown", 31 },
-	/*  3 */ { "unknown", 30 },
-	/*  4 */ { "unknown", 25 }, // bram?
-	/*  5 */ { "unknown", 31 },
-	/*  6 */ { "unknown", 30 },
-	/*  7 */ { "unknown", 24 }, // dsp?
-	/*  8 */ { "unknown", 31 },
-	/*  9 */ { "unknown", 31 },
-	/* 10 */ { "unknown", 31 },
-	/* 11 */ { "unknown", 30 },
-	/* 12 */ { "unknown", 31 },
-	/* 13 */ { "unknown", 30 },
-	/* 14 */ { "unknown", 25 },
-	/* 15 */ { "unknown", 31 },
-	/* 16 */ { "unknown", 30 },
-	/* 17 */ { "unknown", 30 }
+	/*  0 */ { 0, 4 }, // clock?
+	/*  1 */ { 0, 30 },
+	/*  2 */ { "clb", 31 },
+	/*  3 */ { 0, 30 },
+	/*  4 */ { "bram", 25 },
+	/*  5 */ { "clb", 31 },
+	/*  6 */ { 0, 30 },
+	/*  7 */ { 0, 24 }, // dsp?
+	/*  8 */ { "clb", 31 },
+	/*  9 */ { 0, 31 },
+	/* 10 */ { "clb", 31 },
+	/* 11 */ { 0, 30 },
+	/* 12 */ { 0, 31 },
+	/* 13 */ { 0, 30 },
+	/* 14 */ { 0, 25 },
+	/* 15 */ { "clb", 31 },
+	/* 16 */ { 0, 30 },
+	/* 17 */ { 0, 30 }
 };
 
 static const char* bitstr(uint32_t value, int digits)
@@ -616,7 +616,7 @@ int main(int argc, char** argv)
 	uint16_t packet_hdr_register, packet_hdr_wordcount;
 	int info = 0; // whether to print #I info messages (offsets and others)
 	char* bit_path = 0;
-	int i, j, k, l, num_frames, max_frames_to_scan, offset_in_frame;
+	int i, j, k, l, num_frames, max_frames_to_scan, offset_in_frame, times;
 
 	//
 	// parse command line
@@ -797,7 +797,26 @@ int main(int argc, char** argv)
 			if (u16 & 0x07FF)
 				printf("#W 0x%x=0x%x Unexpected noop "
 					"header.\n", u16_off, u16);
-	 		printf("noop\n");
+			if (packet_hdr_type != 1 || (u16&0x07FF))
+				times = 1;
+			else { // lookahead for more good noops
+				i = bit_cur;
+				while (i+1 < bit_eof) {
+					u16 = __be16_to_cpu(*(uint16_t*)&bit_data[i]);
+					if (((u16 & 0xE000) >> 13) != 1
+					    || ((u16 & 0x1800) >> 11)
+					    || (u16 & 0x7FF))
+						break;
+					i += 2;
+				}
+				times = 1 + (i - bit_cur)/2;
+				if (times > 1)
+					bit_cur += (times-1)*2;
+			}
+   			if (times > 1)
+				printf("noop times %i\n", times);
+			else
+		 		printf("noop\n");
 			continue;
 		}
 
@@ -1187,6 +1206,114 @@ int main(int argc, char** argv)
 					printf("#W Expected reserved 0x%x, got 0x%x.\n", 0x001F, u16);
 				continue;
 			}
+			if (packet_hdr_register == PU_GWE) {
+				if (packet_hdr_wordcount != 1) {
+					fprintf(stderr, "#E 0x%x=0x%x Unexpected PU_GWE"
+						" wordcount %u.\n", u16_off,
+					u16, packet_hdr_wordcount);
+					goto fail;
+				}
+				u16 = __be16_to_cpu(*(uint16_t*)&bit_data[u16_off+2]);
+				u16_off+=2;
+				printf("T1 PU_GWE 0x%03X\n", u16);
+				continue;
+			}
+			if (packet_hdr_register == PU_GTS) {
+				if (packet_hdr_wordcount != 1) {
+					fprintf(stderr, "#E 0x%x=0x%x Unexpected PU_GTS"
+						" wordcount %u.\n", u16_off,
+					u16, packet_hdr_wordcount);
+					goto fail;
+				}
+				u16 = __be16_to_cpu(*(uint16_t*)&bit_data[u16_off+2]);
+				u16_off+=2;
+				printf("T1 PU_GTS 0x%03X\n", u16);
+				continue;
+			}
+			if (packet_hdr_register == CWDT) {
+				if (packet_hdr_wordcount != 1) {
+					fprintf(stderr, "#E 0x%x=0x%x Unexpected CWDT"
+						" wordcount %u.\n", u16_off,
+					u16, packet_hdr_wordcount);
+					goto fail;
+				}
+				u16 = __be16_to_cpu(*(uint16_t*)&bit_data[u16_off+2]);
+				u16_off+=2;
+				printf("T1 CWDT 0x%X\n", u16);
+				if (u16 < 0x0201)
+					printf("#W Watchdog timer clock below"
+					  " minimum value of 0x0201.\n");
+				continue;
+			}
+			if (packet_hdr_register == MODE_REG) {
+				int unexpected_buswidth = 0;
+
+				if (packet_hdr_wordcount != 1) {
+					fprintf(stderr, "#E 0x%x=0x%x Unexpected MODE_REG"
+						" wordcount %u.\n", u16_off,
+					u16, packet_hdr_wordcount);
+					goto fail;
+				}
+				u16 = __be16_to_cpu(*(uint16_t*)&bit_data[u16_off+2]);
+				u16_off+=2;
+				printf("T1 MODE_REG");
+				if (u16 & (1<<13)) {
+					printf(" NEW_MODE=BITSTREAM");
+					u16 &= ~(1<<13);
+				}
+				if ((u16 & (1<<12))
+				   && (u16 & (1<<11)))
+					unexpected_buswidth = 1;
+				else if (u16 & (1<<12)) {
+					printf(" BUSWIDTH=4");
+					u16 &= ~(1<<12);
+				} else if (u16 & (1<<11)) {
+					printf(" BUSWIDTH=2");
+					u16 &= ~(1<<11);
+				}
+				// BUSWIDTH=1 is the default and not displayed
+
+				if (u16 & (1<<9)) {
+					printf(" BOOTMODE_1");
+					u16 &= ~(1<<9);
+				}
+				if (u16 & (1<<8)) {
+					printf(" BOOTMODE_0");
+					u16 &= ~(1<<8);
+				}
+
+				if (unexpected_buswidth)
+					printf("#W Unexpected bus width 0b11.\n");
+				if (u16)
+					printf(" 0x%x", u16);
+				printf("\n");
+				if (u16)
+					printf("#W Expected reserved 0, got 0x%x.\n", u16);
+				continue;
+			}
+			if (packet_hdr_register == CCLK_FREQ) {
+				if (packet_hdr_wordcount != 1) {
+					fprintf(stderr, "#E 0x%x=0x%x Unexpected CCLK_FREQ"
+						" wordcount %u.\n", u16_off,
+					u16, packet_hdr_wordcount);
+					goto fail;
+				}
+				u16 = __be16_to_cpu(*(uint16_t*)&bit_data[u16_off+2]);
+				u16_off+=2;
+				printf("T1 CCLK_FREQ");
+				if (u16 & (1<<14)) {
+					printf(" EXT_MCLK");
+					u16 &= ~(1<<14);
+				}
+				printf(" MCLK_FREQ=0x%03X", u16 & 0x03FF);
+				u16 &= ~(0x03FF);
+				if (u16)
+					printf(" 0x%x", u16);
+				printf("\n");
+				if (u16)
+					printf("#W Expected reserved 0, got 0x%x.\n", u16);
+				continue;
+			}
 			printf("#W T1 %s (%u words)",
 				xc6_regs[packet_hdr_register].name,
 				packet_hdr_wordcount);
@@ -1225,37 +1352,66 @@ int main(int argc, char** argv)
 
 		num_frames = (2*u32)/130;
 		for (i = 0; i < num_frames; i++) {
-			int first64_all_zero, first64_all_one;
-			int last64_all_zero, last64_all_one;
+			int first64_all_zero, last64_all_zero;
 			uint16_t middle_word;
 			int count, cur_row, cur_major, cur_minor;
 
 			if (i >= type1_bram_data_start_frame) break;
 
-			if (i%(505+2) == 0)
+			if (i%(505+2) == 0 && info)
 				printf("\n#D row %i\n", i/505);
+			else if (!i)
+				printf("\n");
 			cur_row = i/(505+2);
-			if (i%(505+2) == 505)
+			if (i%(505+2) == 505) {
+				// If two frames of all one are following,
+				// it's standard padding and we don't need
+				// to display anything.
+				if (i + 2 < num_frames) {
+					for (j = 0; j < 2*130; j++) {
+						if (bit_data[bit_cur+i*130+j]
+							!= 0xFF)
+							break;
+					}
+					if (j >= 2*130) {
+						i++;
+						continue;
+					}
+				}
 				printf("\n#D padding\n");
+			}
 
 			cur_major = 0;
 			cur_minor = 0;
 			count = 0;
 			for (j = 0; j < sizeof(majors)/sizeof(majors[0]); j++) {
-				if (count == i%(505+2)) {
-					printf("\n#D r%i major %i (%i "
-					  "minors) %s\n", cur_row, j,
-					  majors[j].minors, majors[j].name);
-					cur_major = j;
-					cur_minor = 0;
-					break;
-				}
 				if (count + majors[j].minors > i%(505+2)) {
 					cur_major = j;
 					cur_minor = i%(505+2) - count;
 					break;
 				}
 				count += majors[j].minors;
+			}
+			if (!cur_minor) {
+				if (i+majors[cur_major].minors <= num_frames) {
+					for (j = 0; j <
+					  majors[cur_major].minors * 130; j++) {
+						if (bit_data[bit_cur+i*130+j])
+							break;
+					}
+					if (j >= majors[cur_major].minors*130) {
+						if (majors[cur_major].minors > 1)
+							i += majors[cur_major].minors - 1;
+						continue;
+					}
+				}
+				if (info) {
+					printf("\n#D r%i major %i (%s) minors "
+					  "%i\n", cur_row, cur_major,
+					  majors[cur_major].name ?
+					  majors[cur_major].name : "?",
+					  majors[cur_major].minors);
+				}
 			}
 			if (cur_major == 4 && cur_minor == 23
 			    && i+1 < num_frames
@@ -1287,55 +1443,55 @@ int main(int argc, char** argv)
 
 			middle_word = __be16_to_cpu(*(uint16_t*)
 				&bit_data[bit_cur+i*130+64]);
-			first64_all_zero = 1; first64_all_one = 1;
-			last64_all_zero = 1; last64_all_one = 1;
+			first64_all_zero = 1;
+			last64_all_zero = 1;
 
 			for (j = 0; j < 64; j++) {
-				if (bit_data[bit_cur+i*130+j] != 0)
+				if (bit_data[bit_cur+i*130+j] != 0) {
 					first64_all_zero = 0;
-				if (bit_data[bit_cur+i*130+j] != 0xff)
-					first64_all_one = 0;
-				if (!first64_all_zero && !first64_all_one)
 					break;
+				}
 			}
 			for (j = 66; j < 130; j++) {
-				if (bit_data[bit_cur+i*130+j] != 0)
+				if (bit_data[bit_cur+i*130+j] != 0) {
 					last64_all_zero = 0;
-				if (bit_data[bit_cur+i*130+j] != 0xff)
-					last64_all_one = 0;
-				if (!last64_all_zero && !last64_all_one)
 					break;
+				}
 			}
 
-			if (!(first64_all_zero && !middle_word && last64_all_zero)
-			    && !(first64_all_one && (middle_word == 0xFFFF) &&
-				last64_all_one)) {
-				// If the frame is neither all_0 nor all_1
-				if (first64_all_zero)
-					printf("frame_64 all_0\n");
-				else if (first64_all_one)
-					printf("frame_64 all_1\n");
-				else {
-					printf("frame_64\n");
-					hexdump(1, &bit_data[bit_cur+i*130], 64);
+			if (!(first64_all_zero && !middle_word && last64_all_zero)) {
+				for (j = 0; j < 16; j++) {
+					if (middle_word & (1<<j))
+						printf("cfg r%i m%i-%i/%i c%i ?\n",
+							cur_row, cur_major,
+							cur_minor,
+					majors[cur_major].minors, j);
 				}
-
-				printf("frame_2 0x%04x\n", __be16_to_cpu(
-				  *(uint16_t*) &bit_data[bit_cur+i*130+64]));
-
-				if (last64_all_zero)
-					printf("frame_64 all_0\n");
-				else if (last64_all_one)
-					printf("frame_64 all_1\n");
-				else {
-					printf("frame_64\n");
-					hexdump(1, &bit_data[bit_cur+i*130+66], 64);
+				for (j = 0; j < 512; j++) {
+					if (bit_data[bit_cur+i*130+j/8] & (1<<(j%8)))
+						printf("cfg r%i m%i-%i/%i b%i ?\n",
+							cur_row, cur_major,
+							cur_minor,
+					majors[cur_major].minors, j);
+				}
+				for (j = 0; j < 512; j++) {
+					if (bit_data[bit_cur+i*130+66+j/8] & (1<<(j%8)))
+						printf("cfg r%i m%i-%i/%i b%i ?\n",
+							cur_row, cur_major,
+							cur_minor,
+					majors[cur_major].minors, 512+j);
+				}
+				if (info) {
+				  printf("hex r%i m%i-%i/%i\n", cur_row,
+					cur_major, cur_minor,
+					majors[cur_major].minors);
+				  hexdump(1, &bit_data[bit_cur+i*130], 130);
 				}
 				continue;
 			}
 
 			max_frames_to_scan = num_frames - i - 1;
-			if (i + 1 + max_frames_to_scan >= ((i / 507)+1)*507 - 2)
+			if (i + 1 + max_frames_to_scan >= ((i/507)+1)*507 - 2)
 				max_frames_to_scan = ((i/507)+1)*507 - i - 3;
 			count = 0;
 			for (j = 0; j < sizeof(majors)/sizeof(majors[0]); j++) {
@@ -1346,41 +1502,22 @@ int main(int argc, char** argv)
 				}
 				count += majors[j].minors;
 			}
-			if (first64_all_zero && !middle_word
-				&& last64_all_zero) {
-				for (j = 0; j < max_frames_to_scan*130; j++) {
-					if (bit_data[bit_cur+i*130+130+j] != 0)
-						break;
-				}
-				if (j/130) {
+			for (j = 0; j < max_frames_to_scan*130; j++) {
+				if (bit_data[bit_cur+i*130+130+j] != 0)
+					break;
+			}
+			if (j/130) {
+				if (info)
 					printf("frame_130 times %i all_0\n", 1+j/130);
-					i += j/130;
-					continue;
-				}
+				i += j/130;
+				continue;
+			}
+			if (info)
 				printf("frame_130 all_0\n");
-				continue;
-			}
-			if (first64_all_one
-				&& (middle_word == 0xFFFF) &&
-				last64_all_one) {
-				for (j = 0; j < max_frames_to_scan*130; j++) {
-					if (bit_data[bit_cur+i*130+130+j] != 0xFF)
-						break;
-				}
-				if (j/130) {
-					printf("frame_130 times %i all_1\n", 1+j/130);
-					i += j/130;
-					continue;
-				}
-				printf("frame_130 all_1\n");
-				continue;
-			}
-			fprintf(stderr, "#E Internal error %i.\n", __LINE__);
-			goto fail;
+			continue;
 		}
 
 		for (i = type1_bram_data_start_frame; i < num_frames; i++) {
-			int all_zero, all_one;
 			static const int ram_starts[] =
 				{ 144, 162, 180, 198, 
 				  288, 306, 324, 342,
@@ -1388,9 +1525,12 @@ int main(int argc, char** argv)
 
 			if (i >= type2_iob_start_frame)
 				break;
-			if (i == type1_bram_data_start_frame)
-				printf("\n#D type 1 bram data start frame %i", i);
-			if (((i-type1_bram_data_start_frame) % 144) == 0)
+			if (i == type1_bram_data_start_frame) {
+				if (info) printf("#D type 1 bram data start "
+					"frame %i", i);
+			}
+			if (((i-type1_bram_data_start_frame) % 144) == 0
+				&& info)
 				printf("\n#D bram row %i\n", (i-type1_bram_data_start_frame)/144);
 
 			for (j = 0; j < sizeof(ram_starts) / sizeof(ram_starts[0]); j++) {
@@ -1401,19 +1541,23 @@ int main(int argc, char** argv)
 			if (j < sizeof(ram_starts) / sizeof(ram_starts[0])) {
 				uint8_t init_byte;
 				char init_str[65];
+				int print_header = j*2;
 
 				// We are at the beginning of a RAMB16 block
 				// (or two RAMB8 blocks), and have the full
 				// 18 frames available.
-				printf("RAMB16_X0Y%i data\n", j*2);
-
-				// Verify that the first and last 18 bytes are all
-				// 0. If not, hexdump them.
+				// Verify that the first and last 18 bytes are
+				// all 0. If not, hexdump them.
 				for (j = 0; j < 18; j++) {
 					if (bit_data[bit_cur+i*130+j] != 0)
 						break;
 				}
 				if (j < 18) {
+					if (print_header != -1) {
+						printf("\nRAMB16_X0Y%i data\n",
+							print_header);
+						print_header = -1;
+					}
 					printf("ramb16_head");
 					for (j = 0; j < 18; j++)
 						printf(" %02x", bit_data[bit_cur+i*130+j]);
@@ -1424,6 +1568,11 @@ int main(int argc, char** argv)
 						break;
 				}
 				if (j < 18) {
+					if (print_header != -1) {
+						printf("\nRAMB16_X0Y%i data\n",
+							print_header);
+						print_header = -1;
+					}
 					printf("ramb16_tail");
 					for (j = 0; j < 18; j++)
 						printf(" %02x", bit_data[bit_cur+(i+18)*130-18+j]);
@@ -1444,9 +1593,16 @@ int main(int argc, char** argv)
 						if (init_str[k] != '0')
 							break;
 					}
-					if (k < 64)
+					if (k < 64) {
+						if (print_header != -1) {
+							printf("\nRAMB16_X0Y%i "
+							  "data\n",
+							   print_header);
+							print_header = -1;
+						}
 						printf("initp_%02i \"%s\"\n",
 							j, init_str);
+					}
 				}
 				for (j = 0; j < 32; j++) {
 					for (k = 0; k < 32; k++) { // 32 bytes per config
@@ -1462,32 +1618,35 @@ int main(int argc, char** argv)
 						if (init_str[k] != '0')
 							break;
 					}
-					if (k < 64)
+					if (k < 64) {
+						if (print_header != -1) {
+							printf("\nRAMB16_X0Y%i "
+							  "data\n",
+							   print_header);
+							print_header = -1;
+						}
 						printf("init_%02i \"%s\"\n",
 							j, init_str);
+					}
 				}
 				i += 17; // 17 (+1) frames have been processed
 				continue;
 			}
-			all_zero = 1; all_one = 1;
+			// everything from now on should be 0
 			for (j = 0; j < 130; j++) {
-				if (bit_data[bit_cur+i*130+j] != 0)
-					all_zero = 0;
-				if (bit_data[bit_cur+i*130+j] != 0xff)
-					all_one = 0;
-				if (!all_zero && !all_one)
-					break;
-			}
-			if (!all_zero && !all_one) {
-				printf("frame_130 %i frames into content, file off 0x%xh (%i)\n",
-					i-type1_bram_data_start_frame, bit_cur+i*130, bit_cur+i*130);
-				hexdump(1, &bit_data[bit_cur+i*130], 130);
-				continue;
+				if (bit_data[bit_cur+i*130+j]) {
+					printf("frame_130 %i frames into "
+					  "content, file off 0x%xh (%i)\n",
+					  i-type1_bram_data_start_frame,
+					  bit_cur+i*130, bit_cur+i*130);
+					hexdump(1, &bit_data[bit_cur+i*130],
+						130);
+					continue;
+				}
 			}
 
-			// Check whether more all_0 or all_1 frames are
-			// following. That way we can make the output more
-			// readable.
+			// Check whether more all zero frames are following.
+			// That way we can make the output more readable.
 			max_frames_to_scan = num_frames - i - 1;
 			if (max_frames_to_scan > type2_iob_start_frame - i - 1)
 				max_frames_to_scan = type2_iob_start_frame - i - 1;
@@ -1500,40 +1659,26 @@ int main(int argc, char** argv)
 					break;
 				}
 			}
-			if (all_zero) {
-				for (j = 0; j < max_frames_to_scan*130; j++) {
-					if (bit_data[bit_cur+i*130+130+j] != 0)
-						break;
-				}
-				if (j/130) {
-					printf("frame_130 times %i all_0\n", 1+j/130);
-					i += j/130;
-					continue;
-				}
-				printf("frame_130 all_0\n");
+			for (j = 0; j < max_frames_to_scan*130; j++) {
+				if (bit_data[bit_cur+i*130+130+j] != 0)
+					break;
+			}
+			if (j/130) {
+				if (info)
+					printf("frame_130 times %i all_0\n",
+						1+j/130);
+				i += j/130;
 				continue;
 			}
-			if (all_one) {
-				for (j = 0; j < max_frames_to_scan*130; j++) {
-					if (bit_data[bit_cur+i*130+130+j] != 0xFF)
-						break;
-				}
-				if (j/130) {
-					printf("frame_130 times %i all_1\n", 1+j/130);
-					i += j/130;
-					continue;
-				}
-				printf("frame_130 all_1\n");
-				continue;
-			}
-			fprintf(stderr, "#E Internal error %i.\n", __LINE__);
-			goto fail;
+			printf("frame_130 all_0\n");
+			continue;
 		}
 		last_processed_pos = i*130;
 		if (i == type2_iob_start_frame) {
 			int iob_end_pos;
 
-			printf("\n#D type 2 iob start frame %i\n", i);
+			printf("\n");
+			if (info) printf("#D type 2 iob start frame %i\n", i);
 			iob_end_pos = (type2_iob_start_frame*130 + (g_FLR_value+1)*2);
 
 			if (g_FLR_value == -1)
@@ -1567,6 +1712,7 @@ int main(int argc, char** argv)
 					printf("#W Unexpected post IOB padding 0x%x.\n", post_iob_padding);
 				if (iob_end_pos < 2*u32)
 					printf("#W Extra data after IOB.\n");
+				printf("\n");
 				last_processed_pos = iob_end_pos;
 			}
 		}
