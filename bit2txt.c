@@ -604,6 +604,131 @@ void print_ramb16_cfg(ramb16_cfg_t* cfg)
 
 }
 
+int bool_nextlen(const char* expr, int len)
+{
+	int i, depth;
+
+	if (!len) return -1;
+	i = 0;
+	if (expr[i] == '~') {
+		i++;
+		if (i >= len) return -1;
+	}
+	if (expr[i] == '(') {
+		if (i+2 >= len) return -1;
+		i++;
+		for (depth = 1; depth && i < len; i++) {
+			if (expr[i] == '(')
+				depth++;
+			else if (expr[i] == ')')
+				depth--;
+		}
+		if (depth) return -1;
+		return i;
+	}
+	if (expr[i] == 'A') {
+		i++;
+		if (i >= len) return -1;
+		if (expr[i] < '1' || expr[i] > '6') return -1;
+		return i+1;
+	}
+	return -1;
+}
+
+// + or, * and, @ xor, ~ not
+// var must point to array of A1..A6 variables
+int bool_eval(const char* expr, int len, const int* var)
+{
+	int i, negate, result, oplen;
+
+	oplen = bool_nextlen(expr, len);
+	if (oplen < 1) goto fail;
+	i = 0;
+	negate = 0;
+	if (expr[i] == '~') {
+		negate = 1;
+		if (++i >= oplen) goto fail;
+	}
+	if (expr[i] == '(') {
+		if (i+2 >= oplen) goto fail;
+		result = bool_eval(&expr[i+1], oplen-i-2, var);
+		if (result == -1) goto fail;
+	} else if (expr[i] == 'A') {
+		if (i+1 >= oplen) goto fail;
+		if (expr[i+1] < '1' || expr[i+1] > '6')
+			goto fail;
+		result = var[expr[i+1]-'1'];
+		if (oplen != i+2) goto fail;
+	} else goto fail;
+	if (negate) result = !result;
+	i = oplen;
+	while (i < len) {
+		if (expr[i] == '+') {
+			if (result) return 1;
+			return bool_eval(&expr[i+1], len-i-1, var);
+		}
+		if (expr[i] == '@') {
+			int right_side = bool_eval(&expr[i+1], len-i-1, var);
+			if (right_side == -1) goto fail;
+			return (result && !right_side) || (!result && right_side);
+		}
+		if (expr[i] != '*') goto fail;
+		if (!result) break;
+		if (++i >= len) goto fail;
+
+		oplen = bool_nextlen(&expr[i], len-i);
+		if (oplen < 1) goto fail;
+		result = bool_eval(&expr[i], oplen, var);
+		if (result == -1) goto fail;
+		i += oplen;
+	}
+	return result;
+fail:
+	return -1;
+}
+
+int parse_boolexpr(const char* expr, uint64_t* lut)
+{
+	int i, j, result, vars[6];
+	const int base_vars[6] = {0 /* A1 */, 1, 0, 0, 0, 1 /* A6 */};
+
+	*lut = 0;
+	for (i = 0; i < 64; i++) {
+		memcpy(vars, base_vars, sizeof(vars));
+		for (j = 0; j < 6; j++) {
+			if (i & (1<<j))
+				vars[j] = !vars[j];
+		}
+		result = bool_eval(expr, strlen(expr), vars);
+		if (result == -1) return -1;
+		if (result) *lut |= 1LL<<i;
+	}
+	return 0;
+}
+
+void printf_lut6(const char* cfg)
+{
+	uint64_t lut;
+	uint32_t first_major, second_major;
+	int i;
+
+	first_major = 0;
+	second_major = 0;
+	parse_boolexpr(cfg, &lut);
+
+	for (i = 0; i < 16; i++) {
+		if (lut & (1LL<<(i*4)))
+			first_major |= 1<<(i*2);
+		if (lut & (1LL<<(i*4+1)))
+			first_major |= 1<<(i*2+1);
+		if (lut & (1LL<<(i*4+2)))
+			second_major |= 1<<(i*2);
+		if (lut & (1LL<<(i*4+3)))
+			second_major |= 1<<(i*2+1);
+	}
+	printf("first_major 0x%X second_major 0x%X\n", first_major, second_major);
+}
+
 int g_FLR_value = -1;
 
 int main(int argc, char** argv)
@@ -1353,7 +1478,7 @@ int main(int argc, char** argv)
 		num_frames = (2*u32)/130;
 		for (i = 0; i < num_frames; i++) {
 			int first64_all_zero, last64_all_zero;
-			uint16_t middle_word;
+			uint8_t middle_byte0, middle_byte1;
 			int count, cur_row, cur_major, cur_minor;
 
 			if (i >= type1_bram_data_start_frame) break;
@@ -1441,8 +1566,8 @@ int main(int argc, char** argv)
 				continue;
 			}
 
-			middle_word = __be16_to_cpu(*(uint16_t*)
-				&bit_data[bit_cur+i*130+64]);
+			middle_byte0 = bit_data[bit_cur+i*130+64];
+			middle_byte1 = bit_data[bit_cur+i*130+65];
 			first64_all_zero = 1;
 			last64_all_zero = 1;
 
@@ -1459,27 +1584,30 @@ int main(int argc, char** argv)
 				}
 			}
 
-			if (!(first64_all_zero && !middle_word && last64_all_zero)) {
+			if (!(first64_all_zero && !middle_byte0 &&
+                              !middle_byte1 && last64_all_zero)) {
 				for (j = 0; j < 16; j++) {
-					if (middle_word & (1<<j))
+					if ((j < 8 && middle_byte1 & (1<<(7-j)))
+					  || (j >= 8 && middle_byte0 & (1<<(7-j-8))))
 						printf("cfg r%i m%i-%i/%i c%i ?\n",
 							cur_row, cur_major,
 							cur_minor,
 					majors[cur_major].minors, j);
 				}
-				for (j = 0; j < 512; j++) {
-					if (bit_data[bit_cur+i*130+j/8] & (1<<(j%8)))
+				for (j = 0; j < 1024; j++) {
+					int word_o, byte_o, bit_o;
+
+					word_o = j / 16;
+					if (word_o >= 64)
+						word_o++;
+					byte_o = !((j/8)%2);
+					bit_o = 7-(j%8);
+
+					if (bit_data[bit_cur+i*130+word_o*2+byte_o] & (1<<bit_o))
 						printf("cfg r%i m%i-%i/%i b%i ?\n",
 							cur_row, cur_major,
 							cur_minor,
 					majors[cur_major].minors, j);
-				}
-				for (j = 0; j < 512; j++) {
-					if (bit_data[bit_cur+i*130+66+j/8] & (1<<(j%8)))
-						printf("cfg r%i m%i-%i/%i b%i ?\n",
-							cur_row, cur_major,
-							cur_minor,
-					majors[cur_major].minors, 512+j);
 				}
 				if (info) {
 				  printf("hex r%i m%i-%i/%i\n", cur_row,

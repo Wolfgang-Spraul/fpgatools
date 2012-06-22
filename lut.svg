@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet href="fpgastyle.css" type="text/css"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="2.0" viewBox="0 0 1000 1000" width="1000" height="1000">
+  <rect width="100%" height="100%" class="background"/>
+
+  <text x="880" y="50">MAJ+1</text>
+  <text x="800" y="50">MAJ</text>
+
+  <text x="800" y="100" class="small">b0</text>
+  <path d="M800,105 h40"/>
+
+  <!-- AND gate -->
+<path d="M200,200 v-100 h40 a50,50 0 0,1 0,100 h-40 z"/>
+<path d="M200,125 h-80 z"/>
+<path d="M184,175 h-64 z"/>
+
+<path d="M200,200 v-100 h40 a50,50 0 0,1 0,100 h-40 z"/>
+<path d="M200,125 h-80 z"/>
+<path d="M184,175 h-64 z"/>
+<circle cx="192" cy="175" r="8"/>
+
+</svg>
