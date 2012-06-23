@@ -10,6 +10,7 @@ text
 text.small
 {
   font-size: 10pt;
+  text-anchor: end;
 }
 path
 {
