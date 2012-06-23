@@ -1,22 +1,278 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <?xml-stylesheet href="fpgastyle.css" type="text/css"?>
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="2.0" viewBox="0 0 1000 1000" width="1000" height="1000">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="2.0" width="1000" height="1220">
   <rect width="100%" height="100%" class="background"/>
 
-  <text x="880" y="50">MAJ+1</text>
-  <text x="800" y="50">MAJ</text>
+  <text x="120" y="20">A5</text>
+  <text x="120" y="40">A6</text>
+  <text x="260" y="30">A4</text>
+  <text x="400" y="30">A3</text>
+  <text x="540" y="30">A2</text>
+  <text x="680" y="30">A1</text>
+  <text x="820" y="30">MAJ</text>
+  <text x="890" y="30">MAJ+1</text>
 
-  <text x="800" y="100" class="small">b0</text>
-  <path d="M800,105 h40"/>
+  <defs>
+    <g id="and_small">
+      <path d="M835,48 h-10"/>
+      <path d="M835,54 h-106"/>
+      <path d="M835,44 h7 a7,7 0 0,1 0,14 h-7 v-14"/>
+      <path d="M850,50 h7"/>
+    </g>
+    <g id="maj_block">
+      <use xlink:href="#and_small" x="0" y="0"/>
+      <use xlink:href="#and_small" x="0" y="18"/>
+    </g>
+    <g id="maj1_block">
+      <use xlink:href="#and_small" x="100" y="36"/>
+      <path d="M829,90 h-100"/>
+      <use xlink:href="#and_small" x="100" y="54"/>
+      <path d="M829,108 h-100"/>
+    </g>
+    <g id="a1_block">
+      <path d="M715,47 h7 a7,7 0 0,1 0,14 h-7 v-14"/>
+      <circle cx="712" cy="52" r="3"/>
+      <path d="M709,52 h-12"/>
+      <path d="M715,65 h7 a7,7 0 0,1 0,14 h-7 v-14"/>
+      <path d="M715,75 h-18"/>
+      <path d="M715,68 h-12 v-10 h12"/>
+      <path d="M702,63 h-105"/>
+      <text x="695" y="57" class="small">A1</text>
+      <text x="695" y="78" class="small">A1</text>
+    </g>
+    <g id="a2_block">
+      <path d="M567,48 h15 a15,15 0 0,1 0,30 h-15 v-30"/>
+      <path d="M567,84 h15 a15,15 0 0,1 0,30 h-15 v-30"/>
+      <path d="M567,55 h-25"/>
+      <text x="539" y="59" class="small">A2</text>
+      <text x="539" y="109" class="small">A2</text>
+      <circle cx="563" cy="105" r="4"/>
+      <path d="M559,105 h-17"/>
+      <path d="M567,69 h-15 v25 h15"/>
+      <path d="M552,81 h-82"/>
+    </g>
+    <g id="a3_block">
+      <path d="M426,59 h22 a22,22 0 0,1 0,44 h-22 v-44"/>
+      <path d="M426,132 h22 a22,22 0 0,1 0,44 h-22 v-44"/>
+      <circle cx="421" cy="72" r="5"/>
+      <path d="M426,91 h-20 v54 h20"/>
+      <path d="M416,72 h-20"/>
+      <path d="M426,162 h-30"/>
+      <text x="392" y="76" class="small">A3</text>
+      <text x="392" y="166" class="small">A3</text>
+      <path d="M406,118 h-80"/>
+    </g>
+    <g id="a4_block">
+      <path d="M282,97 h22 a22,22 0 0,1 0,44 h-22 v-44"/>
+      <path d="M282,239 h22 a22,22 0 0,1 0,44 h-22 v-44"/>
+      <circle cx="277" cy="110" r="5"/>
+      <path d="M272,110 h-20"/>
+      <path d="M282,129 h-20 v123 h20"/>
+      <path d="M282,270 h-30"/>
+      <path d="M262,190 h-80"/>
+      <text x="248" y="114" class="small">A4</text>
+      <text x="248" y="273" class="small">A4</text>
+    </g>
+  </defs>
 
-  <!-- AND gate -->
-<path d="M200,200 v-100 h40 a50,50 0 0,1 0,100 h-40 z"/>
-<path d="M200,125 h-80 z"/>
-<path d="M184,175 h-64 z"/>
+  <!-- MAJ+1 column -->
 
-<path d="M200,200 v-100 h40 a50,50 0 0,1 0,100 h-40 z"/>
-<path d="M200,125 h-80 z"/>
-<path d="M184,175 h-64 z"/>
-<circle cx="192" cy="175" r="8"/>
+  <use xlink:href="#maj1_block"/>
+  <text x="924" y="88" class="small">b0</text>
+  <text x="924" y="106" class="small">b1</text>
+  <use xlink:href="#maj1_block" y="72"/>
+  <text x="924" y="160" class="small">b2</text>
+  <text x="924" y="188" class="small">b3</text>
+  <use xlink:href="#maj1_block" y="144"/>
+  <text x="924" y="232" class="small">b4</text>
+  <text x="924" y="250" class="small">b5</text>
+  <use xlink:href="#maj1_block" y="216"/>
+  <text x="924" y="304" class="small">b6</text>
+  <text x="924" y="322" class="small">b7</text>
+  <use xlink:href="#maj1_block" y="288"/>
+  <text x="924" y="376" class="small">b8</text>
+  <text x="924" y="394" class="small">b9</text>
+  <use xlink:href="#maj1_block" y="360"/>
+  <text x="924" y="448" class="small">b10</text>
+  <text x="924" y="466" class="small">b11</text>
+  <use xlink:href="#maj1_block" y="432"/>
+  <text x="924" y="520" class="small">b12</text>
+  <text x="924" y="538" class="small">b13</text>
+  <use xlink:href="#maj1_block" y="504"/>
+  <text x="924" y="592" class="small">b14</text>
+  <text x="924" y="610" class="small">b15</text>
+  <use xlink:href="#maj1_block" y="576"/>
+  <text x="924" y="664" class="small">b16</text>
+  <text x="924" y="682" class="small">b17</text>
+  <use xlink:href="#maj1_block" y="648"/>
+  <text x="924" y="736" class="small">b18</text>
+  <text x="924" y="754" class="small">b19</text>
+  <use xlink:href="#maj1_block" y="720"/>
+  <text x="924" y="808" class="small">b20</text>
+  <text x="924" y="826" class="small">b21</text>
+  <use xlink:href="#maj1_block" y="792"/>
+  <text x="924" y="880" class="small">b22</text>
+  <text x="924" y="898" class="small">b23</text>
+  <use xlink:href="#maj1_block" y="864"/>
+  <text x="924" y="952" class="small">b24</text>
+  <text x="924" y="970" class="small">b25</text>
+  <use xlink:href="#maj1_block" y="936"/>
+  <text x="924" y="1024" class="small">b26</text>
+  <text x="924" y="1042" class="small">b27</text>
+  <use xlink:href="#maj1_block" y="1008"/>
+  <text x="924" y="1096" class="small">b28</text>
+  <text x="924" y="1114" class="small">b29</text>
+  <use xlink:href="#maj1_block" y="1080"/>
+  <text x="924" y="1168" class="small">b30</text>
+  <text x="924" y="1184" class="small">b31</text>
 
+  <!-- MAJ column -->
+
+  <use xlink:href="#maj_block"/>
+  <text x="824" y="52" class="small">b0</text>
+  <text x="824" y="70" class="small">b1</text>
+  <use xlink:href="#maj_block" y="72"/>
+  <text x="824" y="124" class="small">b2</text>
+  <text x="824" y="142" class="small">b3</text>
+  <use xlink:href="#maj_block" y="144"/>
+  <text x="824" y="196" class="small">b4</text>
+  <text x="824" y="214" class="small">b5</text>
+  <use xlink:href="#maj_block" y="216"/>
+  <text x="824" y="268" class="small">b6</text>
+  <text x="824" y="286" class="small">b7</text>
+  <use xlink:href="#maj_block" y="288"/>
+  <text x="824" y="340" class="small">b8</text>
+  <text x="824" y="358" class="small">b9</text>
+  <use xlink:href="#maj_block" y="360"/>
+  <text x="824" y="412" class="small">b10</text>
+  <text x="824" y="430" class="small">b11</text>
+  <use xlink:href="#maj_block" y="432"/>
+  <text x="824" y="484" class="small">b12</text>
+  <text x="824" y="502" class="small">b13</text>
+  <use xlink:href="#maj_block" y="504"/>
+  <text x="824" y="556" class="small">b14</text>
+  <text x="824" y="574" class="small">b15</text>
+  <use xlink:href="#maj_block" y="576"/>
+  <text x="824" y="628" class="small">b16</text>
+  <text x="824" y="646" class="small">b17</text>
+  <use xlink:href="#maj_block" y="648"/>
+  <text x="824" y="700" class="small">b18</text>
+  <text x="824" y="718" class="small">b19</text>
+  <use xlink:href="#maj_block" y="720"/>
+  <text x="824" y="772" class="small">b20</text>
+  <text x="824" y="790" class="small">b21</text>
+  <use xlink:href="#maj_block" y="792"/>
+  <text x="824" y="844" class="small">b22</text>
+  <text x="824" y="862" class="small">b23</text>
+  <use xlink:href="#maj_block" y="864"/>
+  <text x="824" y="916" class="small">b24</text>
+  <text x="824" y="934" class="small">b25</text>
+  <use xlink:href="#maj_block" y="936"/>
+  <text x="824" y="988" class="small">b26</text>
+  <text x="824" y="1006" class="small">b27</text>
+  <use xlink:href="#maj_block" y="1008"/>
+  <text x="824" y="1060" class="small">b28</text>
+  <text x="824" y="1078" class="small">b29</text>
+  <use xlink:href="#maj_block" y="1080"/>
+  <text x="824" y="1132" class="small">b30</text>
+  <text x="824" y="1150" class="small">b31</text>
+
+  <!-- A1 column -->
+
+  <use xlink:href="#a1_block"/>
+  <use xlink:href="#a1_block" y="36"/>
+  <use xlink:href="#a1_block" y="72"/>
+  <use xlink:href="#a1_block" y="108"/>
+  <use xlink:href="#a1_block" y="144"/>
+  <use xlink:href="#a1_block" y="180"/>
+  <use xlink:href="#a1_block" y="216"/>
+  <use xlink:href="#a1_block" y="252"/>
+  <use xlink:href="#a1_block" y="288"/>
+  <use xlink:href="#a1_block" y="324"/>
+  <use xlink:href="#a1_block" y="360"/>
+  <use xlink:href="#a1_block" y="396"/>
+  <use xlink:href="#a1_block" y="432"/>
+  <use xlink:href="#a1_block" y="468"/>
+  <use xlink:href="#a1_block" y="504"/>
+  <use xlink:href="#a1_block" y="540"/>
+  <use xlink:href="#a1_block" y="576"/>
+  <use xlink:href="#a1_block" y="612"/>
+  <use xlink:href="#a1_block" y="648"/>
+  <use xlink:href="#a1_block" y="684"/>
+  <use xlink:href="#a1_block" y="720"/>
+  <use xlink:href="#a1_block" y="756"/>
+  <use xlink:href="#a1_block" y="792"/>
+  <use xlink:href="#a1_block" y="828"/>
+  <use xlink:href="#a1_block" y="864"/>
+  <use xlink:href="#a1_block" y="900"/>
+  <use xlink:href="#a1_block" y="936"/>
+  <use xlink:href="#a1_block" y="972"/>
+  <use xlink:href="#a1_block" y="1008"/>
+  <use xlink:href="#a1_block" y="1044"/>
+  <use xlink:href="#a1_block" y="1080"/>
+  <use xlink:href="#a1_block" y="1116"/>
+
+  <!-- A2 column -->
+
+  <use xlink:href="#a2_block"/>
+  <use xlink:href="#a2_block" y="72"/>
+  <use xlink:href="#a2_block" y="144"/>
+  <use xlink:href="#a2_block" y="216"/>
+  <use xlink:href="#a2_block" y="288"/>
+  <use xlink:href="#a2_block" y="360"/>
+  <use xlink:href="#a2_block" y="432"/>
+  <use xlink:href="#a2_block" y="504"/>
+  <use xlink:href="#a2_block" y="576"/>
+  <use xlink:href="#a2_block" y="648"/>
+  <use xlink:href="#a2_block" y="720"/>
+  <use xlink:href="#a2_block" y="792"/>
+  <use xlink:href="#a2_block" y="864"/>
+  <use xlink:href="#a2_block" y="936"/>
+  <use xlink:href="#a2_block" y="1008"/>
+  <use xlink:href="#a2_block" y="1080"/>
+
+  <!-- A3 column -->
+
+  <use xlink:href="#a3_block"/>
+  <use xlink:href="#a3_block" y="144"/>
+  <use xlink:href="#a3_block" y="288"/>
+  <use xlink:href="#a3_block" y="432"/>
+  <use xlink:href="#a3_block" y="576"/>
+  <use xlink:href="#a3_block" y="720"/>
+  <use xlink:href="#a3_block" y="864"/>
+  <use xlink:href="#a3_block" y="1008"/>
+
+  <!-- A4 column -->
+
+  <use xlink:href="#a4_block"/>
+  <use xlink:href="#a4_block" y="288"/>
+  <use xlink:href="#a4_block" y="576"/>
+  <use xlink:href="#a4_block" y="864"/>
+
+  <!-- A5 and A6 column -->
+
+  <path d="M138,168 h22 a22,22 0 0,1 0,44 h-22 v-44"/>
+  <path d="M138,456 h22 a22,22 0 0,1 0,44 h-22 v-44"/>
+  <path d="M138,744 h22 a22,22 0 0,1 0,44 h-22 v-44"/>
+  <path d="M138,1032 h22 a22,22 0 0,1 0,44 h-22 v-44"/>
+  <circle cx="133" cy="182" r="5"/>
+  <circle cx="133" cy="756" r="5"/>
+  <circle cx="133" cy="777" r="5"/>
+  <circle cx="133" cy="1046" r="5"/>
+  <path d="M128,182 h-20"/>
+  <path d="M138,200 h-30 v268 h30"/>
+  <path d="M138,485 h-30"/>
+  <path d="M128,756 h-20"/>
+  <path d="M128,777 h-20 v268 h20"/>
+  <path d="M138,1066 h-30"/>
+  <path d="M108,334 h-30"/>
+  <path d="M108,911 h-30"/>
+  <text x="104" y="186" class="small">A5</text>
+  <text x="104" y="489" class="small">A5</text>
+  <text x="104" y="760" class="small">A5</text>
+  <text x="104" y="1070" class="small">A5</text>
+  <text x="75" y="338" class="small">A6</text>
+  <text x="75" y="915" class="small">A6</text>
+
+  <path d="M120,621 h650" style="stroke-dasharray: 9, 5;"/>
 </svg>
