@@ -604,6 +604,9 @@ void print_ramb16_cfg(ramb16_cfg_t* cfg)
 
 }
 
+// for an equivalent schematic, see lut.svg
+const int lut_base_vars[6] = {0 /* A1 */, 1, 0, 0, 0, 1 /* A6 */};
+
 int bool_nextlen(const char* expr, int len)
 {
 	int i, depth;
@@ -690,11 +693,10 @@ fail:
 int parse_boolexpr(const char* expr, uint64_t* lut)
 {
 	int i, j, result, vars[6];
-	const int base_vars[6] = {0 /* A1 */, 1, 0, 0, 0, 1 /* A6 */};
 
 	*lut = 0;
 	for (i = 0; i < 64; i++) {
-		memcpy(vars, base_vars, sizeof(vars));
+		memcpy(vars, lut_base_vars, sizeof(vars));
 		for (j = 0; j < 6; j++) {
 			if (i & (1<<j))
 				vars[j] = !vars[j];
@@ -728,6 +730,138 @@ void printf_lut6(const char* cfg)
 	}
 	printf("first_major 0x%X second_major 0x%X\n", first_major, second_major);
 }
+
+typedef struct _minterm_entry
+{
+	char a[6]; // 0=A1, 5=A6. value can be 0, 1 or 2 for 'removed'
+	int merged;
+} minterm_entry;
+
+// bits is tested only for 32 and 64
+void lut2bool(const uint64_t lut, int bits, char* str)
+{
+	// round 0 needs 64 entries
+	// round 1 (size2): 192
+	// round 2 (size4): 240
+	// round 3 (size8): 160
+	// round 4 (size16): 60
+	// round 5 (size32): 12
+	// round 6 (size64): 1
+	minterm_entry mt[7][256];
+	int mt_size[7];
+	int i, j, k, round, only_diff_bit;
+	int str_end, first_op;
+
+	memset(mt, 0, sizeof(mt));
+	memset(mt_size, 0, sizeof(mt_size));
+
+	for (i = 0; i < bits; i++) {
+		if (lut & (1LL<<i)) {
+			mt[0][mt_size[0]].a[0] = lut_base_vars[0];
+			mt[0][mt_size[0]].a[1] = lut_base_vars[1];
+			mt[0][mt_size[0]].a[2] = lut_base_vars[2];
+			mt[0][mt_size[0]].a[3] = lut_base_vars[3];
+			mt[0][mt_size[0]].a[4] = lut_base_vars[4];
+			mt[0][mt_size[0]].a[5] = lut_base_vars[5];
+			for (j = 0; j < 6; j++) {
+				if (i & (1<<j))
+					mt[0][mt_size[0]].a[j]
+						= !mt[0][mt_size[0]].a[j];
+			}
+			mt_size[0]++;
+		}
+	}
+
+	// special case: no minterms -> empty string
+	if (mt_size[0] == 0) {
+		str[0] = 0;
+		return;
+	}
+
+	// go through five rounds of merging
+	for (round = 1; round < 7; round++) {
+		for (i = 0; i < mt_size[round-1]; i++) {
+			for (j = i+1; j < mt_size[round-1]; j++) {
+				only_diff_bit = -1;
+				for (k = 0; k < 6; k++) {
+					if (mt[round-1][i].a[k] != mt[round-1][j].a[k]) {
+						if (only_diff_bit != -1) {
+							only_diff_bit = -1;
+							break;
+						}
+						only_diff_bit = k;
+					}
+				}
+				if (only_diff_bit != -1) {
+					char new_term[6];
+	
+					for (k = 0; k < 6; k++)
+						new_term[k] =
+						  (k == only_diff_bit) ? 2 
+						    : mt[round-1][i].a[k];
+					for (k = 0; k < mt_size[round]; k++) {
+						if (new_term[0] == mt[round][k].a[0]
+						    && new_term[1] == mt[round][k].a[1]
+						    && new_term[2] == mt[round][k].a[2]
+						    && new_term[3] == mt[round][k].a[3]
+						    && new_term[4] == mt[round][k].a[4]
+						    && new_term[5] == mt[round][k].a[5])
+							break;
+					}
+					if (k >= mt_size[round]) {
+						mt[round][mt_size[round]].a[0] = new_term[0];
+						mt[round][mt_size[round]].a[1] = new_term[1];
+						mt[round][mt_size[round]].a[2] = new_term[2];
+						mt[round][mt_size[round]].a[3] = new_term[3];
+						mt[round][mt_size[round]].a[4] = new_term[4];
+						mt[round][mt_size[round]].a[5] = new_term[5];
+						mt_size[round]++;
+					}
+					mt[round-1][i].merged = 1;
+					mt[round-1][j].merged = 1;
+				}
+			}
+		}
+	}
+	// special case: 222222 -> (A6+~A6)
+	for (i = 0; i < mt_size[6]; i++) {
+		if (mt[6][i].a[0] == 2
+		    && mt[6][i].a[1] == 2
+		    && mt[6][i].a[2] == 2
+		    && mt[6][i].a[3] == 2
+		    && mt[6][i].a[4] == 2
+		    && mt[6][i].a[5] == 2) {
+			strcpy(str, "A6+~A6");
+			return;
+		}
+	}
+
+	str_end = 0;
+	for (round = 0; round < 7; round++) {
+		for (i = 0; i < mt_size[round]; i++) {
+			if (!mt[round][i].merged) {
+				if (str_end)
+					str[str_end++] = '+';
+				first_op = 1;
+				for (j = 0; j < 6; j++) {
+					if (mt[round][i].a[j] != 2) {
+						if (!first_op)
+							str[str_end++] = '*';
+						if (!mt[round][i].a[j])
+							str[str_end++] = '~';
+						str[str_end++] = 'A';
+						str[str_end++] = '1' + j;
+						first_op = 0;
+					}
+				}
+			}
+		}
+	}
+	str[str_end] = 0;
+	// TODO: This could be further simplified, see Petrick's method.
+	// XOR don't simplify well, try A2@A3
+}
+
 
 int g_FLR_value = -1;
 
