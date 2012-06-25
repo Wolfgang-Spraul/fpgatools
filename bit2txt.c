@@ -1,10 +1,8 @@
 //
 // Author: Wolfgang Spraul
 //
-// This program is free software; you can redistribute it and/or
-// modify it under the terms of the GNU General Public License
-// as published by the Free Software Foundation; either version
-// 3 of the License, or (at your option) any later version.
+// This is free and unencumbered software released into the public domain.
+// For details see the UNLICENSE file at the root of the source tree.
 //
 
 #include <stdio.h>
@@ -231,39 +229,6 @@ void hexdump(int indent, const uint8_t* data, int len)
 		i += 8;
 	}
 }
-
-typedef struct ramb16_cfg
-{
-	uint8_t byte[64];
-} __attribute((packed)) ramb16_cfg_t;
-
-static const int ramb_data_width_encoding[8] =
-{
-	/* 000 */  1,
-	/* 001 */  2,
-	/* 010 */  4,
-	/* 011 */  9,
-	/* 100 */ 18,
-	/* 101 */ 36,
-	/* 110 */ -1, // unsupported
-	/* 111 */  0
-};
-
-static const char* ramb16_cfg_str_min24[128] =
-{
-	[257 - 256] "WRITE_MODE_A_NO_CHANGE",
-	[258 - 256] "WRITE_MODE_B_NO_CHANGE",
-	[259 - 256] "WRITE_MODE_A_READ_FIRST",
-	[260 - 256] "WRITE_MODE_B_READ_FIRST",
-	[264 - 256] "RSTTYPE_ASYNC",
-	[265 - 256] "RST_PRIORITY_A_CE",
-	[266 - 256] "RST_PRIORITY_B_CE",
-	[277 - 256] "DOA_REG",
-	[278 - 256] "DOB_REG",
-	[279 - 256] "RSTTYPE_ASYNC",
-	[286 - 256] "EN_RSTRAM_A",
-	[337 - 256] "EN_RSTRAM_B",
-};
 
 static const char* iob_xc6slx4_sitenames[896*2/8] =
 {
@@ -492,11 +457,61 @@ static const char* iob_xc6slx4_sitenames[896*2/8] =
 		   "P74"
 };
 
+typedef struct ramb16_cfg
+{
+	uint8_t byte[64];
+} __attribute((packed)) ramb16_cfg_t;
+
+static const int ramb_data_width_encoding[8] =
+{
+	/* 000 */  1,
+	/* 001 */  2,
+	/* 010 */  4,
+	/* 011 */  9,
+	/* 100 */ 18,
+	/* 101 */ 36,
+	/* 110 */ -1, // unsupported
+	/* 111 */  0
+};
+
+static const char* ramb16_cfg_str_min24[128] =
+{
+	[261 - 256] "RST_PRIORITY_B_CE",
+	[262 - 256] "RST_PRIORITY_A_CE",
+	[263 - 256] "RSTTYPE_ASYNC",
+	[269 - 256] "WRITE_MODE_B_NO_CHANGE",
+	[270 - 256] "WRITE_MODE_A_NO_CHANGE",
+	[267 - 256] "WRITE_MODE_B_READ_FIRST",
+	[268 - 256] "WRITE_MODE_A_READ_FIRST",
+	[273 - 256] "EN_RSTRAM_A",
+	[281 - 256] "DOB_REG",
+	[282 - 256] "DOA_REG",
+	[350 - 256] "EN_RSTRAM_B",
+};
+
 void print_ramb16_cfg(ramb16_cfg_t* cfg)
 {
 	int i;
+	uint8_t u8;
 	char forward_bits[128], reverse_bits[128];
 
+	for (i = 0; i < 32; i++) {
+		u8 = cfg->byte[i*2];
+		cfg->byte[i*2] = cfg->byte[i*2+1];
+		cfg->byte[i*2+1] = u8;
+	}
+	for (i = 0; i < 64; i++) {
+		u8 = 0;
+		if (cfg->byte[i] & 0x01) u8 |= 0x80;
+		if (cfg->byte[i] & 0x02) u8 |= 0x40;
+		if (cfg->byte[i] & 0x04) u8 |= 0x20;
+		if (cfg->byte[i] & 0x08) u8 |= 0x10;
+		if (cfg->byte[i] & 0x10) u8 |= 0x08;
+		if (cfg->byte[i] & 0x20) u8 |= 0x04;
+		if (cfg->byte[i] & 0x40) u8 |= 0x02;
+		if (cfg->byte[i] & 0x80) u8 |= 0x01;
+		cfg->byte[i] = u8;
+	}
 	printf("{\n");
 	// hexdump(1 /* indent */, &cfg->byte[0], 64 /* len */);
 
@@ -542,47 +557,47 @@ void print_ramb16_cfg(ramb16_cfg_t* cfg)
 	{
 		int encoding;
 
-		if (forward_bits[267-256] == reverse_bits[267-256]
-		    && forward_bits[269-256] == reverse_bits[269-256]
-		    && forward_bits[271-256] == reverse_bits[271-256]) {
+		if (forward_bits[256-256] == reverse_bits[256-256]
+		    && forward_bits[258-256] == reverse_bits[258-256]
+		    && forward_bits[260-256] == reverse_bits[260-256]) {
 			encoding = 0;
-			if (forward_bits[267-256])
-				encoding |= 0x04;
-			if (forward_bits[269-256])
-				encoding |= 0x02;
-			if (forward_bits[271-256])
+			if (forward_bits[256-256])
 				encoding |= 0x01;
+			if (forward_bits[258-256])
+				encoding |= 0x02;
+			if (forward_bits[260-256])
+				encoding |= 0x04;
 			if (encoding < sizeof(ramb_data_width_encoding) / sizeof(ramb_data_width_encoding[0])
 			    && ramb_data_width_encoding[encoding] != -1) {
 				printf(" data_width_a %i\n", ramb_data_width_encoding[encoding]);
-				forward_bits[267-256] = 0;
-				reverse_bits[267-256] = 0;
-				forward_bits[269-256] = 0;
-				reverse_bits[269-256] = 0;
-				forward_bits[271-256] = 0;
-				reverse_bits[271-256] = 0;
+				forward_bits[256-256] = 0;
+				reverse_bits[256-256] = 0;
+				forward_bits[258-256] = 0;
+				reverse_bits[258-256] = 0;
+				forward_bits[260-256] = 0;
+				reverse_bits[260-256] = 0;
 			}
 		}
-		if (forward_bits[268-256] == reverse_bits[268-256]
-		    && forward_bits[256-256] == reverse_bits[256-256]
-		    && forward_bits[270-256] == reverse_bits[270-256]) {
+		if (forward_bits[257-256] == reverse_bits[257-256]
+		    && forward_bits[259-256] == reverse_bits[259-256]
+		    && forward_bits[271-256] == reverse_bits[271-256]) {
 			encoding = 0;
-			if (forward_bits[268-256])
-				encoding |= 0x04;
-			if (forward_bits[256-256])
-				encoding |= 0x02;
-			if (forward_bits[270-256])
+			if (forward_bits[257-256])
 				encoding |= 0x01;
+			if (forward_bits[259-256])
+				encoding |= 0x04;
+			if (forward_bits[271-256])
+				encoding |= 0x02;
 			if (encoding < sizeof(ramb_data_width_encoding) / sizeof(ramb_data_width_encoding[0])
 			    && ramb_data_width_encoding[encoding] != -1) {
 				printf(" data_width_b %i\n",
 					ramb_data_width_encoding[encoding]);
-				forward_bits[268-256] = 0;
-				reverse_bits[268-256] = 0;
-				forward_bits[256-256] = 0;
-				reverse_bits[256-256] = 0;
-				forward_bits[270-256] = 0;
-				reverse_bits[270-256] = 0;
+				forward_bits[257-256] = 0;
+				reverse_bits[257-256] = 0;
+				forward_bits[259-256] = 0;
+				reverse_bits[259-256] = 0;
+				forward_bits[271-256] = 0;
+				reverse_bits[271-256] = 0;
 			}
 		}
 	}

@@ -1,10 +1,8 @@
 //
 // Author: Wolfgang Spraul
 //
-// This program is free software; you can redistribute it and/or
-// modify it under the terms of the GNU General Public License
-// as published by the Free Software Foundation; either version
-// 3 of the License, or (at your option) any later version.
+// This is free and unencumbered software released into the public domain.
+// For details see the UNLICENSE file at the root of the source tree.
 //
 
 #include <stdio.h>
