@@ -457,50 +457,118 @@ static const char* iob_xc6slx4_sitenames[896*2/8] =
 		   "P74"
 };
 
+#define ATOM_MAX_BITS	32+1 // -1 signals end of array
+
+typedef struct _cfg_atom
+{
+	int must_0[ATOM_MAX_BITS];
+	int must_1[ATOM_MAX_BITS];
+	const char* str;
+	int flag; // used to remember a state such as 'found'
+} cfg_atom_t;
+
+int atom_found(char* bits, const cfg_atom_t* atom)
+{
+	int i;
+	for (i = 0; atom->must_0[i] != -1; i++)
+		if (bits[atom->must_0[i]])
+			break;
+	if (atom->must_0[i] != -1)
+		return 0;
+	for (i = 0; atom->must_1[i] != -1; i++)
+		if (!bits[atom->must_1[i]])
+			break;
+	return atom->must_1[i] == -1;
+}
+
+void atom_remove(char* bits, const cfg_atom_t* atom)
+{
+	int i;
+	for (i = 0; atom->must_1[i] != -1; i++) {
+		if (bits[atom->must_1[i]])
+			bits[atom->must_1[i]] = 0;
+	}
+}
+
 typedef struct ramb16_cfg
 {
 	uint8_t byte[64];
 } __attribute((packed)) ramb16_cfg_t;
 
-static const int ramb16_default_forward_bits[] =
-	{1,3,6,9,11,137,138,158,159,210,211,-1};
-static const int ramb16_default_reverse_bits[] =
-	{1,3,6,9,11,137,138,158,159,210,211,-1};
-
-static const int ramb16_data_width_encoding[8] =
+static const cfg_atom_t ramb16_default =
 {
-	/* 000 */  1,
-	/* 001 */  2,
-	/* 010 */  4,
-	/* 011 */  9,
-	/* 100 */ 18,
-	/* 101 */ 36,
-	/* 110 */ -1, // unsupported
-	/* 111 */  0
+	{-1}, {12,13, 274,275,276,277,316,317,318,319,
+	       420,421,422,423,-1}, "default_bits"
 };
 
-static const char* ramb16_pair_str[256][3] =
+static cfg_atom_t ramb16_atoms[] =
 {
-	//     01 10  11
-	[133] { 0, 0, "RST_PRIORITY_B_CE" },
-	[134] { 0, 0, "RST_PRIORITY_A_CE" },
-	[135] { 0, 0, "RSTTYPE_ASYNC" },
-	[139] { 0, 0, "WRITE_MODE_B_READ_FIRST" },
-	[140] { 0, 0, "WRITE_MODE_A_READ_FIRST" },
-	[141] { 0, 0, "WRITE_MODE_B_NO_CHANGE" },
-	[142] { 0, 0, "WRITE_MODE_A_NO_CHANGE" },
-	[145] { 0, 0, "EN_RSTRAM_A" },
-	[153] { 0, 0, "DOB_REG" },
-	[154] { 0, 0, "DOA_REG" },
-	[222] { 0, 0, "EN_RSTRAM_B" },
+  // data_width_a
+  {{264,265,260,261,256,257,-1},{                        -1},"data_width_a 1"},
+  {{264,265,260,261,        -1},{                256,257,-1},"data_width_a 2"},
+  {{264,265,        256,257,-1},{        260,261,        -1},"data_width_a 4"},
+  {{264,265,                -1},{        260,261,256,257,-1},"data_width_a 9"},
+  {{        260,261,256,257,-1},{264,265,                -1},"data_width_a 18"},
+  {{        260,261,        -1},{264,265,        256,257,-1},"data_width_a 36"},
+  {{                        -1},{264,265,260,261,256,257,-1},"data_width_a 0"},
+
+  // data_width_b
+  {{262,263,286,287,258,259,-1},{                        -1},"data_width_b 1"},
+  {{262,263,286,287,        -1},{                258,259,-1},"data_width_b 2"},
+  {{262,263,        258,259,-1},{        286,287,        -1},"data_width_b 4"},
+  {{262,263,                -1},{        286,287,258,259,-1},"data_width_b 9"},
+  {{        286,287,258,259,-1},{262,263,                -1},"data_width_b 18"},
+  {{        286,287,        -1},{262,263,        258,259,-1},"data_width_b 36"},
+  {{                        -1},{262,263,286,287,258,259,-1},"data_width_b 0"},
+
+	{ {          -1}, { 26,  27, -1}, "CLKAINV:CLKA" },
+	{ {          -1}, { 30,  31, -1}, "CLKBINV:CLKB"  },
+	{ {          -1}, {266, 267, -1}, "RST_PRIORITY_B_CE"  },
+	{ {          -1}, {268, 269, -1}, "RST_PRIORITY_A_CE"  },
+	{ {          -1}, {270, 271, -1}, "RSTTYPE_ASYNC"  },
+	{ {          -1}, {278, 279, -1}, "WRITE_MODE_B_READ_FIRST"  },
+	{ {          -1}, {280, 281, -1}, "WRITE_MODE_A_READ_FIRST"  },
+	{ {          -1}, {282, 283, -1}, "WRITE_MODE_B_NO_CHANGE"  },
+	{ {          -1}, {284, 285, -1}, "WRITE_MODE_A_NO_CHANGE"  },
+	{ {          -1}, {290, 291, -1}, "EN_RSTRAM_A"  },
+	{ {          -1}, {306, 307, -1}, "DOB_REG"  },
+	{ {          -1}, {308, 309, -1}, "DOA_REG"  },
+	{ {          -1}, {444, 445, -1}, "EN_RSTRAM_B" },
+	{ {431, 467, -1}, {430, 466, -1}, "ENAINV:ENA" },
+	{ {430, 431, 466, 467, -1}, {-1}, "ENAINV:ENA_B" },
+	{ {465, 469, -1}, {464, 468, -1}, "ENBINV:ENB" },
+	{ {464, 465, 468, 469, -1}, {-1}, "ENBINV:ENB_B" },
+	{ {          -1}, { 20,  21, -1}, "REGCEAINV:REGCEA" },
+	{ { 20,  21, -1}, {          -1}, "REGCEAINV:REGCEA_B" },
+	{ {          -1}, {  8,   9, -1}, "REGCEBINV:REGCEB" },
+	{ {  8,   9, -1}, {          -1}, "REGCEBINV:REGCEB_B" },
+	{ { 24,  25, -1}, {          -1}, "RSTAINV:RSTA" },
+	{ {          -1}, { 24,  25, -1}, "RSTAINV:RSTA_B" },
+	{ {          -1}, {  4,   5, -1}, "RSTBINV:RSTB" },
+	{ {  4,   5, -1}, {          -1}, "RSTBINV:RSTB_B" },
+	{ {          -1}, {      19, -1}, "WEA0INV:WEA0" },
+	{ {      19, -1}, {          -1}, "WEA0INV:WEA0_B" },
+	{ {          -1}, {      23, -1}, "WEA2INV:WEA1" },
+	{ {      23, -1}, {          -1}, "WEA2INV:WEA1_B" },
+	{ {          -1}, {      18, -1}, "WEA2INV:WEA2" },
+	{ {      18, -1}, {          -1}, "WEA2INV:WEA2_B" },
+	{ {          -1}, {      22, -1}, "WEA2INV:WEA3" },
+	{ {      22, -1}, {          -1}, "WEA2INV:WEA3_B" },
+	{ {          -1}, {       7, -1}, "WEB0INV:WEB0" },
+	{ {       7, -1}, {          -1}, "WEB0INV:WEB0_B" },
+	{ {          -1}, {       3, -1}, "WEB1INV:WEB1" },
+	{ {       3, -1}, {          -1}, "WEB1INV:WEB1_B" },
+	{ {          -1}, {       6, -1}, "WEB2INV:WEB2" },
+	{ {       6, -1}, {          -1}, "WEB2INV:WEB2_B" },
+	{ {          -1}, {       2, -1}, "WEB3INV:WEB3" },
+	{ {       2, -1}, {          -1}, "WEB3INV:WEB3_B" },
 };
 
 void print_ramb16_cfg(ramb16_cfg_t* cfg)
 {
-	char forward_bits[256], reverse_bits[256];
-	int pair[256]; // value will be 0..3
+	char bits[512];
 	uint8_t u8;
-	int i, j, first_extra;
+	int i, first_extra;
 
 	for (i = 0; i < 32; i++) {
 		u8 = cfg->byte[i*2];
@@ -522,126 +590,58 @@ void print_ramb16_cfg(ramb16_cfg_t* cfg)
 
 	//
 	// Bits 0..255 come from minor 23, Bits 256..511 from minor 24.
-	// It looks like each set of 256 bits is divided into two halfs
-	// of 128 bits that are swept forward and backward to form 2-bit
-	// pairs, pairs 0..127 are formed out of bits 0..127 and 255..128,
+	// Each set of 256 bits is divided into two halfs of 128 bits
+	// that are swept forward and backward to form 2-bit pairs,
+	// pairs 0..127 are formed out of bits 0..127 and 255..128,
 	// p128..p255 are formed out of b256..b383 and b511..b384.
+	// Since so much bit twiddling is already happening, we are sorting
+	// the bits so that pairs are next to each other.
 	// The notation for a pair is "p8=01".
-	//
 
 	// minor 23
 	for (i = 0; i < 128; i++) {
-		forward_bits[i] = (cfg->byte[i/8] & (1<<(i%8))) != 0;
-		reverse_bits[i] = (cfg->byte[(255-i)/8]
+		bits[i*2] = (cfg->byte[i/8] & (1<<(i%8))) != 0;
+		bits[i*2+1] = (cfg->byte[(255-i)/8]
 			& (1<<(7-(i%8)))) != 0;
 	}
 	// minor 24
 	for (i = 0; i < 128; i++) {
-		forward_bits[128+i] = (cfg->byte[32+i/8] & (1<<(i%8))) != 0;
-		reverse_bits[128+i] = (cfg->byte[32+(255-i)/8]
+		bits[256+i*2] = (cfg->byte[32+i/8] & (1<<(i%8))) != 0;
+		bits[256+i*2+1] = (cfg->byte[32+(255-i)/8]
 			& (1<<(7-(i%8)))) != 0;
 	}
 
 	printf("{\n");
 	// hexdump(1 /* indent */, &cfg->byte[0], 64 /* len */);
-
-	// default
-	if (ramb16_default_forward_bits[0] != -1
-	    || ramb16_default_reverse_bits[0] != -1) {
-		for (i = 0; ramb16_default_forward_bits[i] != -1; i++) {
-			if (!forward_bits[ramb16_default_forward_bits[i]])
-				break;
-		}
-		j = 0;
-		if (ramb16_default_forward_bits[i] == -1) {
-			while (ramb16_default_reverse_bits[j] != -1) {
-				if (!reverse_bits[ramb16_default_reverse_bits[j]])
-					break;
-				j++;
-			}
-		}
-		if (ramb16_default_forward_bits[i] == -1
-		    && ramb16_default_reverse_bits[j] == -1) {
+	if (ramb16_default.must_1[0] != -1) {
+		if (atom_found(bits, &ramb16_default)) {
 			printf("  default_bits\n");
-			for (i = 0; ramb16_default_forward_bits[i] != -1; i++)
-				forward_bits[ramb16_default_forward_bits[i]] = 0;
-			for (i = 0; ramb16_default_reverse_bits[i] != -1; i++)
-				reverse_bits[ramb16_default_reverse_bits[i]] = 0;
+			atom_remove(bits, &ramb16_default);
 		} else
 			printf("  #W Not all default bits set.\n");
 	}
-
-	// pair after removing default bits
-	for (i = 0; i < 256; i++) {
-		pair[i] = 0;
-		if (forward_bits[i])
-			pair[i] |= 0x02;
-		if (reverse_bits[i])
-			pair[i] |= 0x01;
+	for (i = 0; i < sizeof(ramb16_atoms)/sizeof(ramb16_atoms[0]); i++) {
+		if (atom_found(bits, &ramb16_atoms[i])) {
+			printf("  %s\n", ramb16_atoms[i].str);
+			ramb16_atoms[i].flag = 1;
+		} else
+			ramb16_atoms[i].flag = 0;
 	}
-
-	// data width
-	{
-		int encoding;
-
-		if ((!pair[128] || pair[128] == 0x03)
-		    && (!pair[130] || pair[130] == 0x03)
-		    && (!pair[132] || pair[132] == 0x03)) {
-			encoding = 0;
-			if (pair[128]) encoding |= 0x01;
-			if (pair[130]) encoding |= 0x02;
-			if (pair[132]) encoding |= 0x04;
-
-			if (encoding < sizeof(ramb16_data_width_encoding) / sizeof(ramb16_data_width_encoding[0])
-			    && ramb16_data_width_encoding[encoding] != -1) {
-				printf("  data_width_a %i\n", ramb16_data_width_encoding[encoding]);
-				pair[128] = 0;
-				pair[130] = 0;
-				pair[132] = 0;
-			}
-		}
-		if ((!pair[129] || pair[129] == 0x03)
-		    && (!pair[131] || pair[131] == 0x03)
-		    && (!pair[143] || pair[143] == 0x03)) {
-			encoding = 0;
-			if (pair[129]) encoding |= 0x01;
-			if (pair[131]) encoding |= 0x04;
-			if (pair[143]) encoding |= 0x02;
-
-			if (encoding < sizeof(ramb16_data_width_encoding) / sizeof(ramb16_data_width_encoding[0])
-			    && ramb16_data_width_encoding[encoding] != -1) {
-				printf("  data_width_b %i\n", ramb16_data_width_encoding[encoding]);
-				pair[129] = 0;
-				pair[131] = 0;
-				pair[143] = 0;
-			}
-		}
+	for (i = 0; i < sizeof(ramb16_atoms)/sizeof(ramb16_atoms[0]); i++) {
+		if (ramb16_atoms[i].flag)
+			atom_remove(bits, &ramb16_atoms[i]);
 	}
-
-	// pairs
-	for (i = 0; i < 256; i++) {
-		if (pair[i]) {
-			if (ramb16_pair_str[i][pair[i]-1]) {
-				printf("  %s\n", ramb16_pair_str[i][pair[i]-1]);
-				pair[i] = 0;
-			}
-		}
-	}
-
-	// extra pairs
+	// extra bits
 	first_extra = 1;
-	for (i = 0; i < 256; i++) {
-		if (pair[i]) {
+	for (i = 0; i < 512; i++) {
+		if (bits[i]) {
 			if (first_extra) {
-				printf("  #W Extra pairs set.\n");
+				printf("  #W Extra bits set.\n");
 				first_extra = 0;
 			}
-			printf("  p%i=%c%c\n", i,
-				 (pair[i] & 0x02) ? '1' : '0',
-				 (pair[i] & 0x01) ? '1' : '0');
+			printf("  b%i\n", i);
 		}
 	}
-
 	printf("}\n");
 }
 
