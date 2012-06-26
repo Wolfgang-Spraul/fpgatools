@@ -462,7 +462,12 @@ typedef struct ramb16_cfg
 	uint8_t byte[64];
 } __attribute((packed)) ramb16_cfg_t;
 
-static const int ramb_data_width_encoding[8] =
+static const int ramb16_default_forward_bits[] =
+	{1,3,6,9,11,137,138,158,159,210,211,-1};
+static const int ramb16_default_reverse_bits[] =
+	{1,3,6,9,11,137,138,158,159,210,211,-1};
+
+static const int ramb16_data_width_encoding[8] =
 {
 	/* 000 */  1,
 	/* 001 */  2,
@@ -474,26 +479,28 @@ static const int ramb_data_width_encoding[8] =
 	/* 111 */  0
 };
 
-static const char* ramb16_cfg_str_min24[128] =
+static const char* ramb16_pair_str[256][3] =
 {
-	[261 - 256] "RST_PRIORITY_B_CE",
-	[262 - 256] "RST_PRIORITY_A_CE",
-	[263 - 256] "RSTTYPE_ASYNC",
-	[269 - 256] "WRITE_MODE_B_NO_CHANGE",
-	[270 - 256] "WRITE_MODE_A_NO_CHANGE",
-	[267 - 256] "WRITE_MODE_B_READ_FIRST",
-	[268 - 256] "WRITE_MODE_A_READ_FIRST",
-	[273 - 256] "EN_RSTRAM_A",
-	[281 - 256] "DOB_REG",
-	[282 - 256] "DOA_REG",
-	[350 - 256] "EN_RSTRAM_B",
+	//     01 10  11
+	[133] { 0, 0, "RST_PRIORITY_B_CE" },
+	[134] { 0, 0, "RST_PRIORITY_A_CE" },
+	[135] { 0, 0, "RSTTYPE_ASYNC" },
+	[139] { 0, 0, "WRITE_MODE_B_READ_FIRST" },
+	[140] { 0, 0, "WRITE_MODE_A_READ_FIRST" },
+	[141] { 0, 0, "WRITE_MODE_B_NO_CHANGE" },
+	[142] { 0, 0, "WRITE_MODE_A_NO_CHANGE" },
+	[145] { 0, 0, "EN_RSTRAM_A" },
+	[153] { 0, 0, "DOB_REG" },
+	[154] { 0, 0, "DOA_REG" },
+	[222] { 0, 0, "EN_RSTRAM_B" },
 };
 
 void print_ramb16_cfg(ramb16_cfg_t* cfg)
 {
-	int i;
+	char forward_bits[256], reverse_bits[256];
+	int pair[256]; // value will be 0..3
 	uint8_t u8;
-	char forward_bits[128], reverse_bits[128];
+	int i, j, first_extra;
 
 	for (i = 0; i < 32; i++) {
 		u8 = cfg->byte[i*2];
@@ -512,111 +519,130 @@ void print_ramb16_cfg(ramb16_cfg_t* cfg)
 		if (cfg->byte[i] & 0x80) u8 |= 0x01;
 		cfg->byte[i] = u8;
 	}
-	printf("{\n");
-	// hexdump(1 /* indent */, &cfg->byte[0], 64 /* len */);
 
 	//
 	// Bits 0..255 come from minor 23, Bits 256..511 from minor 24.
 	// It looks like each set of 256 bits is divided into two halfs
-	// of 128 bits that are swept across the same memory locations
-	// in the chip. On the first sweep, some bits are turned on.
-	// On the second sweep, reverse from the end, most/all of the
-	// enabled bits stay on, some more are enabled, some disabled.
+	// of 128 bits that are swept forward and backward to form 2-bit
+	// pairs, pairs 0..127 are formed out of bits 0..127 and 255..128,
+	// p128..p255 are formed out of b256..b383 and b511..b384.
+	// The notation for a pair is "p8=01".
 	//
-		
+
+	// minor 23
 	for (i = 0; i < 128; i++) {
 		forward_bits[i] = (cfg->byte[i/8] & (1<<(i%8))) != 0;
 		reverse_bits[i] = (cfg->byte[(255-i)/8]
 			& (1<<(7-(i%8)))) != 0;
 	}
-	//
-	// "fe" = forward enable (enable in forward sweep)
-	// "re" = reverse enable (enable in reverse sweep)
-	// "rd" = reverse disable (disable in reverse sweep)
-	//
+	// minor 24
 	for (i = 0; i < 128; i++) {
-		if (forward_bits[i])
-			printf(" fe%i ?\n", i);
-	}
-	for (i = 127; i >= 0; i--) {
-		if (reverse_bits[i] != forward_bits[i]) {
-			printf(" r%c%i ?\n",
-				reverse_bits[i] ? 'e' : 'd', i);
-		}
+		forward_bits[128+i] = (cfg->byte[32+i/8] & (1<<(i%8))) != 0;
+		reverse_bits[128+i] = (cfg->byte[32+(255-i)/8]
+			& (1<<(7-(i%8)))) != 0;
 	}
 
-	// minor 24
-	printf("\n");
-	for (i = 0; i < 128; i++) {
-		forward_bits[i] = (cfg->byte[32+i/8] & (1<<(i%8))) != 0;
-		reverse_bits[i] = (cfg->byte[32+(255-i)/8]
-			& (1<<(7-(i%8)))) != 0;
+	printf("{\n");
+	// hexdump(1 /* indent */, &cfg->byte[0], 64 /* len */);
+
+	// default
+	if (ramb16_default_forward_bits[0] != -1
+	    || ramb16_default_reverse_bits[0] != -1) {
+		for (i = 0; ramb16_default_forward_bits[i] != -1; i++) {
+			if (!forward_bits[ramb16_default_forward_bits[i]])
+				break;
+		}
+		j = 0;
+		if (ramb16_default_forward_bits[i] == -1) {
+			while (ramb16_default_reverse_bits[j] != -1) {
+				if (!reverse_bits[ramb16_default_reverse_bits[j]])
+					break;
+				j++;
+			}
+		}
+		if (ramb16_default_forward_bits[i] == -1
+		    && ramb16_default_reverse_bits[j] == -1) {
+			printf("  default_bits\n");
+			for (i = 0; ramb16_default_forward_bits[i] != -1; i++)
+				forward_bits[ramb16_default_forward_bits[i]] = 0;
+			for (i = 0; ramb16_default_reverse_bits[i] != -1; i++)
+				reverse_bits[ramb16_default_reverse_bits[i]] = 0;
+		} else
+			printf("  #W Not all default bits set.\n");
+	}
+
+	// pair after removing default bits
+	for (i = 0; i < 256; i++) {
+		pair[i] = 0;
+		if (forward_bits[i])
+			pair[i] |= 0x02;
+		if (reverse_bits[i])
+			pair[i] |= 0x01;
 	}
 
 	// data width
 	{
 		int encoding;
 
-		if (forward_bits[256-256] == reverse_bits[256-256]
-		    && forward_bits[258-256] == reverse_bits[258-256]
-		    && forward_bits[260-256] == reverse_bits[260-256]) {
+		if ((!pair[128] || pair[128] == 0x03)
+		    && (!pair[130] || pair[130] == 0x03)
+		    && (!pair[132] || pair[132] == 0x03)) {
 			encoding = 0;
-			if (forward_bits[256-256])
-				encoding |= 0x01;
-			if (forward_bits[258-256])
-				encoding |= 0x02;
-			if (forward_bits[260-256])
-				encoding |= 0x04;
-			if (encoding < sizeof(ramb_data_width_encoding) / sizeof(ramb_data_width_encoding[0])
-			    && ramb_data_width_encoding[encoding] != -1) {
-				printf(" data_width_a %i\n", ramb_data_width_encoding[encoding]);
-				forward_bits[256-256] = 0;
-				reverse_bits[256-256] = 0;
-				forward_bits[258-256] = 0;
-				reverse_bits[258-256] = 0;
-				forward_bits[260-256] = 0;
-				reverse_bits[260-256] = 0;
+			if (pair[128]) encoding |= 0x01;
+			if (pair[130]) encoding |= 0x02;
+			if (pair[132]) encoding |= 0x04;
+
+			if (encoding < sizeof(ramb16_data_width_encoding) / sizeof(ramb16_data_width_encoding[0])
+			    && ramb16_data_width_encoding[encoding] != -1) {
+				printf("  data_width_a %i\n", ramb16_data_width_encoding[encoding]);
+				pair[128] = 0;
+				pair[130] = 0;
+				pair[132] = 0;
 			}
 		}
-		if (forward_bits[257-256] == reverse_bits[257-256]
-		    && forward_bits[259-256] == reverse_bits[259-256]
-		    && forward_bits[271-256] == reverse_bits[271-256]) {
+		if ((!pair[129] || pair[129] == 0x03)
+		    && (!pair[131] || pair[131] == 0x03)
+		    && (!pair[143] || pair[143] == 0x03)) {
 			encoding = 0;
-			if (forward_bits[257-256])
-				encoding |= 0x01;
-			if (forward_bits[259-256])
-				encoding |= 0x04;
-			if (forward_bits[271-256])
-				encoding |= 0x02;
-			if (encoding < sizeof(ramb_data_width_encoding) / sizeof(ramb_data_width_encoding[0])
-			    && ramb_data_width_encoding[encoding] != -1) {
-				printf(" data_width_b %i\n",
-					ramb_data_width_encoding[encoding]);
-				forward_bits[257-256] = 0;
-				reverse_bits[257-256] = 0;
-				forward_bits[259-256] = 0;
-				reverse_bits[259-256] = 0;
-				forward_bits[271-256] = 0;
-				reverse_bits[271-256] = 0;
+			if (pair[129]) encoding |= 0x01;
+			if (pair[131]) encoding |= 0x04;
+			if (pair[143]) encoding |= 0x02;
+
+			if (encoding < sizeof(ramb16_data_width_encoding) / sizeof(ramb16_data_width_encoding[0])
+			    && ramb16_data_width_encoding[encoding] != -1) {
+				printf("  data_width_b %i\n", ramb16_data_width_encoding[encoding]);
+				pair[129] = 0;
+				pair[131] = 0;
+				pair[143] = 0;
 			}
 		}
 	}
 
-	for (i = 0; i < 128; i++) {
-		if (forward_bits[i])
-			printf(" fe%i %s\n", 256+i, ramb16_cfg_str_min24[i] ?
-				ramb16_cfg_str_min24[i] : "?");
-	}
-	for (i = 127; i >= 0; i--) {
-		if (reverse_bits[i] != forward_bits[i]) {
-			printf(" r%c%i %s\n",
-				reverse_bits[i] ? 'e' : 'd', 256+i,
-				ramb16_cfg_str_min24[i]
-					? ramb16_cfg_str_min24[i] : "?");
+	// pairs
+	for (i = 0; i < 256; i++) {
+		if (pair[i]) {
+			if (ramb16_pair_str[i][pair[i]-1]) {
+				printf("  %s\n", ramb16_pair_str[i][pair[i]-1]);
+				pair[i] = 0;
+			}
 		}
 	}
+
+	// extra pairs
+	first_extra = 1;
+	for (i = 0; i < 256; i++) {
+		if (pair[i]) {
+			if (first_extra) {
+				printf("  #W Extra pairs set.\n");
+				first_extra = 0;
+			}
+			printf("  p%i=%c%c\n", i,
+				 (pair[i] & 0x02) ? '1' : '0',
+				 (pair[i] & 0x01) ? '1' : '0');
+		}
+	}
+
 	printf("}\n");
-
 }
 
 // for an equivalent schematic, see lut.svg
@@ -1708,7 +1734,7 @@ int main(int argc, char** argv)
 							break;
 					}
 					if (k >= 64) continue; // empty
-					printf("RAMB16_X0Y%i config\n", ((cur_row-1)*4 + j)*2);
+					printf("RAMB16_X0Y%i inst\n", ((cur_row-1)*4 + j)*2);
 					print_ramb16_cfg(&ramb16_cfg);
 				}
 				i++; // we processed two frames
