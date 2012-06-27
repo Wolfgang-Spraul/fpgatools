@@ -1,2 +1,4 @@
 bit2txt
+bit2txt.o
 draw_fpga
+draw_fpga.o

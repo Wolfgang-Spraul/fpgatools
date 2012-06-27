@@ -7,13 +7,20 @@
 #
 
 CFLAGS = -Wall -g
-TARGETS = bit2txt draw_fpga
-OBJS = $(TARGETS:=.o)
+#TARGETS = bit2txt draw_fpga
+#OBJS = $(TARGETS:=.o)
 LDLIBS = -lxml2
 
-.PHONY:	all clean
+all: bit2txt draw_fpga
 
-all:		$(TARGETS)
+bit2txt: bit2txt.o helper.o
+
+bit2txt.o:bit2txt.c helper.h
+
+helper.o:helper.c helper.h
+
+draw_fpga: draw_fpga.o
 
 clean:
-		rm -f $(OBJS) $(TARGETS)
+		rm -f bit2txt bit2txt.o helper.o draw_fpga
+.PHONY:	all clean

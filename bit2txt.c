@@ -5,43 +5,11 @@
 // For details see the UNLICENSE file at the root of the source tree.
 //
 
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <stdint.h>
-#include <sys/types.h>
-
-#define PROGRAM_REVISION "2012-06-01"
+#include "helper.h"
 
 // 120 MB max bitstream size is enough for now
 #define BITSTREAM_READ_PAGESIZE		4096
 #define BITSTREAM_READ_MAXPAGES		30000	// 120 MB max bitstream
-
-__inline uint16_t __swab16(uint16_t x)
-{
-        return (((x & 0x00ffU) << 8) | \
-            ((x & 0xff00U) >> 8)); \
-}
-
-__inline uint32_t __swab32(uint32_t x)
-{
-        return (((x & 0x000000ffUL) << 24) | \
-            ((x & 0x0000ff00UL) << 8) | \
-            ((x & 0x00ff0000UL) >> 8) | \
-            ((x & 0xff000000UL) >> 24)); \
-}
-
-#define __be32_to_cpu(x) __swab32((uint32_t)(x))
-#define __be16_to_cpu(x) __swab16((uint16_t)(x))
-#define __cpu_to_be32(x) __swab32((uint32_t)(x))
-#define __cpu_to_be16(x) __swab16((uint16_t)(x))
-
-#define __le32_to_cpu(x) ((uint32_t)(x))
-#define __le16_to_cpu(x) ((uint16_t)(x))
-#define __cpu_to_le32(x) ((uint32_t)(x))
-#define __cpu_to_le16(x) ((uint16_t)(x))
-
-void help();
 
 //
 // xc6 configuration registers, documentation in ug380, page90
@@ -53,61 +21,6 @@ enum {
 	GENERAL1, GENERAL2, GENERAL3, GENERAL4, GENERAL5, MODE_REG, PU_GWE,
 	PU_GTS, MFWR, CCLK_FREQ, SEU_OPT, EXP_SIGN, RDBK_SIGN, BOOTSTS,
 	EYE_MASK, CBC_REG
-};
-
-#define REG_R	0x01
-#define REG_W	0x02
-#define REG_RW	(REG_R | REG_W)
-
-typedef struct
-{
-	char* name;
-	int rw;		// REG_READ / REG_WRITE
-} REG_INFO;
-
-const REG_INFO xc6_regs[] =
-{
-	[CRC] = {"CRC", REG_W},
-	[FAR_MAJ] = {"FAR_MAJ", REG_W},	// frame address register block and major
-	[FAR_MIN] = {"FAR_MIN", REG_W},	// frame address register minor
-	[FDRI] = {"FDRI", REG_W}, // frame data input
-	[FDRO] = {"FDRO", REG_R}, // frame data output
-	[CMD] = {"CMD", REG_RW}, // command
-	[CTL] = {"CTL", REG_RW}, // control
-	[MASK] = {"MASK", REG_RW}, // control mask
-	[STAT] = {"STAT", REG_R}, // status
-	[LOUT] = {"LOUT", REG_W}, // legacy output for serial daisy-chain
-	[COR1] = {"COR1", REG_RW}, // configuration option 1
-	[COR2] = {"COR2", REG_RW}, // configuration option 2
-	[PWRDN_REG] = {"PWRDN_REG", REG_RW}, // power-down option register
-	[FLR] = {"FLR", REG_W}, // frame length register
-	[IDCODE] = {"IDCODE", REG_RW}, // product IDCODE
-	[CWDT] = {"CWDT", REG_RW}, // configuration watchdog timer
-	[HC_OPT_REG] = {"HC_OPT_REG", REG_RW}, // house clean option register
-	[CSBO] = {"CSBO", REG_W}, // CSB output for parallel daisy-chaining
-	[GENERAL1] = {"GENERAL1", REG_RW}, // power-up self test or loadable
-					   // program addr
-	[GENERAL2] = {"GENERAL2", REG_RW}, // power-up self test or loadable
-					   // program addr and new SPI opcode
-	[GENERAL3] = {"GENERAL3", REG_RW}, // golden bitstream address
-	[GENERAL4] = {"GENERAL4", REG_RW}, // golden bitstream address and new
-					   // SPI opcode
-	[GENERAL5] = {"GENERAL5", REG_RW}, // user-defined register for
-					   // fail-safe scheme
-	[MODE_REG] = {"MODE_REG", REG_RW}, // reboot mode
-	[PU_GWE] = {"PU_GWE", REG_W}, // GWE cycle during wake-up from suspend
-	[PU_GTS] = {"PU_GTS", REG_W}, // GTS cycle during wake-up from suspend
-	[MFWR] = {"MFWR", REG_W}, // multi-frame write register
-	[CCLK_FREQ] = {"CCLK_FREQ", REG_W}, // CCLK frequency select for
-					    // master mode
-	[SEU_OPT] = {"SEU_OPT", REG_RW}, // SEU frequency, enable and status
-	[EXP_SIGN] = {"EXP_SIGN", REG_RW}, // expected readback signature for
-					   // SEU detect
-	[RDBK_SIGN] = {"RDBK_SIGN", REG_W}, // readback signature for readback
-					    // cmd and SEU
-	[BOOTSTS] = {"BOOTSTS", REG_R}, // boot history register
-	[EYE_MASK] = {"EYE_MASK", REG_RW}, // mask pins for multi-pin wake-up
-	[CBC_REG] = {"CBC_REG", REG_W} // initial CBC value register 
 };
 
 // The highest 4 bits are the binary revision and not
@@ -135,7 +48,6 @@ const IDCODE_S idcodes[] =
 	{"XC6SLX150", 0x0401D093}
 };
 
-// CMD register - ug380, page 92
 enum {
 	CMD_NULL = 0, CMD_WCFG, CMD_MFW, CMD_LFRM, CMD_RCFG, CMD_START,
 	CMD_RCRC = 7, CMD_AGHIGH, CMD_GRESTORE = 10, CMD_SHUTDOWN,
@@ -186,316 +98,12 @@ const MAJOR majors[] =
 	/* 17 */ { 0, 30 }
 };
 
-static const char* bitstr(uint32_t value, int digits)
-{
-	static char str[2 /* "0b" */ + 32 + 1 /* '\0' */];
-	int i;
-
-	str[0] = '0';
-	str[1] = 'b';
-	for (i = 0; i < digits; i++)
-		str[digits-i+1] = (value & (1<<i)) ? '1' : '0';
-	str[digits+2] = 0;
-	return str;
-}
-
-void hexdump(int indent, const uint8_t* data, int len)
-{
-	int i, j;
-	char fmt_str[16] = "%s@%05x %02x";
-	char indent_str[16];
-
-	if (indent > 15)
-		indent = 15;
-	for (i = 0; i < indent; i++)
-		indent_str[i] = ' ';
-	indent_str[i] = 0;
-
-	i = 0;
-	if (len <= 0x100)
-		fmt_str[5] = '2';
-	else if (len <= 0x10000)
-		fmt_str[5] = '4';
-	else
-		fmt_str[5] = '6';
-
-	while (i < len) {
-		printf(fmt_str, indent_str, i, data[i]);
-		for (j = 1; (j < 8) && (i + j < len); j++) {
-			if (i + j >= len) break;
-			printf(" %02x", data[i+j]);
-		}
-		printf("\n");
-		i += 8;
-	}
-}
-
-static const char* iob_xc6slx4_sitenames[896*2/8] =
-{
-	[0x0000/8] "P70",
-		   "P69",
-		   "P67",
-		   "P66",
-		   "P65",
-		   "P64",
-		   "P62",
-		   "P61",
-		   "P60",
-		   "P59",
-		   "P58",
-		   "P57",
-		   0,
-		   0,
-		   0,
-		   0,
-	[0x0080/8] 0,
-		   0,
-		   "P56",
-		   "P55",
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   "P51",
-		   "P50",
-		   0,
-		   0,
-		   0,
-		   0,
-	[0x0100/8] 0,
-		   0,
-		   0,
-		   0,
-		   "UNB131",
-		   "UNB132",
-		   "P48",
-		   "P47",
-		   "P46",
-		   "P45",
-		   "P44",
-		   "P43",
-		   0,
-		   0,
-		   "P41",
-		   "P40",
-	[0x0180/8] "P39",
-		   "P38",
-		   "P35",
-		   "P34",
-		   "P33",
-		   "P32",
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-	[0x0200/8] "P30",
-		   "P29",
-		   "P27",
-		   "P26",
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   "P24",
-		   "P23",
-		   "P22",
-		   "P21",
-		   0,
-		   0,
-	[0x0280/8] 0,
-		   0,
-		   0,
-		   0,
-		   "P17",
-		   "P16",
-		   "P15",
-		   "P14",
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-	[0x0300/8] "P12",
-		   "P11",
-		   "P10",
-		   "P9",
-		   "P8",
-		   "P7",
-		   "P6",
-		   "P5",
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   "P2",
-		   "P1",
-	[0x0380/8] "P144",
-		   "P143",
-		   "P142",
-		   "P141",
-		   "P140",
-		   "P139",
-		   "P138",
-		   "P137",
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-	[0x0400/8] 0,
-		   0,
-		   0,
-		   0,
-		   "P134",
-		   "P133",
-		   "P132",
-		   "P131",
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   "P127",
-		   "P126",
-	[0x0480/8] "P124",
-		   "P123",
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   "P121",
-		   "P120",
-		   "P119",
-		   "P118",
-		   "P117",
-		   "P116",
-		   "P115",
-		   "P114",
-	[0x0500/8] "P112",
-		   "P111",
-		   "P105",
-		   "P104",
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   "P102",
-		   "P101",
-		   "P99",
-		   "P98",
-		   "P97",
-	[0x0580/8] 0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   "P95",
-		   "P94",
-		   "P93",
-		   "P92",
-		   0,
-		   0,
-	[0x0600/8] 0,
-		   0,
-		   0,
-		   "P88",
-		   "P87",
-		   0,
-		   "P85",
-		   "P84",
-		   0,
-		   0,
-		   "P83",
-		   "P82",
-		   "P81",
-		   "P80",
-		   "P79",
-		   "P78",
-	[0x0680/8] 0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   "P75",
-		   "P74"
-};
-
-#define ATOM_MAX_BITS	32+1 // -1 signals end of array
-
-typedef struct _cfg_atom
-{
-	int must_0[ATOM_MAX_BITS];
-	int must_1[ATOM_MAX_BITS];
-	const char* str;
-	int flag; // used to remember a state such as 'found'
-} cfg_atom_t;
-
-int atom_found(char* bits, const cfg_atom_t* atom)
-{
-	int i;
-	for (i = 0; atom->must_0[i] != -1; i++)
-		if (bits[atom->must_0[i]])
-			break;
-	if (atom->must_0[i] != -1)
-		return 0;
-	for (i = 0; atom->must_1[i] != -1; i++)
-		if (!bits[atom->must_1[i]])
-			break;
-	return atom->must_1[i] == -1;
-}
-
-void atom_remove(char* bits, const cfg_atom_t* atom)
-{
-	int i;
-	for (i = 0; atom->must_1[i] != -1; i++) {
-		if (bits[atom->must_1[i]])
-			bits[atom->must_1[i]] = 0;
-	}
-}
-
 typedef struct ramb16_cfg
 {
 	uint8_t byte[64];
 } __attribute((packed)) ramb16_cfg_t;
 
-static const cfg_atom_t ramb16_default =
+static const cfg_atom_t ramb16_instance =
 {
 	{-1}, {12,13, 274,275,276,277,316,317,318,319,
 	       420,421,422,423,-1}, "default_bits"
@@ -521,47 +129,61 @@ static cfg_atom_t ramb16_atoms[] =
   {{        286,287,        -1},{262,263,        258,259,-1},"data_width_b 36"},
   {{                        -1},{262,263,286,287,258,259,-1},"data_width_b 0"},
 
-	{ {          -1}, { 26,  27, -1}, "CLKAINV:CLKA" },
-	{ {          -1}, { 30,  31, -1}, "CLKBINV:CLKB"  },
-	{ {          -1}, {266, 267, -1}, "RST_PRIORITY_B_CE"  },
-	{ {          -1}, {268, 269, -1}, "RST_PRIORITY_A_CE"  },
-	{ {          -1}, {270, 271, -1}, "RSTTYPE_ASYNC"  },
-	{ {          -1}, {278, 279, -1}, "WRITE_MODE_B_READ_FIRST"  },
-	{ {          -1}, {280, 281, -1}, "WRITE_MODE_A_READ_FIRST"  },
-	{ {          -1}, {282, 283, -1}, "WRITE_MODE_B_NO_CHANGE"  },
-	{ {          -1}, {284, 285, -1}, "WRITE_MODE_A_NO_CHANGE"  },
-	{ {          -1}, {290, 291, -1}, "EN_RSTRAM_A"  },
-	{ {          -1}, {306, 307, -1}, "DOB_REG"  },
-	{ {          -1}, {308, 309, -1}, "DOA_REG"  },
-	{ {          -1}, {444, 445, -1}, "EN_RSTRAM_B" },
-	{ {431, 467, -1}, {430, 466, -1}, "ENAINV:ENA" },
-	{ {430, 431, 466, 467, -1}, {-1}, "ENAINV:ENA_B" },
-	{ {465, 469, -1}, {464, 468, -1}, "ENBINV:ENB" },
-	{ {464, 465, 468, 469, -1}, {-1}, "ENBINV:ENB_B" },
-	{ {          -1}, { 20,  21, -1}, "REGCEAINV:REGCEA" },
-	{ { 20,  21, -1}, {          -1}, "REGCEAINV:REGCEA_B" },
-	{ {          -1}, {  8,   9, -1}, "REGCEBINV:REGCEB" },
-	{ {  8,   9, -1}, {          -1}, "REGCEBINV:REGCEB_B" },
-	{ { 24,  25, -1}, {          -1}, "RSTAINV:RSTA" },
-	{ {          -1}, { 24,  25, -1}, "RSTAINV:RSTA_B" },
-	{ {          -1}, {  4,   5, -1}, "RSTBINV:RSTB" },
-	{ {  4,   5, -1}, {          -1}, "RSTBINV:RSTB_B" },
-	{ {          -1}, {      19, -1}, "WEA0INV:WEA0" },
-	{ {      19, -1}, {          -1}, "WEA0INV:WEA0_B" },
-	{ {          -1}, {      23, -1}, "WEA2INV:WEA1" },
-	{ {      23, -1}, {          -1}, "WEA2INV:WEA1_B" },
-	{ {          -1}, {      18, -1}, "WEA2INV:WEA2" },
-	{ {      18, -1}, {          -1}, "WEA2INV:WEA2_B" },
-	{ {          -1}, {      22, -1}, "WEA2INV:WEA3" },
-	{ {      22, -1}, {          -1}, "WEA2INV:WEA3_B" },
-	{ {          -1}, {       7, -1}, "WEB0INV:WEB0" },
-	{ {       7, -1}, {          -1}, "WEB0INV:WEB0_B" },
-	{ {          -1}, {       3, -1}, "WEB1INV:WEB1" },
-	{ {       3, -1}, {          -1}, "WEB1INV:WEB1_B" },
-	{ {          -1}, {       6, -1}, "WEB2INV:WEB2" },
-	{ {       6, -1}, {          -1}, "WEB2INV:WEB2_B" },
-	{ {          -1}, {       2, -1}, "WEB3INV:WEB3" },
-	{ {       2, -1}, {          -1}, "WEB3INV:WEB3_B" },
+	// required
+	{ {           -1}, {266, 267, -1}, "RST_PRIORITY_B:CE"  },
+	{ {266, 267,  -1}, {          -1}, "RST_PRIORITY_B:SR"  },
+	{ {           -1}, {268, 269, -1}, "RST_PRIORITY_A:CE"  },
+	{ {268, 269,  -1}, {          -1}, "RST_PRIORITY_A:SR"  },
+	{ {           -1}, {290, 291, -1}, "EN_RSTRAM_A:TRUE"  },
+	{ {290, 291,  -1}, {          -1}, "EN_RSTRAM_A:FALSE"  },
+	{ {           -1}, {444, 445, -1}, "EN_RSTRAM_B:TRUE" },
+	{ {444, 445,  -1}, {          -1}, "EN_RSTRAM_B:FALSE" },
+
+	// optional
+	{ {           -1}, { 26,  27, -1}, "CLKAINV:CLKA" },
+	{ { 26,  27,  -1}, {          -1}, "CLKAINV:CLKA_B" }, // def
+	{ {           -1}, { 30,  31, -1}, "CLKBINV:CLKB"  },
+	{ { 30,  31,  -1}, {          -1}, "CLKBINV:CLKB_B" }, // def
+	{ {           -1}, {270, 271, -1}, "RSTTYPE:ASYNC"  },
+	{ {270, 271,  -1}, {          -1}, "RSTTYPE:SYNC"  }, // def
+	{ {           -1}, {278, 279, -1}, "WRITE_MODE_B:READ_FIRST"  },
+	{ {           -1}, {280, 281, -1}, "WRITE_MODE_A:READ_FIRST"  },
+	{ {           -1}, {282, 283, -1}, "WRITE_MODE_B:NO_CHANGE"  },
+	{ {           -1}, {284, 285, -1}, "WRITE_MODE_A:NO_CHANGE"  },
+	{ {278, 279, 282, 283, -1},  {-1}, "WRITE_MODE_B:WRITE_FIRST"  }, //def
+	{ {280, 281, 284, 285, -1},  {-1}, "WRITE_MODE_A:WRITE_FIRST"  }, //def
+	{ {           -1}, {306, 307, -1}, "DOB_REG:1"  },
+	{ {306, 306,  -1}, {          -1}, "DOB_REG:0"  }, // def
+	{ {           -1}, {308, 309, -1}, "DOA_REG:1"  },
+	{ {308, 309,  -1}, {          -1}, "DOA_REG:0"  }, // def
+	{ {431, 467,  -1}, {430, 466, -1}, "ENAINV:ENA" }, // def
+	{ {430, 431, 466, 467, -1},  {-1}, "ENAINV:ENA_B" },
+	{ {465, 469,  -1}, {464, 468, -1}, "ENBINV:ENB" }, // def
+	{ {464, 465, 468, 469, -1},  {-1}, "ENBINV:ENB_B" },
+	{ {           -1}, { 20,  21, -1}, "REGCEAINV:REGCEA" }, // def
+	{ { 20,  21,  -1}, {          -1}, "REGCEAINV:REGCEA_B" },
+	{ {           -1}, {  8,   9, -1}, "REGCEBINV:REGCEB" },
+	{ {  8,   9,  -1}, {          -1}, "REGCEBINV:REGCEB_B" }, // def
+	{ { 24,  25,  -1}, {          -1}, "RSTAINV:RSTA" }, // def
+	{ {           -1}, { 24,  25, -1}, "RSTAINV:RSTA_B" },
+	{ {           -1}, {  4,   5, -1}, "RSTBINV:RSTB" }, // def
+	{ {  4,   5,  -1}, {          -1}, "RSTBINV:RSTB_B" },
+	{ {           -1}, {      19, -1}, "WEA0INV:WEA0" }, // def
+	{ { 19,       -1}, {          -1}, "WEA0INV:WEA0_B" },
+	{ {           -1}, {      23, -1}, "WEA2INV:WEA1" }, // def
+	{ { 23,       -1}, {          -1}, "WEA2INV:WEA1_B" },
+	{ {           -1}, {      18, -1}, "WEA2INV:WEA2" }, // def
+	{ { 18,       -1}, {          -1}, "WEA2INV:WEA2_B" },
+	{ {           -1}, {      22, -1}, "WEA2INV:WEA3" }, // def
+	{ { 22,       -1}, {          -1}, "WEA2INV:WEA3_B" },
+	{ {           -1}, {       7, -1}, "WEB0INV:WEB0" }, // def
+	{ {  7,       -1}, {          -1}, "WEB0INV:WEB0_B" },
+	{ {           -1}, {       3, -1}, "WEB1INV:WEB1" }, // def
+	{ {  3,       -1}, {          -1}, "WEB1INV:WEB1_B" },
+	{ {           -1}, {       6, -1}, "WEB2INV:WEB2" }, // def
+	{ {  6,       -1}, {          -1}, "WEB2INV:WEB2_B" },
+	{ {           -1}, {       2, -1}, "WEB3INV:WEB3" }, // def
+	{ {  2,       -1}, {          -1}, "WEB3INV:WEB3_B" },
 };
 
 void print_ramb16_cfg(ramb16_cfg_t* cfg)
@@ -613,15 +235,9 @@ void print_ramb16_cfg(ramb16_cfg_t* cfg)
 
 	printf("{\n");
 	// hexdump(1 /* indent */, &cfg->byte[0], 64 /* len */);
-	if (ramb16_default.must_1[0] != -1) {
-		if (atom_found(bits, &ramb16_default)) {
-			printf("  default_bits\n");
-			atom_remove(bits, &ramb16_default);
-		} else
-			printf("  #W Not all default bits set.\n");
-	}
 	for (i = 0; i < sizeof(ramb16_atoms)/sizeof(ramb16_atoms[0]); i++) {
-		if (atom_found(bits, &ramb16_atoms[i])) {
+		if (atom_found(bits, &ramb16_atoms[i])
+		    && ramb16_atoms[i].must_1[0] != -1) {
 			printf("  %s\n", ramb16_atoms[i].str);
 			ramb16_atoms[i].flag = 1;
 		} else
@@ -630,6 +246,15 @@ void print_ramb16_cfg(ramb16_cfg_t* cfg)
 	for (i = 0; i < sizeof(ramb16_atoms)/sizeof(ramb16_atoms[0]); i++) {
 		if (ramb16_atoms[i].flag)
 			atom_remove(bits, &ramb16_atoms[i]);
+	}
+	// instantiation bits
+	if (ramb16_instance.must_1[0] != -1) {
+		if (atom_found(bits, &ramb16_instance)) {
+			for (i = 0; ramb16_instance.must_1[i] != -1; i++)
+				printf("  b%i\n", ramb16_instance.must_1[i]);
+			atom_remove(bits, &ramb16_instance);
+		} else
+			printf("  #W Not all instantiation bits set.\n");
 	}
 	// extra bits
 	first_extra = 1;
@@ -645,274 +270,16 @@ void print_ramb16_cfg(ramb16_cfg_t* cfg)
 	printf("}\n");
 }
 
-// for an equivalent schematic, see lut.svg
-const int lut_base_vars[6] = {0 /* A1 */, 1, 0, 0, 0, 1 /* A6 */};
-
-int bool_nextlen(const char* expr, int len)
-{
-	int i, depth;
-
-	if (!len) return -1;
-	i = 0;
-	if (expr[i] == '~') {
-		i++;
-		if (i >= len) return -1;
-	}
-	if (expr[i] == '(') {
-		if (i+2 >= len) return -1;
-		i++;
-		for (depth = 1; depth && i < len; i++) {
-			if (expr[i] == '(')
-				depth++;
-			else if (expr[i] == ')')
-				depth--;
-		}
-		if (depth) return -1;
-		return i;
-	}
-	if (expr[i] == 'A') {
-		i++;
-		if (i >= len) return -1;
-		if (expr[i] < '1' || expr[i] > '6') return -1;
-		return i+1;
-	}
-	return -1;
-}
-
-// + or, * and, @ xor, ~ not
-// var must point to array of A1..A6 variables
-int bool_eval(const char* expr, int len, const int* var)
-{
-	int i, negate, result, oplen;
-
-	oplen = bool_nextlen(expr, len);
-	if (oplen < 1) goto fail;
-	i = 0;
-	negate = 0;
-	if (expr[i] == '~') {
-		negate = 1;
-		if (++i >= oplen) goto fail;
-	}
-	if (expr[i] == '(') {
-		if (i+2 >= oplen) goto fail;
-		result = bool_eval(&expr[i+1], oplen-i-2, var);
-		if (result == -1) goto fail;
-	} else if (expr[i] == 'A') {
-		if (i+1 >= oplen) goto fail;
-		if (expr[i+1] < '1' || expr[i+1] > '6')
-			goto fail;
-		result = var[expr[i+1]-'1'];
-		if (oplen != i+2) goto fail;
-	} else goto fail;
-	if (negate) result = !result;
-	i = oplen;
-	while (i < len) {
-		if (expr[i] == '+') {
-			if (result) return 1;
-			return bool_eval(&expr[i+1], len-i-1, var);
-		}
-		if (expr[i] == '@') {
-			int right_side = bool_eval(&expr[i+1], len-i-1, var);
-			if (right_side == -1) goto fail;
-			return (result && !right_side) || (!result && right_side);
-		}
-		if (expr[i] != '*') goto fail;
-		if (!result) break;
-		if (++i >= len) goto fail;
-
-		oplen = bool_nextlen(&expr[i], len-i);
-		if (oplen < 1) goto fail;
-		result = bool_eval(&expr[i], oplen, var);
-		if (result == -1) goto fail;
-		i += oplen;
-	}
-	return result;
-fail:
-	return -1;
-}
-
-int parse_boolexpr(const char* expr, uint64_t* lut)
-{
-	int i, j, result, vars[6];
-
-	*lut = 0;
-	for (i = 0; i < 64; i++) {
-		memcpy(vars, lut_base_vars, sizeof(vars));
-		for (j = 0; j < 6; j++) {
-			if (i & (1<<j))
-				vars[j] = !vars[j];
-		}
-		result = bool_eval(expr, strlen(expr), vars);
-		if (result == -1) return -1;
-		if (result) *lut |= 1LL<<i;
-	}
-	return 0;
-}
-
-void printf_lut6(const char* cfg)
-{
-	uint64_t lut;
-	uint32_t first_major, second_major;
-	int i;
-
-	first_major = 0;
-	second_major = 0;
-	parse_boolexpr(cfg, &lut);
-
-	for (i = 0; i < 16; i++) {
-		if (lut & (1LL<<(i*4)))
-			first_major |= 1<<(i*2);
-		if (lut & (1LL<<(i*4+1)))
-			first_major |= 1<<(i*2+1);
-		if (lut & (1LL<<(i*4+2)))
-			second_major |= 1<<(i*2);
-		if (lut & (1LL<<(i*4+3)))
-			second_major |= 1<<(i*2+1);
-	}
-	printf("first_major 0x%X second_major 0x%X\n", first_major, second_major);
-}
-
-typedef struct _minterm_entry
-{
-	char a[6]; // 0=A1, 5=A6. value can be 0, 1 or 2 for 'removed'
-	int merged;
-} minterm_entry;
-
-// bits is tested only for 32 and 64
-void lut2bool(const uint64_t lut, int bits, char* str)
-{
-	// round 0 needs 64 entries
-	// round 1 (size2): 192
-	// round 2 (size4): 240
-	// round 3 (size8): 160
-	// round 4 (size16): 60
-	// round 5 (size32): 12
-	// round 6 (size64): 1
-	minterm_entry mt[7][256];
-	int mt_size[7];
-	int i, j, k, round, only_diff_bit;
-	int str_end, first_op;
-
-	memset(mt, 0, sizeof(mt));
-	memset(mt_size, 0, sizeof(mt_size));
-
-	for (i = 0; i < bits; i++) {
-		if (lut & (1LL<<i)) {
-			mt[0][mt_size[0]].a[0] = lut_base_vars[0];
-			mt[0][mt_size[0]].a[1] = lut_base_vars[1];
-			mt[0][mt_size[0]].a[2] = lut_base_vars[2];
-			mt[0][mt_size[0]].a[3] = lut_base_vars[3];
-			mt[0][mt_size[0]].a[4] = lut_base_vars[4];
-			mt[0][mt_size[0]].a[5] = lut_base_vars[5];
-			for (j = 0; j < 6; j++) {
-				if (i & (1<<j))
-					mt[0][mt_size[0]].a[j]
-						= !mt[0][mt_size[0]].a[j];
-			}
-			mt_size[0]++;
-		}
-	}
-
-	// special case: no minterms -> empty string
-	if (mt_size[0] == 0) {
-		str[0] = 0;
-		return;
-	}
-
-	// go through five rounds of merging
-	for (round = 1; round < 7; round++) {
-		for (i = 0; i < mt_size[round-1]; i++) {
-			for (j = i+1; j < mt_size[round-1]; j++) {
-				only_diff_bit = -1;
-				for (k = 0; k < 6; k++) {
-					if (mt[round-1][i].a[k] != mt[round-1][j].a[k]) {
-						if (only_diff_bit != -1) {
-							only_diff_bit = -1;
-							break;
-						}
-						only_diff_bit = k;
-					}
-				}
-				if (only_diff_bit != -1) {
-					char new_term[6];
-	
-					for (k = 0; k < 6; k++)
-						new_term[k] =
-						  (k == only_diff_bit) ? 2 
-						    : mt[round-1][i].a[k];
-					for (k = 0; k < mt_size[round]; k++) {
-						if (new_term[0] == mt[round][k].a[0]
-						    && new_term[1] == mt[round][k].a[1]
-						    && new_term[2] == mt[round][k].a[2]
-						    && new_term[3] == mt[round][k].a[3]
-						    && new_term[4] == mt[round][k].a[4]
-						    && new_term[5] == mt[round][k].a[5])
-							break;
-					}
-					if (k >= mt_size[round]) {
-						mt[round][mt_size[round]].a[0] = new_term[0];
-						mt[round][mt_size[round]].a[1] = new_term[1];
-						mt[round][mt_size[round]].a[2] = new_term[2];
-						mt[round][mt_size[round]].a[3] = new_term[3];
-						mt[round][mt_size[round]].a[4] = new_term[4];
-						mt[round][mt_size[round]].a[5] = new_term[5];
-						mt_size[round]++;
-					}
-					mt[round-1][i].merged = 1;
-					mt[round-1][j].merged = 1;
-				}
-			}
-		}
-	}
-	// special case: 222222 -> (A6+~A6)
-	for (i = 0; i < mt_size[6]; i++) {
-		if (mt[6][i].a[0] == 2
-		    && mt[6][i].a[1] == 2
-		    && mt[6][i].a[2] == 2
-		    && mt[6][i].a[3] == 2
-		    && mt[6][i].a[4] == 2
-		    && mt[6][i].a[5] == 2) {
-			strcpy(str, "A6+~A6");
-			return;
-		}
-	}
-
-	str_end = 0;
-	for (round = 0; round < 7; round++) {
-		for (i = 0; i < mt_size[round]; i++) {
-			if (!mt[round][i].merged) {
-				if (str_end)
-					str[str_end++] = '+';
-				first_op = 1;
-				for (j = 0; j < 6; j++) {
-					if (mt[round][i].a[j] != 2) {
-						if (!first_op)
-							str[str_end++] = '*';
-						if (!mt[round][i].a[j])
-							str[str_end++] = '~';
-						str[str_end++] = 'A';
-						str[str_end++] = '1' + j;
-						first_op = 0;
-					}
-				}
-			}
-		}
-	}
-	str[str_end] = 0;
-	// TODO: This could be further simplified, see Petrick's method.
-	// XOR don't simplify well, try A2@A3
-}
-
-
 int g_FLR_value = -1;
 
 int main(int argc, char** argv)
 {
 	uint8_t* bit_data = 0;
 	FILE* bitf = 0;
-	uint32_t bit_cur, bit_eof, cmd_len, u32, u16_off, bit_off;
+	int bit_cur;
+	uint32_t bit_eof, cmd_len, u32, u16_off, bit_off;
 	uint32_t last_processed_pos;
-	uint16_t str_len, u16, packet_hdr_type, packet_hdr_opcode;
+	uint16_t u16, packet_hdr_type, packet_hdr_opcode;
 	uint16_t packet_hdr_register, packet_hdr_wordcount;
 	int info = 0; // whether to print #I info messages (offsets and others)
 	char* bit_path = 0;
@@ -923,12 +290,12 @@ int main(int argc, char** argv)
 	//
 
 	if (argc < 2) {
-		help();
+		printf_help();
 		return EXIT_SUCCESS;
 	}
 	for (i = 1; i < argc; i++) {
 		if (!strcmp(argv[i], "--help")) {
-			help();
+			printf_help();
 			return EXIT_SUCCESS;
 		}
 		if (!strcmp(argv[i], "--version")) {
@@ -940,13 +307,13 @@ int main(int argc, char** argv)
 		} else {
 			bit_path = argv[i];
 			if (argc > i+1) { // only 1 path supported
-				help();
+				printf_help();
 				return EXIT_FAILURE;
 			}
 		}
 	}
 	if (!bit_path) { // shouldn't get here, just in case
-		help();
+		printf_help();
 		return EXIT_FAILURE;
 	}
 
@@ -986,42 +353,7 @@ int main(int argc, char** argv)
 
 	printf("bit2txt_format 1\n");
 
-	// offset 0 - magic header
-	if (bit_eof < 13) {
-		fprintf(stderr, "#E File size %i below minimum of 13 bytes.\n",
-			bit_eof);
-		goto fail;
-	}
-	printf("hex");
-	for (i = 0; i < 13; i++)
-		printf(" %.02x", bit_data[i]);
-	printf("\n");
-
-	// 4 strings 'a' - 'd', 16-bit length
-	bit_cur = 13;
-	for (i = 'a'; i <= 'd'; i++) {
-		if (bit_eof < bit_cur + 3) {
-			fprintf(stderr, "#E Unexpected EOF at %i.\n", bit_eof);
-			goto fail;
-		}
-		if (bit_data[bit_cur] != i) {
-			fprintf(stderr, "#E Expected string code '%c', got "
-				"'%c'.\n", i, bit_data[bit_cur]);
-			goto fail;
-		}
-		str_len = __be16_to_cpu(*(uint16_t*)&bit_data[bit_cur + 1]);
-		if (bit_eof < bit_cur + 3 + str_len) {
-			fprintf(stderr, "#E Unexpected EOF at %i.\n", bit_eof);
-			goto fail;
-		}
-		if (bit_data[bit_cur + 3 + str_len - 1] != 0) {
-			fprintf(stderr, "#E z-terminated string ends with %0xh"
-				".\n", bit_data[bit_cur + 3 + str_len - 1]);
-			goto fail;
-		}
-		printf("header_str_%c %s\n", i, &bit_data[bit_cur + 3]);
-		bit_cur += 3 + str_len;
-	}
+	if (printf_header(bit_data, bit_eof, 0 /* inpos */, &bit_cur)) goto fail;
 
 	//
 	// commands
@@ -1130,14 +462,6 @@ int main(int argc, char** argv)
 		// looks valid.
 
 		if (packet_hdr_type == 1) {
-			if (packet_hdr_register >= sizeof(xc6_regs)
-				/ sizeof(xc6_regs[0])
-			    || xc6_regs[packet_hdr_register].name[0] == 0) {
-				printf("#W 0x%x=0x%x unknown T1 reg %u, "
-					"skipping %d words.\n", u16_off, u16,
-				packet_hdr_register, packet_hdr_wordcount);
-				continue;
-			}
 			if (packet_hdr_register == IDCODE) {
 				if (packet_hdr_wordcount != 2) {
 					fprintf(stderr, "#E 0x%x=0x%x Unexpected IDCODE"
@@ -1614,13 +938,131 @@ int main(int argc, char** argv)
 					printf("#W Expected reserved 0, got 0x%x.\n", u16);
 				continue;
 			}
-			printf("#W T1 %s (%u words)",
-				xc6_regs[packet_hdr_register].name,
-				packet_hdr_wordcount);
-			if (packet_hdr_register == CRC) {
-				printf("\n"); // omit CRC for diff beauty
+			if (packet_hdr_register == EYE_MASK) {
+				if (packet_hdr_wordcount != 1) {
+					fprintf(stderr, "#E 0x%x=0x%x Unexpected EYE_MASK"
+						" wordcount %u.\n", u16_off,
+					u16, packet_hdr_wordcount);
+					goto fail;
+				}
+				u16 = __be16_to_cpu(*(uint16_t*)&bit_data[u16_off+2]);
+				u16_off+=2;
+				printf("T1 EYE_MASK 0x%X\n", u16);
 				continue;
 			}
+			if (packet_hdr_register == GENERAL1) {
+				if (packet_hdr_wordcount != 1) {
+					fprintf(stderr, "#E 0x%x=0x%x Unexpected GENERAL1"
+						" wordcount %u.\n", u16_off,
+					u16, packet_hdr_wordcount);
+					goto fail;
+				}
+				u16 = __be16_to_cpu(*(uint16_t*)&bit_data[u16_off+2]);
+				u16_off+=2;
+				printf("T1 GENERAL1 0x%X\n", u16);
+				continue;
+			}
+			if (packet_hdr_register == GENERAL2) {
+				if (packet_hdr_wordcount != 1) {
+					fprintf(stderr, "#E 0x%x=0x%x Unexpected GENERAL1"
+						" wordcount %u.\n", u16_off,
+					u16, packet_hdr_wordcount);
+					goto fail;
+				}
+				u16 = __be16_to_cpu(*(uint16_t*)&bit_data[u16_off+2]);
+				u16_off+=2;
+				printf("T1 GENERAL2 0x%X\n", u16);
+				continue;
+			}
+			if (packet_hdr_register == GENERAL3) {
+				if (packet_hdr_wordcount != 1) {
+					fprintf(stderr, "#E 0x%x=0x%x Unexpected GENERAL1"
+						" wordcount %u.\n", u16_off,
+					u16, packet_hdr_wordcount);
+					goto fail;
+				}
+				u16 = __be16_to_cpu(*(uint16_t*)&bit_data[u16_off+2]);
+				u16_off+=2;
+				printf("T1 GENERAL3 0x%X\n", u16);
+				continue;
+			}
+			if (packet_hdr_register == GENERAL4) {
+				if (packet_hdr_wordcount != 1) {
+					fprintf(stderr, "#E 0x%x=0x%x Unexpected GENERAL1"
+						" wordcount %u.\n", u16_off,
+					u16, packet_hdr_wordcount);
+					goto fail;
+				}
+				u16 = __be16_to_cpu(*(uint16_t*)&bit_data[u16_off+2]);
+				u16_off+=2;
+				printf("T1 GENERAL4 0x%X\n", u16);
+				continue;
+			}
+			if (packet_hdr_register == GENERAL5) {
+				if (packet_hdr_wordcount != 1) {
+					fprintf(stderr, "#E 0x%x=0x%x Unexpected GENERAL1"
+						" wordcount %u.\n", u16_off,
+					u16, packet_hdr_wordcount);
+					goto fail;
+				}
+				u16 = __be16_to_cpu(*(uint16_t*)&bit_data[u16_off+2]);
+				u16_off+=2;
+				printf("T1 GENERAL5 0x%X\n", u16);
+				continue;
+			}
+			if (packet_hdr_register == EXP_SIGN) {
+				if (packet_hdr_wordcount != 2) {
+					fprintf(stderr, "#E 0x%x=0x%x Unexpected EXP_SIGN"
+						" wordcount %u.\n", u16_off,
+					u16, packet_hdr_wordcount);
+					goto fail;
+				}
+				u32 = __be32_to_cpu(*(uint32_t*)&bit_data[u16_off+2]);
+				u16_off+=4;
+				printf("T1 EXP_SIGN 0x%X\n", u32);
+				continue;
+			}
+			if (packet_hdr_register == SEU_OPT) {
+				int seu_freq;
+
+				if (packet_hdr_wordcount != 1) {
+					fprintf(stderr, "#E 0x%x=0x%x Unexpected SEU_OPT"
+						" wordcount %u.\n", u16_off,
+					u16, packet_hdr_wordcount);
+					goto fail;
+				}
+				u16 = __be16_to_cpu(*(uint16_t*)&bit_data[u16_off+2]);
+				u16_off+=2;
+				seu_freq = (u16 & 0x3FF0) >> 4;
+				printf("T1 SEU_OPT SEU_FREQ=0x%X", seu_freq);
+				u16 &= ~(0x3FF0);
+				if (u16 & (1<<3)) {
+					printf(" SEU_RUN_ON_ERR");
+					u16 &= ~(1<<3);
+				}
+				if (u16 & (1<<1)) {
+					printf(" GLUT_MASK");
+					u16 &= ~(1<<1);
+				}
+				if (u16 & (1<<0)) {
+					printf(" SEU_ENABLE");
+					u16 &= ~(1<<0);
+				}
+				if (u16)
+					printf(" 0x%x", u16);
+				printf("\n");
+				if (u16)
+					printf("#W Expected reserved 0, got 0x%x.\n", u16);
+				continue;
+			}
+			if (packet_hdr_register == CRC) {
+				// Don't print CRC value for cleaner diff.
+				printf("#W T1 CRC (%u words)\n",
+					packet_hdr_wordcount);
+				continue;
+			}
+			printf("#W 0x%x=0x%x T1 %i (%u words)", u16_off, u16,
+				packet_hdr_register, packet_hdr_wordcount);
 			for (i = 0; (i < 8) && (i < packet_hdr_wordcount); i++)
 				printf(" 0x%x", __be16_to_cpu(*(uint16_t*)
 					&bit_data[u16_off+2+i*2]));
@@ -1642,7 +1084,7 @@ int main(int argc, char** argv)
 		u32 = __be32_to_cpu(*(uint32_t*)&bit_data[bit_cur]);
 		bit_cur += 4;
 
-		printf("T2 FDRI\n");
+		printf("T2 FDRI words=%i\n", u32);
 		if (bit_cur + 2*u32 > bit_eof) goto fail_eof;
 		if (2*u32 < 130) {
 			fprintf(stderr, "#E 0x%x=0x%x Unexpected Type2"
@@ -1992,23 +1434,8 @@ int main(int argc, char** argv)
 			else {
 				uint16_t post_iob_padding;
 
-				if (g_FLR_value*2/8 != sizeof(iob_xc6slx4_sitenames)/sizeof(iob_xc6slx4_sitenames[0]))
-					printf("#W Expected %li IOB entries but got %i.\n",
-						sizeof(iob_xc6slx4_sitenames)/sizeof(iob_xc6slx4_sitenames[0]),
-						g_FLR_value*2/8);
-				for (j = 0; j < g_FLR_value*2/8; j++) {
-					if (*(uint32_t*)&bit_data[bit_cur+type2_iob_start_frame*130+j*8]
-					    || *(uint32_t*)&bit_data[bit_cur+type2_iob_start_frame*130+j*8+4]) {
-						if (j < sizeof(iob_xc6slx4_sitenames)/sizeof(iob_xc6slx4_sitenames[0])
-						    && iob_xc6slx4_sitenames[j]) {
-							printf("iob %s", iob_xc6slx4_sitenames[j]);
-						} else
-							printf("iob %i", j);
-						for (k = 0; k < 8; k++)
-							printf(" %02X", bit_data[bit_cur+type2_iob_start_frame*130+j*8+k]);
-						printf("\n");
-					}
-				}
+				printf_iob(bit_data, bit_eof, bit_cur + type2_iob_start_frame*130, g_FLR_value*2/8);
+
 				if (info) hexdump(1, &bit_data[bit_cur+type2_iob_start_frame*130], g_FLR_value*2);
 				post_iob_padding = __be16_to_cpu(*(uint16_t*)&bit_data[bit_cur+type2_iob_start_frame*130+g_FLR_value*2]);
 				if (post_iob_padding)
@@ -2041,19 +1468,4 @@ fail_eof:
 fail:
 	free(bit_data);
 	return EXIT_FAILURE;
-}
-
-void help()
-{
-	printf("\n"
-	       "bit2txt %s - convert FPGA bitstream to text\n"
-	       "(c) 2012 Wolfgang Spraul\n"
-	       "\n"
-	       "bit2txt [options] <path to .bit file>\n"
-	       "  --help                 print help message\n"
-	       "  --version              print version number\n"
-	       "  --info                 add extra info to output (marked #I)\n"
-	       "  <path to .bit file>    bitstream to print on stdout\n"
-	       "                         (proposing extension .b2t)\n"
-	       "\n", PROGRAM_REVISION);
 }
