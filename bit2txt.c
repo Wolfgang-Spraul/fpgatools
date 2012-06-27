@@ -32,20 +32,33 @@ typedef struct
 	uint32_t code;
 } IDCODE_S;
 
+#define XC6SLX4		0x04000093
+#define XC6SLX9		0x04001093
+#define XC6SLX16	0x04002093
+#define XC6SLX25	0x04004093
+#define XC6SLX25T	0x04024093
+#define XC6SLX45	0x04008093
+#define XC6SLX45T	0x04028093
+#define XC6SLX75	0x0400E093
+#define XC6SLX75T	0x0402E093
+#define XC6SLX100	0x04011093
+#define XC6SLX100T	0x04031093
+#define XC6SLX150	0x0401D093
+
 const IDCODE_S idcodes[] =
 {
-	{"XC6SLX4", 0x04000093},
-	{"XC6SLX9", 0x04001093},
-	{"XC6SLX16", 0x04002093},
-	{"XC6SLX25", 0x04004093},
-	{"XC6SLX25T", 0x04024093},
-	{"XC6SLX45", 0x04008093},
-	{"XC6SLX45T", 0x04028093},
-	{"XC6SLX75", 0x0400E093},
-	{"XC6SLX75T", 0x0402E093},
-	{"XC6SLX100", 0x04011093},
-	{"XC6SLX100T", 0x04031093},
-	{"XC6SLX150", 0x0401D093}
+	{"XC6SLX4",	XC6SLX4},
+	{"XC6SLX9",	XC6SLX9},
+	{"XC6SLX16",	XC6SLX16},
+	{"XC6SLX25",	XC6SLX25},
+	{"XC6SLX25T",	XC6SLX25T},
+	{"XC6SLX45",	XC6SLX45},
+	{"XC6SLX45T",	XC6SLX45T},
+	{"XC6SLX75",	XC6SLX75},
+	{"XC6SLX75T",	XC6SLX75T},
+	{"XC6SLX100",	XC6SLX100},
+	{"XC6SLX100T",	XC6SLX100T},
+	{"XC6SLX150",	XC6SLX150}
 };
 
 enum {
@@ -270,13 +283,181 @@ void print_ramb16_cfg(ramb16_cfg_t* cfg)
 	printf("}\n");
 }
 
-int g_FLR_value = -1;
+int full_map(uint8_t* bit_file, int bf_len, int first_FAR_off,
+	uint8_t** bits, int* bits_len, int idcode, int FLR_len, int* outdelta)
+{
+	int src_off, packet_hdr_type, packet_hdr_opcode;
+	int packet_hdr_register, packet_hdr_wordcount;
+	int FAR_block, FAR_row, FAR_major, FAR_minor, i, j;
+	int offset_in_bits;
+	uint16_t u16;
+	uint32_t u32;
+
+	*bits = 0;
+	if (idcode != XC6SLX4) goto fail;
+	if (FLR_len != 896) goto fail;
+
+	*bits_len = 4*505 + 4*144 + 896*2;
+	*bits = calloc(*bits_len, 1 /* elsize */);
+	if (!(*bits)) {
+		fprintf(stderr, "#E Cannot allocate %i bytes for bits.\n",
+			*bits_len);
+		goto fail;
+	}
+	FAR_block = -1;
+	FAR_row = -1;
+	FAR_major = -1;
+	FAR_minor = -1;
+	// Go through bit_file from first_FAR_off until last byte of
+	// IOB was read, plus padding, plus CRC verification.
+	src_off = first_FAR_off;
+	while (src_off < bf_len) {
+		if (src_off + 2 > bf_len) goto fail;
+		u16 = __be16_to_cpu(*(uint16_t*)&bit_file[src_off]);
+		src_off += 2;
+
+		// 3 bits: 001 = Type 1; 010 = Type 2
+		packet_hdr_type = (u16 & 0xE000) >> 13;
+		if (packet_hdr_type != 1 && packet_hdr_type != 2)
+			goto fail;
+
+		// 2 bits: 00 = noop; 01 = read; 10 = write; 11 = reserved
+		packet_hdr_opcode = (u16 & 0x1800) >> 11;
+		if (packet_hdr_opcode == 3) goto fail;
+
+		if (packet_hdr_opcode == 0) { // noop
+			if (packet_hdr_type != 1 || u16 & 0x07FF) goto fail;
+			continue;
+		}
+
+		// Now we must look at a Type 1 command
+		packet_hdr_register = (u16 & 0x07E0) >> 5;
+		packet_hdr_wordcount = u16 & 0x001F;
+		if (src_off + packet_hdr_wordcount*2 > bf_len) goto fail;
+		src_off += 2;
+
+		if (packet_hdr_type == 1) {
+			if (packet_hdr_register == CMD) {
+				if (packet_hdr_wordcount != 1) goto fail;
+				u16 = __be16_to_cpu(
+					*(uint16_t*)&bit_file[src_off]);
+				if (u16 == CMD_GRESTORE || u16 == CMD_LFRM) {
+					src_off -= 2;
+					goto success;
+				}
+				if (u16 != CMD_MFW && u16 != CMD_WCFG)
+					goto fail;
+				src_off += 2;
+				continue;
+			}
+			if (packet_hdr_register == FAR_MAJ) {
+				uint16_t maj, min;
+
+				if (packet_hdr_wordcount != 2) goto fail;
+				maj = __be16_to_cpu(*(uint16_t*)
+					&bit_file[src_off]);
+				min = __be16_to_cpu(*(uint16_t*)
+					&bit_file[src_off+2]);
+
+				FAR_block = (maj & 0xF000) >> 12;
+				if (FAR_block > 7) goto fail;
+				FAR_row = (maj & 0x0F00) >> 8;
+				FAR_major = maj & 0x00FF;
+				// MINOR
+				FAR_minor = min & 0x03FF;
+				continue;
+			}
+			if (packet_hdr_register == MFWR) {
+				uint32_t first_dword, second_dword;
+
+				if (packet_hdr_wordcount != 4) goto fail;
+				first_dword = __be32_to_cpu(
+					*(uint32_t*)&bit_file[src_off]);
+				second_dword = __be32_to_cpu(
+					*(uint32_t*)&bit_file[src_off+4]);
+				if (first_dword || second_dword) goto fail;
+				src_off += 8;
+				continue;
+			}
+			goto fail;
+		}
+
+		// packet type must be 2 here
+		if (packet_hdr_wordcount != 0) goto fail;
+		if (packet_hdr_register != FDRI) goto fail;
+
+		if (src_off + 4 > bf_len) goto fail;
+		u32 = __be32_to_cpu(*(uint32_t*)&bit_file[src_off]);
+		src_off += 4;
+		if (src_off+2*u32 > bf_len) goto fail;
+		if (2*u32 < 130) goto fail;
+
+		// fdri words u32
+		if (FAR_block == -1 || FAR_row == -1
+		    || FAR_major == -1 || FAR_minor == -1)
+			goto fail;
+
+		if (!FAR_block) {
+			if (FAR_row > 3 || FAR_major > 17
+			    || FAR_minor >= majors[FAR_major].minors)
+				goto fail;
+			if (u32 % 65) goto fail;
+			offset_in_bits = FAR_row * 505*130;
+			for (i = 0; i < FAR_major; i++)
+				offset_in_bits += majors[i].minors*130;
+			offset_in_bits += FAR_minor*130;
+			for (i = 0; i < u32/65; i++) {
+				if (i && i+1 == u32/65) {
+					for (j = 0; j < 130; j++) {
+						if (bit_file[src_off+i*130+j]
+						    != 0xFF) goto fail;
+					}
+					break;
+				}
+				if (!FAR_major && !FAR_minor
+				    && (i%507 == 505)) {
+					for (j = 0; j < 2*130; j++) {
+						if (bit_file[src_off+i*130+j]
+						    != 0xFF) goto fail;
+					}
+					i++;
+					continue;
+				}
+				memcpy(&(*bits)[offset_in_bits],
+					&bit_file[src_off + i*130], 130);
+			}
+		} else if (FAR_block == 1) {
+			int bram_data_words = 4*144*65 + 896;
+			if (u32 != bram_data_words + 1) goto fail;
+			offset_in_bits = 4*505*130;
+			memcpy(&(*bits)[offset_in_bits],
+				&bit_file[src_off], bram_data_words*2);
+			u16 = __be16_to_cpu(*(uint16_t*)&bit_file[src_off+bram_data_words*2]);
+			if (u16 != 0xFFFF) goto fail;
+		} else goto fail;
+		src_off += 2*u32;
+		// CRC word?
+	}
+fail:
+	free(*bits);
+	*bits = 0;
+	return -1;
+success:
+	*outdelta = src_off - first_FAR_off;
+	return 0;
+}
+
+void printf_bits(uint8_t* bits, int bits_len, int idcode)
+{
+	printf("\nbits\n");
+}
 
 int main(int argc, char** argv)
 {
-	uint8_t* bit_data = 0;
+	uint8_t* bit_data = 0; // file contents
+	uint8_t* bits = 0; // bits in chip layout
 	FILE* bitf = 0;
-	int bit_cur;
+	int bit_cur, try_full_map, first_FAR_off, bits_len;
 	uint32_t bit_eof, cmd_len, u32, u16_off, bit_off;
 	uint32_t last_processed_pos;
 	uint16_t u16, packet_hdr_type, packet_hdr_opcode;
@@ -284,6 +465,10 @@ int main(int argc, char** argv)
 	int info = 0; // whether to print #I info messages (offsets and others)
 	char* bit_path = 0;
 	int i, j, k, l, num_frames, max_frames_to_scan, offset_in_frame, times;
+
+	// state machine driven from file input
+	int m_FLR_value = -1;
+	int m_idcode = -1; // offset into idcodes
 
 	//
 	// parse command line
@@ -323,7 +508,7 @@ int main(int argc, char** argv)
 
 	bit_data = malloc(BITSTREAM_READ_MAXPAGES * BITSTREAM_READ_PAGESIZE);
 	if (!bit_data) {
-		fprintf(stderr, "#E Cannot allocate %i bytes for bitstream.\n",
+		fprintf(stderr, "#E Cannot allocate %i bytes for filebuf.\n",
 		BITSTREAM_READ_MAXPAGES * BITSTREAM_READ_PAGESIZE);
 		goto fail;
 	}
@@ -353,7 +538,8 @@ int main(int argc, char** argv)
 
 	printf("bit2txt_format 1\n");
 
-	if (printf_header(bit_data, bit_eof, 0 /* inpos */, &bit_cur)) goto fail;
+	if (printf_header(bit_data, bit_eof, 0 /* inpos */, &bit_cur))
+		goto fail;
 
 	//
 	// commands
@@ -393,6 +579,8 @@ int main(int argc, char** argv)
 	}
 	printf("sync_word\n");
 
+	try_full_map = 1;
+	first_FAR_off = -1;
 	while (bit_cur < bit_eof) {
 		// 8 is 2 padding frames between each row and 2 at the end
 		static const int type1_bram_data_start_frame = 4*505+8;
@@ -458,9 +646,6 @@ int main(int argc, char** argv)
 		if (bit_cur + packet_hdr_wordcount*2 > bit_eof) goto fail_eof;
 		bit_cur += packet_hdr_wordcount*2;
 
-		// Check whether register and r/w action on register
-		// looks valid.
-
 		if (packet_hdr_type == 1) {
 			if (packet_hdr_register == IDCODE) {
 				if (packet_hdr_wordcount != 2) {
@@ -473,6 +658,7 @@ int main(int argc, char** argv)
 				for (i = 0; i < sizeof(idcodes)/sizeof(idcodes[0]); i++) {
 					if ((u32 & 0x0FFFFFFF) == idcodes[i].code) {
 						printf("T1 IDCODE %s\n", idcodes[i].name);
+						m_idcode = i;
 						break;
 					}
 				}
@@ -480,6 +666,11 @@ int main(int argc, char** argv)
 					printf("#W Unknown IDCODE 0x%x.\n", u32);
 				else if (u32 & 0xF0000000)
 					printf("#W Unexpected revision bits in IDCODE 0x%x.\n", u32);
+				if (idcodes[m_idcode].code == XC6SLX4
+				    && m_FLR_value != 896)
+					printf("#W Unexpected FLR value %i on "
+					  "idcode %s.\n", m_FLR_value,
+					  idcodes[m_idcode].name);
 				continue;
 			}
 			if (packet_hdr_register == CMD) {
@@ -509,10 +700,10 @@ int main(int argc, char** argv)
 				u16 = __be16_to_cpu(*(uint16_t*)&bit_data[u16_off+2]);
 				u16_off+=2;
 				printf("T1 FLR %u\n", u16);
-				g_FLR_value = u16;
-				if ((g_FLR_value*2) % 8)
+				m_FLR_value = u16;
+				if ((m_FLR_value*2) % 8)
 					printf("#W FLR*2 should be multiple of "
-					"8, but modulo 8 is %i\n", (g_FLR_value*2) % 8);
+					"8, but modulo 8 is %i\n", (m_FLR_value*2) % 8);
 				// First come the type 0 frames (clb, bram
 				// config, dsp, etc). Then type 1 (bram data),
 				// then type 2, the IOB config data block.
@@ -631,6 +822,9 @@ int main(int argc, char** argv)
 				uint16_t maj, min;
 				int unexpected_blk_bit4 = 0;
 
+				if (first_FAR_off == -1)
+					first_FAR_off = u16_off;
+
 				maj = __be16_to_cpu(*(uint16_t*)&bit_data[u16_off+2]);
 				min = __be16_to_cpu(*(uint16_t*)&bit_data[u16_off+4]);
 				printf("T1 FAR_MAJ");
@@ -659,8 +853,7 @@ int main(int argc, char** argv)
 
 				if (unexpected_blk_bit4)
 					printf("#W Unexpected BLK bit 4 set.\n");
-				// Reserved min bits 13:10 should be 000
-				// according to documentation.
+				// Reserved min bits 13:10 should be 000.
 				if (min & 0x3C00)
 					printf("#W Expected reserved 0, got 0x%x.\n", (min & 0x3C00) > 10);
 				continue;
@@ -1082,14 +1275,28 @@ int main(int argc, char** argv)
 		}
 		if (bit_cur + 4 > bit_eof) goto fail_eof;
 		u32 = __be32_to_cpu(*(uint32_t*)&bit_data[bit_cur]);
-		bit_cur += 4;
-
-		printf("T2 FDRI words=%i\n", u32);
-		if (bit_cur + 2*u32 > bit_eof) goto fail_eof;
+		if (bit_cur+4+2*u32 > bit_eof) goto fail_eof;
 		if (2*u32 < 130) {
 			fprintf(stderr, "#E 0x%x=0x%x Unexpected Type2"
 				" length %u.\n", u16_off, u16, 2*u32);
 			goto fail;
+		}
+
+		printf("T2 FDRI words=%i\n", u32);
+		bit_cur += 4;
+		if (try_full_map) {
+			try_full_map = 0;
+			if (0&&first_FAR_off != -1) {
+				int outdelta;
+				if (!full_map(bit_data, bit_eof, first_FAR_off,
+				     &bits, &bits_len, idcodes[m_idcode].code,
+				     m_FLR_value, &outdelta)) {
+					printf_bits(bits, bits_len,
+						idcodes[m_idcode].code);
+					bit_cur = first_FAR_off + outdelta;
+					continue;
+				}
+			}
 		}
 
 		num_frames = (2*u32)/130;
@@ -1424,20 +1631,20 @@ int main(int argc, char** argv)
 
 			printf("\n");
 			if (info) printf("#D type 2 iob start frame %i\n", i);
-			iob_end_pos = (type2_iob_start_frame*130 + (g_FLR_value+1)*2);
+			iob_end_pos = (type2_iob_start_frame*130 + (m_FLR_value+1)*2);
 
-			if (g_FLR_value == -1)
+			if (m_FLR_value == -1)
 				printf("#W No FLR value set, cannot process IOB block.\n");
 			else if (iob_end_pos > 2*u32)
 				printf("#W Expected %i bytes IOB data, only got %i.\n",
-					(g_FLR_value+1)*2, 2*u32 - (g_FLR_value+1)*2);
+					(m_FLR_value+1)*2, 2*u32 - (m_FLR_value+1)*2);
 			else {
 				uint16_t post_iob_padding;
 
-				printf_iob(bit_data, bit_eof, bit_cur + type2_iob_start_frame*130, g_FLR_value*2/8);
+				printf_iob(bit_data, bit_eof, bit_cur + type2_iob_start_frame*130, m_FLR_value*2/8);
 
-				if (info) hexdump(1, &bit_data[bit_cur+type2_iob_start_frame*130], g_FLR_value*2);
-				post_iob_padding = __be16_to_cpu(*(uint16_t*)&bit_data[bit_cur+type2_iob_start_frame*130+g_FLR_value*2]);
+				if (info) hexdump(1, &bit_data[bit_cur+type2_iob_start_frame*130], m_FLR_value*2);
+				post_iob_padding = __be16_to_cpu(*(uint16_t*)&bit_data[bit_cur+type2_iob_start_frame*130+m_FLR_value*2]);
 				if (post_iob_padding)
 					printf("#W Unexpected post IOB padding 0x%x.\n", post_iob_padding);
 				if (iob_end_pos < 2*u32)
@@ -1460,12 +1667,14 @@ int main(int argc, char** argv)
 		if (info) printf("#I 0x%x=0x%x Ignoring Auto-CRC.\n", bit_cur, u32);
 		bit_cur += 4;
 	}
+	free(bits);
 	free(bit_data);
 	return EXIT_SUCCESS;
 
 fail_eof:
 	fprintf(stderr, "#E Unexpected EOF.\n");
 fail:
+	free(bits);
 	free(bit_data);
 	return EXIT_FAILURE;
 }
