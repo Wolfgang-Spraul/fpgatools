@@ -631,10 +631,11 @@ static const char* iob_xc6slx4_sitenames[896*2/8] =
 		   "P74"
 };
 
-void printf_iob(uint8_t* d, int len, int inpos, int num_entries)
+int printf_iob(uint8_t* d, int len, int inpos, int num_entries)
 {
-	int i, j;
+	int i, j, num_printed;
 
+	num_printed = 0;
 	if (num_entries != sizeof(iob_xc6slx4_sitenames)/sizeof(iob_xc6slx4_sitenames[0]))
 		printf("#W Expected %li IOB entries but got %i.\n",
 			sizeof(iob_xc6slx4_sitenames)/sizeof(iob_xc6slx4_sitenames[0]),
@@ -650,6 +651,89 @@ void printf_iob(uint8_t* d, int len, int inpos, int num_entries)
 			for (j = 0; j < 8; j++)
 				printf(" %02X", d[inpos+i*8+j]);
 			printf("\n");
+			num_printed++;
+		}
+	}
+	return num_printed;
+}
+
+void printf_ramb16_data(uint8_t* bits, int inpos)
+{
+	int nonzero_head, nonzero_tail;
+	uint8_t init_byte;
+	char init_str[65];
+	int i, j, k, bit_off;
+
+	// check head and tail
+	nonzero_head = 0;
+	for (i = 0; i < 18; i++) {
+		if (bits[inpos + i]) {
+			nonzero_head = 1;
+			break;
+		}
+	}
+	nonzero_tail = 0;
+	for (i = 0; i < 18; i++) {
+		if (bits[inpos + 18*130-18 + i]) {
+			nonzero_tail = 1;
+			break;
+		}
+	}
+	if (nonzero_head || nonzero_tail)
+		printf(" #W Unexpected data.\n");
+	if (nonzero_head) {
+		printf(" head");
+		for (i = 0; i < 18; i++)
+			printf(" %02X", bits[inpos + i]);
+		printf("\n");
+	}
+	if (nonzero_tail) {
+		printf(" tail");
+		for (i = 0; i < 18; i++)
+			printf(" %02X", bits[inpos + 18*130-18 + i]);
+		printf("\n");
+	}
+
+	// 8 parity configs
+	for (i = 0; i < 8; i++) {
+		// 32 bytes per config
+		for (j = 0; j < 32; j++) {
+			init_byte = 0;
+			for (k = 0; k < 8; k++) {
+				bit_off = (i*(2048+256)) + (31-j)*4*18;
+				bit_off += 1+(k/2)*18-(k&1);
+				if (bits[inpos+18+bit_off/8]
+				    & (1<<(7-(bit_off%8))))
+					init_byte |= 1<<k;
+			}
+			sprintf(&init_str[j*2], "%02X", init_byte);
+		}
+		for (j = 0; j < 64; j++) {
+			if (init_str[j] != '0') {
+				printf(" parity 0x%02X \"%s\"\n", i, init_str);
+				break;
+			}
+		}
+	}
+
+	for (i = 0; i < 64; i++) {
+		// 32 bytes per config
+		for (j = 0; j < 32; j++) {
+			init_byte = 0;
+			for (k = 0; k < 8; k++) {
+				bit_off = (i*(256+32)) + ((31-j)/2)*18;
+				bit_off += (8-((31-j)&1)*8) + 2 + k;
+				if (bits[inpos+18+bit_off/8]
+				    & (1<<(7-(bit_off%8))))
+					init_byte |= 1<<(7-k);
+			}
+			sprintf(&init_str[j*2], "%02X", init_byte);
+		}
+		for (j = 0; j < 64; j++) {
+			if (init_str[j] != '0') {
+				printf(" init 0x%02X \"%s\"\n", i, init_str);
+				break;
+			}
 		}
 	}
 }

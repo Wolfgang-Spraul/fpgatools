@@ -283,13 +283,28 @@ void print_ramb16_cfg(ramb16_cfg_t* cfg)
 	printf("}\n");
 }
 
+int FAR_pos(int FAR_row, int FAR_major, int FAR_minor)
+{
+	int result, i;
+
+	if (FAR_row < 0 || FAR_major < 0 || FAR_minor < 0)
+		return -1;
+	if (FAR_row > 3 || FAR_major > 17
+	    || FAR_minor >= majors[FAR_major].minors)
+		return -1;
+	result = FAR_row * 505*130;
+	for (i = 0; i < FAR_major; i++)
+		result += majors[i].minors*130;
+	return result + FAR_minor*130;
+}
+
 int full_map(uint8_t* bit_file, int bf_len, int first_FAR_off,
 	uint8_t** bits, int* bits_len, int idcode, int FLR_len, int* outdelta)
 {
 	int src_off, packet_hdr_type, packet_hdr_opcode;
 	int packet_hdr_register, packet_hdr_wordcount;
-	int FAR_block, FAR_row, FAR_major, FAR_minor, i, j;
-	int offset_in_bits;
+	int FAR_block, FAR_row, FAR_major, FAR_minor, i, j, MFW_src_off;
+	int offset_in_bits, block0_words, padding_frames;
 	uint16_t u16;
 	uint32_t u32;
 
@@ -297,7 +312,7 @@ int full_map(uint8_t* bit_file, int bf_len, int first_FAR_off,
 	if (idcode != XC6SLX4) goto fail;
 	if (FLR_len != 896) goto fail;
 
-	*bits_len = 4*505 + 4*144 + 896*2;
+	*bits_len = (4*505 + 4*144) * 130 + 896*2;
 	*bits = calloc(*bits_len, 1 /* elsize */);
 	if (!(*bits)) {
 		fprintf(stderr, "#E Cannot allocate %i bytes for bits.\n",
@@ -308,6 +323,7 @@ int full_map(uint8_t* bit_file, int bf_len, int first_FAR_off,
 	FAR_row = -1;
 	FAR_major = -1;
 	FAR_minor = -1;
+	MFW_src_off = -1;
 	// Go through bit_file from first_FAR_off until last byte of
 	// IOB was read, plus padding, plus CRC verification.
 	src_off = first_FAR_off;
@@ -334,7 +350,6 @@ int full_map(uint8_t* bit_file, int bf_len, int first_FAR_off,
 		packet_hdr_register = (u16 & 0x07E0) >> 5;
 		packet_hdr_wordcount = u16 & 0x001F;
 		if (src_off + packet_hdr_wordcount*2 > bf_len) goto fail;
-		src_off += 2;
 
 		if (packet_hdr_type == 1) {
 			if (packet_hdr_register == CMD) {
@@ -347,6 +362,11 @@ int full_map(uint8_t* bit_file, int bf_len, int first_FAR_off,
 				}
 				if (u16 != CMD_MFW && u16 != CMD_WCFG)
 					goto fail;
+				if (u16 == CMD_MFW) {
+					if (FAR_block != 0) goto fail;
+					MFW_src_off = FAR_pos(FAR_row, FAR_major, FAR_minor);
+					if (MFW_src_off == -1) goto fail;
+				}
 				src_off += 2;
 				continue;
 			}
@@ -363,8 +383,8 @@ int full_map(uint8_t* bit_file, int bf_len, int first_FAR_off,
 				if (FAR_block > 7) goto fail;
 				FAR_row = (maj & 0x0F00) >> 8;
 				FAR_major = maj & 0x00FF;
-				// MINOR
 				FAR_minor = min & 0x03FF;
+				src_off += 4;
 				continue;
 			}
 			if (packet_hdr_register == MFWR) {
@@ -376,6 +396,13 @@ int full_map(uint8_t* bit_file, int bf_len, int first_FAR_off,
 				second_dword = __be32_to_cpu(
 					*(uint32_t*)&bit_file[src_off+4]);
 				if (first_dword || second_dword) goto fail;
+				// The first MFWR will overwrite itself, so
+				// use memmove().
+				if (FAR_block != 0) goto fail;
+				offset_in_bits = FAR_pos(FAR_row, FAR_major, FAR_minor);
+				if (offset_in_bits == -1) goto fail;
+				memmove(&(*bits)[offset_in_bits], &(*bits)[MFW_src_off], 130);
+				   
 				src_off += 8;
 				continue;
 			}
@@ -393,26 +420,37 @@ int full_map(uint8_t* bit_file, int bf_len, int first_FAR_off,
 		if (2*u32 < 130) goto fail;
 
 		// fdri words u32
-		if (FAR_block == -1 || FAR_row == -1
+		if (FAR_block == -1 || FAR_block > 1 || FAR_row == -1
 		    || FAR_major == -1 || FAR_minor == -1)
 			goto fail;
 
+		block0_words = 0;
 		if (!FAR_block) {
-			if (FAR_row > 3 || FAR_major > 17
-			    || FAR_minor >= majors[FAR_major].minors)
-				goto fail;
-			if (u32 % 65) goto fail;
-			offset_in_bits = FAR_row * 505*130;
-			for (i = 0; i < FAR_major; i++)
-				offset_in_bits += majors[i].minors*130;
-			offset_in_bits += FAR_minor*130;
-			for (i = 0; i < u32/65; i++) {
-				if (i && i+1 == u32/65) {
+
+			offset_in_bits = FAR_pos(FAR_row, FAR_major, FAR_minor);
+			if (offset_in_bits == -1) goto fail;
+			if (!FAR_row && !FAR_major && !FAR_minor
+			    && u32 > 4*(505+2)*65)
+				block0_words = 4*(505+2)*65;
+			else {
+				block0_words = u32;
+				if (block0_words % 65) goto fail;
+			}
+			padding_frames = 0;
+			for (i = 0; i < block0_words/65; i++) {
+				if (i && i+1 == block0_words/65) {
 					for (j = 0; j < 130; j++) {
 						if (bit_file[src_off+i*130+j]
-						    != 0xFF) goto fail;
+						    != 0xFF) break;
 					}
-					break;
+					// Not sure about the exact logic to
+					// determine a padding frame. Maybe
+					// first word all 1? For now we skip
+					// the frame as a padding frame when
+					// it's the last frame of a block and
+					// all-1.
+					if (j >= 130)
+						break;
 				}
 				if (!FAR_major && !FAR_minor
 				    && (i%507 == 505)) {
@@ -421,22 +459,29 @@ int full_map(uint8_t* bit_file, int bf_len, int first_FAR_off,
 						    != 0xFF) goto fail;
 					}
 					i++;
+					padding_frames += 2;
 					continue;
 				}
-				memcpy(&(*bits)[offset_in_bits],
-					&bit_file[src_off + i*130], 130);
+				memcpy(&(*bits)[offset_in_bits
+					+ (i-padding_frames)*130],
+					&bit_file[src_off
+					+ i*130], 130);
 			}
-		} else if (FAR_block == 1) {
+		}
+		if (u32 - block0_words > 0) {
 			int bram_data_words = 4*144*65 + 896;
-			if (u32 != bram_data_words + 1) goto fail;
+			if (u32 - block0_words != bram_data_words + 1) goto fail;
 			offset_in_bits = 4*505*130;
 			memcpy(&(*bits)[offset_in_bits],
-				&bit_file[src_off], bram_data_words*2);
-			u16 = __be16_to_cpu(*(uint16_t*)&bit_file[src_off+bram_data_words*2]);
-			if (u16 != 0xFFFF) goto fail;
-		} else goto fail;
+				&bit_file[src_off+block0_words*2],
+				bram_data_words*2);
+			u16 = __be16_to_cpu(*(uint16_t*)&bit_file[(src_off+block0_words+bram_data_words)*2]);
+			if (u16) goto fail;
+		}
 		src_off += 2*u32;
-		// CRC word?
+		// two CRC words
+		u32 = __be32_to_cpu(*(uint32_t*)&bit_file[src_off]);
+		src_off += 4;
 	}
 fail:
 	free(*bits);
@@ -449,7 +494,49 @@ success:
 
 void printf_bits(uint8_t* bits, int bits_len, int idcode)
 {
-	printf("\nbits\n");
+	int row, major, nodata_times, i, j, off, bram_data_start;
+
+	// type0
+	for (row = 0; row < 4; row++) {
+		for (major = 0; major < 17; major++) {
+		}
+	}
+
+	// bram
+	printf("\n");
+	bram_data_start = 4*505*130;
+	for (row = 0; row < 4; row++) {
+		nodata_times = 0;
+		for (i = 0; i < 8; i++) {
+			for (j = 0; j < 18*130; j++) {
+				if (bits[bram_data_start + row*144*130
+					  + i*18*130 + j])
+					break;
+			}
+			if (j >= 18*130) {
+				nodata_times++;
+				continue;
+			}
+			if (nodata_times) {
+				printf("r%i ramb16 nodata times %i\n",
+					row, nodata_times);
+				nodata_times = 0;
+			}
+			printf("r%i ramb16 data\n", row);
+			printf("{\n");
+			off = bram_data_start + row*144*130 + i*18*130;
+			printf_ramb16_data(bits, off);
+			printf("}\n");
+		}
+		if (nodata_times)
+			printf("r%i ramb16 nodata times %i\n",
+				row, nodata_times);
+	}
+
+	// iob
+	printf("\n");
+	if (printf_iob(bits, bits_len, bram_data_start + 4*144*130, 896*2/8))
+		printf("\n");
 }
 
 int main(int argc, char** argv)
@@ -1286,7 +1373,7 @@ int main(int argc, char** argv)
 		bit_cur += 4;
 		if (try_full_map) {
 			try_full_map = 0;
-			if (0&&first_FAR_off != -1) {
+			if (first_FAR_off != -1) {
 				int outdelta;
 				if (!full_map(bit_data, bit_eof, first_FAR_off,
 				     &bits, &bits_len, idcodes[m_idcode].code,
@@ -1556,11 +1643,11 @@ int main(int argc, char** argv)
 							j, init_str);
 					}
 				}
-				for (j = 0; j < 32; j++) {
+				for (j = 0; j < 64; j++) {
 					for (k = 0; k < 32; k++) { // 32 bytes per config
 						init_byte = 0;
 						for (l = 0; l < 8; l++) {
-							bit_off = (j*(2048+256)) + ((31-k)/2)*18 + (8-((31-k)&1)*8) + 2 + l;
+							bit_off = (j*(256+32)) + ((31-k)/2)*18 + (8-((31-k)&1)*8) + 2 + l;
 							if (bit_data[bit_cur+i*130+18+bit_off/8] & (1<<(7-(bit_off%8))))
 								init_byte |= 1<<(7-l);
 						}
