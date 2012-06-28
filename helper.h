@@ -52,3 +52,13 @@ void lut2bool(const uint64_t lut, int bits, char* str);
 
 int printf_iob(uint8_t* d, int len, int inpos, int num_entries);
 void printf_ramb16_data(uint8_t* bits, int inpos);
+
+int is_empty(uint8_t* d, int l);
+int count_bits(uint8_t* d, int l);
+int bit_set(uint8_t* d, int bit);
+
+// if row is negative, it's an absolute frame number and major and
+// minor are ignored
+int printf_frames(uint8_t* bits, int max_frames, int row, int major,
+	int minor, int print_empty);
+void printf_clock(uint8_t* frame, int row, int major, int minor);

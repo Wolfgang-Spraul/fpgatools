@@ -737,3 +737,79 @@ void printf_ramb16_data(uint8_t* bits, int inpos)
 		}
 	}
 }
+
+int is_empty(uint8_t* d, int l)
+{
+	while (--l >= 0)
+		if (d[l]) return 0;
+	return 1;
+}
+
+int count_bits(uint8_t* d, int l)
+{
+	int bits = 0;
+	while (--l >= 0) {
+		if (d[l] & 0x01) bits++;
+		if (d[l] & 0x02) bits++;
+		if (d[l] & 0x04) bits++;
+		if (d[l] & 0x08) bits++;
+		if (d[l] & 0x10) bits++;
+		if (d[l] & 0x20) bits++;
+		if (d[l] & 0x40) bits++;
+		if (d[l] & 0x80) bits++;
+	}
+	return bits;
+}
+
+int bit_set(uint8_t* d, int bit)
+{
+	return (d[(bit/16)*2 + !((bit/8)%2)] & 1<<(7-(bit%8))) != 0;
+}
+
+int printf_frames(uint8_t* bits, int max_frames,
+	int row, int major, int minor, int print_empty)
+{
+	int i;
+	char prefix[32];
+
+	if (row < 0)
+		sprintf(prefix, "f%i ", abs(row));
+	else
+		sprintf(prefix, "r%i m%i-%i ", row, major, minor);
+
+	if (is_empty(bits, 130)) {
+		for (i = 1; i < max_frames; i++) {
+			if (!is_empty(&bits[i*130], 130))
+				break;
+		}
+		if (print_empty) {
+			if (i > 1)
+				printf("%s- *%i\n", prefix, i);
+			else
+				printf("%s-\n", prefix);
+		}
+		return i;
+	}
+	if (count_bits(bits, 130) <= 32) {
+		printf_clock(bits, row, major, minor);
+		for (i = 0; i < 1024; i++) {
+			if (bit_set(bits, (i >= 512) ? i + 16 : i))
+				printf("%sbit %i\n", prefix, i);
+		}
+		return 1;
+	}
+	printf("%shex\n", prefix);
+	printf("{\n");
+	hexdump(1, bits, 130);
+	printf("}\n");
+	return 1;
+}
+
+void printf_clock(uint8_t* frame, int row, int major, int minor)
+{
+	int i;
+	for (i = 0; i < 16; i++) {
+		if (bit_set(frame, 512 + i))
+			printf("r%i m%i-%i clock %i\n", row, major, minor, i);
+	}
+}
