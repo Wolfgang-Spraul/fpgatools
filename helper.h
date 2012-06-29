@@ -48,17 +48,21 @@ int printf_header(uint8_t* d, int len, int inpos, int* outdelta);
 
 void printf_lut6(const char* cfg);
 // bits is tested only for 32 and 64
-void lut2bool(const uint64_t lut, int bits, char* str);
+const char* lut2bool(const uint64_t lut, int bits);
 
 int printf_iob(uint8_t* d, int len, int inpos, int num_entries);
 void printf_ramb16_data(uint8_t* bits, int inpos);
 
 int is_empty(uint8_t* d, int l);
 int count_bits(uint8_t* d, int l);
-int bit_set(uint8_t* d, int bit);
+int bit_set(uint8_t* frame_d, int bit);
 
 // if row is negative, it's an absolute frame number and major and
 // minor are ignored
 int printf_frames(uint8_t* bits, int max_frames, int row, int major,
 	int minor, int print_empty);
 void printf_clock(uint8_t* frame, int row, int major, int minor);
+int clb_empty(uint8_t* maj_bits, int idx);
+void printf_singlebits(uint8_t* maj_bits, int start_minor, int num_minors,
+	int start_bit, int num_bits, int row, int major);
+uint64_t read_lut64(uint8_t* two_minors, int off_in_frame);

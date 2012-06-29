@@ -147,7 +147,8 @@ int printf_header(uint8_t* d, int len, int inpos, int* outdelta)
 }
 
 // for an equivalent schematic, see lut.svg
-const int lut_base_vars[6] = {0 /* A1 */, 1, 0, 0, 0, 1 /* A6 */};
+const int lut_base_vars[6] = {0 /* A1 */, 1, 0 /* A3 - not used */,
+				0, 0, 1 /* A6 */};
 
 int bool_nextlen(const char* expr, int len)
 {
@@ -240,9 +241,11 @@ int parse_boolexpr(const char* expr, uint64_t* lut)
 	for (i = 0; i < 64; i++) {
 		memcpy(vars, lut_base_vars, sizeof(vars));
 		for (j = 0; j < 6; j++) {
-			if (i & (1<<j))
+			if (j != 2 && (i & (1<<j)))
 				vars[j] = !vars[j];
 		}
+		if (((i&8) != 0) ^ ((i&4) != 0))
+			vars[2] = 1;
 		result = bool_eval(expr, strlen(expr), vars);
 		if (result == -1) return -1;
 		if (result) *lut |= 1LL<<i;
@@ -280,7 +283,7 @@ typedef struct _minterm_entry
 } minterm_entry;
 
 // bits is tested only for 32 and 64
-void lut2bool(const uint64_t lut, int bits, char* str)
+const char* lut2bool(const uint64_t lut, int bits)
 {
 	// round 0 needs 64 entries
 	// round 1 (size2): 192
@@ -293,6 +296,7 @@ void lut2bool(const uint64_t lut, int bits, char* str)
 	int mt_size[7];
 	int i, j, k, round, only_diff_bit;
 	int str_end, first_op;
+	static char str[2048];
 
 	memset(mt, 0, sizeof(mt));
 	memset(mt_size, 0, sizeof(mt_size));
@@ -306,10 +310,12 @@ void lut2bool(const uint64_t lut, int bits, char* str)
 			mt[0][mt_size[0]].a[4] = lut_base_vars[4];
 			mt[0][mt_size[0]].a[5] = lut_base_vars[5];
 			for (j = 0; j < 6; j++) {
-				if (i & (1<<j))
+				if (j != 2 && (i&(1<<j)))
 					mt[0][mt_size[0]].a[j]
 						= !mt[0][mt_size[0]].a[j];
 			}
+			if (((i&8) != 0) ^ ((i&4) != 0))
+				mt[0][mt_size[0]].a[2] = 1;
 			mt_size[0]++;
 		}
 	}
@@ -317,7 +323,7 @@ void lut2bool(const uint64_t lut, int bits, char* str)
 	// special case: no minterms -> empty string
 	if (mt_size[0] == 0) {
 		str[0] = 0;
-		return;
+		return str;
 	}
 
 	// go through five rounds of merging
@@ -374,7 +380,7 @@ void lut2bool(const uint64_t lut, int bits, char* str)
 		    && mt[6][i].a[4] == 2
 		    && mt[6][i].a[5] == 2) {
 			strcpy(str, "A6+~A6");
-			return;
+			return str;
 		}
 	}
 
@@ -402,6 +408,7 @@ void lut2bool(const uint64_t lut, int bits, char* str)
 	str[str_end] = 0;
 	// TODO: This could be further simplified, see Petrick's method.
 	// XOR don't simplify well, try A2@A3
+	return str;
 }
 
 static const char* iob_xc6slx4_sitenames[896*2/8] =
@@ -761,9 +768,9 @@ int count_bits(uint8_t* d, int l)
 	return bits;
 }
 
-int bit_set(uint8_t* d, int bit)
+int bit_set(uint8_t* frame_d, int bit)
 {
-	return (d[(bit/16)*2 + !((bit/8)%2)] & 1<<(7-(bit%8))) != 0;
+	return (frame_d[(bit/16)*2 + !((bit/8)%2)] & 1<<(7-(bit%8))) != 0;
 }
 
 int printf_frames(uint8_t* bits, int max_frames,
@@ -812,4 +819,52 @@ void printf_clock(uint8_t* frame, int row, int major, int minor)
 		if (bit_set(frame, 512 + i))
 			printf("r%i m%i-%i clock %i\n", row, major, minor, i);
 	}
+}
+
+int clb_empty(uint8_t* maj_bits, int idx)
+{
+	int byte_off, i, minor;
+
+	byte_off = idx * 8;
+	if (idx >= 8) byte_off += 2;
+
+	for (i = 0; i < 16; i++) {
+		for (minor = 20; minor < 31; minor++) {
+			if (!is_empty(&maj_bits[minor*130 + byte_off], 8))
+				return 0;
+		}
+	}
+	return 1;
+}
+
+void printf_singlebits(uint8_t* maj_bits, int start_minor, int num_minors,
+	int start_bit, int num_bits, int row, int major)
+{
+	int minor, bit;
+
+	for (minor = start_minor; minor < start_minor + num_minors; minor++) {
+		for (bit = start_bit; bit < start_bit + num_bits; bit++) {
+			if (bit_set(&maj_bits[minor*130], bit))
+				printf("r%i m%i-%i b%i\n",
+					row, major, minor, bit);
+		}
+	}
+}
+
+uint64_t read_lut64(uint8_t* two_minors, int off_in_frame)
+{
+	uint64_t lut64 = 0;
+	int j;
+
+	for (j = 0; j < 16; j++) {
+		if (bit_set(two_minors, off_in_frame+j*2))
+			lut64 |= 1LL << (j*4);
+		if (bit_set(two_minors, off_in_frame+(j*2)+1))
+			lut64 |= 1LL << (j*4+1);
+		if (bit_set(&two_minors[130], off_in_frame+j*2))
+			lut64 |= 1LL << (j*4+2);
+		if (bit_set(&two_minors[130], off_in_frame+(j*2)+1))
+			lut64 |= 1LL << (j*4+3);
+	}
+	return lut64;
 }
