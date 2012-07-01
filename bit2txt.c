@@ -510,11 +510,11 @@ void printf_clb(uint8_t* maj_bits, int row, int major)
 
 	// the first two slots on top and bottom row are not used for clb
 	if (!row) {
-		start = 2;
-		max_idx = 16;
-	} else if (row == 2) {
 		start = 0;
 		max_idx = 14;
+	} else if (row == 3) {
+		start = 2;
+		max_idx = 16;
 	} else {
 		start = 0;
 		max_idx = 16;
@@ -531,42 +531,50 @@ void printf_clb(uint8_t* maj_bits, int row, int major)
 
 		// LUTs
 		lut64 = read_lut64(&maj_bits[24*130], frame_off+32);
-		lut_str = lut2bool(lut64, 64);
+		{  int logic_base[6] = {0,1,0,0,1,0};
+		   lut_str = lut2bool(lut64, 64, &logic_base, 1 /* flip_b0 */); }
 		if (*lut_str)
 			printf(" s0_A6LUT \"%s\"\n", lut_str);
 
 		lut64 = read_lut64(&maj_bits[21*130], frame_off+32);
-		lut_str = lut2bool(lut64, 64);
+		{  int logic_base[6] = {1,1,0,1,0,1};
+		   lut_str = lut2bool(lut64, 64, &logic_base, 1 /* flip_b0 */); }
 		if (*lut_str)
 			printf(" s0_B6LUT \"%s\"\n", lut_str);
 
 		lut64 = read_lut64(&maj_bits[24*130], frame_off);
-		lut_str = lut2bool(lut64, 64);
+		{  int logic_base[6] = {0,1,0,0,1,0};
+		   lut_str = lut2bool(lut64, 64, &logic_base, 1 /* flip_b0 */); }
 		if (*lut_str)
 			printf(" s0_C6LUT \"%s\"\n", lut_str);
 
 		lut64 = read_lut64(&maj_bits[21*130], frame_off);
-		lut_str = lut2bool(lut64, 64);
+		{  int logic_base[6] = {1,1,0,1,0,1};
+		   lut_str = lut2bool(lut64, 64, &logic_base, 1 /* flip_b0 */); }
 		if (*lut_str)
 			printf(" s0_D6LUT \"%s\"\n", lut_str);
 
 		lut64 = read_lut64(&maj_bits[27*130], frame_off+32);
-		lut_str = lut2bool(lut64, 64);
+		{  int logic_base[6] = {1,1,0,1,1,0};
+		   lut_str = lut2bool(lut64, 64, &logic_base, 0 /* flip_b0 */); }
 		if (*lut_str)
 			printf(" s1_A6LUT \"%s\"\n", lut_str);
 
 		lut64 = read_lut64(&maj_bits[29*130], frame_off+32);
-		lut_str = lut2bool(lut64, 64);
+		{  int logic_base[6] = {1,1,0,1,1,0};
+		   lut_str = lut2bool(lut64, 64, &logic_base, 0 /* flip_b0 */); }
 		if (*lut_str)
 			printf(" s1_B6LUT \"%s\"\n", lut_str);
 
 		lut64 = read_lut64(&maj_bits[27*130], frame_off);
-		lut_str = lut2bool(lut64, 64);
+		{  int logic_base[6] = {0,1,0,0,0,1};
+		   lut_str = lut2bool(lut64, 64, &logic_base, 0 /* flip_b0 */); }
 		if (*lut_str)
 			printf(" s1_C6LUT \"%s\"\n", lut_str);
 
 		lut64 = read_lut64(&maj_bits[29*130], frame_off);
-		lut_str = lut2bool(lut64, 64);
+		{  int logic_base[6] = {0,1,0,0,0,1};
+		   lut_str = lut2bool(lut64, 64, &logic_base, 0 /* flip_b0 */); }
 		if (*lut_str)
 			printf(" s1_D6LUT \"%s\"\n", lut_str);
 
@@ -609,8 +617,8 @@ void printf_bits(uint8_t* bits, int bits_len, int idcode)
 				for (minor = 20; minor < 31; minor++)
 					printf_clock(&bits[off+minor*130],
 						row, major, minor);
-				// extra bits at bottom of row0 and top of row2
-				if (row == 2)
+				// extra bits at bottom of row0 and top of row3
+				if (row == 3)
 					printf_singlebits(&bits[off], 20, 11,
 						0, 128, row, major);
 				else if (!row)

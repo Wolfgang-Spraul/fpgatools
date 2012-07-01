@@ -48,7 +48,8 @@ int printf_header(uint8_t* d, int len, int inpos, int* outdelta);
 
 void printf_lut6(const char* cfg);
 // bits is tested only for 32 and 64
-const char* lut2bool(const uint64_t lut, int bits);
+const char* lut2bool(const uint64_t lut, int bits,
+	int (*logic_base)[6], int flip_b0);
 
 int printf_iob(uint8_t* d, int len, int inpos, int num_entries);
 void printf_ramb16_data(uint8_t* bits, int inpos);

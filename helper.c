@@ -246,6 +246,7 @@ int parse_boolexpr(const char* expr, uint64_t* lut)
 		}
 		if (((i&8) != 0) ^ ((i&4) != 0))
 			vars[2] = 1;
+		// todo: flip_b0 and different base values missing
 		result = bool_eval(expr, strlen(expr), vars);
 		if (result == -1) return -1;
 		if (result) *lut |= 1LL<<i;
@@ -261,6 +262,7 @@ void printf_lut6(const char* cfg)
 
 	first_major = 0;
 	second_major = 0;
+	// todo: this is missing the different base_values, flip_b0 etc.
 	parse_boolexpr(cfg, &lut);
 
 	for (i = 0; i < 16; i++) {
@@ -283,7 +285,8 @@ typedef struct _minterm_entry
 } minterm_entry;
 
 // bits is tested only for 32 and 64
-const char* lut2bool(const uint64_t lut, int bits)
+const char* lut2bool(const uint64_t lut, int bits,
+	int (*logic_base)[6], int flip_b0)
 {
 	// round 0 needs 64 entries
 	// round 1 (size2): 192
@@ -303,12 +306,12 @@ const char* lut2bool(const uint64_t lut, int bits)
 
 	for (i = 0; i < bits; i++) {
 		if (lut & (1LL<<i)) {
-			mt[0][mt_size[0]].a[0] = lut_base_vars[0];
-			mt[0][mt_size[0]].a[1] = lut_base_vars[1];
-			mt[0][mt_size[0]].a[2] = lut_base_vars[2];
-			mt[0][mt_size[0]].a[3] = lut_base_vars[3];
-			mt[0][mt_size[0]].a[4] = lut_base_vars[4];
-			mt[0][mt_size[0]].a[5] = lut_base_vars[5];
+			mt[0][mt_size[0]].a[0] = (*logic_base)[0];
+			mt[0][mt_size[0]].a[1] = (*logic_base)[1];
+			mt[0][mt_size[0]].a[2] = (*logic_base)[2];
+			mt[0][mt_size[0]].a[3] = (*logic_base)[3];
+			mt[0][mt_size[0]].a[4] = (*logic_base)[4];
+			mt[0][mt_size[0]].a[5] = (*logic_base)[5];
 			for (j = 0; j < 6; j++) {
 				if (j != 2 && (i&(1<<j)))
 					mt[0][mt_size[0]].a[j]
@@ -316,6 +319,9 @@ const char* lut2bool(const uint64_t lut, int bits)
 			}
 			if (((i&8) != 0) ^ ((i&4) != 0))
 				mt[0][mt_size[0]].a[2] = 1;
+			if (flip_b0
+			   && (mt[0][mt_size[0]].a[2] ^ mt[0][mt_size[0]].a[3]))
+			  mt[0][mt_size[0]].a[0] = !mt[0][mt_size[0]].a[0];
 			mt_size[0]++;
 		}
 	}
@@ -411,250 +417,14 @@ const char* lut2bool(const uint64_t lut, int bits)
 	return str;
 }
 
-static const char* iob_xc6slx4_sitenames[896*2/8] =
-{
-	[0x0000/8] "P70",
-		   "P69",
-		   "P67",
-		   "P66",
-		   "P65",
-		   "P64",
-		   "P62",
-		   "P61",
-		   "P60",
-		   "P59",
-		   "P58",
-		   "P57",
-		   0,
-		   0,
-		   0,
-		   0,
-	[0x0080/8] 0,
-		   0,
-		   "P56",
-		   "P55",
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   "P51",
-		   "P50",
-		   0,
-		   0,
-		   0,
-		   0,
-	[0x0100/8] 0,
-		   0,
-		   0,
-		   0,
-		   "UNB131",
-		   "UNB132",
-		   "P48",
-		   "P47",
-		   "P46",
-		   "P45",
-		   "P44",
-		   "P43",
-		   0,
-		   0,
-		   "P41",
-		   "P40",
-	[0x0180/8] "P39",
-		   "P38",
-		   "P35",
-		   "P34",
-		   "P33",
-		   "P32",
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-	[0x0200/8] "P30",
-		   "P29",
-		   "P27",
-		   "P26",
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   "P24",
-		   "P23",
-		   "P22",
-		   "P21",
-		   0,
-		   0,
-	[0x0280/8] 0,
-		   0,
-		   0,
-		   0,
-		   "P17",
-		   "P16",
-		   "P15",
-		   "P14",
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-	[0x0300/8] "P12",
-		   "P11",
-		   "P10",
-		   "P9",
-		   "P8",
-		   "P7",
-		   "P6",
-		   "P5",
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   "P2",
-		   "P1",
-	[0x0380/8] "P144",
-		   "P143",
-		   "P142",
-		   "P141",
-		   "P140",
-		   "P139",
-		   "P138",
-		   "P137",
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-	[0x0400/8] 0,
-		   0,
-		   0,
-		   0,
-		   "P134",
-		   "P133",
-		   "P132",
-		   "P131",
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   "P127",
-		   "P126",
-	[0x0480/8] "P124",
-		   "P123",
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   "P121",
-		   "P120",
-		   "P119",
-		   "P118",
-		   "P117",
-		   "P116",
-		   "P115",
-		   "P114",
-	[0x0500/8] "P112",
-		   "P111",
-		   "P105",
-		   "P104",
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   "P102",
-		   "P101",
-		   "P99",
-		   "P98",
-		   "P97",
-	[0x0580/8] 0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   "P95",
-		   "P94",
-		   "P93",
-		   "P92",
-		   0,
-		   0,
-	[0x0600/8] 0,
-		   0,
-		   0,
-		   "P88",
-		   "P87",
-		   0,
-		   "P85",
-		   "P84",
-		   0,
-		   0,
-		   "P83",
-		   "P82",
-		   "P81",
-		   "P80",
-		   "P79",
-		   "P78",
-	[0x0680/8] 0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   0,
-		   "P75",
-		   "P74"
-};
-
 int printf_iob(uint8_t* d, int len, int inpos, int num_entries)
 {
 	int i, j, num_printed;
 
 	num_printed = 0;
-	if (num_entries != sizeof(iob_xc6slx4_sitenames)/sizeof(iob_xc6slx4_sitenames[0]))
-		printf("#W Expected %li IOB entries but got %i.\n",
-			sizeof(iob_xc6slx4_sitenames)/sizeof(iob_xc6slx4_sitenames[0]),
-			num_entries);
 	for (i = 0; i < num_entries; i++) {
-		if (*(uint32_t*)&d[inpos+i*8]
-		    || *(uint32_t*)&d[inpos+i*8+4]) {
-			if (i < sizeof(iob_xc6slx4_sitenames)/sizeof(iob_xc6slx4_sitenames[0])
-			    && iob_xc6slx4_sitenames[i]) {
-				printf("iob %s", iob_xc6slx4_sitenames[i]);
-			} else
-				printf("iob %i", i);
+		if (*(uint32_t*)&d[inpos+i*8] || *(uint32_t*)&d[inpos+i*8+4]) {
+			printf("iob i%i", i);
 			for (j = 0; j < 8; j++)
 				printf(" %02X", d[inpos+i*8+j]);
 			printf("\n");
