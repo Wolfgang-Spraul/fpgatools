@@ -64,6 +64,6 @@ int printf_frames(uint8_t* bits, int max_frames, int row, int major,
 	int minor, int print_empty);
 void printf_clock(uint8_t* frame, int row, int major, int minor);
 int clb_empty(uint8_t* maj_bits, int idx);
-void printf_singlebits(uint8_t* maj_bits, int start_minor, int num_minors,
+void printf_extrabits(uint8_t* maj_bits, int start_minor, int num_minors,
 	int start_bit, int num_bits, int row, int major);
 uint64_t read_lut64(uint8_t* two_minors, int off_in_frame);

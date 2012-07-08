@@ -85,7 +85,7 @@ const char* cmds[] =
 
 typedef enum {
 	MAJ_EXTRA = -1,
-	MAJ_CLB, MAJ_BRAM
+	MAJ_CLB, MAJ_BRAM, MAJ_DSP
 } major_t;
 
 typedef struct
@@ -97,14 +97,15 @@ typedef struct
 
 const MAJOR majors[] =
 {
-	/*  0 */ { 0,		 4, MAJ_EXTRA }, // clock?
+	/*  0 */ { 0,		 4, MAJ_EXTRA }, // 505 bytes = middle 8-bit
+						 // for each minor?
 	/*  1 */ { 0,		30, MAJ_EXTRA },
 	/*  2 */ { "clb",	31, MAJ_CLB },
 	/*  3 */ { 0,		30, MAJ_EXTRA },
 	/*  4 */ { "bram",	25, MAJ_BRAM },
 	/*  5 */ { "clb",	31, MAJ_CLB },
 	/*  6 */ { 0,		30, MAJ_EXTRA },
-	/*  7 */ { 0,		24, MAJ_EXTRA }, // dsp?
+	/*  7 */ { "dsp",	24, MAJ_DSP },
 	/*  8 */ { "clb",	31, MAJ_CLB },
 	/*  9 */ { 0,		31, MAJ_EXTRA },
 	/* 10 */ { "clb",	31, MAJ_CLB },
@@ -526,72 +527,80 @@ void printf_clb(uint8_t* maj_bits, int row, int major)
 		frame_off = i*64;
 		if (i >= 8)
 			frame_off += 16; // skip clock bits for idx >= 8
-		printf("r%i ma%i clb i%i\n", row, major, i-start);
-		printf("{\n");
 
 		// LUTs
 		lut64 = read_lut64(&maj_bits[24*130], frame_off+32);
-		{  int logic_base[6] = {0,1,0,0,1,0};
-		   lut_str = lut2bool(lut64, 64, &logic_base, 1 /* flip_b0 */); }
+		{ int logic_base[6] = {0,1,0,0,1,0};
+		  lut_str = lut2bool(lut64, 64, &logic_base, 1 /* flip_b0 */); }
 		if (*lut_str)
-			printf(" s0_A6LUT \"%s\"\n", lut_str);
+			printf("r%i ma%i clb i%i s0_A6LUT \"%s\"\n",
+				row, major, i-start, lut_str);
 
 		lut64 = read_lut64(&maj_bits[21*130], frame_off+32);
-		{  int logic_base[6] = {1,1,0,1,0,1};
-		   lut_str = lut2bool(lut64, 64, &logic_base, 1 /* flip_b0 */); }
+		{ int logic_base[6] = {1,1,0,1,0,1};
+		  lut_str = lut2bool(lut64, 64, &logic_base, 1 /* flip_b0 */); }
 		if (*lut_str)
-			printf(" s0_B6LUT \"%s\"\n", lut_str);
+			printf("r%i ma%i clb i%i s0_B6LUT \"%s\"\n",
+				row, major, i-start, lut_str);
 
 		lut64 = read_lut64(&maj_bits[24*130], frame_off);
-		{  int logic_base[6] = {0,1,0,0,1,0};
-		   lut_str = lut2bool(lut64, 64, &logic_base, 1 /* flip_b0 */); }
+		{ int logic_base[6] = {0,1,0,0,1,0};
+		  lut_str = lut2bool(lut64, 64, &logic_base, 1 /* flip_b0 */); }
 		if (*lut_str)
-			printf(" s0_C6LUT \"%s\"\n", lut_str);
+			printf("r%i ma%i clb i%i s0_C6LUT \"%s\"\n",
+				row, major, i-start, lut_str);
 
 		lut64 = read_lut64(&maj_bits[21*130], frame_off);
-		{  int logic_base[6] = {1,1,0,1,0,1};
-		   lut_str = lut2bool(lut64, 64, &logic_base, 1 /* flip_b0 */); }
+		{ int logic_base[6] = {1,1,0,1,0,1};
+		  lut_str = lut2bool(lut64, 64, &logic_base, 1 /* flip_b0 */); }
 		if (*lut_str)
-			printf(" s0_D6LUT \"%s\"\n", lut_str);
+			printf("r%i ma%i clb i%i s0_D6LUT \"%s\"\n",
+				row, major, i-start, lut_str);
 
 		lut64 = read_lut64(&maj_bits[27*130], frame_off+32);
-		{  int logic_base[6] = {1,1,0,1,1,0};
-		   lut_str = lut2bool(lut64, 64, &logic_base, 0 /* flip_b0 */); }
+		{ int logic_base[6] = {1,1,0,1,1,0};
+		  lut_str = lut2bool(lut64, 64, &logic_base, 0 /* flip_b0 */); }
 		if (*lut_str)
-			printf(" s1_A6LUT \"%s\"\n", lut_str);
+			printf("r%i ma%i clb i%i s1_A6LUT \"%s\"\n",
+				row, major, i-start, lut_str);
 
 		lut64 = read_lut64(&maj_bits[29*130], frame_off+32);
-		{  int logic_base[6] = {1,1,0,1,1,0};
-		   lut_str = lut2bool(lut64, 64, &logic_base, 0 /* flip_b0 */); }
+		{ int logic_base[6] = {1,1,0,1,1,0};
+		  lut_str = lut2bool(lut64, 64, &logic_base, 0 /* flip_b0 */); }
 		if (*lut_str)
-			printf(" s1_B6LUT \"%s\"\n", lut_str);
+			printf("r%i ma%i clb i%i s1_B6LUT \"%s\"\n",
+				row, major, i-start, lut_str);
 
 		lut64 = read_lut64(&maj_bits[27*130], frame_off);
-		{  int logic_base[6] = {0,1,0,0,0,1};
-		   lut_str = lut2bool(lut64, 64, &logic_base, 0 /* flip_b0 */); }
+		{ int logic_base[6] = {0,1,0,0,0,1};
+		  lut_str = lut2bool(lut64, 64, &logic_base, 0 /* flip_b0 */); }
 		if (*lut_str)
-			printf(" s1_C6LUT \"%s\"\n", lut_str);
+			printf("r%i ma%i clb i%i s1_C6LUT \"%s\"\n",
+				row, major, i-start, lut_str);
 
 		lut64 = read_lut64(&maj_bits[29*130], frame_off);
-		{  int logic_base[6] = {0,1,0,0,0,1};
-		   lut_str = lut2bool(lut64, 64, &logic_base, 0 /* flip_b0 */); }
+		{ int logic_base[6] = {0,1,0,0,0,1};
+		  lut_str = lut2bool(lut64, 64, &logic_base, 0 /* flip_b0 */); }
 		if (*lut_str)
-			printf(" s1_D6LUT \"%s\"\n", lut_str);
+			printf("r%i ma%i clb i%i s1_D6LUT \"%s\"\n",
+				row, major, i-start, lut_str);
 
 		// bits
 		for (j = 0; j < 64; j++) {
 			if (bit_set(&maj_bits[20*130], frame_off + j))
-				printf(" mi20 b%i\n", j); 
+				printf("r%i ma%i clb i%i mi20 bit %i\n",
+					row, major, i-start, j); 
 		}
 		for (j = 0; j < 64; j++) {
 			if (bit_set(&maj_bits[23*130], frame_off + j))
-				printf(" mi23 b%i\n", j); 
+				printf("r%i ma%i clb i%i mi23 bit %i\n",
+					row, major, i-start, j); 
 		}
 		for (j = 0; j < 64; j++) {
 			if (bit_set(&maj_bits[26*130], frame_off + j))
-				printf(" mi26 b%i\n", j); 
+				printf("r%i ma%i clb i%i mi26 bit %i\n",
+					row, major, i-start, j); 
 		}
-		printf("}\n");
 	}
 }
 
@@ -605,7 +614,35 @@ void printf_bits(uint8_t* bits, int bits_len, int idcode)
 	printf("\n");
 	for (row = 0; row < 4; row++) {
 		for (major = 0; major < 18; major++) {
-			if (majors[major].type == MAJ_CLB) {
+			if (majors[major].type == MAJ_DSP) {
+				int last_extra_minor;
+
+				if (!row || row == 3)
+					last_extra_minor = 23;
+				else
+					last_extra_minor = 21;
+				minor = 0;
+				while (minor <= last_extra_minor) {
+					minor += printf_frames(&bits[off
+					  +minor*130], 31 - minor, row,
+					  major, minor, g_cmd_info);
+				}
+
+				// clock
+				for (; minor < 24; minor++)
+					printf_clock(&bits[off+minor*130],
+						row, major, minor);
+
+				for (i = 0; i < 4; i++) {
+					for (minor = last_extra_minor+1; minor < 24;
+					     minor++) {
+						for (j = 0; j < 256; j++) {
+							if (bit_set(&bits[off+minor*130], i*256 + ((i>=2)?16:0) + j))
+							printf("r%i ma%i dsp i%i mi%i bit %i\n", row, major, i, minor, i*256+j);
+						}
+					}
+				}
+			} else if (majors[major].type == MAJ_CLB) {
 				minor = 0;
 				while (minor < 20) {
 					minor += printf_frames(&bits[off
@@ -619,10 +656,10 @@ void printf_bits(uint8_t* bits, int bits_len, int idcode)
 						row, major, minor);
 				// extra bits at bottom of row0 and top of row3
 				if (row == 3)
-					printf_singlebits(&bits[off], 20, 11,
+					printf_extrabits(&bits[off], 20, 11,
 						0, 128, row, major);
 				else if (!row)
-					printf_singlebits(&bits[off], 20, 11,
+					printf_extrabits(&bits[off], 20, 11,
 						14*64 + 16, 128, row, major);
 
 				// clbs
@@ -657,7 +694,8 @@ void printf_bits(uint8_t* bits, int bits_len, int idcode)
 					}
 					if (j >= 64)
 						continue;
-					printf("r%i m%i i%i ramb16\n", row, major, i);
+					printf("r%i ma%i ramb16 i%i\n",
+						row, major, i);
 					print_ramb16_cfg(&ramb16_cfg[i]);
 				}
 			} else {
@@ -688,7 +726,7 @@ void printf_bits(uint8_t* bits, int bits_len, int idcode)
 				newline = 1;
 				printf("\n");
 			}
-			printf("br%i i%i ramb16 data\n", row, i);
+			printf("br%i ramb16 i%i\n", row, i);
 			printf("{\n");
 			off = bram_data_start + row*144*130 + i*18*130;
 			printf_ramb16_data(bits, off);

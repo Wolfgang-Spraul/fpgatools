@@ -552,7 +552,7 @@ int printf_frames(uint8_t* bits, int max_frames,
 	if (row < 0)
 		sprintf(prefix, "f%i ", abs(row));
 	else
-		sprintf(prefix, "r%i m%i-%i ", row, major, minor);
+		sprintf(prefix, "r%i ma%i extra mi%i ", row, major, minor);
 
 	if (is_empty(bits, 130)) {
 		for (i = 1; i < max_frames; i++) {
@@ -587,7 +587,8 @@ void printf_clock(uint8_t* frame, int row, int major, int minor)
 	int i;
 	for (i = 0; i < 16; i++) {
 		if (bit_set(frame, 512 + i))
-			printf("r%i m%i-%i clock %i\n", row, major, minor, i);
+			printf("r%i ma%i mi%i clock %i\n",
+				row, major, minor, i);
 	}
 }
 
@@ -607,7 +608,7 @@ int clb_empty(uint8_t* maj_bits, int idx)
 	return 1;
 }
 
-void printf_singlebits(uint8_t* maj_bits, int start_minor, int num_minors,
+void printf_extrabits(uint8_t* maj_bits, int start_minor, int num_minors,
 	int start_bit, int num_bits, int row, int major)
 {
 	int minor, bit;
@@ -615,7 +616,7 @@ void printf_singlebits(uint8_t* maj_bits, int start_minor, int num_minors,
 	for (minor = start_minor; minor < start_minor + num_minors; minor++) {
 		for (bit = start_bit; bit < start_bit + num_bits; bit++) {
 			if (bit_set(&maj_bits[minor*130], bit))
-				printf("r%i m%i-%i b%i\n",
+				printf("r%i ma%i extra mi%i bit %i\n",
 					row, major, minor, bit);
 		}
 	}
