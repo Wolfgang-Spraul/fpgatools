@@ -15,20 +15,78 @@
 #include <libxml/xpath.h>
 #include <libxml/xpathInternals.h>
 
+struct fpga_model
+{
+	int tile_x_range, tile_y_range;
+	struct fpga_tile* tiles;
+};
+
+enum fpga_tile_type
+{
+	NULL_T,
+	LOGIC_XM,
+	LOGIC_XL,
+	BRAM,
+	MACC,
+};
+
+struct fpga_tile
+{
+	enum fpga_tile_type type;
+};
+
+struct fpga_model* build_model(int rows, const char* columns)
+{
+	int tile_rows, tile_columns, i;
+
+	tile_rows = 1 /* middle */ + (8+1+8)*rows
+		+ 2+2 /* two extra tiles at top and bottom */;
+	tile_columns = 5 /* left */ + 2 /* middle regs */ + 5 /* right */;
+	for (i = 0; columns[i] != 0; i++) {
+		tile_columns += 2; // 2 for logic blocks L/M or middle regs
+		if (columns[i] == 'B' || columns[i] == 'D')
+			tile_columns++; // 3 for bram or macc
+	}
+	return 0;
+}
+
+// columns
+//  'L' = X+L logic block
+//  'M' = X+M logic block
+//  'B' = block ram
+//  'D' = dsp (macc)
+//  'R' = registers (middle)
+
+#define XC6SLX9_ROWS	4
+#define XC6SLX9_COLUMNS	"MLBMLDMLRMLMLBML"
+
 static const xmlChar* empty_svg = (const xmlChar*)
 	"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
 	"<svg\n"
-	"   xmlns=\"http://www.w3.org/2000/svg\"\n"
 	"   version=\"2.0\"\n"
+	"   xmlns=\"http://www.w3.org/2000/svg\"\n"
 	"   xmlns:xlink=\"http://www.w3.org/1999/xlink\"\n"
-	"   viewBox=\"0 0 1000 1000\" width=\"1000\" height=\"1000\">\n"
-	"   <rect width=\"100%\" height=\"100%\" style=\"fill:black;\"/>\n"
-        "   <g id=\"root\" transform=\"translate(0,1000) scale(1,-1)\">\n"
-        "   </g>\n"
+	"   width=\"1000\" height=\"1000\"\n"
+	"   id=\"root\">\n"
 	"</svg>\n";
 
 int main(int argc, char** argv)
 {
+	struct fpga_model* model = 0;
+
+	//
+	// build memory model
+	//
+
+// build_model(XC6SLX9_ROWS, XC6SLX9_COLUMNS);
+
+	//
+	// write svg
+	//
+
+// can't get indent formatting to work - use 'xmllint --pretty 1 -'
+// on the output for now
+
 	xmlDocPtr doc = 0;
 	xmlXPathContextPtr xpathCtx = 0;
 	xmlXPathObjectPtr xpathObj = 0;
@@ -63,6 +121,7 @@ int main(int argc, char** argv)
 		xmlNodePtr new_node;
 		int i;
 
+//<text x="6900" y="1058">NULL</text>
 		for (i = 0; i < 10; i++) {
 			new_node = xmlNewChild(xpathObj->nodesetval->nodeTab[0], 0 /* xmlNsPtr */, BAD_CAST "use", 0 /* content */);
 			xmlSetProp(new_node, BAD_CAST "xlink:href", BAD_CAST "lib.svg#IOB");
@@ -73,7 +132,7 @@ int main(int argc, char** argv)
 		}
 	}
 
-	xmlDocDump(stdout, doc);
+	xmlDocFormatDump(stdout, doc, 1 /* format */);
 
 	xmlXPathFreeObject(xpathObj);
 	xmlXPathFreeContext(xpathCtx); 
