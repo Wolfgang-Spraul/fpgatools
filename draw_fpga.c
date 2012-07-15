@@ -116,18 +116,66 @@ enum fpga_tile_type
 	ROUTING_VIA_IO_DCM,
 	ROUTING_VIA_CARRY,
 	CORNER_TERM_L,
+	CORNER_TERM_R,
 	IO_TERM_L_UPPER_TOP,
 	IO_TERM_L_UPPER_BOT,
 	IO_TERM_L_LOWER_TOP,
 	IO_TERM_L_LOWER_BOT,
+	IO_TERM_R_UPPER_TOP,
+	IO_TERM_R_UPPER_BOT,
+	IO_TERM_R_LOWER_TOP,
+	IO_TERM_R_LOWER_BOT,
 	IO_TERM_L,
+	IO_TERM_R,
 	HCLK_TERM_L,
+	HCLK_TERM_R,
 	REGH_IO_TERM_L,
+	REGH_IO_TERM_R,
 	REG_L,
+	REG_R,
 	IO_PCI_L,
+	IO_PCI_R,
 	IO_RDY_L,
+	IO_RDY_R,
 	IO_L,
+	IO_R,
 	IO_PCI_CONN_L,
+	IO_PCI_CONN_R,
+	CORNER_TERM_T,
+	CORNER_TERM_B,
+	ROUTING_IO_L,
+	HCLK_ROUTING_IO_L,
+	HCLK_ROUTING_IO_R,
+	REGH_ROUTING_IO_L,
+	REGH_ROUTING_IO_R,
+	ROUTING_IO_L_BRK,
+	ROUTING_GCLK,
+	REGH_IO_L,
+	REGH_IO_R,
+	REGH_MCB,
+	HCLK_MCB,
+	ROUTING_IO_VIA_L,
+	ROUTING_IO_VIA_R,
+	ROUTING_IO_PCI_CE_L,
+	ROUTING_IO_PCI_CE_R,
+	CORNER_TL,
+	CORNER_BL,
+	CORNER_TR_UPPER,
+	CORNER_TR_LOWER,
+	CORNER_BR_UPPER,
+	CORNER_BR_LOWER,
+	HCLK_IO_TOP_UP_L,
+	HCLK_IO_TOP_UP_R,
+	HCLK_IO_TOP_SPLIT_L,
+	HCLK_IO_TOP_SPLIT_R,
+	HCLK_IO_TOP_DN_L,
+	HCLK_IO_TOP_DN_R,
+	HCLK_IO_BOT_UP_L,
+	HCLK_IO_BOT_UP_R,
+	HCLK_IO_BOT_SPLIT_L,
+	HCLK_IO_BOT_SPLIT_R,
+	HCLK_IO_BOT_DN_L,
+	HCLK_IO_BOT_DN_R,
 };
 
 const char* fpga_ttstr[] = // tile type strings
@@ -223,18 +271,66 @@ const char* fpga_ttstr[] = // tile type strings
 	[ROUTING_VIA_IO_DCM] = "ROUTING_VIA_IO_DCM",
 	[ROUTING_VIA_CARRY] = "ROUTING_VIA_CARRY",
 	[CORNER_TERM_L] = "CORNER_TERM_L",
+	[CORNER_TERM_R] = "CORNER_TERM_R",
 	[IO_TERM_L_UPPER_TOP] = "IO_TERM_L_UPPER_TOP",
 	[IO_TERM_L_UPPER_BOT] = "IO_TERM_L_UPPER_BOT",
 	[IO_TERM_L_LOWER_TOP] = "IO_TERM_L_LOWER_TOP",
 	[IO_TERM_L_LOWER_BOT] = "IO_TERM_L_LOWER_BOT",
+	[IO_TERM_R_UPPER_TOP] = "IO_TERM_R_UPPER_TOP",
+	[IO_TERM_R_UPPER_BOT] = "IO_TERM_R_UPPER_BOT",
+	[IO_TERM_R_LOWER_TOP] = "IO_TERM_R_LOWER_TOP",
+	[IO_TERM_R_LOWER_BOT] = "IO_TERM_R_LOWER_BOT",
 	[IO_TERM_L] = "IO_TERM_L",
+	[IO_TERM_R] = "IO_TERM_R",
 	[HCLK_TERM_L] = "HCLK_TERM_L",
+	[HCLK_TERM_R] = "HCLK_TERM_R",
 	[REGH_IO_TERM_L] = "REGH_IO_TERM_L",
+	[REGH_IO_TERM_R] = "REGH_IO_TERM_R",
 	[REG_L] = "REG_L",
+	[REG_R] = "REG_R",
 	[IO_PCI_L] = "IO_PCI_L",
+	[IO_PCI_R] = "IO_PCI_R",
 	[IO_RDY_L] = "IO_RDY_L",
+	[IO_RDY_R] = "IO_RDY_R",
 	[IO_L] = "IO_L",
+	[IO_R] = "IO_R",
 	[IO_PCI_CONN_L] = "IO_PCI_CONN_L",
+	[IO_PCI_CONN_R] = "IO_PCI_CONN_R",
+	[CORNER_TERM_T] = "CORNER_TERM_T",
+	[CORNER_TERM_B] = "CORNER_TERM_B",
+	[ROUTING_IO_L] = "ROUTING_IO_L",
+	[HCLK_ROUTING_IO_L] = "HCLK_ROUTING_IO_L",
+	[HCLK_ROUTING_IO_R] = "HCLK_ROUTING_IO_R",
+	[REGH_ROUTING_IO_L] = "REGH_ROUTING_IO_L",
+	[REGH_ROUTING_IO_R] = "REGH_ROUTING_IO_R",
+	[ROUTING_IO_L_BRK] = "ROUTING_IO_L_BRK",
+	[ROUTING_GCLK] = "ROUTING_GCLK",
+	[REGH_IO_L] = "REGH_IO_L",
+	[REGH_IO_R] = "REGH_IO_R",
+	[REGH_MCB] = "REGH_MCB",
+	[HCLK_MCB] = "HCLK_MCB",
+	[ROUTING_IO_VIA_L] = "ROUTING_IO_VIA_L",
+	[ROUTING_IO_VIA_R] = "ROUTING_IO_VIA_R",
+	[ROUTING_IO_PCI_CE_L] = "ROUTING_IO_PCI_CE_L",
+	[ROUTING_IO_PCI_CE_R] = "ROUTING_IO_PCI_CE_R",
+	[CORNER_TL] = "CORNER_TL",
+	[CORNER_BL] = "CORNER_BL",
+	[CORNER_TR_UPPER] = "CORNER_TR_UPPER",
+	[CORNER_TR_LOWER] = "CORNER_TR_LOWER",
+	[CORNER_BR_UPPER] = "CORNER_BR_UPPER",
+	[CORNER_BR_LOWER] = "CORNER_BR_LOWER",
+	[HCLK_IO_TOP_UP_L] = "HCLK_IO_TOP_UP_L",
+	[HCLK_IO_TOP_UP_R] = "HCLK_IO_TOP_UP_R",
+	[HCLK_IO_TOP_SPLIT_L] = "HCLK_IO_TOP_SPLIT_L",
+	[HCLK_IO_TOP_SPLIT_R] = "HCLK_IO_TOP_SPLIT_R",
+	[HCLK_IO_TOP_DN_L] = "HCLK_IO_TOP_DN_L",
+	[HCLK_IO_TOP_DN_R] = "HCLK_IO_TOP_DN_R",
+	[HCLK_IO_BOT_UP_L] = "HCLK_IO_BOT_UP_L",
+	[HCLK_IO_BOT_UP_R] = "HCLK_IO_BOT_UP_R",
+	[HCLK_IO_BOT_SPLIT_L] = "HCLK_IO_BOT_SPLIT_L",
+	[HCLK_IO_BOT_SPLIT_R] = "HCLK_IO_BOT_SPLIT_R",
+	[HCLK_IO_BOT_DN_L] = "HCLK_IO_BOT_DN_L",
+	[HCLK_IO_BOT_DN_R] = "HCLK_IO_BOT_DN_R",
 };
 
 struct fpga_tile
@@ -602,8 +698,14 @@ struct fpga_model* build_model(int fpga_rows, const char* columns,
 		if (k<(fpga_rows/2)) row_top_y++; // middle system tiles
 
 		for (l = 0; l < 16; l++) {
+			//
+			// +0
+			//
 			if (left_wiring[(fpga_rows-1-k)*16+l] == 'W')
 				model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns].type = IO_L;
+			//
+			// +1
+			//
 			if ((k == fpga_rows-1 && !l) || (!k && l==15))
 				model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + 1].type = CORNER_TERM_L;
 			else if (k == fpga_rows/2 && l == 12)
@@ -616,20 +718,182 @@ struct fpga_model* build_model(int fpga_rows, const char* columns,
 				model->tiles[(row_top_y+l)*tile_columns + 1].type = IO_TERM_L_LOWER_BOT;
 			else 
 				model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + 1].type = IO_TERM_L;
+			//
+			// +2
+			//
+			if (left_wiring[(fpga_rows-1-k)*16+l] == 'W') {
+				if (l == 15 && k && k != fpga_rows/2)
+					model->tiles[(row_top_y+l+1)*tile_columns + 2].type = ROUTING_IO_L_BRK;
+				else
+					model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + 2].type = ROUTING_IO_L;
+			} else { // unwired
+				if (k && k != fpga_rows/2 && l == 15)
+					model->tiles[(row_top_y+l+1)*tile_columns + 2].type = ROUTING_BRK;
+				else if (k == fpga_rows/2 && l == 14)
+					model->tiles[(row_top_y+l+1)*tile_columns + 2].type = ROUTING_GCLK;
+				else
+					model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + 2].type = ROUTING;
+			}
+			//
+			// +3
+			//
+			if (left_wiring[(fpga_rows-1-k)*16+l] == 'W') {
+				model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + 3].type = ROUTING_IO_VIA_L;
+			} else { // unwired
+				if (k == fpga_rows-1 && !l) {
+					model->tiles[(row_top_y+l)*tile_columns + 3].type = CORNER_TL;
+				} else if (!k && l == 15) {
+					model->tiles[(row_top_y+l+1)*tile_columns + 3].type = CORNER_BL;
+				} else {
+					if (k && k != fpga_rows/2 && l == 15)
+						model->tiles[(row_top_y+l+1)*tile_columns + 3].type = ROUTING_VIA_CARRY;
+					else
+						model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + 3].type = ROUTING_VIA;
+				}
+			}
 		}
 		model->tiles[(row_top_y+8)*tile_columns + 1].type = HCLK_TERM_L;
+		model->tiles[(row_top_y+8)*tile_columns + 2].type = HCLK_ROUTING_IO_L;
+		if (k >= fpga_rows/2) { // top half
+			if (k > (fpga_rows*3)/4)
+				model->tiles[(row_top_y+8)*tile_columns + 3].type = HCLK_IO_TOP_UP_L;
+			else if (k == (fpga_rows*3)/4)
+				model->tiles[(row_top_y+8)*tile_columns + 3].type = HCLK_IO_TOP_SPLIT_L;
+			else
+				model->tiles[(row_top_y+8)*tile_columns + 3].type = HCLK_IO_TOP_DN_L;
+		} else { // bottom half
+			if (k < fpga_rows/4 - 1)
+				model->tiles[(row_top_y+8)*tile_columns + 3].type = HCLK_IO_BOT_DN_L;
+			else if (k == fpga_rows/4 - 1)
+				model->tiles[(row_top_y+8)*tile_columns + 3].type = HCLK_IO_BOT_SPLIT_L;
+			else
+				model->tiles[(row_top_y+8)*tile_columns + 3].type = HCLK_IO_BOT_UP_L;
+		}
+		model->tiles[(row_top_y+8)*tile_columns + 4].type = HCLK_MCB;
 	}
 
 	model->tiles[(center_row-3)*tile_columns].type = IO_PCI_L;
 	model->tiles[(center_row-2)*tile_columns].type = IO_PCI_CONN_L;
 	model->tiles[(center_row-1)*tile_columns].type = IO_PCI_CONN_L;
 	model->tiles[center_row*tile_columns].type = REG_L;
-	model->tiles[center_row*tile_columns + 1].type = REGH_IO_TERM_L;
 	model->tiles[(center_row+1)*tile_columns].type = IO_RDY_L;
+
+	model->tiles[center_row*tile_columns + 1].type = REGH_IO_TERM_L;
+
+	model->tiles[tile_columns + 2].type = CORNER_TERM_T;
+	model->tiles[(tile_rows-2)*tile_columns + 2].type = CORNER_TERM_B;
+	model->tiles[center_row*tile_columns + 2].type = REGH_ROUTING_IO_L;
+
+	model->tiles[tile_columns + 3].type = ROUTING_IO_PCI_CE_L;
+	model->tiles[(tile_rows-2)*tile_columns + 3].type = ROUTING_IO_PCI_CE_L;
+	model->tiles[center_row*tile_columns + 3].type = REGH_IO_L;
+	model->tiles[center_row*tile_columns + 4].type = REGH_MCB;
 
 	//
 	// right IO
 	//
+
+	for (k = fpga_rows-1; k >= 0; k--) {
+		row_top_y = 2 /* top IO tiles */ + (fpga_rows-1-k)*(8+1/*middle of row clock*/+8);
+		if (k<(fpga_rows/2)) row_top_y++; // middle system tiles
+
+		for (l = 0; l < 16; l++) {
+			//
+			// -1
+			//
+			if (k == fpga_rows/2 && l == 13)
+				model->tiles[(row_top_y+l+1)*tile_columns + tile_columns - 1].type = IO_RDY_R;
+			else if (k == fpga_rows/2 && l == 14)
+				model->tiles[(row_top_y+l+1)*tile_columns + tile_columns - 1].type = IO_PCI_CONN_R;
+			else if (k == fpga_rows/2 && l == 15)
+				model->tiles[(row_top_y+l+1)*tile_columns + tile_columns - 1].type = IO_PCI_CONN_R;
+			else if (k == fpga_rows/2-1 && !l)
+				model->tiles[(row_top_y+l)*tile_columns + tile_columns - 1].type = IO_PCI_R;
+			else {
+				if (right_wiring[(fpga_rows-1-k)*16+l] == 'W')
+					model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + tile_columns - 1].type = IO_R;
+			}
+			//
+			// -2
+			//
+			if ((k == fpga_rows-1 && (!l || l == 1)) || (!k && (l==15 || l==14)))
+				model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + tile_columns - 2].type = CORNER_TERM_R;
+			else if (k == fpga_rows/2 && l == 12)
+				model->tiles[(row_top_y+l+1)*tile_columns + tile_columns - 2].type = IO_TERM_R_UPPER_TOP;
+			else if (k == fpga_rows/2 && l == 13)
+				model->tiles[(row_top_y+l+1)*tile_columns + tile_columns - 2].type = IO_TERM_R_UPPER_BOT;
+			else if (k == (fpga_rows/2)-1 && !l)
+				model->tiles[(row_top_y+l)*tile_columns + tile_columns - 2].type = IO_TERM_R_LOWER_TOP;
+			else if (k == (fpga_rows/2)-1 && l == 1)
+				model->tiles[(row_top_y+l)*tile_columns + tile_columns - 2].type = IO_TERM_R_LOWER_BOT;
+			else 
+				model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + tile_columns - 2].type = IO_TERM_R;
+			//
+			// -3
+			//
+			//
+			// -4
+			//
+			if (right_wiring[(fpga_rows-1-k)*16+l] == 'W')
+				model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + tile_columns - 4].type = ROUTING_IO_VIA_R;
+			else {
+				if (k == fpga_rows-1 && l == 0)
+					model->tiles[(row_top_y+l)*tile_columns + tile_columns - 4].type = CORNER_TR_UPPER;
+				else if (k == fpga_rows-1 && l == 1)
+					model->tiles[(row_top_y+l)*tile_columns + tile_columns - 4].type = CORNER_TR_LOWER;
+				else if (k && k != fpga_rows/2 && l == 15)
+					model->tiles[(row_top_y+l+1)*tile_columns + tile_columns - 4].type = ROUTING_VIA_CARRY;
+				else if (!k && l == 14)
+					model->tiles[(row_top_y+l+1)*tile_columns + tile_columns - 4].type = CORNER_BR_UPPER;
+				else if (!k && l == 15)
+					model->tiles[(row_top_y+l+1)*tile_columns + tile_columns - 4].type = CORNER_BR_LOWER;
+				else
+					model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + tile_columns - 4].type = ROUTING_VIA;
+			}
+			//
+			// -5
+			//
+			if (right_wiring[(fpga_rows-1-k)*16+l] == 'W')
+				model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + tile_columns - 5].type = IO_ROUTING;
+			else {
+				if (k && k != fpga_rows/2 && l == 15)
+					model->tiles[(row_top_y+l+1)*tile_columns + tile_columns - 5].type = ROUTING_BRK;
+				else if (k == fpga_rows/2 && l == 14)
+					model->tiles[(row_top_y+l+1)*tile_columns + tile_columns - 5].type = ROUTING_GCLK;
+				else
+					model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + tile_columns - 5].type = ROUTING;
+			}
+		}
+		model->tiles[(row_top_y+8)*tile_columns + tile_columns - 2].type = HCLK_TERM_R;
+		model->tiles[(row_top_y+8)*tile_columns + tile_columns - 3].type = HCLK_MCB;
+
+		model->tiles[(row_top_y+8)*tile_columns + tile_columns - 5].type = HCLK_ROUTING_IO_R;
+		if (k >= fpga_rows/2) { // top half
+			if (k > (fpga_rows*3)/4)
+				model->tiles[(row_top_y+8)*tile_columns + tile_columns - 4].type = HCLK_IO_TOP_UP_R;
+			else if (k == (fpga_rows*3)/4)
+				model->tiles[(row_top_y+8)*tile_columns + tile_columns - 4].type = HCLK_IO_TOP_SPLIT_R;
+			else
+				model->tiles[(row_top_y+8)*tile_columns + tile_columns - 4].type = HCLK_IO_TOP_DN_R;
+		} else { // bottom half
+			if (k < fpga_rows/4 - 1)
+				model->tiles[(row_top_y+8)*tile_columns + tile_columns - 4].type = HCLK_IO_BOT_DN_R;
+			else if (k == fpga_rows/4 - 1)
+				model->tiles[(row_top_y+8)*tile_columns + tile_columns - 4].type = HCLK_IO_BOT_SPLIT_R;
+			else
+				model->tiles[(row_top_y+8)*tile_columns + tile_columns - 4].type = HCLK_IO_BOT_UP_R;
+		}
+	}
+	model->tiles[tile_columns + tile_columns - 5].type = CORNER_TERM_T;
+	model->tiles[(tile_rows-2)*tile_columns + tile_columns - 5].type = CORNER_TERM_B;
+	model->tiles[tile_columns + tile_columns - 4].type = ROUTING_IO_PCI_CE_R;
+	model->tiles[(tile_rows-2)*tile_columns + tile_columns - 4].type = ROUTING_IO_PCI_CE_R;
+	model->tiles[center_row*tile_columns + tile_columns - 1].type = REG_R;
+	model->tiles[center_row*tile_columns + tile_columns - 2].type = REGH_IO_TERM_R;
+	model->tiles[center_row*tile_columns + tile_columns - 3].type = REGH_MCB;
+	model->tiles[center_row*tile_columns + tile_columns - 4].type = REGH_IO_R;
+	model->tiles[center_row*tile_columns + tile_columns - 5].type = REGH_ROUTING_IO_R;
+
 	return model;
 }
 
@@ -686,13 +950,13 @@ void print_svg_tiles(struct fpga_model* model)
 			strcpy(str, fpga_ttstr[model->tiles[i*model->tile_x_range+j].type]);
 			new_node = xmlNewChild(xpathObj->nodesetval->nodeTab[0], 0 /* xmlNsPtr */, BAD_CAST "text", BAD_CAST str);
 			xmlSetProp(new_node, BAD_CAST "x", xmlXPathCastNumberToString(130 + j*130));
-			xmlSetProp(new_node, BAD_CAST "y", xmlXPathCastNumberToString(40 + i*20));
+			xmlSetProp(new_node, BAD_CAST "y", xmlXPathCastNumberToString(40 + i*14));
 			xmlSetProp(new_node, BAD_CAST "fpga:tile_y", BAD_CAST xmlXPathCastNumberToString(i));
 			xmlSetProp(new_node, BAD_CAST "fpga:tile_x", BAD_CAST xmlXPathCastNumberToString(j));
 		}
 	}
 	xmlSetProp(xpathObj->nodesetval->nodeTab[0], BAD_CAST "width", BAD_CAST xmlXPathCastNumberToString(model->tile_x_range * 130 + 65));
-	xmlSetProp(xpathObj->nodesetval->nodeTab[0], BAD_CAST "height", BAD_CAST xmlXPathCastNumberToString(model->tile_y_range * 20 + 60));
+	xmlSetProp(xpathObj->nodesetval->nodeTab[0], BAD_CAST "height", BAD_CAST xmlXPathCastNumberToString(model->tile_y_range * 14 + 60));
 
 	xmlDocFormatDump(stdout, doc, 1 /* format */);
 	xmlXPathFreeObject(xpathObj);
