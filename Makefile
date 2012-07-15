@@ -14,7 +14,7 @@ LDLIBS = -lxml2
 all: bit2txt draw_fpga xc6slx9.svg
 
 xc6slx9.svg: draw_fpga
-	./draw_fpga | xmllint --pretty 1 - > $@
+	./draw_fpga --svg | xmllint --pretty 1 - > $@
 
 bit2txt: bit2txt.o helper.o
 

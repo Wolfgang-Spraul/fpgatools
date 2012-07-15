@@ -8,7 +8,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <assert.h>
+#include <sys/stat.h>
 
 #include <libxml/tree.h>
 #include <libxml/parser.h>
@@ -40,20 +42,14 @@ enum fpga_tile_type
 	BRAM_ROUTING,
 	BRAM_ROUTING_BRK,
 	BRAM,
-	BRAM_ROUTING_T,
 	BRAM_ROUTING_TERM_T,
 	BRAM_ROUTING_TERM_B,
-	BRAM_ROUTING_B,
-	BRAM_ROUTING_VIA_T,
 	BRAM_ROUTING_VIA_TERM_T,
 	BRAM_ROUTING_VIA_TERM_B,
-	BRAM_ROUTING_VIA_B,
-	BRAM_T,
 	BRAM_TERM_LT,
 	BRAM_TERM_RT,
 	BRAM_TERM_LB,
 	BRAM_TERM_RB,
-	BRAM_B,
 	HCLK_BRAM_ROUTING,
 	HCLK_BRAM_ROUTING_VIA,
 	HCLK_BRAM,
@@ -107,15 +103,10 @@ enum fpga_tile_type
 	IO_BUFPLL_TERM_B,
 	IO_LOGIC_REG_TERM_B,
 	LOGIC_ROUTING_TERM_B,
-	LOGIC_EMPTY_TERM_B,
-	MACC_ROUTING_EMPTY_T,
-	MACC_ROUTING_EMPTY_B,
+	LOGIC_NOIO_TERM_B,
 	MACC_ROUTING_TERM_T,
 	MACC_ROUTING_TERM_B,
-	MACC_VIA_EMPTY,
 	MACC_VIA_TERM_T,
-	MACC_EMPTY_T,
-	MACC_EMPTY_B,
 	MACC_TERM_TL,
 	MACC_TERM_TR,
 	MACC_TERM_BL,
@@ -124,6 +115,19 @@ enum fpga_tile_type
 	ROUTING_VIA_IO,
 	ROUTING_VIA_IO_DCM,
 	ROUTING_VIA_CARRY,
+	CORNER_TERM_L,
+	IO_TERM_L_UPPER_TOP,
+	IO_TERM_L_UPPER_BOT,
+	IO_TERM_L_LOWER_TOP,
+	IO_TERM_L_LOWER_BOT,
+	IO_TERM_L,
+	HCLK_TERM_L,
+	REGH_IO_TERM_L,
+	REG_L,
+	IO_PCI_L,
+	IO_RDY_L,
+	IO_L,
+	IO_PCI_CONN_L,
 };
 
 const char* fpga_ttstr[] = // tile type strings
@@ -145,20 +149,14 @@ const char* fpga_ttstr[] = // tile type strings
 	[BRAM_ROUTING] = "BRAM_ROUTING",
 	[BRAM_ROUTING_BRK] = "BRAM_ROUTING_BRK",
 	[BRAM] = "BRAM",
-	[BRAM_ROUTING_T] = "BRAM_ROUTING_T",
 	[BRAM_ROUTING_TERM_T] = "BRAM_ROUTING_TERM_T",
 	[BRAM_ROUTING_TERM_B] = "BRAM_ROUTING_TERM_B",
-	[BRAM_ROUTING_B] = "BRAM_ROUTING_B",
-	[BRAM_ROUTING_VIA_T] = "BRAM_ROUTING_VIA_T",
 	[BRAM_ROUTING_VIA_TERM_T] = "BRAM_ROUTING_VIA_TERM_T",
 	[BRAM_ROUTING_VIA_TERM_B] = "BRAM_ROUTING_VIA_TERM_B",
-	[BRAM_ROUTING_VIA_B] = "BRAM_ROUTING_VIA_B",
-	[BRAM_T] = "BRAM_T",
 	[BRAM_TERM_LT] = "BRAM_TERM_LT",
 	[BRAM_TERM_RT] = "BRAM_TERM_RT",
 	[BRAM_TERM_LB] = "BRAM_TERM_LB",
 	[BRAM_TERM_RB] = "BRAM_TERM_RB",
-	[BRAM_B] = "BRAM_B",
 	[HCLK_BRAM_ROUTING] = "HCLK_BRAM_ROUTING",
 	[HCLK_BRAM_ROUTING_VIA] = "HCLK_BRAM_ROUTING_VIA",
 	[HCLK_BRAM] = "HCLK_BRAM",
@@ -212,15 +210,10 @@ const char* fpga_ttstr[] = // tile type strings
 	[IO_BUFPLL_TERM_B] = "IO_BUFPLL_TERM_B",
 	[IO_LOGIC_REG_TERM_B] = "IO_LOGIC_REG_TERM_B",
 	[LOGIC_ROUTING_TERM_B] = "LOGIC_ROUTING_TERM_B",
-	[LOGIC_EMPTY_TERM_B] = "LOGIC_EMPTY_TERM_B",
-	[MACC_ROUTING_EMPTY_T] = "MACC_ROUTING_EMPTY_T",
-	[MACC_ROUTING_EMPTY_B] = "MACC_ROUTING_EMPTY_B",
+	[LOGIC_NOIO_TERM_B] = "LOGIC_NOIO_TERM_B",
 	[MACC_ROUTING_TERM_T] = "MACC_ROUTING_TERM_T",
 	[MACC_ROUTING_TERM_B] = "MACC_ROUTING_TERM_B",
-	[MACC_VIA_EMPTY] = "MACC_VIA_EMPTY",
 	[MACC_VIA_TERM_T] = "MACC_VIA_TERM_T",
-	[MACC_EMPTY_T] = "MACC_EMPTY_T",
-	[MACC_EMPTY_B] = "MACC_EMPTY_B",
 	[MACC_TERM_TL] = "MACC_TERM_TL",
 	[MACC_TERM_TR] = "MACC_TERM_TR",
 	[MACC_TERM_BL] = "MACC_TERM_BL",
@@ -229,11 +222,54 @@ const char* fpga_ttstr[] = // tile type strings
 	[ROUTING_VIA_IO] = "ROUTING_VIA_IO",
 	[ROUTING_VIA_IO_DCM] = "ROUTING_VIA_IO_DCM",
 	[ROUTING_VIA_CARRY] = "ROUTING_VIA_CARRY",
+	[CORNER_TERM_L] = "CORNER_TERM_L",
+	[IO_TERM_L_UPPER_TOP] = "IO_TERM_L_UPPER_TOP",
+	[IO_TERM_L_UPPER_BOT] = "IO_TERM_L_UPPER_BOT",
+	[IO_TERM_L_LOWER_TOP] = "IO_TERM_L_LOWER_TOP",
+	[IO_TERM_L_LOWER_BOT] = "IO_TERM_L_LOWER_BOT",
+	[IO_TERM_L] = "IO_TERM_L",
+	[HCLK_TERM_L] = "HCLK_TERM_L",
+	[REGH_IO_TERM_L] = "REGH_IO_TERM_L",
+	[REG_L] = "REG_L",
+	[IO_PCI_L] = "IO_PCI_L",
+	[IO_RDY_L] = "IO_RDY_L",
+	[IO_L] = "IO_L",
+	[IO_PCI_CONN_L] = "IO_PCI_CONN_L",
 };
 
 struct fpga_tile
 {
 	enum fpga_tile_type type;
+
+	// expect up to 64 devices per tile
+	int num_devices;
+	struct fpga_device* devices;
+
+	// expect up to 28k connections to other tiles per tile
+	// 3*16 bit per connection:
+	//   - x coordinate of other tile (16bit)
+	//   - y coordinate of other tile (16bit)
+	//   - endpoint index in other tile (16bit)
+	int num_conns; // conns array is 3*num_conns 16-bit words
+	uint16_t* conns; // num_conns*3 16-bit words: 16(x)-16(y)-16(endpoint)
+
+	// expect up to 5k endpoints per tile
+	// 16-bit index into conns (not yet multiplied by 3)
+	int num_endpoints;
+	uint16_t* endpoints;
+	// endpoints0 are conceptual endpoints without outgoing wires.
+	// Imagine their indices added to the end of num_endpoints, so
+	// the first endpoint0 is at index num_endpoints, the second one
+	// at num_endpoints+1, and so on.
+	int num_endpoints0;
+
+	// expect up to 4k connection pairs per tile
+	// 32bit: 31    off: not in use      on: used
+	//        30    off: unidirectional  on: bidirectional
+	//        29:15 from, index into endpoints
+	//        14:0  to, index into endpoints
+	int num_connect_pairs;
+	uint32_t* connect_pairs;
 };
 
 // columns
@@ -244,35 +280,61 @@ struct fpga_tile
 //  'B' = block ram
 //  'D' = dsp (macc)
 //  'R' = registers and center IO/logic column
+//
+// wiring on the left and right side is described with 16
+// characters for each row - 'W' = wired, 'U' = unwired
+// order is top-down
 
 #define XC6SLX9_ROWS	4
 #define XC6SLX9_COLUMNS	"MLBMLDMRMlMLBML"
+#define XC6SLX9_LEFT_WIRING \
+	/* row 3 */ "UWUWUWUW" "WWWWUUUU" \
+	/* row 2 */ "UUUUUUUU" "WWWWWWUU" \
+	/* row 1 */ "WWWUUWUU" "WUUWUUWU" \
+	/* row 0 */ "UWUUWUUW" "UUWWWWUU"
+#define XC6SLX9_RIGHT_WIRING \
+	/* row 3 */ "UUWWUWUW" "WWWWUUUU" \
+	/* row 2 */ "UUUUUUUU" "WWWWWWUU" \
+	/* row 1 */ "WWWUUWUU" "WUUWUUWU" \
+	/* row 0 */ "UWUUWUUW" "UUWWWWUU"
 
-struct fpga_model* build_model(int fpga_rows, const char* columns);
-void printf_model(struct fpga_model* model);
+struct fpga_model* build_model(int fpga_rows, const char* columns,
+	const char* left_wiring, const char* right_wiring);
+void print_svg_tiles(struct fpga_model* model);
+void write_folders(struct fpga_model* model, const char* root_folder);
 
 int main(int argc, char** argv)
 {
 	struct fpga_model* model = 0;
 
-	//
-	// build memory model
-	//
+	if (argc < 2) {
+		printf("\n"
+		       "draw_fpga - model and view of an FPGA\n"
+		       "Public domain work by Wolfgang Spraul\n"
+		       "\n"
+		       "draw_fpga [options]\n"
+		       "  --svg             writes a simple svg tile grid to stdout\n"
+		       "  --folder <path>   writes a folder structure of tiles and devices\n" 
+		       "\n");
+		return EXIT_SUCCESS;
+	}
 
-	model = build_model(XC6SLX9_ROWS, XC6SLX9_COLUMNS);
+	model = build_model(XC6SLX9_ROWS, XC6SLX9_COLUMNS,
+			XC6SLX9_LEFT_WIRING, XC6SLX9_RIGHT_WIRING);
 	if (!model) goto fail;
 
-	//
-	// write svg
-	//
+	if (!strcmp(argv[1], "--svg"))
+		print_svg_tiles(model);
+	if (!strcmp(argv[1], "--folder"))
+		write_folders(model, argv[2]);
 
-	printf_model(model);
 	return EXIT_SUCCESS;
 fail:
 	return EXIT_FAILURE;
 }
 
-struct fpga_model* build_model(int fpga_rows, const char* columns)
+struct fpga_model* build_model(int fpga_rows, const char* columns,
+	const char* left_wiring, const char* right_wiring)
 {
 	int tile_rows, tile_columns, i, j, k, l, row_top_y, center_row, left_side;
 	int start, end;
@@ -304,9 +366,15 @@ struct fpga_model* build_model(int fpga_rows, const char* columns)
 		model->tiles[i].type = NA;
 	if (!(tile_rows % 2))
 		fprintf(stderr, "Unexpected even number of tile rows (%i).\n", tile_rows);
-	i = 5; // left IO columns
 	center_row = 2 /* top IO files */ + (fpga_rows/2)*(8+1/*middle of row clock*/+8);
+
+	//
+	// top, bottom, center:
+	// go through columns from left to right, rows from top to bottom
+	//
+
 	left_side = 1; // turn off (=right side) when reaching the 'R' middle column
+	i = 5; // skip left IO columns
 	for (j = 0; columns[j]; j++) {
 		switch (columns[j]) {
 			case 'L':
@@ -360,7 +428,7 @@ struct fpga_model* build_model(int fpga_rows, const char* columns)
 					if (columns[j] == 'L' || columns[j] == 'M')
 						model->tiles[(tile_rows-2)*tile_columns + i + 1].type = IO_LOGIC_TERM_B;
 					else
-						model->tiles[(tile_rows-2)*tile_columns + i + 1].type = LOGIC_EMPTY_TERM_B;
+						model->tiles[(tile_rows-2)*tile_columns + i + 1].type = LOGIC_NOIO_TERM_B;
 				}
 				if (columns[j] == 'L' || columns[j] == 'M') {
 					model->tiles[2*tile_columns + i + 1].type = IO_OUTER_T;
@@ -393,18 +461,12 @@ struct fpga_model* build_model(int fpga_rows, const char* columns)
 					model->tiles[(row_top_y+8)*tile_columns + i + 2].type = HCLK_BRAM;
 				}
 
-				model->tiles[i].type = BRAM_ROUTING_T;
 				model->tiles[tile_columns + i].type = BRAM_ROUTING_TERM_T;
 				model->tiles[(tile_rows-2)*tile_columns + i].type = BRAM_ROUTING_TERM_B;
-				model->tiles[(tile_rows-1)*tile_columns + i].type = BRAM_ROUTING_B;
-				model->tiles[i + 1].type = BRAM_ROUTING_VIA_T;
 				model->tiles[tile_columns + i + 1].type = BRAM_ROUTING_VIA_TERM_T;
 				model->tiles[(tile_rows-2)*tile_columns + i + 1].type = BRAM_ROUTING_VIA_TERM_B;
-				model->tiles[(tile_rows-1)*tile_columns + i + 1].type = BRAM_ROUTING_VIA_B;
-				model->tiles[i + 2].type = BRAM_T;
 				model->tiles[tile_columns + i + 2].type = left_side ? BRAM_TERM_LT : BRAM_TERM_RT;
 				model->tiles[(tile_rows-2)*tile_columns + i + 2].type = left_side ? BRAM_TERM_LB : BRAM_TERM_RB;
-				model->tiles[(tile_rows-1)*tile_columns + i + 2].type = BRAM_B;
 
 				model->tiles[center_row*tile_columns + i].type = REGH_BRAM_ROUTING;
 				model->tiles[center_row*tile_columns + i + 1].type = REGH_BRAM_ROUTING_VIA;
@@ -426,18 +488,12 @@ struct fpga_model* build_model(int fpga_rows, const char* columns)
 					model->tiles[(row_top_y+8)*tile_columns + i + 2].type = HCLK_MACC;
 				}
 
-				model->tiles[i].type = MACC_ROUTING_EMPTY_T;
 				model->tiles[tile_columns + i].type = MACC_ROUTING_TERM_T;
 				model->tiles[(tile_rows-2)*tile_columns + i].type = MACC_ROUTING_TERM_B;
-				model->tiles[(tile_rows-1)*tile_columns + i].type = MACC_ROUTING_EMPTY_B;
-				model->tiles[i + 1].type = MACC_VIA_EMPTY;
 				model->tiles[tile_columns + i + 1].type = MACC_VIA_TERM_T;
 				model->tiles[(tile_rows-2)*tile_columns + i + 1].type = IO_LOGIC_TERM_B;
-				model->tiles[(tile_rows-1)*tile_columns + i + 1].type = MACC_VIA_EMPTY;
-				model->tiles[i + 2].type = MACC_EMPTY_T;
 				model->tiles[tile_columns + i + 2].type = left_side ? MACC_TERM_TL : MACC_TERM_TR;
 				model->tiles[(tile_rows-2)*tile_columns + i + 2].type = left_side ? MACC_TERM_BL : MACC_TERM_BR;
-				model->tiles[(tile_rows-1)*tile_columns + i + 2].type = MACC_EMPTY_B;
 
 				model->tiles[center_row*tile_columns + i].type = REGH_MACC_ROUTING;
 				model->tiles[center_row*tile_columns + i + 1].type = REGH_MACC_ROUTING_VIA;
@@ -502,7 +558,6 @@ struct fpga_model* build_model(int fpga_rows, const char* columns)
 					model->tiles[(row_top_y+8)*tile_columns + i + 1].type = HCLK_LOGIC_XL;
 					model->tiles[(row_top_y+8)*tile_columns + i + 3].type = HCLK_REGV;
 				}
-
 				model->tiles[i].type = IO_T;
 				model->tiles[(tile_rows-1)*tile_columns + i].type = IO_B;
 				model->tiles[tile_columns + i].type = IO_TERM_T;
@@ -537,10 +592,48 @@ struct fpga_model* build_model(int fpga_rows, const char* columns)
 					break;
 		}
 	}
+
+	//
+	// left IO
+	//
+
+	for (k = fpga_rows-1; k >= 0; k--) {
+		row_top_y = 2 /* top IO tiles */ + (fpga_rows-1-k)*(8+1/*middle of row clock*/+8);
+		if (k<(fpga_rows/2)) row_top_y++; // middle system tiles
+
+		for (l = 0; l < 16; l++) {
+			if (left_wiring[(fpga_rows-1-k)*16+l] == 'W')
+				model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns].type = IO_L;
+			if ((k == fpga_rows-1 && !l) || (!k && l==15))
+				model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + 1].type = CORNER_TERM_L;
+			else if (k == fpga_rows/2 && l == 12)
+				model->tiles[(row_top_y+l+1)*tile_columns + 1].type = IO_TERM_L_UPPER_TOP;
+			else if (k == fpga_rows/2 && l == 13)
+				model->tiles[(row_top_y+l+1)*tile_columns + 1].type = IO_TERM_L_UPPER_BOT;
+			else if (k == (fpga_rows/2)-1 && !l)
+				model->tiles[(row_top_y+l)*tile_columns + 1].type = IO_TERM_L_LOWER_TOP;
+			else if (k == (fpga_rows/2)-1 && l == 1)
+				model->tiles[(row_top_y+l)*tile_columns + 1].type = IO_TERM_L_LOWER_BOT;
+			else 
+				model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + 1].type = IO_TERM_L;
+		}
+		model->tiles[(row_top_y+8)*tile_columns + 1].type = HCLK_TERM_L;
+	}
+
+	model->tiles[(center_row-3)*tile_columns].type = IO_PCI_L;
+	model->tiles[(center_row-2)*tile_columns].type = IO_PCI_CONN_L;
+	model->tiles[(center_row-1)*tile_columns].type = IO_PCI_CONN_L;
+	model->tiles[center_row*tile_columns].type = REG_L;
+	model->tiles[center_row*tile_columns + 1].type = REGH_IO_TERM_L;
+	model->tiles[(center_row+1)*tile_columns].type = IO_RDY_L;
+
+	//
+	// right IO
+	//
 	return model;
 }
 
-void printf_model(struct fpga_model* model)
+void print_svg_tiles(struct fpga_model* model)
 {
 	static const xmlChar* empty_svg = (const xmlChar*)
 		"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
@@ -613,4 +706,18 @@ fail:
 	if (xpathCtx) xmlXPathFreeContext(xpathCtx); 
 	if (doc) xmlFreeDoc(doc); 
  	xmlCleanupParser();
+}
+
+void write_folders(struct fpga_model* model, const char* root_folder)
+{
+	char path[1024];
+
+	sprintf(path, "%s/devices", root_folder);
+	if (mkdir(path, S_IRWXU|S_IRWXG|S_IROTH|S_IXOTH)) {
+		fprintf(stderr, "Cannot create folder %s\n", path);
+		return;
+	}
+
+	// root/devices/IOB
+	// root/tile_type/1file_per_tile
 }
