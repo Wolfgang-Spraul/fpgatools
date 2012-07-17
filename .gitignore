@@ -1,5 +1,6 @@
 bit2txt
 bit2txt.o
-draw_fpga
-draw_fpga.o
+draw_svg_tiles
+draw_svg_tiles.o
 helper.o
+model.o

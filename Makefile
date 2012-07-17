@@ -6,24 +6,26 @@
 # For details see the UNLICENSE file at the root of the source tree.
 #
 
+.PHONY:	all clean
 CFLAGS = -Wall -g
-#TARGETS = bit2txt draw_fpga
-#OBJS = $(TARGETS:=.o)
 LDLIBS = -lxml2
 
-all: bit2txt draw_fpga xc6slx9.svg
+all: bit2txt draw_svg_tiles xc6slx9.svg
 
-xc6slx9.svg: draw_fpga
-	./draw_fpga --svg | xmllint --pretty 1 - > $@
+xc6slx9.svg: draw_svg_tiles
+	./draw_svg_tiles | xmllint --pretty 1 - > $@
 
 bit2txt: bit2txt.o helper.o
 
-bit2txt.o:bit2txt.c helper.h
+bit2txt.o: bit2txt.c helper.h
 
-helper.o:helper.c helper.h
+helper.o: helper.c helper.h
 
-draw_fpga: draw_fpga.o
+model.o: model.c model.h
+
+draw_svg_tiles: draw_svg_tiles.o model.o
 
 clean:
-		rm -f bit2txt bit2txt.o helper.o draw_fpga
-.PHONY:	all clean
+		rm -f bit2txt bit2txt.o \
+			draw_svg_tiles draw_svg_tiles.o \
+			helper.o model.o
