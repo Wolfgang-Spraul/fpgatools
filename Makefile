@@ -10,7 +10,7 @@
 CFLAGS = -Wall -g
 LDLIBS = -lxml2
 
-all: bit2txt draw_svg_tiles xc6slx9.svg
+all: bit2txt draw_svg_tiles new_floorplan xc6slx9.svg
 
 xc6slx9.svg: draw_svg_tiles
 	./draw_svg_tiles | xmllint --pretty 1 - > $@
@@ -25,7 +25,10 @@ model.o: model.c model.h
 
 draw_svg_tiles: draw_svg_tiles.o model.o
 
+new_floorplan: new_floorplan.o model.o
+
 clean:
 		rm -f bit2txt bit2txt.o \
 			draw_svg_tiles draw_svg_tiles.o \
+			new_floorplan new_floorplan.o \
 			helper.o model.o

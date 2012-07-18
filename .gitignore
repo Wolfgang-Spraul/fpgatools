@@ -4,3 +4,5 @@ draw_svg_tiles
 draw_svg_tiles.o
 helper.o
 model.o
+new_floorplan
+new_floorplan.o

@@ -19,8 +19,6 @@
 
 #include "model.h"
 
-void print_svg_tiles(struct fpga_model* model);
-
 int main(int argc, char** argv)
 {
 	static const xmlChar* empty_svg = (const xmlChar*)
