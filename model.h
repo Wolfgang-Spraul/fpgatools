@@ -139,3 +139,23 @@ struct fpga_model* fpga_build_model(int fpga_rows, const char* columns,
 	const char* left_wiring, const char* right_wiring);
 
 const char* fpga_tiletype_str(enum fpga_tile_type type);
+
+unsigned long hash_djb2(const unsigned char* str);
+
+// Strings are distributed among 1024 bins. Each bin
+// is one continuous stream of zero-terminated strings
+// prefixed with a 2*16-bit header. The allocation
+// increment for each bin is 32k.
+struct hashed_strarray
+{
+	uint32_t bin_offsets[256*256]; // min offset is 4, 0 means no entry
+	uint16_t index_to_bin[256*256];
+	char* bin_strings[1024];
+	int bin_len[1024]; // points behind the last zero-termination
+};
+
+const char* strarray_lookup(struct hashed_strarray* array, uint16_t idx);
+int strarray_find_or_add(struct hashed_strarray* array, const char* str,
+	uint16_t* idx);
+void strarray_init(struct hashed_strarray* array);
+void strarray_free(struct hashed_strarray* array);
