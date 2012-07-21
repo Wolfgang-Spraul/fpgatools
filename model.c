@@ -162,12 +162,11 @@ static const char* fpga_ttstr[] = // tile type strings
 	[HCLK_IO_BOT_DN_R] = "HCLK_IO_BOT_DN_R",
 };
 
-struct fpga_model* fpga_build_model(int fpga_rows, const char* columns,
+int fpga_build_model(struct fpga_model* model, int fpga_rows, const char* columns,
 	const char* left_wiring, const char* right_wiring)
 {
 	int tile_rows, tile_columns, i, j, k, l, row_top_y, center_row, left_side;
 	int start, end;
-	struct fpga_model* model;
 
 	tile_rows = 1 /* middle */ + (8+1+8)*fpga_rows + 2+2 /* two extra tiles at top and bottom */;
 	tile_columns = 5 /* left */ + 5 /* right */;
@@ -178,18 +177,12 @@ struct fpga_model* fpga_build_model(int fpga_rows, const char* columns,
 		else if (columns[i] == 'R')
 			tile_columns+=2; // 2+2 for middle IO+logic+PLL/DCM
 	}
-	model = calloc(1 /* nelem */, sizeof(struct fpga_model));
-	if (!model) {
-		fprintf(stderr, "%i: Out of memory.\n", __LINE__);
-		return 0;
-	}
 	model->tile_x_range = tile_columns;
 	model->tile_y_range = tile_rows;
 	model->tiles = calloc(tile_columns * tile_rows, sizeof(struct fpga_tile));
 	if (!model->tiles) {
 		fprintf(stderr, "%i: Out of memory.\n", __LINE__);
-		free(model);
-		return 0;
+		return -1;
 	}
 	for (i = 0; i < tile_rows * tile_columns; i++)
 		model->tiles[i].type = NA;
@@ -627,7 +620,14 @@ struct fpga_model* fpga_build_model(int fpga_rows, const char* columns,
 	model->tiles[center_row*tile_columns + tile_columns - 4].type = REGH_IO_R;
 	model->tiles[center_row*tile_columns + tile_columns - 5].type = REGH_ROUTING_IO_R;
 
-	return model;
+	return 0;
+}
+
+void fpga_free_model(struct fpga_model* model)
+{
+	if (!model) return;
+	free(model->tiles);
+	memset(model, 0, sizeof(*model));
 }
 
 const char* fpga_tiletype_str(enum fpga_tile_type type)

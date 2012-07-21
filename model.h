@@ -46,7 +46,7 @@ struct fpga_model
 
 enum fpga_tile_type
 {
-	NA,
+	NA = 0,
 	ROUTING, ROUTING_BRK, ROUTING_VIA,
 	HCLK_ROUTING_XM, HCLK_ROUTING_XL, HCLK_LOGIC_XM, HCLK_LOGIC_XL,
 	LOGIC_XM, LOGIC_XL,
@@ -125,6 +125,9 @@ struct fpga_tile
 	// the first endpoint0 is at index num_endpoints, the second one
 	// at num_endpoints+1, and so on.
 	int num_endpoints0;
+	// If != 0, endpoint_names will have
+	// num_endpoints + num_endpoints0 entries.
+	uint16_t* endpoint_names;
 
 	// expect up to 4k connection pairs per tile
 	// 32bit: 31    off: not in use      on: used
@@ -135,8 +138,10 @@ struct fpga_tile
 	uint32_t* connect_pairs;
 };
 
-struct fpga_model* fpga_build_model(int fpga_rows, const char* columns,
+int fpga_build_model(struct fpga_model* model,
+	int fpga_rows, const char* columns,
 	const char* left_wiring, const char* right_wiring);
+void fpga_free_model(struct fpga_model* model);
 
 const char* fpga_tiletype_str(enum fpga_tile_type type);
 

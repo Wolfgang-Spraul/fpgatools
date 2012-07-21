@@ -35,7 +35,7 @@ int main(int argc, char** argv)
 	xmlXPathContextPtr xpathCtx = 0;
 	xmlXPathObjectPtr xpathObj = 0;
 	xmlNodePtr new_node;
-	struct fpga_model* model = 0;
+	struct fpga_model model = {0};
 	char str[128];
 	int i, j;
 
@@ -43,9 +43,9 @@ int main(int argc, char** argv)
 // on the output for now
 
 	xmlInitParser();
-	model = fpga_build_model(XC6SLX9_ROWS, XC6SLX9_COLUMNS,
-			XC6SLX9_LEFT_WIRING, XC6SLX9_RIGHT_WIRING);
-	if (!model) goto fail;
+	if (fpga_build_model(&model, XC6SLX9_ROWS, XC6SLX9_COLUMNS,
+			XC6SLX9_LEFT_WIRING, XC6SLX9_RIGHT_WIRING))
+		goto fail;
 
 	doc = xmlParseDoc(empty_svg);
 	if (!doc) {
@@ -72,9 +72,9 @@ int main(int argc, char** argv)
 		goto fail;
 	}
 
-	for (i = 0; i < model->tile_y_range; i++) {
-		for (j = 0; j < model->tile_x_range; j++) {
-			strcpy(str, fpga_tiletype_str(model->tiles[i*model->tile_x_range+j].type));
+	for (i = 0; i < model.tile_y_range; i++) {
+		for (j = 0; j < model.tile_x_range; j++) {
+			strcpy(str, fpga_tiletype_str(model.tiles[i*model.tile_x_range+j].type));
 			new_node = xmlNewChild(xpathObj->nodesetval->nodeTab[0], 0 /* xmlNsPtr */, BAD_CAST "text", BAD_CAST str);
 			xmlSetProp(new_node, BAD_CAST "x", xmlXPathCastNumberToString(130 + j*130));
 			xmlSetProp(new_node, BAD_CAST "y", xmlXPathCastNumberToString(40 + i*14));
@@ -82,14 +82,15 @@ int main(int argc, char** argv)
 			xmlSetProp(new_node, BAD_CAST "fpga:tile_x", BAD_CAST xmlXPathCastNumberToString(j));
 		}
 	}
-	xmlSetProp(xpathObj->nodesetval->nodeTab[0], BAD_CAST "width", BAD_CAST xmlXPathCastNumberToString(model->tile_x_range * 130 + 65));
-	xmlSetProp(xpathObj->nodesetval->nodeTab[0], BAD_CAST "height", BAD_CAST xmlXPathCastNumberToString(model->tile_y_range * 14 + 60));
+	xmlSetProp(xpathObj->nodesetval->nodeTab[0], BAD_CAST "width", BAD_CAST xmlXPathCastNumberToString(model.tile_x_range * 130 + 65));
+	xmlSetProp(xpathObj->nodesetval->nodeTab[0], BAD_CAST "height", BAD_CAST xmlXPathCastNumberToString(model.tile_y_range * 14 + 60));
 
 	xmlDocFormatDump(stdout, doc, 1 /* format */);
 	xmlXPathFreeObject(xpathObj);
 	xmlXPathFreeContext(xpathCtx); 
 	xmlFreeDoc(doc); 
  	xmlCleanupParser();
+	fpga_free_model(&model);
 	return EXIT_SUCCESS;
 
 fail:
@@ -97,5 +98,6 @@ fail:
 	if (xpathCtx) xmlXPathFreeContext(xpathCtx); 
 	if (doc) xmlFreeDoc(doc); 
  	xmlCleanupParser();
+	fpga_free_model(&model);
 	return EXIT_FAILURE;
 }

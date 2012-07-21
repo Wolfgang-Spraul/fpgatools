@@ -639,3 +639,17 @@ uint64_t read_lut64(uint8_t* two_minors, int off_in_frame)
 	}
 	return lut64;
 }
+
+int get_vm_mb()
+{
+	FILE* statusf = fopen("/proc/self/status", "r");
+	char line[1024];
+	int vm_size = 0;
+	while (fgets(line, sizeof(line), statusf)) {
+		if (sscanf(line, "VmSize: %i kB", &vm_size) == 1)
+			break;
+	}
+	fclose(statusf);
+	if (!vm_size) return 0;
+	return (vm_size+1023)/1024;
+}

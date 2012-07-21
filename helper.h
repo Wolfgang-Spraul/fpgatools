@@ -67,3 +67,5 @@ int clb_empty(uint8_t* maj_bits, int idx);
 void printf_extrabits(uint8_t* maj_bits, int start_minor, int num_minors,
 	int start_bit, int num_bits, int row, int major);
 uint64_t read_lut64(uint8_t* two_minors, int off_in_frame);
+
+int get_vm_mb();
