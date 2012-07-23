@@ -12,6 +12,20 @@
 #include <assert.h>
 #include <sys/stat.h>
 
+#define HASHARRAY_NUM_INDICES (256*256)
+
+// Strings are distributed among 1024 bins. Each bin
+// is one continuous stream of zero-terminated strings
+// prefixed with a 2*16-bit header. The allocation
+// increment for each bin is 32k.
+struct hashed_strarray
+{
+	uint32_t bin_offsets[HASHARRAY_NUM_INDICES]; // min offset is 4, 0 means no entry
+	uint16_t index_to_bin[HASHARRAY_NUM_INDICES];
+	char* bin_strings[1024];
+	int bin_len[1024]; // points behind the last zero-termination
+};
+
 // columns
 //  'L' = X+L logic block
 //  'l' = X+L logic block without IO at top and bottom
@@ -40,8 +54,13 @@
 
 struct fpga_model
 {
+	int cfg_rows;
+	char cfg_columns[512];
+	char cfg_left_wiring[1024], cfg_right_wiring[1024];
+
 	int tile_x_range, tile_y_range;
 	struct fpga_tile* tiles;
+	struct hashed_strarray str;
 };
 
 enum fpga_tile_type
@@ -100,40 +119,46 @@ enum fpga_tile_type
 	HCLK_IO_BOT_DN_L, HCLK_IO_BOT_DN_R,
 };
 
+// tile flags
+
+#define TF_DIRWIRE_START		0x0001
+#define TF_FIRST_ROW			0x0002
+#define TF_SECOND_ROW			0x0004
+#define TF_SECOND_TO_LAST_ROW		0x0008
+#define TF_LAST_ROW			0x0010
+#define TF_ROW_HORIZ_AXSYMM		0x0020
+#define TF_CHIP_HORIZ_AXSYMM		0x0040
+#define TF_CHIP_VERT_AXSYMM		0x0080
+
 struct fpga_tile
 {
 	enum fpga_tile_type type;
+	int flags;
 
 	// expect up to 64 devices per tile
 	int num_devices;
 	struct fpga_device* devices;
 
+	// expect up to 5k connection names per tile
+	// 2*16 bit per entry
+	//   - index into conns (not multiplied by 3) (16bit)
+	//   - hashed string array index (16 bit)
+	int num_conn_names; // conn_names is 2*num_conn_names 16-bit words
+	uint16_t* conn_names; // num_conn_names*2 16-bit-words: 16(conn)-16(str)
+
 	// expect up to 28k connections to other tiles per tile
 	// 3*16 bit per connection:
 	//   - x coordinate of other tile (16bit)
 	//   - y coordinate of other tile (16bit)
-	//   - endpoint index in other tile (16bit)
+	//   - hashed string array index for conn_names name in other tile (16bit)
 	int num_conns; // conns array is 3*num_conns 16-bit words
-	uint16_t* conns; // num_conns*3 16-bit words: 16(x)-16(y)-16(endpoint)
-
-	// expect up to 5k endpoints per tile
-	// 16-bit index into conns (not yet multiplied by 3)
-	int num_endpoints;
-	uint16_t* endpoints;
-	// endpoints0 are conceptual endpoints without outgoing wires.
-	// Imagine their indices added to the end of num_endpoints, so
-	// the first endpoint0 is at index num_endpoints, the second one
-	// at num_endpoints+1, and so on.
-	int num_endpoints0;
-	// If != 0, endpoint_names will have
-	// num_endpoints + num_endpoints0 entries.
-	uint16_t* endpoint_names;
+	uint16_t* conns; // num_conns*3 16-bit words: 16(x)-16(y)-16(conn_name)
 
 	// expect up to 4k connection pairs per tile
 	// 32bit: 31    off: not in use      on: used
 	//        30    off: unidirectional  on: bidirectional
-	//        29:15 from, index into endpoints
-	//        14:0  to, index into endpoints
+	//        29:15 from, index into conn_names
+	//        14:0  to, index into conn_names
 	int num_connect_pairs;
 	uint32_t* connect_pairs;
 };
@@ -145,22 +170,13 @@ void fpga_free_model(struct fpga_model* model);
 
 const char* fpga_tiletype_str(enum fpga_tile_type type);
 
-unsigned long hash_djb2(const unsigned char* str);
-
-// Strings are distributed among 1024 bins. Each bin
-// is one continuous stream of zero-terminated strings
-// prefixed with a 2*16-bit header. The allocation
-// increment for each bin is 32k.
-struct hashed_strarray
-{
-	uint32_t bin_offsets[256*256]; // min offset is 4, 0 means no entry
-	uint16_t index_to_bin[256*256];
-	char* bin_strings[1024];
-	int bin_len[1024]; // points behind the last zero-termination
-};
+uint32_t hash_djb2(const unsigned char* str);
 
 const char* strarray_lookup(struct hashed_strarray* array, uint16_t idx);
+// The found or created index will never be 0, so the caller
+// can use 0 as a special value to indicate 'no string'.
 int strarray_find_or_add(struct hashed_strarray* array, const char* str,
 	uint16_t* idx);
+int strarray_used_slots(struct hashed_strarray* array);
 void strarray_init(struct hashed_strarray* array);
 void strarray_free(struct hashed_strarray* array);

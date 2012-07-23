@@ -19,6 +19,9 @@
 
 #include "model.h"
 
+#define VERT_TILE_SPACING	 45
+#define HORIZ_TILE_SPACING	160
+
 int main(int argc, char** argv)
 {
 	static const xmlChar* empty_svg = (const xmlChar*)
@@ -28,7 +31,7 @@ int main(int argc, char** argv)
 		"   xmlns:xlink=\"http://www.w3.org/1999/xlink\"\n"
 		"   xmlns:fpga=\"http://qi-hw.com/fpga\"\n"
 		"   id=\"root\">\n"
-		"<style type=\"text/css\"><![CDATA[text{font-size:6pt;text-anchor:end;}]]></style>\n"
+		"<style type=\"text/css\"><![CDATA[text{font-size:8pt;font-family:sans-serif;text-anchor:end;}]]></style>\n"
 		"</svg>\n";
 
 	xmlDocPtr doc = 0;
@@ -74,16 +77,32 @@ int main(int argc, char** argv)
 
 	for (i = 0; i < model.tile_y_range; i++) {
 		for (j = 0; j < model.tile_x_range; j++) {
-			strcpy(str, fpga_tiletype_str(model.tiles[i*model.tile_x_range+j].type));
-			new_node = xmlNewChild(xpathObj->nodesetval->nodeTab[0], 0 /* xmlNsPtr */, BAD_CAST "text", BAD_CAST str);
-			xmlSetProp(new_node, BAD_CAST "x", xmlXPathCastNumberToString(130 + j*130));
-			xmlSetProp(new_node, BAD_CAST "y", xmlXPathCastNumberToString(40 + i*14));
+			sprintf(str, "y%i x%i:", i, j);
+			new_node = xmlNewChild(xpathObj->nodesetval->nodeTab[0],
+			   0 /* xmlNsPtr */, BAD_CAST "text", BAD_CAST str);
+			xmlSetProp(new_node, BAD_CAST "x",
+				xmlXPathCastNumberToString(HORIZ_TILE_SPACING + j*HORIZ_TILE_SPACING));
+			xmlSetProp(new_node, BAD_CAST "y",
+				xmlXPathCastNumberToString(20
+			  + VERT_TILE_SPACING + i*VERT_TILE_SPACING));
+
+			strcpy(str, fpga_tiletype_str(
+				model.tiles[i*model.tile_x_range+j].type));
+			new_node = xmlNewChild(xpathObj->nodesetval->nodeTab[0],
+			   0 /* xmlNsPtr */, BAD_CAST "text", BAD_CAST str);
+			xmlSetProp(new_node, BAD_CAST "x",
+				xmlXPathCastNumberToString(HORIZ_TILE_SPACING + j*HORIZ_TILE_SPACING));
+			xmlSetProp(new_node, BAD_CAST "y",
+				xmlXPathCastNumberToString(20 + VERT_TILE_SPACING + i*VERT_TILE_SPACING + 14));
 			xmlSetProp(new_node, BAD_CAST "fpga:tile_y", BAD_CAST xmlXPathCastNumberToString(i));
 			xmlSetProp(new_node, BAD_CAST "fpga:tile_x", BAD_CAST xmlXPathCastNumberToString(j));
 		}
 	}
-	xmlSetProp(xpathObj->nodesetval->nodeTab[0], BAD_CAST "width", BAD_CAST xmlXPathCastNumberToString(model.tile_x_range * 130 + 65));
-	xmlSetProp(xpathObj->nodesetval->nodeTab[0], BAD_CAST "height", BAD_CAST xmlXPathCastNumberToString(model.tile_y_range * 14 + 60));
+	xmlSetProp(xpathObj->nodesetval->nodeTab[0], BAD_CAST "width",
+		BAD_CAST xmlXPathCastNumberToString(model.tile_x_range * HORIZ_TILE_SPACING + HORIZ_TILE_SPACING/2));
+	xmlSetProp(xpathObj->nodesetval->nodeTab[0], BAD_CAST "height",
+		BAD_CAST xmlXPathCastNumberToString(20 + VERT_TILE_SPACING
+		+ model.tile_y_range * VERT_TILE_SPACING + 20));
 
 	xmlDocFormatDump(stdout, doc, 1 /* format */);
 	xmlXPathFreeObject(xpathObj);
