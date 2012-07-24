@@ -264,46 +264,74 @@ int add_conn_bi(struct fpga_model* model, int y1, int x1, const char* name1, int
 
 const char* pf(const char* fmt, ...)
 {
-	static char pf_buf[128];
+	// safe to call it 4 times in 1 expression (such as function params)
+	static char pf_buf[4][128];
+	static int last_buf = 0;
 	va_list list;
-	pf_buf[0] = 0;
+	last_buf = (last_buf+1)%4;
+	pf_buf[last_buf][0] = 0;
 	va_start(list, fmt);
-	vsnprintf(pf_buf, sizeof(pf_buf), fmt, list);
+	vsnprintf(pf_buf[last_buf], sizeof(pf_buf[0]), fmt, list);
 	va_end(list);
-	return pf_buf;
+	return pf_buf[last_buf];
 }
 
 int run_wires(struct fpga_model* model)
 {
 	struct fpga_tile* tile, *tile_up1, *tile_up2;
-	char b_wire[16], m_wire[16], e_wire[16];
+	char b_wire[16], m_wire[16], e_wire[16], r1b_wire[16], r1e_wire[16];
 	char* wire_fmt;
 	int x, y, i, rc;
 
 	rc = -1;
 	for (y = 0; y < model->tile_y_range; y++) {
 		for (x = 0; x < model->tile_x_range; x++) {
-			tile = &model->tiles[y * model->tile_x_range + x];
-			if (!(tile->flags & TF_DIRWIRE_START))
-				continue;
 
+			tile = &model->tiles[y * model->tile_x_range + x];
 			tile_up1 = &model->tiles[(y-1) * model->tile_x_range + x];
 			tile_up2 = &model->tiles[(y-2) * model->tile_x_range + x];
+
+			if (!(tile->flags & TF_DIRWIRE_START)) {
+				if (tile->flags & TF_VERT_ROUTING) {
+					if (tile_up1->flags & (TF_ROW_HORIZ_AXSYMM | TF_CHIP_HORIZ_AXSYMM)) {
+
+						if (tile_up1->flags & TF_ROW_HORIZ_AXSYMM)
+							wire_fmt = "HCLK_%s";
+						else if (tile[3].flags & TF_CHIP_VERT_AXSYMM)
+							wire_fmt = "REGC_INT_%s";
+						else
+							wire_fmt = "REGH_%s";
+						for (i = 0; i <= 3; i++) {
+							sprintf(r1b_wire, "NR1B%i", i);
+							sprintf(r1e_wire, "NR1E%i", i);
+		
+							if ((rc = add_conn_bi(model, y, x, r1b_wire, y-1, x, pf(wire_fmt, r1e_wire)))) goto xout;
+							if ((rc = add_conn_bi(model, y, x, r1b_wire, y-2, x, r1e_wire))) goto xout;
+						}
+					} else {
+						for (i = 0; i <= 3; i++) {
+							if ((rc = add_conn_bi(model, y, x, pf("NR1B%i", i), y-1, x, pf("NR1E%i", i)))) goto xout;
+						}
+					}
+				}
+				continue;
+			}
 
 			for (i = 0; i <= 3; i++) {
 				sprintf(b_wire, "NN2B%i", i);
 				sprintf(m_wire, "NN2M%i", i);
 				sprintf(e_wire, "NN2E%i", i);
-				if (tile_up1->flags & TF_SECOND_ROW) {
-					rc = add_conn_bi(model, y, x, b_wire, y-1, x, pf("IOI_TTERM_%s", b_wire));
-					if (rc) goto xout;
-				} else if (tile_up2->flags & TF_SECOND_ROW) {
-					rc = add_conn_bi(model, y, x, b_wire, y-1, x, m_wire);
-					if (rc) goto xout;
-					rc = add_conn_bi(model, y, x, b_wire, y-2, x, pf("IOI_TTERM_%s", m_wire));
-					if (rc) goto xout;
-					rc = add_conn_bi(model, y-1, x, m_wire, y-2, x, pf("IOI_TTERM_%s", m_wire));
-					if (rc) goto xout;
+				sprintf(r1b_wire, "NR1B%i", i);
+				sprintf(r1e_wire, "NR1E%i", i);
+				if (tile_up1->flags & TF_UNDER_TOPMOST_TILE) {
+					if ((rc = add_conn_bi(model,   y, x, b_wire,   y-1, x, pf("IOI_TTERM_%s", b_wire)))) goto xout;
+					if ((rc = add_conn_bi(model,   y, x, r1b_wire, y-1, x, pf("IOI_TTERM_%s", r1b_wire)))) goto xout;
+				} else if (tile_up2->flags & TF_UNDER_TOPMOST_TILE) {
+					if ((rc = add_conn_bi(model,   y, x, b_wire,   y-1, x, m_wire))) goto xout;
+					if ((rc = add_conn_bi(model,   y, x, b_wire,   y-2, x, pf("IOI_TTERM_%s", m_wire)))) goto xout;
+					if ((rc = add_conn_bi(model, y-1, x, m_wire,   y-2, x, pf("IOI_TTERM_%s", m_wire)))) goto xout;
+
+					if ((rc = add_conn_bi(model,   y, x, r1b_wire, y-1, x, r1e_wire))) goto xout;
 				} else if (tile_up1->flags & (TF_ROW_HORIZ_AXSYMM|TF_CHIP_HORIZ_AXSYMM)) {
 
 					if (tile_up1->flags & TF_ROW_HORIZ_AXSYMM)
@@ -313,18 +341,15 @@ int run_wires(struct fpga_model* model)
 					else
 						wire_fmt = "REGH_%s";
 
-					rc = add_conn_bi(model, y, x, b_wire, y-1, x, pf(wire_fmt, m_wire));
-					if (rc) goto xout;
-					rc = add_conn_bi(model, y, x, b_wire, y-2, x, m_wire);
-					if (rc) goto xout;
-					rc = add_conn_bi(model, y, x, b_wire, y-3, x, e_wire);
-					if (rc) goto xout;
-					rc = add_conn_bi(model, y-1, x, pf(wire_fmt, m_wire), y-2, x, m_wire);
-					if (rc) goto xout;
-					rc = add_conn_bi(model, y-1, x, pf(wire_fmt, m_wire), y-3, x, e_wire);
-					if (rc) goto xout;
-					rc = add_conn_bi(model, y-2, x, m_wire, y-3, x, e_wire);
-					if (rc) goto xout;
+					if ((rc = add_conn_bi(model,   y, x, b_wire,               y-1, x, pf(wire_fmt, m_wire)))) goto xout;
+					if ((rc = add_conn_bi(model,   y, x, b_wire,               y-2, x, m_wire))) goto xout;
+					if ((rc = add_conn_bi(model,   y, x, b_wire,               y-3, x, e_wire))) goto xout;
+					if ((rc = add_conn_bi(model, y-1, x, pf(wire_fmt, m_wire), y-2, x, m_wire))) goto xout;
+					if ((rc = add_conn_bi(model, y-1, x, pf(wire_fmt, m_wire), y-3, x, e_wire))) goto xout;
+					if ((rc = add_conn_bi(model, y-2, x, m_wire,               y-3, x, e_wire))) goto xout;
+
+					if ((rc = add_conn_bi(model,   y, x, r1b_wire, y-2, x, r1e_wire))) goto xout;
+					if ((rc = add_conn_bi(model,   y, x, r1b_wire, y-1, x, pf(wire_fmt, r1e_wire)))) goto xout;
 
 				} else if (tile_up2->flags & (TF_ROW_HORIZ_AXSYMM|TF_CHIP_HORIZ_AXSYMM)) {
 
@@ -335,32 +360,24 @@ int run_wires(struct fpga_model* model)
 					else
 						wire_fmt = "REGH_%s";
 
-					rc = add_conn_bi(model, y, x, b_wire, y-1, x, m_wire);
-					if (rc) goto xout;
-					rc = add_conn_bi(model, y, x, b_wire, y-2, x, pf(wire_fmt, e_wire));
-					if (rc) goto xout;
-					rc = add_conn_bi(model, y, x, b_wire, y-3, x, e_wire);
-					if (rc) goto xout;
-					rc = add_conn_bi(model, y-1, x, m_wire, y-2, x, pf(wire_fmt, e_wire));
-					if (rc) goto xout;
-					rc = add_conn_bi(model, y-1, x, m_wire, y-3, x, e_wire);
-					if (rc) goto xout;
-					rc = add_conn_bi(model, y-2, x, pf(wire_fmt, e_wire), y-3, x, e_wire);
-					if (rc) goto xout;
+					if ((rc = add_conn_bi(model,   y, x, b_wire, y-1, x, m_wire))) goto xout;
+					if ((rc = add_conn_bi(model,   y, x, b_wire, y-2, x, pf(wire_fmt, e_wire)))) goto xout;
+					if ((rc = add_conn_bi(model,   y, x, b_wire, y-3, x, e_wire))) goto xout;
+					if ((rc = add_conn_bi(model, y-1, x, m_wire, y-2, x, pf(wire_fmt, e_wire)))) goto xout;
+					if ((rc = add_conn_bi(model, y-1, x, m_wire, y-3, x, e_wire))) goto xout;
+					if ((rc = add_conn_bi(model, y-2, x, pf(wire_fmt, e_wire), y-3, x, e_wire))) goto xout;
+
+					if ((rc = add_conn_bi(model,   y, x, r1b_wire, y-1, x, r1e_wire))) goto xout;
 
 				} else {
-					rc = add_conn_bi(model, y, x, b_wire, y-1, x, m_wire);
-					if (rc) goto xout;
-					rc = add_conn_bi(model, y, x, b_wire, y-2, x, e_wire);
-					if (rc) goto xout;
-					rc = add_conn_bi(model, y-1, x, m_wire, y-2, x, e_wire);
-					if (rc) goto xout;
+					if ((rc = add_conn_bi(model,   y, x, b_wire, y-1, x, m_wire))) goto xout;
+					if ((rc = add_conn_bi(model,   y, x, b_wire, y-2, x, e_wire))) goto xout;
+					if ((rc = add_conn_bi(model, y-1, x, m_wire, y-2, x, e_wire))) goto xout;
 					if (!i) {
-						rc = add_conn_bi(model, y, x, "NN2B0", y-1, x, "NN2E_S0");
-						if (rc) goto xout;
-						rc = add_conn_bi(model, y-2, x, "NN2E0", y-1, x, "NN2E_S0");
-						if (rc) goto xout;
+						if ((rc = add_conn_bi(model,   y, x, "NN2B0", y-1, x, "NN2E_S0"))) goto xout;
+						if ((rc = add_conn_bi(model, y-2, x, "NN2E0", y-1, x, "NN2E_S0"))) goto xout;
 					}
+					if ((rc = add_conn_bi(model,   y, x, r1b_wire, y-1, x, r1e_wire))) goto xout;
 				}
 			}
 		}
@@ -400,16 +417,17 @@ int init_tiles(struct fpga_model* model)
 
 	// flag horizontal rows
 	for (x = 0; x < model->tile_x_range; x++) {
-		model->tiles[x].flags |= TF_FIRST_ROW;
-		model->tiles[model->tile_x_range + x].flags |= TF_SECOND_ROW;
+		model->tiles[x].flags |= TF_TOPMOST_TILE;
+		model->tiles[model->tile_x_range + x].flags |= TF_UNDER_TOPMOST_TILE;
 		for (i = model->cfg_rows-1; i >= 0; i--) {
 			row_top_y = 2 /* top IO tiles */ + (model->cfg_rows-1-i)*(8+1/*middle of row clock*/+8);
 			if (i<(model->cfg_rows/2)) row_top_y++; // middle system tiles
 			model->tiles[(row_top_y+8)*model->tile_x_range + x].flags |= TF_ROW_HORIZ_AXSYMM;
+			model->tiles[(row_top_y+16)*model->tile_x_range + x].flags |= TF_BOTTOM_OF_ROW;
 		}
 		model->tiles[center_row * model->tile_x_range + x].flags |= TF_CHIP_HORIZ_AXSYMM;
-		model->tiles[(model->tile_y_range-2)*model->tile_x_range + x].flags |= TF_SECOND_TO_LAST_ROW;
-		model->tiles[(model->tile_y_range-1)*model->tile_x_range + x].flags |= TF_LAST_ROW;
+		model->tiles[(model->tile_y_range-2)*model->tile_x_range + x].flags |= TF_ABOVE_BOTTOMMOST_TILE;
+		model->tiles[(model->tile_y_range-1)*model->tile_x_range + x].flags |= TF_BOTTOMMOST_TILE;
 	}
 
 	//
@@ -420,6 +438,20 @@ int init_tiles(struct fpga_model* model)
 	left_side = 1; // turn off (=right side) when reaching the 'R' middle column
 	i = 5; // skip left IO columns
 	for (j = 0; model->cfg_columns[j]; j++) {
+		if (model->cfg_columns[j] == 'L'
+		    || model->cfg_columns[j] == 'l'
+		    || model->cfg_columns[j] == 'M'
+		    || model->cfg_columns[j] == 'm'
+		    || model->cfg_columns[j] == 'D'
+		    || model->cfg_columns[j] == 'B'
+		    || model->cfg_columns[j] == 'R') {
+			for (k = model->cfg_rows-1; k >= 0; k--) {
+				row_top_y = 2 /* top IO tiles */ + (model->cfg_rows-1-k)*(8+1/*middle of row clock*/+8);
+				if (k<(model->cfg_rows/2)) row_top_y++; // middle system tiles (center row)
+				for (l = 0; l < 16; l++)
+					model->tiles[(row_top_y+(l<8?l:l+1))*model->tile_x_range + i].flags |= TF_VERT_ROUTING;
+			}
+		}
 		switch (model->cfg_columns[j]) {
 			case 'L':
 			case 'l':
@@ -666,6 +698,16 @@ int init_tiles(struct fpga_model* model)
 			default:
 				fprintf(stderr, "Unexpected column identifier '%c'\n", model->cfg_columns[j]);
 					break;
+		}
+	}
+
+	// flag left and right vertical routing
+	for (k = model->cfg_rows-1; k >= 0; k--) {
+		row_top_y = 2 /* top IO tiles */ + (model->cfg_rows-1-k)*(8+1/*middle of row clock*/+8);
+		if (k<(model->cfg_rows/2)) row_top_y++; // middle system tiles (center row)
+		for (l = 0; l < 16; l++) {
+			model->tiles[(row_top_y+(l<8?l:l+1))*model->tile_x_range + 2].flags |= TF_VERT_ROUTING;
+			model->tiles[(row_top_y+(l<8?l:l+1))*model->tile_x_range + model->tile_x_range - 5].flags |= TF_VERT_ROUTING;
 		}
 	}
 
