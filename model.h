@@ -11,6 +11,7 @@
 #include <stdint.h>
 #include <assert.h>
 #include <sys/stat.h>
+#define MACRO_STR(arg)	#arg
 
 #define HASHARRAY_NUM_INDICES (256*256)
 
@@ -131,6 +132,9 @@ enum fpga_tile_type
 #define TF_CHIP_HORIZ_AXSYMM		0x0080
 #define TF_CHIP_VERT_AXSYMM		0x0100
 #define TF_VERT_ROUTING			0x0200
+#define TF_LOGIC_COL			0x0400
+#define TF_MACC_COL			0x0800
+#define TF_BRAM_COL			0x1000
 
 struct fpga_tile
 {
