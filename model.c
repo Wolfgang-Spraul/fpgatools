@@ -247,7 +247,7 @@ int add_conn_uni(struct fpga_model* model, int y1, int x1, const char* name1, in
 		tile1->conns = new_ptr;
 	}
 	if (tile1->num_conns > j)
-		memmove(&tile1->conns[(j+1)*3], &tile1->conns[j*3], (tile1->num_conns-j)*3);
+		memmove(&tile1->conns[(j+1)*3], &tile1->conns[j*3], (tile1->num_conns-j)*3*sizeof(uint16_t));
 	tile1->conns[j*3] = x2;
 	tile1->conns[j*3+1] = y2;
 	tile1->conns[j*3+2] = name2_i;
@@ -289,6 +289,7 @@ int run_wires(struct fpga_model* model)
 
 			tile_up1 = &model->tiles[(y-1) * model->tile_x_range + x];
 			tile_up2 = &model->tiles[(y-2) * model->tile_x_range + x];
+
 			for (i = 0; i <= 3; i++) {
 				sprintf(b_wire, "NN2B%i", i);
 				sprintf(m_wire, "NN2M%i", i);
@@ -354,6 +355,12 @@ int run_wires(struct fpga_model* model)
 					if (rc) goto xout;
 					rc = add_conn_bi(model, y-1, x, m_wire, y-2, x, e_wire);
 					if (rc) goto xout;
+					if (!i) {
+						rc = add_conn_bi(model, y, x, "NN2B0", y-1, x, "NN2E_S0");
+						if (rc) goto xout;
+						rc = add_conn_bi(model, y-2, x, "NN2E0", y-1, x, "NN2E_S0");
+						if (rc) goto xout;
+					}
 				}
 			}
 		}
