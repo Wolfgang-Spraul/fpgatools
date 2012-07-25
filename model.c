@@ -401,6 +401,7 @@ xout:
 int run_wires(struct fpga_model* model)
 {
 	struct fpga_tile* tile, *tile_up1, *tile_up2, *tile_dn1, *tile_dn2;
+	char buf[128];
 	int x, y, i, rc;
 
 	rc = -1;
@@ -447,6 +448,27 @@ int run_wires(struct fpga_model* model)
 						if ((rc = add_conn_bi_pref(model, y+1, x, pf("LOGICIN%i", south_p[i]), y+2, x, pf("LOGICIN_S%i", south_p[i])))) goto xout;
 					} else {
 						if ((rc = add_conn_bi_pref(model,   y, x, pf("LOGICIN%i", south_p[i]), y+1, x, pf("LOGICIN_S%i", south_p[i])))) goto xout;
+					}
+				}
+
+				if (tile->flags & TF_BRAM_COL) {
+					if ((rc = add_conn_range(model, NOPREF_BI_F, y, x, "LOGICIN_B%i", 0, 63, y, x+1, "INT_INTERFACE_LOGICBIN%i", 0))) goto xout;
+					if (tile[2].flags & TF_BRAM_DEVICE) {
+						for (i = 0; i < 4; i++) {
+							sprintf(buf, "BRAM_LOGICINB%%i_INT%i", 3-i);
+							if ((rc = add_conn_range(model, NOPREF_BI_F, y-(3-i), x, "LOGICIN_B%i", 0, 63, y, x+2, buf, 0))) goto xout;
+							if ((rc = add_conn_range(model, NOPREF_BI_F, y-(3-i), x+1, "INT_INTERFACE_LOGICBIN%i", 0, 63, y, x+2, buf, 0))) goto xout;
+						}
+					}
+				}
+				if (tile->flags & TF_MACC_COL) {
+					if ((rc = add_conn_range(model, NOPREF_BI_F, y, x, "LOGICIN_B%i", 0, 63, y, x+1, "INT_INTERFACE_LOGICBIN%i", 0))) goto xout;
+					if (tile[2].flags & TF_MACC_DEVICE) {
+						for (i = 0; i < 4; i++) {
+							sprintf(buf, "MACC_LOGICINB%%i_INT%i", 3-i);
+							if ((rc = add_conn_range(model, NOPREF_BI_F, y-(3-i), x, "LOGICIN_B%i", 0, 63, y, x+2, buf, 0))) goto xout;
+							if ((rc = add_conn_range(model, NOPREF_BI_F, y-(3-i), x+1, "INT_INTERFACE_LOGICBIN%i", 0, 63, y, x+2, buf, 0))) goto xout;
+						}
 					}
 				}
 			}
@@ -711,8 +733,7 @@ int init_tiles(struct fpga_model* model)
 					if (k<(model->cfg_rows/2)) row_top_y++; // middle system tiles (center row)
 					for (l = 0; l < 16; l++) {
 						tile_i0 = &model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + i];
-						tile_i0->flags |= TF_LOGIC_COL;
-						tile_i0[1].flags |= TF_LOGIC_COL;
+						tile_i0->flags |= (model->cfg_columns[j] == 'L' || model->cfg_columns[j] == 'l') ? TF_LOGIC_XL : TF_LOGIC_XM;
 					}
 					start = ((k == model->cfg_rows-1 && (model->cfg_columns[j] == 'L' || model->cfg_columns[j] == 'M')) ? 2 : 0);
 					end = ((k == 0 && (model->cfg_columns[j] == 'L' || model->cfg_columns[j] == 'M')) ? 14 : 16);
@@ -793,8 +814,10 @@ int init_tiles(struct fpga_model* model)
 						else
 							tile_i0->type = BRAM_ROUTING_BRK;
 						model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + i + 1].type = ROUTING_VIA;
-						if (!(l%4))
+						if (!(l%4)) {
 							model->tiles[(row_top_y+3+(l<8?l:l+1))*tile_columns + i + 2].type = BRAM;
+							model->tiles[(row_top_y+3+(l<8?l:l+1))*tile_columns + i + 2].flags |= TF_BRAM_DEVICE;
+						}
 					}
 					model->tiles[(row_top_y+8)*tile_columns + i].type = HCLK_BRAM_ROUTING;
 					model->tiles[(row_top_y+8)*tile_columns + i + 1].type = HCLK_BRAM_ROUTING_VIA;
@@ -827,8 +850,10 @@ int init_tiles(struct fpga_model* model)
 						else
 							tile_i0->type = ROUTING_BRK;
 						tile_i0[1].type = ROUTING_VIA;
-						if (!(l%4))
+						if (!(l%4)) {
 							model->tiles[(row_top_y+3+(l<8?l:l+1))*tile_columns + i + 2].type = MACC;
+							model->tiles[(row_top_y+3+(l<8?l:l+1))*tile_columns + i + 2].flags |= TF_MACC_DEVICE;
+						}
 					}
 					model->tiles[(row_top_y+8)*tile_columns + i].type = HCLK_MACC_ROUTING;
 					model->tiles[(row_top_y+8)*tile_columns + i + 1].type = HCLK_MACC_ROUTING_VIA;
@@ -865,8 +890,7 @@ int init_tiles(struct fpga_model* model)
 
 					for (l = 0; l < 16; l++) {
 						tile_i0 = &model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + i];
-						tile_i0->flags |= TF_LOGIC_COL;
-						tile_i0[1].flags |= TF_LOGIC_COL;
+						tile_i0->flags |= TF_CENTER;
 
 						if ((k < model->cfg_rows-1 || l >= 2) && (k || l<14)) {
 							if (l < 15)
@@ -959,8 +983,8 @@ int init_tiles(struct fpga_model* model)
 		row_top_y = 2 /* top IO tiles */ + (model->cfg_rows-1-k)*(8+1/*middle of row clock*/+8);
 		if (k<(model->cfg_rows/2)) row_top_y++; // middle system tiles (center row)
 		for (l = 0; l < 16; l++) {
-			model->tiles[(row_top_y+(l<8?l:l+1))*model->tile_x_range + 2].flags |= TF_VERT_ROUTING;
-			model->tiles[(row_top_y+(l<8?l:l+1))*model->tile_x_range + model->tile_x_range - 5].flags |= TF_VERT_ROUTING;
+			model->tiles[(row_top_y+(l<8?l:l+1))*model->tile_x_range + 2].flags |= TF_VERT_ROUTING | TF_LEFT_IO;
+			model->tiles[(row_top_y+(l<8?l:l+1))*model->tile_x_range + model->tile_x_range - 5].flags |= TF_VERT_ROUTING | TF_RIGHT_IO;
 		}
 	}
 
