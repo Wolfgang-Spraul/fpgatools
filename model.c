@@ -401,7 +401,7 @@ xout:
 int run_wires(struct fpga_model* model)
 {
 	struct fpga_tile* tile, *tile_up1, *tile_up2, *tile_dn1, *tile_dn2;
-	int x, y, rc;
+	int x, y, i, rc;
 
 	rc = -1;
 	for (y = 0; y < model->tile_y_range; y++) {
@@ -412,6 +412,44 @@ int run_wires(struct fpga_model* model)
 			tile_up2 = &model->tiles[(y-2) * model->tile_x_range + x];
 			tile_dn1 = &model->tiles[(y+1) * model->tile_x_range + x];
 			tile_dn2 = &model->tiles[(y+2) * model->tile_x_range + x];
+
+			// LOGICIN
+			if (tile->flags & TF_VERT_ROUTING) {
+				static const int north_p[4] = {21, 28, 52, 60};
+				static const int south_p[4] = {20, 36, 44, 62};
+
+				for (i = 0; i < sizeof(north_p)/sizeof(north_p[0]); i++) {
+					if (tile_up1->flags & TF_BELOW_TOPMOST_TILE) {
+						if ((rc = add_conn_bi_pref(model, y, x, pf("LOGICIN%i", north_p[i]), y-1, x, pf("LOGICIN%i", north_p[i])))) goto xout;
+					} else {
+						if ((rc = add_conn_bi_pref(model, y, x, pf("LOGICIN%i", north_p[i]), y-1, x, pf("LOGICIN_N%i", north_p[i])))) goto xout;
+					}
+					if (tile_up1->flags & (TF_ROW_HORIZ_AXSYMM | TF_CHIP_HORIZ_AXSYMM | TF_CHIP_HORIZ_AXSYMM_CENTER)) {
+						if ((rc = add_conn_bi_pref(model, y, x, pf("LOGICIN%i", north_p[i]), y-2, x, pf("LOGICIN_N%i", north_p[i])))) goto xout;
+						if ((rc = add_conn_bi_pref(model, y-1, x, pf("LOGICIN_N%i", north_p[i]), y-2, x, pf("LOGICIN_N%i", north_p[i])))) goto xout;
+					}
+					if (tile_dn1->flags & TF_ABOVE_BOTTOMMOST_TILE
+					    && !(tile->flags & TF_BRAM_COL)) {
+						if ((rc = add_conn_bi_pref(model, y, x, pf("LOGICIN_N%i", north_p[i]), y+1, x, pf("LOGICIN_N%i", north_p[i])))) goto xout;
+					}
+				}
+				for (i = 0; i < sizeof(south_p)/sizeof(south_p[0]); i++) {
+					if (tile_up1->flags & TF_BELOW_TOPMOST_TILE) {
+						if ((rc = add_conn_bi_pref(model,   y, x, pf("LOGICIN_S%i", south_p[i]), y-1, x, pf("LOGICIN_S%i", south_p[i])))) goto xout;
+					}
+					if (tile_dn1->flags & TF_ABOVE_BOTTOMMOST_TILE) {
+						if (!(tile->flags & TF_BRAM_COL)) {
+							if ((rc = add_conn_bi_pref(model,   y, x, pf("LOGICIN%i", south_p[i]), y+1, x, pf("LOGICIN%i", south_p[i])))) goto xout;
+						}
+					} else if (tile_dn1->flags & (TF_ROW_HORIZ_AXSYMM | TF_CHIP_HORIZ_AXSYMM | TF_CHIP_HORIZ_AXSYMM_CENTER)) {
+						if ((rc = add_conn_bi_pref(model,   y, x, pf("LOGICIN%i", south_p[i]), y+1, x, pf("LOGICIN%i", south_p[i])))) goto xout;
+						if ((rc = add_conn_bi_pref(model,   y, x, pf("LOGICIN%i", south_p[i]), y+2, x, pf("LOGICIN_S%i", south_p[i])))) goto xout;
+						if ((rc = add_conn_bi_pref(model, y+1, x, pf("LOGICIN%i", south_p[i]), y+2, x, pf("LOGICIN_S%i", south_p[i])))) goto xout;
+					} else {
+						if ((rc = add_conn_bi_pref(model,   y, x, pf("LOGICIN%i", south_p[i]), y+1, x, pf("LOGICIN_S%i", south_p[i])))) goto xout;
+					}
+				}
+			}
 
 			// NR1
 			if (tile->flags & TF_VERT_ROUTING) {
