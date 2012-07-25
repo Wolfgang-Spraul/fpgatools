@@ -316,6 +316,21 @@ int add_conn_uni(struct fpga_model* model, int y1, int x1, const char* name1, in
 	return 0;
 }
 
+typedef int (*add_conn_bi_f)(struct fpga_model* model, int y1, int x1, const char* name1, int y2, int x2, const char* name2);
+#define NOPREF_BI_F	add_conn_bi
+#define PREF_BI_F	add_conn_bi_pref
+#define NOPREF_UNI_F	add_conn_uni
+#define PREF_UNI_F	add_conn_uni_pref
+
+int add_conn_uni_pref(struct fpga_model* model, int y1, int x1, const char* name1, int y2, int x2, const char* name2)
+{
+	return add_conn_uni(model,
+		y1, x1,
+		wpref(model->tiles[y1 * model->tile_x_range + x1].flags, name1),
+		y2, x2,
+		wpref(model->tiles[y2 * model->tile_x_range + x2].flags, name2));
+}
+
 int add_conn_bi(struct fpga_model* model, int y1, int x1, const char* name1, int y2, int x2, const char* name2)
 {
 	int rc = add_conn_uni(model, y1, x1, name1, y2, x2, name2);
@@ -332,17 +347,17 @@ int add_conn_bi_pref(struct fpga_model* model, int y1, int x1, const char* name1
 		wpref(model->tiles[y2 * model->tile_x_range + x2].flags, name2));
 }
 
-int add_conn_range(struct fpga_model* model, int y1, int x1, const char* name1, int start1, int count, int y2, int x2, const char* name2, int start2)
+int add_conn_range(struct fpga_model* model, add_conn_bi_f add_conn_f, int y1, int x1, const char* name1, int start1, int count, int y2, int x2, const char* name2, int start2)
 {
 	char buf1[128], buf2[128];
 	int rc, i;
 
 	if (count < 1)
-		return add_conn_bi(model, y1, x1, name1, y2, x2, name2);
+		return (*add_conn_f)(model, y1, x1, name1, y2, x2, name2);
 	for (i = 0; i < count; i++) {
 		snprintf(buf1, sizeof(buf1), name1, start1+i);
 		snprintf(buf2, sizeof(buf2), name2, start2+i);
-		rc = add_conn_bi(model, y1, x1, buf1, y2, x2, buf2);
+		rc = (*add_conn_f)(model, y1, x1, buf1, y2, x2, buf2);
 		if (rc) return rc;
 	}
 	return 0;
@@ -367,13 +382,13 @@ int add_conn_net(struct fpga_model* model, struct w_net* net)
 
 	for (i = 0; net->pts[i].name[0] && i < sizeof(net->pts)/sizeof(net->pts[0]); i++) {
 		for (j = i+1; net->pts[j].name[0] && j < sizeof(net->pts)/sizeof(net->pts[0]); j++) {
-			rc = add_conn_range(model,
+			rc = add_conn_range(model, PREF_BI_F,
 				net->pts[i].y, net->pts[i].x,
-				wpref(model->tiles[net->pts[i].y * model->tile_x_range + net->pts[i].x].flags, net->pts[i].name),
+				net->pts[i].name,
 				net->pts[i].start_count,
 				net->wire_count,
 				net->pts[j].y, net->pts[j].x,
-				wpref(model->tiles[net->pts[j].y * model->tile_x_range + net->pts[j].x].flags, net->pts[j].name),
+				net->pts[j].name,
 				net->pts[j].start_count);
 			if (rc) goto xout;
 		}
@@ -386,7 +401,7 @@ xout:
 int run_wires(struct fpga_model* model)
 {
 	struct fpga_tile* tile, *tile_up1, *tile_up2, *tile_dn1, *tile_dn2;
-	int x, y, i, rc;
+	int x, y, rc;
 
 	rc = -1;
 	for (y = 0; y < model->tile_y_range; y++) {
@@ -468,6 +483,59 @@ int run_wires(struct fpga_model* model)
 
 			// SS2
 			if (tile->flags & TF_VERT_ROUTING) {
+
+				if (tile_dn2->flags & (TF_ROW_HORIZ_AXSYMM|TF_CHIP_HORIZ_AXSYMM|TF_CHIP_HORIZ_AXSYMM_CENTER)) {
+					{ struct w_net net = {
+						4,
+						{{ "SS2B%i", 0,   y, x },
+						 { "SS2M%i", 0, y+1, x },
+						 { "SS2M%i", 0, y+2, x },
+						 { "SS2E%i", 0, y+3, x },
+						 { "" }}};
+					if ((rc = add_conn_net(model, &net))) goto xout; }
+				} else if (tile_dn1->flags & (TF_ROW_HORIZ_AXSYMM|TF_CHIP_HORIZ_AXSYMM|TF_CHIP_HORIZ_AXSYMM_CENTER)) {
+					{ struct w_net net = {
+						4,
+						{{ "SS2B%i", 0,   y, x },
+						 { "SS2B%i", 0, y+1, x },
+						 { "SS2M%i", 0, y+2, x },
+						 { "SS2E%i", 0, y+3, x },
+						 { "" }}};
+					if ((rc = add_conn_net(model, &net))) goto xout; }
+				} else if (tile_dn2->flags & TF_ABOVE_BOTTOMMOST_TILE) {
+					if (!(tile->flags & TF_BRAM_COL)) {
+						{ struct w_net net = {
+							4,
+							{{ "SS2B%i", 0,   y, x },
+							 { "SS2M%i", 0, y+1, x },
+							 { "SS2M%i", 0, y+2, x },
+							 { "" }}};
+						if ((rc = add_conn_net(model, &net))) goto xout; }
+					}
+				} else if (tile_dn1->flags & TF_ABOVE_BOTTOMMOST_TILE) {
+					if (!(tile->flags & TF_BRAM_COL)) {
+						if ((rc = add_conn_range(model, PREF_BI_F,   y, x, "SS2B%i", 0, 4, y+1, x, "SS2B%i", 0))) goto xout;
+					}
+				} else {
+					if (tile_up1->flags & TF_BELOW_TOPMOST_TILE) {
+						{ struct w_net net = {
+							4,
+							{{ "SS2M%i", 0, y-1, x },
+							 { "SS2M%i", 0,   y, x },
+							 { "SS2E%i", 0, y+1, x },
+							 { "" }}};
+						if ((rc = add_conn_net(model, &net))) goto xout; }
+						if ((rc = add_conn_range(model, PREF_BI_F,   y, x, "SS2E%i", 0, 4, y-1, x, "SS2E%i", 0))) goto xout;
+					}
+					{ struct w_net net = {
+						4,
+						{{ "SS2B%i", 0,   y, x },
+						 { "SS2M%i", 0, y+1, x },
+						 { "SS2E%i", 0, y+2, x },
+						 { "" }}};
+					if ((rc = add_conn_net(model, &net))) goto xout; }
+				}
+
 				if (tile_dn2->flags & (TF_ROW_HORIZ_AXSYMM|TF_CHIP_HORIZ_AXSYMM|TF_CHIP_HORIZ_AXSYMM_CENTER)) {
 					if ((rc = add_conn_bi_pref(model,   y, x, "SS2B3",   y+1, x, "SS2E_N3"))) goto xout;
 					if ((rc = add_conn_bi_pref(model, y+1, x, "SS2E_N3", y+2, x, "SS2E_N3"))) goto xout;

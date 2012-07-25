@@ -67,10 +67,6 @@ int main(int argc, char** argv)
 					printf(" %s", MACRO_STR(TF_TOPMOST_TILE));
 					tf &= ~TF_TOPMOST_TILE;
 				}
-				if (tf & TF_UNDER_TOPMOST_TILE) {
-					printf(" %s", MACRO_STR(TF_UNDER_TOPMOST_TILE));
-					tf &= ~TF_UNDER_TOPMOST_TILE;
-				}
 				if (tf & TF_ABOVE_BOTTOMMOST_TILE) {
 					printf(" %s", MACRO_STR(TF_ABOVE_BOTTOMMOST_TILE));
 					tf &= ~TF_ABOVE_BOTTOMMOST_TILE;
