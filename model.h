@@ -130,11 +130,12 @@ enum fpga_tile_type
 #define TF_ROW_HORIZ_AXSYMM		0x0020
 #define TF_BOTTOM_OF_ROW		0x0040
 #define TF_CHIP_HORIZ_AXSYMM		0x0080
-#define TF_CHIP_VERT_AXSYMM		0x0100
-#define TF_VERT_ROUTING			0x0200
-#define TF_LOGIC_COL			0x0400
-#define TF_MACC_COL			0x0800
-#define TF_BRAM_COL			0x1000
+#define TF_CHIP_HORIZ_AXSYMM_CENTER	0x0100
+#define TF_CHIP_VERT_AXSYMM		0x0200
+#define TF_VERT_ROUTING			0x0400
+#define TF_LOGIC_COL			0x0800
+#define TF_MACC_COL			0x1000
+#define TF_BRAM_COL			0x2000
 
 struct fpga_tile
 {

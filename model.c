@@ -187,6 +187,46 @@ int fpga_build_model(struct fpga_model* model, int fpga_rows, const char* column
 	return 0;
 }
 
+const char* pf(const char* fmt, ...)
+{
+	// safe to call it 8 times in 1 expression (such as function params)
+	static char pf_buf[8][128];
+	static int last_buf = 0;
+	va_list list;
+	last_buf = (last_buf+1)%8;
+	pf_buf[last_buf][0] = 0;
+	va_start(list, fmt);
+	vsnprintf(pf_buf[last_buf], sizeof(pf_buf[0]), fmt, list);
+	va_end(list);
+	return pf_buf[last_buf];
+}
+
+const char* wpref(int flags, const char* wire_name)
+{
+	static char buf[8][128];
+	static int last_buf = 0;
+	char* prefix;
+
+	if (flags & TF_CHIP_HORIZ_AXSYMM_CENTER)
+		prefix = "REGC_INT_";
+	else if (flags & TF_CHIP_HORIZ_AXSYMM)
+		prefix = "REGH_";
+	else if (flags & TF_ROW_HORIZ_AXSYMM)
+		prefix = "HCLK_";
+	else if (flags & TF_UNDER_TOPMOST_TILE)
+		prefix = "IOI_TTERM_";
+	else if (flags & TF_ABOVE_BOTTOMMOST_TILE)
+		prefix = "IOI_BTERM_";
+	else
+		prefix = "";
+
+	last_buf = (last_buf+1)%8;
+	buf[last_buf][0] = 0;
+	strcpy(buf[last_buf], prefix);
+	strcat(buf[last_buf], wire_name);
+	return buf[last_buf];
+}
+
 #define CONN_NAMES_INCREMENT	128
 #define CONNS_INCREMENT		128
 
@@ -283,25 +323,60 @@ int add_conn_bi(struct fpga_model* model, int y1, int x1, const char* name1, int
 	return add_conn_uni(model, y2, x2, name2, y1, x1, name1);
 }
 
-const char* pf(const char* fmt, ...)
+int add_conn_range(struct fpga_model* model, int y1, int x1, const char* name1, int start1, int count, int y2, int x2, const char* name2, int start2)
 {
-	// safe to call it 4 times in 1 expression (such as function params)
-	static char pf_buf[4][128];
-	static int last_buf = 0;
-	va_list list;
-	last_buf = (last_buf+1)%4;
-	pf_buf[last_buf][0] = 0;
-	va_start(list, fmt);
-	vsnprintf(pf_buf[last_buf], sizeof(pf_buf[0]), fmt, list);
-	va_end(list);
-	return pf_buf[last_buf];
+	char buf1[128], buf2[128];
+	int rc, i;
+
+	if (count < 1)
+		return add_conn_bi(model, y1, x1, name1, y2, x2, name2);
+	for (i = 0; i < count; i++) {
+		snprintf(buf1, sizeof(buf1), name1, start1+i);
+		snprintf(buf2, sizeof(buf2), name2, start2+i);
+		rc = add_conn_bi(model, y1, x1, buf1, y2, x2, buf2);
+		if (rc) return rc;
+	}
+	return 0;
+}
+
+struct w_point // wire point
+{
+	const char* name;
+	int start_count; // if there is a %i in the name, this is the start number
+	int y, x;
+};
+
+struct w_net
+{
+	int wire_count; // if > 0, %i in the name will be incremented this many times
+	struct w_point pts[8];
+};
+
+int add_conn_net(struct fpga_model* model, struct w_net* net)
+{
+	int i, j, rc;
+
+	for (i = 0; net->pts[i].name[0] && i < sizeof(net->pts)/sizeof(net->pts[0]); i++) {
+		for (j = i+1; net->pts[j].name[0] && j < sizeof(net->pts)/sizeof(net->pts[0]); j++) {
+			rc = add_conn_range(model,
+				net->pts[i].y, net->pts[i].x,
+				wpref(model->tiles[net->pts[i].y * model->tile_x_range + net->pts[i].x].flags, net->pts[i].name),
+				net->pts[i].start_count,
+				net->wire_count,
+				net->pts[j].y, net->pts[j].x,
+				wpref(model->tiles[net->pts[j].y * model->tile_x_range + net->pts[j].x].flags, net->pts[j].name),
+				net->pts[j].start_count);
+			if (rc) goto xout;
+		}
+	}
+	return 0;
+xout:
+	return rc;
 }
 
 int run_wires(struct fpga_model* model)
 {
 	struct fpga_tile* tile, *tile_up1, *tile_up2, *tile_dn1, *tile_dn2;
-	char b_wire[16], m_wire[16], e_wire[16], r1b_wire[16], r1e_wire[16];
-	char* wire_fmt;
 	int x, y, i, rc;
 
 	rc = -1;
@@ -317,64 +392,58 @@ int run_wires(struct fpga_model* model)
 			if (tile->flags & TF_VERT_ROUTING) {
 				// NR1B-NR1E
 				if (tile_up1->flags & TF_UNDER_TOPMOST_TILE) {
-					for (i = 0; i <= 3; i++) {
-						if ((rc = add_conn_bi(model, y, x, pf("NR1B%i", i), y-1, x, pf("IOI_TTERM_NR1B%i", i)))) goto xout;
-					}
-				} else if (tile_up1->flags & (TF_ROW_HORIZ_AXSYMM | TF_CHIP_HORIZ_AXSYMM)) {
-
-					if (tile_up1->flags & TF_ROW_HORIZ_AXSYMM)
-						wire_fmt = "HCLK_%s";
-					else if (tile[3].flags & TF_CHIP_VERT_AXSYMM)
-						wire_fmt = "REGC_INT_%s";
-					else
-						wire_fmt = "REGH_%s";
-					for (i = 0; i <= 3; i++) {
-						sprintf(r1b_wire, "NR1B%i", i);
-						sprintf(r1e_wire, "NR1E%i", i);
-	
-						if ((rc = add_conn_bi(model,   y, x, r1b_wire, y-1, x, pf(wire_fmt, r1e_wire)))) goto xout;
-						if ((rc = add_conn_bi(model,   y, x, r1b_wire, y-2, x, r1e_wire))) goto xout;
-						if ((rc = add_conn_bi(model, y-1, x, pf(wire_fmt, r1e_wire), y-2, x, r1e_wire))) goto xout;
-					}
+					{ struct w_net net = {
+						4,
+						{{ "NR1B%i", 0,   y, x },
+						 { "NR1B%i", 0, y-1, x },
+						 { "" }}};
+					if ((rc = add_conn_net(model, &net))) goto xout; }
+				} else if (tile_up1->flags & (TF_ROW_HORIZ_AXSYMM | TF_CHIP_HORIZ_AXSYMM | TF_CHIP_HORIZ_AXSYMM_CENTER)) {
+					{ struct w_net net = {
+						4,
+						{{ "NR1B%i", 0,   y, x },
+						 { "NR1E%i", 0, y-1, x },
+						 { "NR1E%i", 0, y-2, x },
+						 { "" }}};
+					if ((rc = add_conn_net(model, &net))) goto xout; }
 				} else {
-					for (i = 0; i <= 3; i++) {
-						if ((rc = add_conn_bi(model, y, x, pf("NR1B%i", i), y-1, x, pf("NR1E%i", i)))) goto xout;
-						if (tile->flags & TF_MACC_COL && tile_dn1->flags & TF_ABOVE_BOTTOMMOST_TILE) {
-							if ((rc = add_conn_bi(model, y, x, pf("NR1E%i", i), y+1, x, pf("IOI_BTERM_NR1E%i", i)))) goto xout;
-						}
+					{ struct w_net net = {
+						4,
+						{{ "NR1B%i", 0,   y, x },
+						 { "NR1E%i", 0, y-1, x },
+						 { "" }}};
+					if ((rc = add_conn_net(model, &net))) goto xout; }
+					if (tile->flags & TF_MACC_COL && tile_dn1->flags & TF_ABOVE_BOTTOMMOST_TILE) {
+						{ struct w_net net = {
+							4,
+							{{ "NR1E%i", 0,   y, x },
+							 { "NR1E%i", 0, y+1, x },
+							 { "" }}};
+						if ((rc = add_conn_net(model, &net))) goto xout; }
 					}
 				}
 
 				// NN2E_S0
 				if (tile_up1->flags & TF_UNDER_TOPMOST_TILE) {
-					if ((rc = add_conn_bi(model, y, x, "NN2E_S0", y-1, x, "IOI_TTERM_NN2E_S0"))) goto xout;
+					{ struct w_net net = {
+						-1,
+						{{ "NN2E_S0", 0,   y, x },
+						 { "NN2E_S0", 0, y-1, x },
+						 { "" }}};
+					if ((rc = add_conn_net(model, &net))) goto xout; }
 				} else if (tile_up2->flags & TF_UNDER_TOPMOST_TILE) {
-				} else if (tile_up1->flags & (TF_ROW_HORIZ_AXSYMM | TF_CHIP_HORIZ_AXSYMM)) {
-					if (tile_up1->flags & TF_ROW_HORIZ_AXSYMM)
-						wire_fmt = "HCLK_%s";
-					else if (tile[3].flags & TF_CHIP_VERT_AXSYMM)
-						wire_fmt = "REGC_INT_%s";
-					else
-						wire_fmt = "REGH_%s";
-
-					if ((rc = add_conn_bi(model, y-1, x, pf(wire_fmt, "NN2M0"), y-2, x, "NN2E_S0"))) goto xout;
+				} else if (tile_up1->flags & (TF_ROW_HORIZ_AXSYMM | TF_CHIP_HORIZ_AXSYMM | TF_CHIP_HORIZ_AXSYMM_CENTER)) {
+					if ((rc = add_conn_bi(model, y-1, x, wpref(tile_up1->flags, "NN2M0"), y-2, x, "NN2E_S0"))) goto xout;
 					if ((rc = add_conn_bi(model, y-3, x, "NN2E0", y-2, x, "NN2E_S0"))) goto xout;
 					if ((rc = add_conn_bi(model,   y, x, "NN2B0", y-2, x, "NN2E_S0"))) goto xout;
-				} else if (tile_up2->flags & (TF_ROW_HORIZ_AXSYMM | TF_CHIP_HORIZ_AXSYMM)) {
-					if (tile_up2->flags & TF_ROW_HORIZ_AXSYMM)
-						wire_fmt = "HCLK_%s";
-					else if (tile[3].flags & TF_CHIP_VERT_AXSYMM)
-						wire_fmt = "REGC_INT_%s";
-					else
-						wire_fmt = "REGH_%s";
-
-					if ((rc = add_conn_bi(model, y-2, x, pf(wire_fmt, "NN2E0"), y-1, x, "NN2E_S0"))) goto xout;
-					if ((rc = add_conn_bi(model, y, x, "NN2B0", y-2, x, pf(wire_fmt, "NN2E_S0")))) goto xout;
-					if ((rc = add_conn_bi(model, y-2, x, pf(wire_fmt, "NN2E_S0"), y-1, x, "NN2M0"))) goto xout;
-					if ((rc = add_conn_bi(model, y-2, x, pf(wire_fmt, "NN2E_S0"), y-1, x, "NN2E_S0"))) goto xout;
-					if ((rc = add_conn_bi(model, y-2, x, pf(wire_fmt, "NN2E_S0"), y-3, x, "NN2E0"))) goto xout;
-					if ((rc = add_conn_bi(model, y-3, x, "NN2E0", y-1, x, "NN2E_S0"))) goto xout;
+				} else if (tile_up2->flags & (TF_ROW_HORIZ_AXSYMM | TF_CHIP_HORIZ_AXSYMM | TF_CHIP_HORIZ_AXSYMM_CENTER)) {
 					if ((rc = add_conn_bi(model,   y, x, "NN2B0", y-1, x, "NN2E_S0"))) goto xout;
+					if ((rc = add_conn_bi(model,   y, x, "NN2B0", y-2, x, wpref(tile_up2->flags, "NN2E_S0")))) goto xout;
+					if ((rc = add_conn_bi(model, y-2, x, wpref(tile_up2->flags, "NN2E0"),   y-1, x, "NN2E_S0"))) goto xout;
+					if ((rc = add_conn_bi(model, y-2, x, wpref(tile_up2->flags, "NN2E_S0"), y-1, x, "NN2M0"))) goto xout;
+					if ((rc = add_conn_bi(model, y-2, x, wpref(tile_up2->flags, "NN2E_S0"), y-1, x, "NN2E_S0"))) goto xout;
+					if ((rc = add_conn_bi(model, y-2, x, wpref(tile_up2->flags, "NN2E_S0"), y-3, x, "NN2E0"))) goto xout;
+					if ((rc = add_conn_bi(model, y-3, x, "NN2E0", y-1, x, "NN2E_S0"))) goto xout;
 				} else {
 					if ((rc = add_conn_bi(model,   y, x, "NN2B0", y-1, x, "NN2E_S0"))) goto xout;
 					if ((rc = add_conn_bi(model, y-2, x, "NN2E0", y-1, x, "NN2E_S0"))) goto xout;
@@ -388,56 +457,50 @@ int run_wires(struct fpga_model* model)
 				}
 			}
 
-			if (!(tile->flags & TF_DIRWIRE_START))
-				continue;
-			for (i = 0; i <= 3; i++) {
-				sprintf(b_wire, "NN2B%i", i);
-				sprintf(m_wire, "NN2M%i", i);
-				sprintf(e_wire, "NN2E%i", i);
-				sprintf(r1b_wire, "NR1B%i", i);
-				sprintf(r1e_wire, "NR1E%i", i);
+			if (tile->flags & TF_DIRWIRE_START) {
 				if (tile_up1->flags & TF_UNDER_TOPMOST_TILE) {
-					if ((rc = add_conn_bi(model,   y, x, b_wire,   y-1, x, pf("IOI_TTERM_%s", b_wire)))) goto xout;
+					{ struct w_net net = {
+						4,
+						{{ "NN2B%i", 0,   y, x },
+						 { "NN2B%i", 0, y-1, x },
+						 { "" }}};
+					if ((rc = add_conn_net(model, &net))) goto xout; }
 				} else if (tile_up2->flags & TF_UNDER_TOPMOST_TILE) {
-					if ((rc = add_conn_bi(model,   y, x, b_wire,   y-1, x, m_wire))) goto xout;
-					if ((rc = add_conn_bi(model,   y, x, b_wire,   y-2, x, pf("IOI_TTERM_%s", m_wire)))) goto xout;
-					if ((rc = add_conn_bi(model, y-1, x, m_wire,   y-2, x, pf("IOI_TTERM_%s", m_wire)))) goto xout;
-				} else if (tile_up1->flags & (TF_ROW_HORIZ_AXSYMM|TF_CHIP_HORIZ_AXSYMM)) {
+					{ struct w_net net = {
+						4,
+						{{ "NN2B%i", 0,   y, x },
+						 { "NN2M%i", 0, y-1, x },
+						 { "NN2M%i", 0, y-2, x },
+						 { "" }}};
+					if ((rc = add_conn_net(model, &net))) goto xout; }
+				} else if (tile_up1->flags & (TF_ROW_HORIZ_AXSYMM|TF_CHIP_HORIZ_AXSYMM|TF_CHIP_HORIZ_AXSYMM_CENTER)) {
 
-					if (tile_up1->flags & TF_ROW_HORIZ_AXSYMM)
-						wire_fmt = "HCLK_%s";
-					else if (tile[3].flags & TF_CHIP_VERT_AXSYMM)
-						wire_fmt = "REGC_INT_%s";
-					else
-						wire_fmt = "REGH_%s";
+					{ struct w_net net = {
+						4,
+						{{ "NN2B%i", 0,   y, x },
+						 { "NN2M%i", 0, y-1, x },
+						 { "NN2M%i", 0, y-2, x },
+						 { "NN2E%i", 0, y-3, x },
+						 { "" }}};
+					if ((rc = add_conn_net(model, &net))) goto xout; }
+				} else if (tile_up2->flags & (TF_ROW_HORIZ_AXSYMM|TF_CHIP_HORIZ_AXSYMM|TF_CHIP_HORIZ_AXSYMM_CENTER)) {
 
-					if ((rc = add_conn_bi(model,   y, x, b_wire,               y-1, x, pf(wire_fmt, m_wire)))) goto xout;
-					if ((rc = add_conn_bi(model,   y, x, b_wire,               y-2, x, m_wire))) goto xout;
-					if ((rc = add_conn_bi(model,   y, x, b_wire,               y-3, x, e_wire))) goto xout;
-					if ((rc = add_conn_bi(model, y-1, x, pf(wire_fmt, m_wire), y-2, x, m_wire))) goto xout;
-					if ((rc = add_conn_bi(model, y-1, x, pf(wire_fmt, m_wire), y-3, x, e_wire))) goto xout;
-					if ((rc = add_conn_bi(model, y-2, x, m_wire,               y-3, x, e_wire))) goto xout;
-
-				} else if (tile_up2->flags & (TF_ROW_HORIZ_AXSYMM|TF_CHIP_HORIZ_AXSYMM)) {
-
-					if (tile_up2->flags & TF_ROW_HORIZ_AXSYMM)
-						wire_fmt = "HCLK_%s";
-					else if (tile[3].flags & TF_CHIP_VERT_AXSYMM)
-						wire_fmt = "REGC_INT_%s";
-					else
-						wire_fmt = "REGH_%s";
-
-					if ((rc = add_conn_bi(model,   y, x, b_wire, y-1, x, m_wire))) goto xout;
-					if ((rc = add_conn_bi(model,   y, x, b_wire, y-2, x, pf(wire_fmt, e_wire)))) goto xout;
-					if ((rc = add_conn_bi(model,   y, x, b_wire, y-3, x, e_wire))) goto xout;
-					if ((rc = add_conn_bi(model, y-1, x, m_wire, y-2, x, pf(wire_fmt, e_wire)))) goto xout;
-					if ((rc = add_conn_bi(model, y-1, x, m_wire, y-3, x, e_wire))) goto xout;
-					if ((rc = add_conn_bi(model, y-2, x, pf(wire_fmt, e_wire), y-3, x, e_wire))) goto xout;
-
+					{ struct w_net net = {
+						4,
+						{{ "NN2B%i", 0,   y, x },
+						 { "NN2M%i", 0, y-1, x },
+						 { "NN2E%i", 0, y-2, x },
+						 { "NN2E%i", 0, y-3, x },
+						 { "" }}};
+					if ((rc = add_conn_net(model, &net))) goto xout; }
 				} else {
-					if ((rc = add_conn_bi(model,   y, x, b_wire, y-1, x, m_wire))) goto xout;
-					if ((rc = add_conn_bi(model,   y, x, b_wire, y-2, x, e_wire))) goto xout;
-					if ((rc = add_conn_bi(model, y-1, x, m_wire, y-2, x, e_wire))) goto xout;
+					{ struct w_net net = {
+						4,
+						{{ "NN2B%i", 0,   y, x },
+						 { "NN2M%i", 0, y-1, x },
+						 { "NN2E%i", 0, y-2, x },
+						 { "" }}};
+					if ((rc = add_conn_net(model, &net))) goto xout; }
 				}
 			}
 		}
@@ -762,9 +825,13 @@ int init_tiles(struct fpga_model* model)
 				model->tiles[(tile_rows-2)*tile_columns + i + 3].type = REGV_TERM_B;
 
 				model->tiles[center_row*tile_columns + i].type = REGC_ROUTING;
+				model->tiles[center_row*tile_columns + i].flags |= TF_CHIP_HORIZ_AXSYMM_CENTER;
 				model->tiles[center_row*tile_columns + i + 1].type = REGC_LOGIC;
+				model->tiles[center_row*tile_columns + i + 1].flags |= TF_CHIP_HORIZ_AXSYMM_CENTER;
 				model->tiles[center_row*tile_columns + i + 2].type = REGC_CMT;
+				model->tiles[center_row*tile_columns + i + 2].flags |= TF_CHIP_HORIZ_AXSYMM_CENTER;
 				model->tiles[center_row*tile_columns + i + 3].type = CENTER;
+				model->tiles[center_row*tile_columns + i + 3].flags |= TF_CHIP_HORIZ_AXSYMM_CENTER;
 
 				i += 4;
 				break;
