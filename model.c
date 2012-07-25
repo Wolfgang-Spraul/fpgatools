@@ -213,7 +213,7 @@ const char* wpref(int flags, const char* wire_name)
 		prefix = "REGH_";
 	else if (flags & TF_ROW_HORIZ_AXSYMM)
 		prefix = "HCLK_";
-	else if (flags & TF_UNDER_TOPMOST_TILE)
+	else if (flags & TF_BELOW_TOPMOST_TILE)
 		prefix = "IOI_TTERM_";
 	else if (flags & TF_ABOVE_BOTTOMMOST_TILE)
 		prefix = "IOI_BTERM_";
@@ -323,6 +323,15 @@ int add_conn_bi(struct fpga_model* model, int y1, int x1, const char* name1, int
 	return add_conn_uni(model, y2, x2, name2, y1, x1, name1);
 }
 
+int add_conn_bi_pref(struct fpga_model* model, int y1, int x1, const char* name1, int y2, int x2, const char* name2)
+{
+	return add_conn_bi(model,
+		y1, x1,
+		wpref(model->tiles[y1 * model->tile_x_range + x1].flags, name1),
+		y2, x2,
+		wpref(model->tiles[y2 * model->tile_x_range + x2].flags, name2));
+}
+
 int add_conn_range(struct fpga_model* model, int y1, int x1, const char* name1, int start1, int count, int y2, int x2, const char* name2, int start2)
 {
 	char buf1[128], buf2[128];
@@ -391,7 +400,7 @@ int run_wires(struct fpga_model* model)
 
 			if (tile->flags & TF_VERT_ROUTING) {
 				// NR1B-NR1E
-				if (tile_up1->flags & TF_UNDER_TOPMOST_TILE) {
+				if (tile_up1->flags & TF_BELOW_TOPMOST_TILE) {
 					{ struct w_net net = {
 						4,
 						{{ "NR1B%i", 0,   y, x },
@@ -424,14 +433,14 @@ int run_wires(struct fpga_model* model)
 				}
 
 				// NN2E_S0
-				if (tile_up1->flags & TF_UNDER_TOPMOST_TILE) {
+				if (tile_up1->flags & TF_BELOW_TOPMOST_TILE) {
 					{ struct w_net net = {
 						-1,
 						{{ "NN2E_S0", 0,   y, x },
 						 { "NN2E_S0", 0, y-1, x },
 						 { "" }}};
 					if ((rc = add_conn_net(model, &net))) goto xout; }
-				} else if (tile_up2->flags & TF_UNDER_TOPMOST_TILE) {
+				} else if (tile_up2->flags & TF_BELOW_TOPMOST_TILE) {
 				} else if (tile_up1->flags & (TF_ROW_HORIZ_AXSYMM | TF_CHIP_HORIZ_AXSYMM | TF_CHIP_HORIZ_AXSYMM_CENTER)) {
 					if ((rc = add_conn_bi(model, y-1, x, wpref(tile_up1->flags, "NN2M0"), y-2, x, "NN2E_S0"))) goto xout;
 					if ((rc = add_conn_bi(model, y-3, x, "NN2E0", y-2, x, "NN2E_S0"))) goto xout;
@@ -457,15 +466,48 @@ int run_wires(struct fpga_model* model)
 				}
 			}
 
+			// SS2
+			if (tile->flags & TF_VERT_ROUTING) {
+				if (tile_dn2->flags & (TF_ROW_HORIZ_AXSYMM|TF_CHIP_HORIZ_AXSYMM|TF_CHIP_HORIZ_AXSYMM_CENTER)) {
+					if ((rc = add_conn_bi_pref(model,   y, x, "SS2B3",   y+1, x, "SS2E_N3"))) goto xout;
+					if ((rc = add_conn_bi_pref(model, y+1, x, "SS2E_N3", y+2, x, "SS2E_N3"))) goto xout;
+
+					if ((rc = add_conn_bi_pref(model,   y, x, "SS2B3",   y+2, x, "SS2E_N3"))) goto xout;
+					if ((rc = add_conn_bi_pref(model, y+2, x, "SS2E_N3", y+3, x, "SS2E3"))) goto xout;
+
+					if ((rc = add_conn_bi_pref(model, y+1, x, "SS2E_N3", y+2, x, "SS2M3"))) goto xout;
+					if ((rc = add_conn_bi_pref(model, y+1, x, "SS2E_N3", y+3, x, "SS2E3"))) goto xout;
+					if ((rc = add_conn_bi_pref(model, y+1, x, "SS2M3",   y+2, x, "SS2E_N3"))) goto xout;
+					if ((rc = add_conn_bi_pref(model, y+2, x, "SS2B3",   y+3, x, "SS2E_N3"))) goto xout;
+				} else if (tile_dn1->flags & (TF_ROW_HORIZ_AXSYMM|TF_CHIP_HORIZ_AXSYMM|TF_CHIP_HORIZ_AXSYMM_CENTER)) {
+					if ((rc = add_conn_bi_pref(model,   y, x, "SS2B3",   y+2, x, "SS2E_N3"))) goto xout;
+					if ((rc = add_conn_bi_pref(model, y+2, x, "SS2E_N3", y+3, x, "SS2E3"))) goto xout;
+				} else if (tile_dn2->flags & TF_ABOVE_BOTTOMMOST_TILE) {
+				} else if (tile_dn1->flags & TF_ABOVE_BOTTOMMOST_TILE) {
+					if (!(tile->flags & TF_BRAM_COL)) {
+						if ((rc = add_conn_bi_pref(model,   y, x, "SS2E_N3", y+1, x, "SS2E_N3"))) goto xout;
+					}
+				} else {
+					if (tile_up1->flags & TF_BELOW_TOPMOST_TILE) {
+						if ((rc = add_conn_bi_pref(model,   y, x, "SS2E3",   y-1, x, "SS2E_N3"))) goto xout;
+						if ((rc = add_conn_bi_pref(model,   y, x, "SS2E_N3", y-1, x, "SS2M3"))) goto xout;
+						if ((rc = add_conn_bi_pref(model,   y, x, "SS2E_N3", y+1, x, "SS2E3"))) goto xout;
+					}
+					if ((rc = add_conn_bi_pref(model,   y, x, "SS2B3",   y+1, x, "SS2E_N3"))) goto xout;
+					if ((rc = add_conn_bi_pref(model, y+1, x, "SS2E_N3", y+2, x, "SS2E3"))) goto xout;
+				}
+			}
+
+			// NN2
 			if (tile->flags & TF_DIRWIRE_START) {
-				if (tile_up1->flags & TF_UNDER_TOPMOST_TILE) {
+				if (tile_up1->flags & TF_BELOW_TOPMOST_TILE) {
 					{ struct w_net net = {
 						4,
 						{{ "NN2B%i", 0,   y, x },
 						 { "NN2B%i", 0, y-1, x },
 						 { "" }}};
 					if ((rc = add_conn_net(model, &net))) goto xout; }
-				} else if (tile_up2->flags & TF_UNDER_TOPMOST_TILE) {
+				} else if (tile_up2->flags & TF_BELOW_TOPMOST_TILE) {
 					{ struct w_net net = {
 						4,
 						{{ "NN2B%i", 0,   y, x },
@@ -474,7 +516,6 @@ int run_wires(struct fpga_model* model)
 						 { "" }}};
 					if ((rc = add_conn_net(model, &net))) goto xout; }
 				} else if (tile_up1->flags & (TF_ROW_HORIZ_AXSYMM|TF_CHIP_HORIZ_AXSYMM|TF_CHIP_HORIZ_AXSYMM_CENTER)) {
-
 					{ struct w_net net = {
 						4,
 						{{ "NN2B%i", 0,   y, x },
@@ -484,7 +525,6 @@ int run_wires(struct fpga_model* model)
 						 { "" }}};
 					if ((rc = add_conn_net(model, &net))) goto xout; }
 				} else if (tile_up2->flags & (TF_ROW_HORIZ_AXSYMM|TF_CHIP_HORIZ_AXSYMM|TF_CHIP_HORIZ_AXSYMM_CENTER)) {
-
 					{ struct w_net net = {
 						4,
 						{{ "NN2B%i", 0,   y, x },
@@ -541,7 +581,7 @@ int init_tiles(struct fpga_model* model)
 	// flag horizontal rows
 	for (x = 0; x < model->tile_x_range; x++) {
 		model->tiles[x].flags |= TF_TOPMOST_TILE;
-		model->tiles[model->tile_x_range + x].flags |= TF_UNDER_TOPMOST_TILE;
+		model->tiles[model->tile_x_range + x].flags |= TF_BELOW_TOPMOST_TILE;
 		for (i = model->cfg_rows-1; i >= 0; i--) {
 			row_top_y = 2 /* top IO tiles */ + (model->cfg_rows-1-i)*(8+1/*middle of row clock*/+8);
 			if (i<(model->cfg_rows/2)) row_top_y++; // middle system tiles
