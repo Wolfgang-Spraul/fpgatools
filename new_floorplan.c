@@ -59,10 +59,6 @@ int main(int argc, char** argv)
 			if (tile->flags) {
 				int tf = tile->flags;
 				printf(" flags");
-				if (tf & TF_DIRWIRE_START) {
-					printf(" %s", MACRO_STR(TF_DIRWIRE_START));
-					tf &= ~TF_DIRWIRE_START;
-				}
 				if (tf & TF_TOPMOST_TILE) {
 					printf(" %s", MACRO_STR(TF_TOPMOST_TILE));
 					tf &= ~TF_TOPMOST_TILE;
