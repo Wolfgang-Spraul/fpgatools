@@ -127,9 +127,39 @@ struct conn_printf_data
 static struct conn_printf_data s_conn_printf_buf[MAX_CONN_PRINTF_ENTRIES];
 static int s_conn_printf_entries;
 
-int sort_by_tile(const void* a, const void* b)
+int compare_with_number(const char* a, const char* b)
 {
 	int i, j, non_numeric_result, a_num, b_num;
+
+	for (i = 0; a[i] && (a[i] == b[i]); i++);
+	if (a[i] == b[i]) {
+		if (a[i]) fprintf(stderr, "Internal error in line %i\n", __LINE__);
+		return 0;
+	}
+	non_numeric_result = a[i] - b[i];
+
+	// go back to beginning of numeric section
+	while (i && a[i-1] >= '0' && a[i-1] <= '9')
+		i--;
+
+	// Are there only digits following in a?
+	for (j = i; a[j] && (a[j] >= '0' && a[j] <= '9'); j++);
+	if (j == i || a[j])
+		return non_numeric_result;
+
+	// Are there only digits following in b?
+	for (j = i; b[j] && (b[j] >= '0' && b[j] <= '9'); j++);
+	if (j == i || b[j])
+		return non_numeric_result;
+
+	a_num = strtol(&a[i], 0 /* endptr */, 10);
+	b_num = strtol(&b[i], 0 /* endptr */, 10);
+	return a_num - b_num;
+}
+
+int sort_by_tile(const void* a, const void* b)
+{
+	int i, rc;
 
 	struct conn_printf_data* _a = (struct conn_printf_data*) a;
 	struct conn_printf_data* _b = (struct conn_printf_data*) b;
@@ -147,46 +177,11 @@ int sort_by_tile(const void* a, const void* b)
 	if (_a->dest_y != _b->dest_y)
 		return _a->dest_y - _b->dest_y;
 	if (_a->num_combined_wires != _b->num_combined_wires)
-		return _a->num_combined_wires - _b->num_combined_wires;
-	for (i = 0; _a->src_conn_point[i]; i++) {
-		if (_b->src_conn_point[i] != _a->src_conn_point[i]) {
-			non_numeric_result = _a->src_conn_point[i] - _b->src_conn_point[i];
+		return _b->num_combined_wires - _a->num_combined_wires;
 
-			if (_a->src_conn_point[i] < '0' || _a->src_conn_point[i] > '9'
-			    || _b->src_conn_point[i] < '0' || _b->src_conn_point[i] > '9')
-				return non_numeric_result;
+	rc = compare_with_number(_a->src_conn_point, _b->src_conn_point);
+	if (rc) return rc;
 
-			// go back to beginning of numeric section
-			while (i && _a->src_conn_point[i-1] >= '0' && _a->src_conn_point[i-1] <= '9')
-				i--;
-			if (!i) {
-				fprintf(stderr, "Error in line %i, a %s b %s\n", __LINE__, _a->src_conn_point, _b->src_conn_point);
-				return non_numeric_result;
-			}
-
-			// Are there only digits following in a?
-			for (j = i; _a->src_conn_point[j]; j++) {
-				if (_a->src_conn_point[j] < '0'
-					|| _a->src_conn_point[j] > '9')
-					break;
-			}
-			if (_a->src_conn_point[j])
-				return non_numeric_result;
-
-			// Are there only digits following in b?
-			for (j = i; _b->src_conn_point[j]; j++) {
-				if (_b->src_conn_point[j] < '0'
-					|| _b->src_conn_point[j] > '9')
-					break;
-			}
-			if (_b->src_conn_point[j])
-				return non_numeric_result;
-
-			a_num = strtol(&_a->src_conn_point[i], 0 /* endptr */, 10);
-			b_num = strtol(&_b->src_conn_point[i], 0 /* endptr */, 10);
-			return a_num - b_num;
-		}
-	}
 	// following is a special version of strcmp(_a->dest_conn_point, _b->dest_conn_point)
 	// to push '_' before digits.
 	for (i = 0; _a->dest_conn_point[i]; i++) {
@@ -203,7 +198,7 @@ int sort_by_tile(const void* a, const void* b)
 			return _a->dest_conn_point[i] - _b->dest_conn_point[i];
 		}
 	}
-	return 0;
+	return _a->dest_conn_point[i] - _b->dest_conn_point[i];
 }
 
 int find_last_wire_digit(const char* wire_str, int* start_o, int* end_o, int* num)
