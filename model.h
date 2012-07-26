@@ -141,6 +141,11 @@ enum fpga_tile_type
 #define TF_BRAM_COL			0x00010000
 #define TF_BRAM_DEVICE			0x00020000
 #define TF_MACC_DEVICE			0x00040000
+#define TF_LOGIC_XL_DEVICE		0x00080000
+#define TF_LOGIC_XM_DEVICE		0x00100000
+#define TF_IOLOGIC_DELAY_DEV		0x00200000
+
+#define SWITCH_BIDIRECTIONAL		0x40000000
 
 struct fpga_tile
 {
@@ -151,28 +156,28 @@ struct fpga_tile
 	int num_devices;
 	struct fpga_device* devices;
 
-	// expect up to 5k connection names per tile
+	// expect up to 5k connection point names per tile
 	// 2*16 bit per entry
-	//   - index into conns (not multiplied by 3) (16bit)
+	//   - index into conn_point_dests (not multiplied by 3) (16bit)
 	//   - hashed string array index (16 bit)
-	int num_conn_names; // conn_names is 2*num_conn_names 16-bit words
-	uint16_t* conn_names; // num_conn_names*2 16-bit-words: 16(conn)-16(str)
+	int num_conn_point_names; // conn_point_names is 2*num_conn_point_names 16-bit words
+	uint16_t* conn_point_names; // num_conn_point_names*2 16-bit-words: 16(conn)-16(str)
 
-	// expect up to 28k connections to other tiles per tile
-	// 3*16 bit per connection:
+	// expect up to 28k connection point destinations to other tiles per tile
+	// 3*16 bit per destination:
 	//   - x coordinate of other tile (16bit)
 	//   - y coordinate of other tile (16bit)
-	//   - hashed string array index for conn_names name in other tile (16bit)
-	int num_conns; // conns array is 3*num_conns 16-bit words
-	uint16_t* conns; // num_conns*3 16-bit words: 16(x)-16(y)-16(conn_name)
+	//   - hashed string array index for conn_point_names name in other tile (16bit)
+	int num_conn_point_dests; // conn_point_dests array is 3*num_conn_point_dests 16-bit words
+	uint16_t* conn_point_dests; // num_conn_point_dests*3 16-bit words: 16(x)-16(y)-16(conn_name)
 
-	// expect up to 4k connection pairs per tile
-	// 32bit: 31    off: not in use      on: used
+	// expect up to 4k switches per tile
+	// 32bit: 31    off: no connection   on: connected
 	//        30    off: unidirectional  on: bidirectional
-	//        29:15 from, index into conn_names
-	//        14:0  to, index into conn_names
-	int num_connect_pairs;
-	uint32_t* connect_pairs;
+	//        29:15 from, index into conn_point_names
+	//        14:0  to, index into conn_point_names
+	int num_switches;
+	uint32_t* switches;
 };
 
 int fpga_build_model(struct fpga_model* model,
