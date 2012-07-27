@@ -208,7 +208,7 @@ const char* wpref(struct fpga_model* model, int y, int x, const char* wire_name)
 	char* prefix;
 
 	if (is_aty(Y_CHIP_HORIZ_REGS, model, y)) {
-		prefix = model->tiles[x+3].flags & TF_CHIP_VERT_REGS
+		prefix = is_atx(X_CHIP_VERT_REGS, model, x+3)
 			? "REGC_INT_" : "REGH_";
 	} else if (is_aty(Y_ROW_HORIZ_AXSYMM, model, y))
 		prefix = "HCLK_";
@@ -315,7 +315,7 @@ int add_conn_uni(struct fpga_model* model, int y1, int x1, const char* name1, in
 	return 0;
 }
 
-typedef int (*add_conn_bi_f)(struct fpga_model* model, int y1, int x1, const char* name1, int y2, int x2, const char* name2);
+typedef int (*add_conn_f)(struct fpga_model* model, int y1, int x1, const char* name1, int y2, int x2, const char* name2);
 #define NOPREF_BI_F	add_conn_bi
 #define PREF_BI_F	add_conn_bi_pref
 #define NOPREF_UNI_F	add_conn_uni
@@ -342,17 +342,17 @@ int add_conn_bi_pref(struct fpga_model* model, int y1, int x1, const char* name1
 		y2, x2, wpref(model, y2, x2, name2));
 }
 
-int add_conn_range(struct fpga_model* model, add_conn_bi_f add_conn_f, int y1, int x1, const char* name1, int start1, int last1, int y2, int x2, const char* name2, int start2)
+int add_conn_range(struct fpga_model* model, add_conn_f add_conn_func, int y1, int x1, const char* name1, int start1, int last1, int y2, int x2, const char* name2, int start2)
 {
 	char buf1[128], buf2[128];
 	int rc, i;
 
 	if (last1 <= start1)
-		return (*add_conn_f)(model, y1, x1, name1, y2, x2, name2);
+		return (*add_conn_func)(model, y1, x1, name1, y2, x2, name2);
 	for (i = start1; i <= last1; i++) {
 		snprintf(buf1, sizeof(buf1), name1, i);
 		snprintf(buf2, sizeof(buf2), name2, start2+(i-start1));
-		rc = (*add_conn_f)(model, y1, x1, buf1, y2, x2, buf2);
+		rc = (*add_conn_func)(model, y1, x1, buf1, y2, x2, buf2);
 		if (rc) return rc;
 	}
 	return 0;
@@ -372,16 +372,16 @@ struct w_net
 	// the %i in the name from 0:last_inc, for a total
 	// of last_inc+1 wires.
 	int last_inc;
-	struct w_point pts[8];
+	struct w_point pts[22];
 };
 
-int add_conn_net(struct fpga_model* model, struct w_net* net)
+int add_conn_net(struct fpga_model* model, add_conn_f add_conn_func, struct w_net* net)
 {
 	int i, j, rc;
 
 	for (i = 0; net->pts[i].name[0] && i < sizeof(net->pts)/sizeof(net->pts[0]); i++) {
 		for (j = i+1; net->pts[j].name[0] && j < sizeof(net->pts)/sizeof(net->pts[0]); j++) {
-			rc = add_conn_range(model, PREF_BI_F,
+			rc = add_conn_range(model, add_conn_func,
 				net->pts[i].y, net->pts[i].x,
 				net->pts[i].name,
 				net->pts[i].start_count,
@@ -401,9 +401,97 @@ int run_wires(struct fpga_model* model)
 {
 	struct fpga_tile* tile;
 	char buf[128];
-	int x, y, i, rc;
+	int x, y, i, rc, row, row_top_y, is_break;
 
 	rc = -1;
+	// GCLK
+	{
+		struct w_net gclk_net;
+		int next_net_o;
+
+		for (row = model->cfg_rows-1; row >= 0; row--) {
+			row_top_y = TOP_IO_TILES + (model->cfg_rows-1-row)*(8+1/* middle of row */+8);
+			if (row < (model->cfg_rows/2)) row_top_y++; // center regs
+
+			gclk_net.last_inc = 15;
+			next_net_o = 0;
+			for (x = LEFT_IO_ROUTING;; x++) {
+				if (next_net_o+2 > sizeof(gclk_net.pts) / sizeof(gclk_net.pts[0])) {
+					fprintf(stderr, "Internal error in line %i\n", __LINE__);
+					goto xout;
+				}
+				gclk_net.pts[next_net_o].x = x;
+				if (is_atx(X_ROUTING_COL, model, x)) {
+					gclk_net.pts[next_net_o++].name = "HCLK_GCLK%i_INT";
+				} else if (is_atx(X_LOGIC_COL, model, x)) {
+					gclk_net.pts[next_net_o++].name = "HCLK_GCLK%i_CLB";
+				} else if (is_atx(X_FABRIC_BRAM_MACC_ROUTING_COL, model, x)) {
+					gclk_net.pts[next_net_o++].name = "HCLK_GCLK%i_BRAM_INTER";
+				} else if (is_atx(X_FABRIC_BRAM_COL, model, x)) {
+					gclk_net.pts[next_net_o++].name = "HCLK_GCLK%i_BRAM";
+				} else if (is_atx(X_FABRIC_MACC_COL, model, x)) {
+					gclk_net.pts[next_net_o++].name = "HCLK_GCLK%i_DSP";
+				} else if (is_atx(X_CHIP_VERT_REGS, model, x)) {
+					gclk_net.pts[next_net_o++].name = "CLKV_BUFH_LEFT_L%i";
+					break;
+				}
+				if (x >= model->tile_x_range) {
+					fprintf(stderr, "Internal error in line %i\n", __LINE__);
+					goto xout;
+				}
+			}
+			for (i = 0; i < next_net_o; i++) {
+				gclk_net.pts[i].start_count = 0;
+				gclk_net.pts[i].y = row_top_y+8;
+			}
+			gclk_net.pts[next_net_o].name = "";
+			if ((rc = add_conn_net(model, NOPREF_BI_F, &gclk_net))) goto xout;
+		}
+		for (x = 0; x < model->tile_x_range; x++) {
+			if (is_atx(X_ROUTING_COL, model, x)) {
+				for (row = model->cfg_rows-1; row >= 0; row--) {
+					row_top_y = 2 /* top IO */ + (model->cfg_rows-1-row)*(8+1/* middle of row */+8);
+					if (row < (model->cfg_rows/2)) row_top_y++; // center regs
+
+					is_break = 0;
+					if (model->tiles[x].flags & TF_FABRIC_ROUTING_COL) {
+						if (row)
+							is_break = 1;
+						else if (is_atx(X_ROUTING_TO_BRAM_COL|X_ROUTING_TO_MACC_COL, model, x))
+							is_break = 1;
+					} else if (row && row != model->cfg_rows/2)
+						is_break = 1;
+
+					// net inside row
+					for (i = 0; i < 8; i++) {
+						gclk_net.pts[i].name = "GCLK%i";
+						gclk_net.pts[i].start_count = 0;
+						gclk_net.pts[i].y = row_top_y+i;
+						gclk_net.pts[i].x = x;
+					}
+					gclk_net.last_inc = 15;
+					gclk_net.pts[8].name = "";
+					if ((rc = add_conn_net(model, NOPREF_BI_F, &gclk_net))) goto xout;
+					for (i = 0; i < 8; i++)
+						gclk_net.pts[i].y += 9;
+					if (is_break)
+						gclk_net.pts[7].name = "GCLK%i_BRK";
+					if ((rc = add_conn_net(model, NOPREF_BI_F, &gclk_net))) goto xout;
+	
+					// connection to hclk
+					for (i = 0; i < 8; i++) {
+						if ((rc = add_conn_range(model, NOPREF_BI_F,
+							row_top_y+i, x, "GCLK%i",  0, 15,
+							row_top_y+8, x, "HCLK_GCLK_UP%i", 0))) goto xout;
+						if ((rc = add_conn_range(model, NOPREF_BI_F,
+							row_top_y+9+i, x, (i == 7 && is_break) ? "GCLK%i_BRK" : "GCLK%i", 0, 15,
+							row_top_y+8, x, "HCLK_GCLK%i", 0))) goto xout;
+					}
+				}
+			}
+		}
+	}
+
 	for (y = 0; y < model->tile_y_range; y++) {
 		for (x = 0; x < model->tile_x_range; x++) {
 			tile = &model->tiles[y * model->tile_x_range + x];
@@ -434,7 +522,7 @@ int run_wires(struct fpga_model* model)
 						if ((rc = add_conn_bi_pref(model, y, x, pf("LOGICIN%i", north_p[i]), y-2, x, pf("LOGICIN_N%i", north_p[i])))) goto xout;
 						if ((rc = add_conn_bi_pref(model, y-1, x, pf("LOGICIN_N%i", north_p[i]), y-2, x, pf("LOGICIN_N%i", north_p[i])))) goto xout;
 					}
-					if (is_aty(Y_INNER_BOTTOM, model, y+1) && !(tile->flags & TF_BRAM_COL)) {
+					if (is_aty(Y_INNER_BOTTOM, model, y+1) && !is_atx(X_ROUTING_TO_BRAM_COL, model, x)) {
 						if ((rc = add_conn_bi_pref(model, y, x, pf("LOGICIN_N%i", north_p[i]), y+1, x, pf("LOGICIN_N%i", north_p[i])))) goto xout;
 					}
 				}
@@ -447,7 +535,7 @@ int run_wires(struct fpga_model* model)
 						if ((rc = add_conn_bi_pref(model,   y, x, pf("LOGICIN%i", south_p[i]), y+2, x, pf("LOGICIN_S%i", south_p[i])))) goto xout;
 						if ((rc = add_conn_bi_pref(model, y+1, x, pf("LOGICIN%i", south_p[i]), y+2, x, pf("LOGICIN_S%i", south_p[i])))) goto xout;
 					} else if (is_aty(Y_INNER_BOTTOM, model, y+1)) {
-						if (!(tile->flags & TF_BRAM_COL))
+						if (!is_atx(X_ROUTING_TO_BRAM_COL, model, x))
 							if ((rc = add_conn_bi_pref(model, y, x, pf("LOGICIN%i", south_p[i]), y+1, x, pf("LOGICIN%i", south_p[i])))) goto xout;
 					} else {
 						if ((rc = add_conn_bi_pref(model, y, x, pf("LOGICIN%i", south_p[i]), y+1, x, pf("LOGICIN_S%i", south_p[i])))) goto xout;
@@ -468,7 +556,7 @@ int run_wires(struct fpga_model* model)
 					if ((rc = add_conn_range(model, NOPREF_BI_F, y, x, "LOGICIN_B%i", 5, 9, y, x+1, "IOI_LOGICINB%i", 5))) goto xout;
 					if ((rc = add_conn_range(model, NOPREF_BI_F, y, x, "LOGICIN_B%i", 11, 62, y, x+1, "IOI_LOGICINB%i", 11))) goto xout;
 				}
-				if (tile->flags & TF_BRAM_COL) {
+				if (is_atx(X_ROUTING_TO_BRAM_COL, model, x)) {
 					if ((rc = add_conn_range(model, NOPREF_BI_F, y, x, "LOGICIN_B%i", 0, 62, y, x+1, "INT_INTERFACE_LOGICBIN%i", 0))) goto xout;
 					if (tile[2].flags & TF_BRAM_DEV) {
 						for (i = 0; i < 4; i++) {
@@ -478,7 +566,7 @@ int run_wires(struct fpga_model* model)
 						}
 					}
 				}
-				if (tile->flags & TF_MACC_COL) {
+				if (is_atx(X_ROUTING_TO_MACC_COL, model, x)) {
 					if ((rc = add_conn_range(model, NOPREF_BI_F, y, x, "LOGICIN_B%i", 0, 62, y, x+1, "INT_INTERFACE_LOGICBIN%i", 0))) goto xout;
 					if (tile[2].flags & TF_MACC_DEV) {
 						for (i = 0; i < 4; i++) {
@@ -534,7 +622,7 @@ int run_wires(struct fpga_model* model)
 						{{ "NR1B%i", 0,   y, x },
 						 { "NR1B%i", 0, y-1, x },
 						 { "" }}};
-					if ((rc = add_conn_net(model, &net))) goto xout; }
+					if ((rc = add_conn_net(model, PREF_BI_F, &net))) goto xout; }
 				} else if (is_aty(Y_ROW_HORIZ_AXSYMM|Y_CHIP_HORIZ_REGS, model, y-1)) {
 					{ struct w_net net = {
 						3,
@@ -542,21 +630,21 @@ int run_wires(struct fpga_model* model)
 						 { "NR1E%i", 0, y-1, x },
 						 { "NR1E%i", 0, y-2, x },
 						 { "" }}};
-					if ((rc = add_conn_net(model, &net))) goto xout; }
+					if ((rc = add_conn_net(model, PREF_BI_F, &net))) goto xout; }
 				} else {
 					{ struct w_net net = {
 						3,
 						{{ "NR1B%i", 0,   y, x },
 						 { "NR1E%i", 0, y-1, x },
 						 { "" }}};
-					if ((rc = add_conn_net(model, &net))) goto xout; }
-					if (tile->flags & TF_MACC_COL && is_aty(Y_INNER_BOTTOM, model, y+1)) {
+					if ((rc = add_conn_net(model, PREF_BI_F, &net))) goto xout; }
+					if (is_aty(Y_INNER_BOTTOM, model, y+1) && !is_atx(X_ROUTING_TO_BRAM_COL, model, x)) {
 						{ struct w_net net = {
 							3,
 							{{ "NR1E%i", 0,   y, x },
 							 { "NR1E%i", 0, y+1, x },
 							 { "" }}};
-						if ((rc = add_conn_net(model, &net))) goto xout; }
+						if ((rc = add_conn_net(model, PREF_BI_F, &net))) goto xout; }
 					}
 				}
 			}
@@ -569,13 +657,13 @@ int run_wires(struct fpga_model* model)
 						{{ "NN2B%i", 0,   y, x },
 						 { "NN2B%i", 0, y-1, x },
 						 { "" }}};
-					if ((rc = add_conn_net(model, &net))) goto xout; }
+					if ((rc = add_conn_net(model, PREF_BI_F, &net))) goto xout; }
 					{ struct w_net net = {
 						0,
 						{{ "NN2E_S0", 0,   y, x },
 						 { "NN2E_S0", 0, y-1, x },
 						 { "" }}};
-					if ((rc = add_conn_net(model, &net))) goto xout; }
+					if ((rc = add_conn_net(model, PREF_BI_F, &net))) goto xout; }
 				} else if (is_aty(Y_INNER_TOP, model, y-2)) {
 					{ struct w_net net = {
 						3,
@@ -583,7 +671,7 @@ int run_wires(struct fpga_model* model)
 						 { "NN2M%i", 0, y-1, x },
 						 { "NN2M%i", 0, y-2, x },
 						 { "" }}};
-					if ((rc = add_conn_net(model, &net))) goto xout; }
+					if ((rc = add_conn_net(model, PREF_BI_F, &net))) goto xout; }
 				} else if (is_aty(Y_ROW_HORIZ_AXSYMM|Y_CHIP_HORIZ_REGS, model, y-1)) {
 					{ struct w_net net = {
 						3,
@@ -592,7 +680,7 @@ int run_wires(struct fpga_model* model)
 						 { "NN2M%i", 0, y-2, x },
 						 { "NN2E%i", 0, y-3, x },
 						 { "" }}};
-					if ((rc = add_conn_net(model, &net))) goto xout; }
+					if ((rc = add_conn_net(model, PREF_BI_F, &net))) goto xout; }
 					if ((rc = add_conn_bi_pref(model, y-1, x, "NN2M0", y-2, x, "NN2E_S0"))) goto xout;
 					if ((rc = add_conn_bi_pref(model, y-3, x, "NN2E0", y-2, x, "NN2E_S0"))) goto xout;
 					if ((rc = add_conn_bi_pref(model,   y, x, "NN2B0", y-2, x, "NN2E_S0"))) goto xout;
@@ -604,7 +692,7 @@ int run_wires(struct fpga_model* model)
 						 { "NN2E%i", 0, y-2, x },
 						 { "NN2E%i", 0, y-3, x },
 						 { "" }}};
-					if ((rc = add_conn_net(model, &net))) goto xout; }
+					if ((rc = add_conn_net(model, PREF_BI_F, &net))) goto xout; }
 					if ((rc = add_conn_bi_pref(model,   y, x, "NN2B0", y-1, x, "NN2E_S0"))) goto xout;
 					if ((rc = add_conn_bi_pref(model,   y, x, "NN2B0", y-2, x, "NN2E_S0"))) goto xout;
 					if ((rc = add_conn_bi_pref(model, y-2, x, "NN2E0",   y-1, x, "NN2E_S0"))) goto xout;
@@ -619,12 +707,20 @@ int run_wires(struct fpga_model* model)
 						 { "NN2M%i", 0, y-1, x },
 						 { "NN2E%i", 0, y-2, x },
 						 { "" }}};
-					if ((rc = add_conn_net(model, &net))) goto xout; }
+					if ((rc = add_conn_net(model, PREF_BI_F, &net))) goto xout; }
 					if ((rc = add_conn_bi(model,   y, x, "NN2B0", y-1, x, "NN2E_S0"))) goto xout;
 					if ((rc = add_conn_bi(model, y-2, x, "NN2E0", y-1, x, "NN2E_S0"))) goto xout;
 					if (is_aty(Y_INNER_BOTTOM, model, y+1)) {
 						if ((rc = add_conn_bi(model, y, x, "NN2E_S0", y-1, x, "NN2E0"))) goto xout;
-						if (!(tile->flags & TF_BRAM_COL)) {
+						if (!is_atx(X_ROUTING_TO_BRAM_COL, model, x)) {
+							{ struct w_net net = {
+								3,
+								{{ "NN2E%i", 0, y-1, x },
+								 { "NN2M%i", 0,   y, x },
+								 { "NN2M%i", 0, y+1, x },
+								 { "" }}};
+							if ((rc = add_conn_net(model, PREF_BI_F, &net))) goto xout; }
+							if ((rc = add_conn_range(model, PREF_BI_F, y, x, "NN2E%i", 0, 3, y+1, x, "NN2E%i", 0))) goto xout;
 							if ((rc = add_conn_bi(model, y, x, "NN2E0", y+1, x, "IOI_BTERM_NN2E_S0"))) goto xout;
 							if ((rc = add_conn_bi(model, y, x, "NN2E_S0", y+1, x, "IOI_BTERM_NN2M0"))) goto xout;
 						}
@@ -642,7 +738,7 @@ int run_wires(struct fpga_model* model)
 						 { "SS2M%i", 0, y+2, x },
 						 { "SS2E%i", 0, y+3, x },
 						 { "" }}};
-					if ((rc = add_conn_net(model, &net))) goto xout; }
+					if ((rc = add_conn_net(model, PREF_BI_F, &net))) goto xout; }
 					if ((rc = add_conn_bi_pref(model,   y, x, "SS2B3",   y+1, x, "SS2E_N3"))) goto xout;
 					if ((rc = add_conn_bi_pref(model, y+1, x, "SS2E_N3", y+2, x, "SS2E_N3"))) goto xout;
 
@@ -661,21 +757,21 @@ int run_wires(struct fpga_model* model)
 						 { "SS2M%i", 0, y+2, x },
 						 { "SS2E%i", 0, y+3, x },
 						 { "" }}};
-					if ((rc = add_conn_net(model, &net))) goto xout; }
+					if ((rc = add_conn_net(model, PREF_BI_F, &net))) goto xout; }
 					if ((rc = add_conn_bi_pref(model,   y, x, "SS2B3",   y+2, x, "SS2E_N3"))) goto xout;
 					if ((rc = add_conn_bi_pref(model, y+2, x, "SS2E_N3", y+3, x, "SS2E3"))) goto xout;
 				} else if (is_aty(Y_INNER_BOTTOM, model, y+2)) {
-					if (!(tile->flags & TF_BRAM_COL)) {
+					if (!is_atx(X_ROUTING_TO_BRAM_COL, model, x)) {
 						{ struct w_net net = {
 							3,
 							{{ "SS2B%i", 0,   y, x },
 							 { "SS2M%i", 0, y+1, x },
 							 { "SS2M%i", 0, y+2, x },
 							 { "" }}};
-						if ((rc = add_conn_net(model, &net))) goto xout; }
+						if ((rc = add_conn_net(model, PREF_BI_F, &net))) goto xout; }
 					}
 				} else if (is_aty(Y_INNER_BOTTOM, model, y+1)) {
-					if (!(tile->flags & TF_BRAM_COL)) {
+					if (!is_atx(X_ROUTING_TO_BRAM_COL, model, x)) {
 						if ((rc = add_conn_range(model, PREF_BI_F,   y, x, "SS2B%i", 0, 3, y+1, x, "SS2B%i", 0))) goto xout;
 						if ((rc = add_conn_bi_pref(model,   y, x, "SS2E_N3", y+1, x, "SS2E_N3"))) goto xout;
 					}
@@ -687,7 +783,7 @@ int run_wires(struct fpga_model* model)
 							 { "SS2M%i", 0,   y, x },
 							 { "SS2E%i", 0, y+1, x },
 							 { "" }}};
-						if ((rc = add_conn_net(model, &net))) goto xout; }
+						if ((rc = add_conn_net(model, PREF_BI_F, &net))) goto xout; }
 						if ((rc = add_conn_range(model, PREF_BI_F,   y, x, "SS2E%i", 0, 3, y-1, x, "SS2E%i", 0))) goto xout;
 						if ((rc = add_conn_bi_pref(model,   y, x, "SS2E3",   y-1, x, "SS2E_N3"))) goto xout;
 						if ((rc = add_conn_bi_pref(model,   y, x, "SS2E_N3", y-1, x, "SS2M3"))) goto xout;
@@ -699,7 +795,7 @@ int run_wires(struct fpga_model* model)
 						 { "SS2M%i", 0, y+1, x },
 						 { "SS2E%i", 0, y+2, x },
 						 { "" }}};
-					if ((rc = add_conn_net(model, &net))) goto xout; }
+					if ((rc = add_conn_net(model, PREF_BI_F, &net))) goto xout; }
 					if ((rc = add_conn_bi_pref(model,   y, x, "SS2B3",   y+1, x, "SS2E_N3"))) goto xout;
 					if ((rc = add_conn_bi_pref(model, y+1, x, "SS2E_N3", y+2, x, "SS2E3"))) goto xout;
 				}
@@ -752,7 +848,8 @@ int init_tiles(struct fpga_model* model)
 			case 'l':
 			case 'M':
 			case 'm':
-				model->tiles[i].flags |= TF_ROUTING_FABRIC_COL;
+				model->tiles[i].flags |= TF_FABRIC_ROUTING_COL;
+				model->tiles[i+1].flags |= TF_FABRIC_LOGIC_COL;
 				for (k = model->cfg_rows-1; k >= 0; k--) {
 					row_top_y = 2 /* top IO tiles */ + (model->cfg_rows-1-k)*(8+1/*middle of row clock*/+8);
 					if (k<(model->cfg_rows/2)) row_top_y++; // middle system tiles (center row)
@@ -818,7 +915,7 @@ int init_tiles(struct fpga_model* model)
 					model->tiles[(tile_rows-4)*tile_columns + i + 1].type = IO_INNER_B;
 					model->tiles[(tile_rows-4)*tile_columns + i + 1].flags |= TF_IOLOGIC_DELAY_DEV;
 					model->tiles[(tile_rows-3)*tile_columns + i + 1].type = IO_OUTER_B;
-					model->tiles[(tile_rows-3)*tile_columns + i + 1].flags |= TF_IOLOGIC_DELAY_DEV;;
+					model->tiles[(tile_rows-3)*tile_columns + i + 1].flags |= TF_IOLOGIC_DELAY_DEV;
 				}
 
 				if (model->cfg_columns[j] == 'L' || model->cfg_columns[j] == 'l') {
@@ -831,15 +928,14 @@ int init_tiles(struct fpga_model* model)
 				i += 2;
 				break;
 			case 'B':
-				model->tiles[i].flags |= TF_ROUTING_FABRIC_COL;
+				model->tiles[i].flags |= TF_FABRIC_ROUTING_COL;
+				model->tiles[i+1].flags |= TF_FABRIC_BRAM_MACC_ROUTING_COL;
+				model->tiles[i+2].flags |= TF_FABRIC_BRAM_COL;
 				for (k = model->cfg_rows-1; k >= 0; k--) {
 					row_top_y = 2 /* top IO tiles */ + (model->cfg_rows-1-k)*(8+1/*middle of row clock*/+8);
 					if (k<(model->cfg_rows/2)) row_top_y++; // middle system tiles
 					for (l = 0; l < 16; l++) {
 						tile_i0 = &model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + i];
-						tile_i0->flags |= TF_BRAM_COL;
-						tile_i0[1].flags |= TF_BRAM_COL;
-						tile_i0[2].flags |= TF_BRAM_COL;
 						if (l < 15)
 							tile_i0->type = BRAM_ROUTING;
 						else
@@ -868,15 +964,14 @@ int init_tiles(struct fpga_model* model)
 				i += 3;
 				break;
 			case 'D':
-				model->tiles[i].flags |= TF_ROUTING_FABRIC_COL;
+				model->tiles[i].flags |= TF_FABRIC_ROUTING_COL;
+				model->tiles[i+1].flags |= TF_FABRIC_BRAM_MACC_ROUTING_COL;
+				model->tiles[i+2].flags |= TF_FABRIC_MACC_COL;
 				for (k = model->cfg_rows-1; k >= 0; k--) {
 					row_top_y = 2 /* top IO tiles */ + (model->cfg_rows-1-k)*(8+1/*middle of row clock*/+8);
 					if (k<(model->cfg_rows/2)) row_top_y++; // middle system tiles
 					for (l = 0; l < 16; l++) {
 						tile_i0 = &model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + i];
-						tile_i0->flags |= TF_MACC_COL;
-						tile_i0[1].flags |= TF_MACC_COL;
-						tile_i0[2].flags |= TF_MACC_COL;
 						if (l < 15)
 							tile_i0->type = ROUTING;
 						else
@@ -911,8 +1006,9 @@ int init_tiles(struct fpga_model* model)
 					fprintf(stderr, "Expecting LOGIC_XM after center but found '%c'\n", model->cfg_columns[j+1]);
 				}
 
-				model->tiles[i].flags |= TF_ROUTING_FABRIC_COL;
-				model->tiles[i + 3].flags |= TF_CHIP_VERT_REGS;
+				model->tiles[i].flags |= TF_FABRIC_ROUTING_COL;
+				model->tiles[i+1].flags |= TF_FABRIC_LOGIC_COL;
+				model->tiles[i+3].flags |= TF_CHIP_VERT_REGS;
 
 				left_side = 0;
 				for (k = model->cfg_rows-1; k >= 0; k--) {
@@ -1266,6 +1362,23 @@ int is_atx(int check, struct fpga_model* model, int x)
 	if (check & X_INNER_LEFT && x == 1) return 1;
 	if (check & X_INNER_RIGHT && x == model->tile_x_range-2) return 1;
 	if (check & X_CHIP_VERT_REGS && model->tiles[x].flags & TF_CHIP_VERT_REGS) return 1;
+	if (check & X_ROUTING_COL
+	    && (model->tiles[x].flags & TF_FABRIC_ROUTING_COL
+	        || x == 2 || x == model->tile_x_range-5)) return 1;
+	if (model->tiles[x].flags & TF_FABRIC_ROUTING_COL) {
+		if (check & X_ROUTING_TO_BRAM_COL
+		    && model->tiles[x+1].flags & TF_FABRIC_BRAM_MACC_ROUTING_COL
+		    && model->tiles[x+2].flags & TF_FABRIC_BRAM_COL) return 1;
+		if (check & X_ROUTING_TO_MACC_COL
+		    && model->tiles[x+1].flags & TF_FABRIC_BRAM_MACC_ROUTING_COL
+		    && model->tiles[x+2].flags & TF_FABRIC_MACC_COL) return 1;
+	}
+	if (check & X_LOGIC_COL
+	    && (model->tiles[x].flags & TF_FABRIC_LOGIC_COL
+	        || x == 3)) return 1;
+	if (check & X_FABRIC_BRAM_MACC_ROUTING_COL && model->tiles[x].flags & TF_FABRIC_BRAM_MACC_ROUTING_COL) return 1;
+	if (check & X_FABRIC_BRAM_COL && model->tiles[x].flags & TF_FABRIC_BRAM_COL) return 1;
+	if (check & X_FABRIC_MACC_COL && model->tiles[x].flags & TF_FABRIC_MACC_COL) return 1;
 	return 0;
 }
 
@@ -1273,7 +1386,7 @@ int is_atyx(int check, struct fpga_model* model, int y, int x)
 {
 	if (y < 0 || x < 0) return 0;
 	if (check & YX_ROUTING_TILE
-	    && (model->tiles[x].flags & TF_ROUTING_FABRIC_COL
+	    && (model->tiles[x].flags & TF_FABRIC_ROUTING_COL
 	        || x == 2 || x == model->tile_x_range-5)) {
 		int row_pos;
 		if (is_in_row(model, y, &row_pos) && row_pos != 8) return 1;

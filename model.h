@@ -120,19 +120,25 @@ enum fpga_tile_type
 	HCLK_IO_BOT_DN_L, HCLK_IO_BOT_DN_R,
 };
 
+// Some constant to make the core more readable
+#define LEFT_IO_ROUTING 2
+#define TOP_IO_TILES	2
+
 // tile flags
 
-#define TF_CHIP_VERT_REGS		0x00000001 // only set for y==0
-#define TF_ROUTING_FABRIC_COL		0x00000002 // only set for y==0, not for left and right IO routing
-#define TF_MACC_COL			0x00000004
-#define TF_BRAM_COL			0x00000008
-#define TF_BRAM_DEV			0x00000010
-#define TF_MACC_DEV			0x00000020
-#define TF_LOGIC_XL_DEV			0x00000040
-#define TF_LOGIC_XM_DEV			0x00000080
-#define TF_IOLOGIC_DELAY_DEV		0x00000100
-#define TF_DCM_DEV			0x00000200
-#define TF_PLL_DEV			0x00000400
+#define TF_CHIP_VERT_REGS		0x00000001 // only set in y==0
+#define TF_FABRIC_ROUTING_COL		0x00000002 // only set in y==0, not for left and right IO routing
+#define TF_FABRIC_LOGIC_COL		0x00000004 // only set in y==0
+#define TF_FABRIC_BRAM_MACC_ROUTING_COL	0x00000008 // only set in y==0
+#define TF_FABRIC_BRAM_COL		0x00000010 // only set in y==0
+#define TF_FABRIC_MACC_COL		0x00000020 // only set in y==0
+#define TF_BRAM_DEV			0x00000040
+#define TF_MACC_DEV			0x00000080
+#define TF_LOGIC_XL_DEV			0x00000100
+#define TF_LOGIC_XM_DEV			0x00000200
+#define TF_IOLOGIC_DELAY_DEV		0x00000400
+#define TF_DCM_DEV			0x00000800
+#define TF_PLL_DEV			0x00001000
 
 #define Y_INNER_TOP		0x0001
 #define Y_INNER_BOTTOM		0x0002
@@ -143,14 +149,21 @@ enum fpga_tile_type
 // multiple checks are combined with OR logic
 int is_aty(int check, struct fpga_model* model, int y);
 
-#define X_INNER_LEFT		0x0001
-#define X_INNER_RIGHT		0x0002
-#define X_CHIP_VERT_REGS	0x0004
+#define X_INNER_LEFT			0x0001
+#define X_INNER_RIGHT			0x0002
+#define X_CHIP_VERT_REGS		0x0004
+#define X_ROUTING_COL			0x0008 // includes routing col in left and right IO
+#define X_ROUTING_TO_BRAM_COL		0x0010
+#define X_ROUTING_TO_MACC_COL		0x0020
+#define X_LOGIC_COL			0x0040 // includes the logic col in left IO
+#define X_FABRIC_BRAM_MACC_ROUTING_COL	0x0080
+#define X_FABRIC_BRAM_COL		0x0100
+#define X_FABRIC_MACC_COL		0x0200
 
 // multiple checks are combined with OR logic
 int is_atx(int check, struct fpga_model* model, int x);
 
-// True for all tiles in routing columns and in the regular 0..15 row tiles.
+// True for all tiles that are in the regular 0..15 row tiles of a routing col
 #define YX_ROUTING_TILE		0x0001
 
 int is_atyx(int check, struct fpga_model* model, int y, int x);

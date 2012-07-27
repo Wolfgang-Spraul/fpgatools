@@ -26,13 +26,13 @@ helper.o: helper.c helper.h
 
 model.o: model.c model.h
 
-new_fp.o: new_fp.c model.h
+new_fp.o: new_fp.c model.h helper.h
 
 draw_svg_tiles.o: draw_svg_tiles.c model.h
 
 draw_svg_tiles: draw_svg_tiles.o model.o
 
-new_fp: new_fp.o model.o
+new_fp: new_fp.o model.o helper.o
 
 clean:
 		rm -f bit2txt bit2txt.o \

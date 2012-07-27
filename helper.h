@@ -69,3 +69,4 @@ void printf_extrabits(uint8_t* maj_bits, int start_minor, int num_minors,
 uint64_t read_lut64(uint8_t* two_minors, int off_in_frame);
 
 int get_vm_mb();
+int compare_with_number(const char* a, const char* b);

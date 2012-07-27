@@ -653,3 +653,33 @@ int get_vm_mb()
 	if (!vm_size) return 0;
 	return (vm_size+1023)/1024;
 }
+
+int compare_with_number(const char* a, const char* b)
+{
+	int i, a_i, b_i, non_numeric_result, a_num, b_num;
+
+	for (i = 0; a[i] && (a[i] == b[i]); i++);
+	if (a[i] == b[i]) {
+		if (a[i]) fprintf(stderr, "Internal error in line %i\n", __LINE__);
+		return 0;
+	}
+	non_numeric_result = a[i] - b[i];
+
+	// go back to beginning of numeric section
+	while (i && a[i-1] >= '0' && a[i-1] <= '9')
+		i--;
+
+	// go forward to first non-digit
+	for (a_i = i; a[a_i] >= '0' && a[a_i] <= '9'; a_i++ );
+	for (b_i = i; b[b_i] >= '0' && b[b_i] <= '9'; b_i++ );
+
+	// There must be at least one digit in both a and b
+	// and the suffix must match.
+	if (a_i <= i || b_i <= i
+	    || strcmp(&a[a_i], &b[b_i]))
+		return non_numeric_result;
+
+	a_num = strtol(&a[i], 0 /* endptr */, 10);
+	b_num = strtol(&b[i], 0 /* endptr */, 10);
+	return a_num - b_num;
+}

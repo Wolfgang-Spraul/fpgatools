@@ -13,6 +13,7 @@
 #include <sys/stat.h>
 
 #include "model.h"
+#include "helper.h"
 
 #define PRINT_FLAG(f)	if (tf & f) { printf (" %s", #f); tf &= ~f; }
 
@@ -82,8 +83,6 @@ int printf_tiles(struct fpga_model* model)
 				int tf = tile->flags;
 				printf(" flags");
 
-				PRINT_FLAG(TF_MACC_COL);
-				PRINT_FLAG(TF_BRAM_COL);
 				PRINT_FLAG(TF_LOGIC_XL_DEV);
 				PRINT_FLAG(TF_LOGIC_XM_DEV);
 				PRINT_FLAG(TF_IOLOGIC_DELAY_DEV);
@@ -109,36 +108,6 @@ struct conn_printf_data
 #define MAX_CONN_PRINTF_ENTRIES	40000
 static struct conn_printf_data s_conn_printf_buf[MAX_CONN_PRINTF_ENTRIES];
 static int s_conn_printf_entries;
-
-int compare_with_number(const char* a, const char* b)
-{
-	int i, j, non_numeric_result, a_num, b_num;
-
-	for (i = 0; a[i] && (a[i] == b[i]); i++);
-	if (a[i] == b[i]) {
-		if (a[i]) fprintf(stderr, "Internal error in line %i\n", __LINE__);
-		return 0;
-	}
-	non_numeric_result = a[i] - b[i];
-
-	// go back to beginning of numeric section
-	while (i && a[i-1] >= '0' && a[i-1] <= '9')
-		i--;
-
-	// Are there only digits following in a?
-	for (j = i; a[j] && (a[j] >= '0' && a[j] <= '9'); j++);
-	if (j == i || a[j])
-		return non_numeric_result;
-
-	// Are there only digits following in b?
-	for (j = i; b[j] && (b[j] >= '0' && b[j] <= '9'); j++);
-	if (j == i || b[j])
-		return non_numeric_result;
-
-	a_num = strtol(&a[i], 0 /* endptr */, 10);
-	b_num = strtol(&b[i], 0 /* endptr */, 10);
-	return a_num - b_num;
-}
 
 int sort_by_tile(const void* a, const void* b)
 {
