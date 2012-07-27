@@ -82,14 +82,10 @@ int printf_tiles(struct fpga_model* model)
 				int tf = tile->flags;
 				printf(" flags");
 
-				PRINT_FLAG(TF_ROW_HORIZ_AXSYMM);
-				PRINT_FLAG(TF_CHIP_HORIZ_AXSYMM);
-				PRINT_FLAG(TF_LOGIC_XL);
-				PRINT_FLAG(TF_LOGIC_XM);
 				PRINT_FLAG(TF_MACC_COL);
 				PRINT_FLAG(TF_BRAM_COL);
-				PRINT_FLAG(TF_LOGIC_XL_DEVICE);
-				PRINT_FLAG(TF_LOGIC_XM_DEVICE);
+				PRINT_FLAG(TF_LOGIC_XL_DEV);
+				PRINT_FLAG(TF_LOGIC_XM_DEV);
 				PRINT_FLAG(TF_IOLOGIC_DELAY_DEV);
 
 				if (tf)
