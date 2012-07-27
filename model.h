@@ -122,30 +122,44 @@ enum fpga_tile_type
 
 // tile flags
 
-#define TF_TOPMOST_TILE			0x00000001
-#define TF_BELOW_TOPMOST_TILE		0x00000002
-#define TF_ABOVE_BOTTOMMOST_TILE	0x00000004
-#define TF_BOTTOMMOST_TILE		0x00000008
-#define TF_ROW_HORIZ_AXSYMM		0x00000010
-#define TF_BOTTOM_OF_ROW		0x00000020
-#define TF_CHIP_HORIZ_AXSYMM		0x00000040
-#define TF_CHIP_HORIZ_AXSYMM_CENTER	0x00000080
-#define TF_CHIP_VERT_AXSYMM		0x00000100
-#define TF_VERT_ROUTING			0x00000200
-#define TF_LOGIC_XL			0x00000400
-#define TF_LOGIC_XM			0x00000800
-#define TF_CENTER			0x00001000
-#define TF_LEFT_IO			0x00002000
-#define TF_RIGHT_IO			0x00004000
+#define TF_ROW_HORIZ_AXSYMM		0x00000010 //x
+#define TF_CHIP_HORIZ_AXSYMM		0x00000040 //x
+#define TF_CHIP_VERT_REGS		0x00000100 // only set for y==0
+#define TF_LOGIC_XL			0x00000400 //?
+#define TF_LOGIC_XM			0x00000800 //?
 #define TF_MACC_COL			0x00008000
 #define TF_BRAM_COL			0x00010000
-#define TF_BRAM_DEVICE			0x00020000
-#define TF_MACC_DEVICE			0x00040000
+#define TF_BRAM_DEV			0x00020000
+#define TF_MACC_DEV			0x00040000
 #define TF_LOGIC_XL_DEVICE		0x00080000
 #define TF_LOGIC_XM_DEVICE		0x00100000
 #define TF_IOLOGIC_DELAY_DEV		0x00200000
 #define TF_DCM_DEV			0x00400000
 #define TF_PLL_DEV			0x00800000
+#define TF_ROUTING_FABRIC_COL		0x01000000
+
+#define Y_OUTER_TOP		0x0001 //?
+#define Y_INNER_TOP		0x0002
+#define Y_OUTER_BOTTOM		0x0004 //?
+#define Y_INNER_BOTTOM		0x0008
+#define Y_CHIP_HORIZ_REGS	0x0010
+#define Y_ROW_HORIZ_AXSYMM	0x0020
+#define Y_BOTTOM_OF_ROW		0x0040
+
+int is_aty(int check, struct fpga_model* model, int y);
+
+#define X_OUTER_LEFT		0x0001 //?
+#define X_INNER_LEFT		0x0002
+#define X_OUTER_RIGHT		0x0004 //?
+#define X_INNER_RIGHT		0x0008
+#define X_CHIP_VERT_REGS	0x0010
+
+int is_atx(int check, struct fpga_model* model, int x);
+
+// True for all tiles in routing columns and in the regular 0..15 row tiles.
+#define YX_ROUTING_TILE		0x0001
+
+int is_atyx(int check, struct fpga_model* model, int y, int x);
 
 #define SWITCH_BIDIRECTIONAL		0x40000000
 
