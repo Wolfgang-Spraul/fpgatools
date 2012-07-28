@@ -397,159 +397,35 @@ xout:
 	return rc;
 }
 
+struct seed_data
+{
+	int x_flags;
+	const char* str;
+};
+
+void seed_strx(struct fpga_model* model, struct seed_data* data)
+{
+	int x, i;
+	for (x = 0; x < model->tile_x_range; x++) {
+		model->tmp_str[x] = 0;
+		for (i = 0; data[i].x_flags; i++) {
+			if (is_atx(data[i].x_flags, model, x))
+				model->tmp_str[x] = data[i].str;
+		}
+	}
+}
+
+int run_gclk(struct fpga_model* model);
+int run_gclk_horiz_regs(struct fpga_model* model);
+
 int run_wires(struct fpga_model* model)
 {
 	struct fpga_tile* tile;
 	char buf[128];
-	int x, y, i, rc, row, row_top_y, is_break, left_half;
+	int x, y, i, rc;
 
-	rc = -1;
-	// GCLK
-	{
-		struct w_net gclk_net;
-		int next_net_o;
-
-		for (row = model->cfg_rows-1; row >= 0; row--) {
-			row_top_y = TOP_IO_TILES + (model->cfg_rows-1-row)*(8+1/* middle of row */+8);
-			if (row < (model->cfg_rows/2)) row_top_y++; // center regs
-
-			// net that connects the hclk of half the chip together horizontally
-			gclk_net.last_inc = 15;
-			next_net_o = 0;
-			for (x = LEFT_IO_ROUTING;; x++) {
-				if (next_net_o+2 > sizeof(gclk_net.pts) / sizeof(gclk_net.pts[0])) {
-					fprintf(stderr, "Internal error in line %i\n", __LINE__);
-					goto xout;
-				}
-				gclk_net.pts[next_net_o].x = x;
-				if (is_atx(X_ROUTING_COL, model, x)) {
-					gclk_net.pts[next_net_o++].name = "HCLK_GCLK%i_INT";
-				} else if (is_atx(X_LOGIC_COL|X_LEFT_IO_DEVS_COL, model, x)) {
-					gclk_net.pts[next_net_o++].name = "HCLK_GCLK%i_CLB";
-				} else if (is_atx(X_FABRIC_BRAM_MACC_ROUTING_COL, model, x)) {
-					gclk_net.pts[next_net_o++].name = "HCLK_GCLK%i_BRAM_INTER";
-				} else if (is_atx(X_FABRIC_BRAM_COL, model, x)) {
-					gclk_net.pts[next_net_o++].name = "HCLK_GCLK%i_BRAM";
-				} else if (is_atx(X_FABRIC_MACC_COL, model, x)) {
-					gclk_net.pts[next_net_o++].name = "HCLK_GCLK%i_DSP";
-				} else if (is_atx(X_CENTER_REGS_COL, model, x)) {
-					gclk_net.pts[next_net_o++].name = "CLKV_BUFH_LEFT_L%i";
-					break;
-				}
-				if (x >= model->tile_x_range) {
-					fprintf(stderr, "Internal error in line %i\n", __LINE__);
-					goto xout;
-				}
-			}
-			for (i = 0; i < next_net_o; i++) {
-				gclk_net.pts[i].start_count = 0;
-				gclk_net.pts[i].y = row_top_y+8;
-			}
-			gclk_net.pts[next_net_o].name = "";
-			if ((rc = add_conn_net(model, NOPREF_BI_F, &gclk_net))) goto xout;
-		}
-		for (x = 0; x < model->tile_x_range; x++) {
-			if (is_atx(X_ROUTING_COL, model, x)) {
-				for (row = model->cfg_rows-1; row >= 0; row--) {
-					row_top_y = 2 /* top IO */ + (model->cfg_rows-1-row)*(8+1/* middle of row */+8);
-					if (row < (model->cfg_rows/2)) row_top_y++; // center regs
-
-					is_break = 0;
- 					if (is_atx(X_LEFT_IO_ROUTING_COL|X_RIGHT_IO_ROUTING_COL, model, x)) {
-						if (row && row != model->cfg_rows/2)
-							is_break = 1;
-					} else {
-						if (row)
-							is_break = 1;
-						else if (is_atx(X_ROUTING_TO_BRAM_COL|X_ROUTING_TO_MACC_COL, model, x))
-							is_break = 1;
-					}
-
-					// vertical net inside row, pulling together 16 gclk
-					// wires across top (8 tiles) and bottom (8 tiles) half
-					// of the row.
-					for (i = 0; i < 8; i++) {
-						gclk_net.pts[i].name = "GCLK%i";
-						gclk_net.pts[i].start_count = 0;
-						gclk_net.pts[i].y = row_top_y+i;
-						gclk_net.pts[i].x = x;
-					}
-					gclk_net.last_inc = 15;
-					gclk_net.pts[8].name = "";
-					if ((rc = add_conn_net(model, NOPREF_BI_F, &gclk_net))) goto xout;
-					for (i = 0; i < 8; i++)
-						gclk_net.pts[i].y += 9;
-					if (is_break)
-						gclk_net.pts[7].name = "GCLK%i_BRK";
-					if ((rc = add_conn_net(model, NOPREF_BI_F, &gclk_net))) goto xout;
-	
-					// connects gclk of each row tile to hclk tile at the middle of the row
-					for (i = 0; i < 8; i++) {
-						if ((rc = add_conn_range(model, NOPREF_BI_F,
-							row_top_y+i, x, "GCLK%i",  0, 15,
-							row_top_y+8, x, "HCLK_GCLK_UP%i", 0))) goto xout;
-						if ((rc = add_conn_range(model, NOPREF_BI_F,
-							row_top_y+9+i, x, (i == 7 && is_break) ? "GCLK%i_BRK" : "GCLK%i", 0, 15,
-							row_top_y+8, x, "HCLK_GCLK%i", 0))) goto xout;
-					}
-
-if (x < model->center_x) {
-					// long connection to CMT at center of chip
-					if ((rc = add_conn_range(model, NOPREF_BI_F,
-						row_top_y+8, x, "HCLK_GCLK%i_INT",  0, 15,
-						row_top_y+7, model->center_x-1, "HCLK_CMT_GCLK%i_CLB", 0))) goto xout;
-}
-				}
-			}
-		}
-		// wires running horizontally through the center regs, meeting
-		// in the middle of each half (left and right), and the center
-		// of the chip.
-		left_half = 1;
-		for (x = 0; x < model->tile_x_range; x++) {
-			const char* fmt;
-
-			if (x == model->left_gclk_sep_x
-			    || x == model->right_gclk_sep_x)
-				continue;
-			
-			if (is_atx(X_OUTER_LEFT, model, x)) {
-				fmt = "REGL_CLKPLL%i";
-			} else if (is_atx(X_INNER_LEFT, model, x)) {
-				fmt = "REGL_LTERM_CLKPLL%i";
-			} else if (is_atx(X_FABRIC_ROUTING_COL|X_LEFT_IO_ROUTING_COL|X_RIGHT_IO_ROUTING_COL, model, x)) {
-				fmt = "INT_CLKPLL%i";
-			} else if (is_atx(X_LEFT_IO_DEVS_COL|X_FABRIC_BRAM_MACC_ROUTING_COL|X_FABRIC_LOGIC_COL|X_RIGHT_IO_DEVS_COL, model, x)) {
-				fmt = "CLE_CLKPLL%i";
-			} else if (is_atx(X_FABRIC_MACC_COL, model, x)) {
-				fmt = "DSP_CLKPLL%i";
-			} else if (is_atx(X_CENTER_ROUTING_COL, model, x)) {
-				fmt = "REGC_INT_CLKPLL_IO_RT%i";
-			} else if (is_atx(X_CENTER_LOGIC_COL, model, x)) {
-				fmt = "REGC_CLECLKPLL_IO_LT%i";
-			} else if (is_atx(X_CENTER_CMTPLL_COL, model, x)) {
-				fmt = left_half ? "REGC_CLKPLL_IO_LT%i" : "REGC_CLKPLL_IO_RT%i";
-			} else if (is_atx(X_CENTER_REGS_COL, model, x)) {
-				fmt = "CLKC_PLL_IO_RT%i";
-			} else if (is_atx(X_INNER_RIGHT, model, x)) {
-				fmt = "REGR_RTERM_CLKPLL%i";
-			} else if (is_atx(X_OUTER_RIGHT, model, x)) {
-				fmt = "REGR_CLKPLL%i";
-			} else continue;
-
-			if ((rc = add_conn_range(model, NOPREF_BI_F,
-				model->center_y, x, fmt, 0, 1,
-				model->center_y, left_half ? model->left_gclk_sep_x : model->right_gclk_sep_x,
-				"INT_CLKPLL%i", 0))) goto xout;
-
-			if (left_half && is_atx(X_CENTER_CMTPLL_COL, model, x)) {
-				left_half = 0;
-				// x-- to redo the cmtpll col and wire
-				// it up with the right side as well
-				x--;
-			}
-		}
-	}
+	rc = run_gclk(model);
+	if (rc) goto xout;
 
 	for (y = 0; y < model->tile_y_range; y++) {
 		for (x = 0; x < model->tile_x_range; x++) {
@@ -866,6 +742,388 @@ xout:
 	return rc;
 }
 
+int run_gclk(struct fpga_model* model)
+{
+	int x, i, rc, row, row_top_y, is_break, next_net_o;
+	struct w_net gclk_net;
+
+	for (row = model->cfg_rows-1; row >= 0; row--) {
+		row_top_y = TOP_IO_TILES + (model->cfg_rows-1-row)*(8+1/* middle of row */+8);
+		if (row < (model->cfg_rows/2)) row_top_y++; // center regs
+
+		// net that connects the hclk of half the chip together horizontally
+		gclk_net.last_inc = 15;
+		next_net_o = 0;
+		for (x = LEFT_IO_ROUTING;; x++) {
+			if (next_net_o+2 > sizeof(gclk_net.pts) / sizeof(gclk_net.pts[0])) {
+				fprintf(stderr, "Internal error in line %i\n", __LINE__);
+				goto xout;
+			}
+			gclk_net.pts[next_net_o].x = x;
+			if (is_atx(X_ROUTING_COL, model, x)) {
+				gclk_net.pts[next_net_o++].name = "HCLK_GCLK%i_INT";
+			} else if (is_atx(X_LOGIC_COL|X_LEFT_IO_DEVS_COL, model, x)) {
+				gclk_net.pts[next_net_o++].name = "HCLK_GCLK%i_CLB";
+			} else if (is_atx(X_FABRIC_BRAM_MACC_ROUTING_COL, model, x)) {
+				gclk_net.pts[next_net_o++].name = "HCLK_GCLK%i_BRAM_INTER";
+			} else if (is_atx(X_FABRIC_BRAM_COL, model, x)) {
+				gclk_net.pts[next_net_o++].name = "HCLK_GCLK%i_BRAM";
+			} else if (is_atx(X_FABRIC_MACC_COL, model, x)) {
+				gclk_net.pts[next_net_o++].name = "HCLK_GCLK%i_DSP";
+			} else if (is_atx(X_CENTER_REGS_COL, model, x)) {
+				gclk_net.pts[next_net_o++].name = "CLKV_BUFH_LEFT_L%i";
+				break;
+			}
+			if (x >= model->tile_x_range) {
+				fprintf(stderr, "Internal error in line %i\n", __LINE__);
+				goto xout;
+			}
+		}
+		for (i = 0; i < next_net_o; i++) {
+			gclk_net.pts[i].start_count = 0;
+			gclk_net.pts[i].y = row_top_y+8;
+		}
+		gclk_net.pts[next_net_o].name = "";
+		if ((rc = add_conn_net(model, NOPREF_BI_F, &gclk_net))) goto xout;
+	}
+	for (x = 0; x < model->tile_x_range; x++) {
+		if (is_atx(X_ROUTING_COL, model, x)) {
+			for (row = model->cfg_rows-1; row >= 0; row--) {
+				row_top_y = 2 /* top IO */ + (model->cfg_rows-1-row)*(8+1/* middle of row */+8);
+				if (row < (model->cfg_rows/2)) row_top_y++; // center regs
+
+				is_break = 0;
+ 				if (is_atx(X_LEFT_IO_ROUTING_COL|X_RIGHT_IO_ROUTING_COL, model, x)) {
+					if (row && row != model->cfg_rows/2)
+						is_break = 1;
+				} else {
+					if (row)
+						is_break = 1;
+					else if (is_atx(X_ROUTING_TO_BRAM_COL|X_ROUTING_TO_MACC_COL, model, x))
+						is_break = 1;
+				}
+
+				// vertical net inside row, pulling together 16 gclk
+				// wires across top (8 tiles) and bottom (8 tiles) half
+				// of the row.
+				for (i = 0; i < 8; i++) {
+					gclk_net.pts[i].name = "GCLK%i";
+					gclk_net.pts[i].start_count = 0;
+					gclk_net.pts[i].y = row_top_y+i;
+					gclk_net.pts[i].x = x;
+				}
+				gclk_net.last_inc = 15;
+				gclk_net.pts[8].name = "";
+				if ((rc = add_conn_net(model, NOPREF_BI_F, &gclk_net))) goto xout;
+				for (i = 0; i < 8; i++)
+					gclk_net.pts[i].y += 9;
+				if (is_break)
+					gclk_net.pts[7].name = "GCLK%i_BRK";
+				if ((rc = add_conn_net(model, NOPREF_BI_F, &gclk_net))) goto xout;
+
+				// connects gclk of each row tile to hclk tile at the middle of the row
+				for (i = 0; i < 8; i++) {
+					if ((rc = add_conn_range(model, NOPREF_BI_F,
+						row_top_y+i, x, "GCLK%i",  0, 15,
+						row_top_y+8, x, "HCLK_GCLK_UP%i", 0))) goto xout;
+					if ((rc = add_conn_range(model, NOPREF_BI_F,
+						row_top_y+9+i, x, (i == 7 && is_break) ? "GCLK%i_BRK" : "GCLK%i", 0, 15,
+						row_top_y+8, x, "HCLK_GCLK%i", 0))) goto xout;
+				}
+
+if (x < model->center_x) {
+				// long connection to CMT at center of chip
+				if ((rc = add_conn_range(model, NOPREF_BI_F,
+					row_top_y+8, x, "HCLK_GCLK%i_INT",  0, 15,
+					row_top_y+7, model->center_x-1, "HCLK_CMT_GCLK%i_CLB", 0))) goto xout;
+}
+			}
+		}
+	}
+	rc = run_gclk_horiz_regs(model);
+	if (rc) goto xout;
+	return 0;
+xout:
+	return rc;
+}
+
+int run_gclk_horiz_regs(struct fpga_model* model)
+{
+	int x, i, rc, left_half;
+	int gclk_sep_pos, start1, last1, start2;
+	char* gclk_sep_str;
+
+	//
+	// Run a set of wire strings horizontally through the entire
+	// chip from left to right over the center reg row.
+	// The wires meet at the middle of each half of the chip on
+	// the left and right side, as well as in the center.
+	//
+
+	//
+	// 1. clk pll 0:1
+	//
+
+	{
+		struct seed_data clkpll_seeds[] = {
+			{ X_OUTER_LEFT, 		"REGL_CLKPLL%i" },
+			{ X_INNER_LEFT, 		"REGL_LTERM_CLKPLL%i" },
+			{ X_FABRIC_ROUTING_COL
+			  | X_LEFT_IO_ROUTING_COL
+			  | X_RIGHT_IO_ROUTING_COL, 	"INT_CLKPLL%i" },
+			{ X_LEFT_IO_DEVS_COL
+			  | X_FABRIC_BRAM_MACC_ROUTING_COL
+			  | X_FABRIC_LOGIC_COL
+			  | X_RIGHT_IO_DEVS_COL, 	"CLE_CLKPLL%i" },
+			{ X_FABRIC_MACC_COL, 		"DSP_CLKPLL%i" },
+			{ X_CENTER_ROUTING_COL, 	"REGC_INT_CLKPLL_IO_RT%i" },
+			{ X_CENTER_LOGIC_COL, 		"REGC_CLECLKPLL_IO_LT%i" },
+			{ X_CENTER_REGS_COL, 		"CLKC_PLL_IO_RT%i" },
+			{ X_INNER_RIGHT, 		"REGR_RTERM_CLKPLL%i" },
+			{ X_OUTER_RIGHT, 		"REGR_CLKPLL%i" },
+			{ 0 }};
+	
+		left_half = 1;
+		seed_strx(model, clkpll_seeds);
+
+		for (x = 0; x < model->tile_x_range; x++) {
+			if (x == model->left_gclk_sep_x
+			    || x == model->right_gclk_sep_x)
+				continue;
+
+			if (is_atx(X_CENTER_CMTPLL_COL, model, x))
+				model->tmp_str[x] = left_half
+				  ? "REGC_CLKPLL_IO_LT%i"
+				  : "REGC_CLKPLL_IO_RT%i";
+			if (!model->tmp_str[x])
+				continue;
+
+			if ((rc = add_conn_range(model, NOPREF_BI_F,
+				model->center_y, x, model->tmp_str[x], 0, 1,
+				model->center_y,
+				left_half ? model->left_gclk_sep_x
+					: model->right_gclk_sep_x,
+				"INT_CLKPLL%i", 0))) goto xout;
+			if (left_half && is_atx(X_CENTER_CMTPLL_COL, model, x)) {
+				left_half = 0;
+				x--; // wire up cmtpll col on right side as well
+			}
+		}
+	}
+
+	//
+	// 2. clk pll lock 0:1
+	//
+
+	{
+		struct seed_data clkpll_lock_seeds[] = {
+			{ X_OUTER_LEFT, 		"REGL_LOCKED%i" },
+			{ X_INNER_LEFT, 		"REGH_LTERM_LOCKED%i" },
+			{ X_FABRIC_ROUTING_COL
+			  | X_LEFT_IO_ROUTING_COL
+			  | X_RIGHT_IO_ROUTING_COL, 	"INT_CLKPLL_LOCK%i" },
+			{ X_LEFT_IO_DEVS_COL
+			  | X_FABRIC_BRAM_MACC_ROUTING_COL
+			  | X_FABRIC_LOGIC_COL
+			  | X_RIGHT_IO_DEVS_COL, 	"CLE_CLKPLL_LOCK%i" },
+			{ X_FABRIC_MACC_COL, 		"DSP_CLKPLL_LOCK%i" },
+			{ X_CENTER_ROUTING_COL, 	"REGC_INT_CLKPLL_LOCK_RT%i" },
+			{ X_CENTER_LOGIC_COL,	 	"REGC_CLECLKPLL_LOCK_LT%i" },
+			{ X_CENTER_REGS_COL, 		"CLKC_PLL_LOCK_RT%i" },
+			{ X_INNER_RIGHT, 		"REGH_RTERM_LOCKED%i" },
+			{ X_OUTER_RIGHT, 		"REGR_LOCKED%i" },
+			{ 0 }};
+	
+		left_half = 1;
+		seed_strx(model, clkpll_lock_seeds);
+
+		for (x = 0; x < model->tile_x_range; x++) {
+			if (x == model->left_gclk_sep_x
+			    || x == model->right_gclk_sep_x)
+				continue;
+
+			if (is_atx(X_CENTER_CMTPLL_COL, model, x))
+				model->tmp_str[x] = left_half
+				  ? "CLK_PLL_LOCK_LT%i"
+				  : "CLK_PLL_LOCK_RT%i";
+			if (!model->tmp_str[x])
+				continue;
+
+			if ((rc = add_conn_range(model, NOPREF_BI_F,
+				model->center_y, x, model->tmp_str[x], 0, 1,
+				model->center_y,
+				left_half ? model->left_gclk_sep_x
+					: model->right_gclk_sep_x,
+				"INT_CLKPLL_LOCK%i", 0))) goto xout;
+			if (left_half && is_atx(X_CENTER_CMTPLL_COL, model, x)) {
+				left_half = 0;
+				x--; // wire up cmtpll col on right side as well
+			}
+		}
+	}
+
+	//
+	// 3. clk indirect 0:7
+	// 4. clk feedback 0:7
+	//
+
+	{
+		struct seed_data clk_indirect_seeds[] = {
+			{ X_OUTER_LEFT, 		"REGL_CLK_INDIRECT%i" },
+			{ X_INNER_LEFT, 		"REGH_LTERM_CLKINDIRECT%i" },
+			{ X_FABRIC_ROUTING_COL
+			  | X_LEFT_IO_ROUTING_COL
+			  | X_RIGHT_IO_ROUTING_COL, 	"REGH_CLKINDIRECT_LR%i_INT" },
+			{ X_LEFT_IO_DEVS_COL
+			  | X_FABRIC_BRAM_MACC_ROUTING_COL
+			  | X_FABRIC_LOGIC_COL
+			  | X_RIGHT_IO_DEVS_COL, 	"REGH_CLKINDIRECT_LR%i_CLB" },
+			{ X_FABRIC_MACC_COL, 		"REGH_CLKINDIRECT_LR%i_DSP" },
+			{ X_CENTER_ROUTING_COL, 	"REGC_INT_CLKINDIRECT_LR%i_INT" },
+			{ X_CENTER_LOGIC_COL, 		"REGC_CLECLKINDIRECT_LR%i_CLB" },
+			{ X_CENTER_CMTPLL_COL, 		"REGC_CMT_CLKINDIRECT_LR%i" },
+			{ X_CENTER_REGS_COL, 		"REGC_CLKINDIRECT_LR%i" },
+			{ X_INNER_RIGHT, 		"REGH_RTERM_CLKINDIRECT%i" },
+			{ X_OUTER_RIGHT, 		"REGR_CLK_INDIRECT%i" },
+			{ 0 }};
+		struct seed_data clk_feedback_seeds[] = {
+			{ X_OUTER_LEFT, 		"REGL_CLK_FEEDBACK%i" },
+			{ X_INNER_LEFT, 		"REGH_LTERM_CLKFEEDBACK%i" },
+			{ X_FABRIC_ROUTING_COL
+			  | X_LEFT_IO_ROUTING_COL
+			  | X_RIGHT_IO_ROUTING_COL, 	"REGH_CLKFEEDBACK_LR%i_INT" },
+			{ X_LEFT_IO_DEVS_COL
+			  | X_FABRIC_BRAM_MACC_ROUTING_COL
+			  | X_FABRIC_LOGIC_COL
+			  | X_RIGHT_IO_DEVS_COL, 	"REGH_CLKFEEDBACK_LR%i_CLB" },
+			{ X_FABRIC_MACC_COL, 		"REGH_CLKFEEDBACK_LR%i_DSP" },
+			{ X_CENTER_ROUTING_COL, 	"REGC_INT_CLKFEEDBACK_LR%i_INT" },
+			{ X_CENTER_LOGIC_COL, 		"REGC_CLECLKFEEDBACK_LR%i_CLB" },
+			{ X_CENTER_CMTPLL_COL, 		"REGC_CMT_CLKFEEDBACK_LR%i" },
+			{ X_CENTER_REGS_COL, 		"REGC_CLKFEEDBACK_LR%i" },
+			{ X_INNER_RIGHT, 		"REGH_RTERM_CLKFEEDBACK%i" },
+			{ X_OUTER_RIGHT, 		"REGR_CLK_FEEDBACK%i" },
+			{ 0 }};
+		struct seed_data* seeds[2] = {clk_indirect_seeds, clk_feedback_seeds};
+		const char* gclk_sep_str[2] = {"REGH_CLKINDIRECT_LR%i_INT", "REGH_CLKFEEDBACK_LR%i_INT"};
+
+		for (i = 0; i <= 1; i++) { // indirect and feedback
+			left_half = 1;
+			seed_strx(model, seeds[i]);
+			for (x = 0; x < model->tile_x_range; x++) {
+				if (x == model->left_gclk_sep_x
+				    || x == model->right_gclk_sep_x)
+					continue;
+				if (!model->tmp_str[x])
+					continue;
+
+				if (is_atx(X_CENTER_LOGIC_COL, model, x)) {
+					start1 = 8;
+					last1 = 15;
+					start2 = 0;
+				} else if (is_atx(X_CENTER_CMTPLL_COL, model, x)) {
+					if (left_half) {
+						start1 = 8;
+						last1 = 15;
+						start2 = 0;
+					} else {
+						start1 = 0;
+						last1 = 3;
+						start2 = 4;
+					}
+				} else if (is_atx(X_CENTER_REGS_COL|X_INNER_RIGHT|X_OUTER_RIGHT, model, x)) {
+					start1 = 0;
+					last1 = 3;
+					start2 = 4;
+				} else {
+					start1 = 0;
+					last1 = 7;
+					start2 = 0;
+				}
+	
+				if ((rc = add_conn_range(model, NOPREF_BI_F,
+					model->center_y, x, model->tmp_str[x], start1, last1,
+					model->center_y, left_half ? model->left_gclk_sep_x : model->right_gclk_sep_x,
+					gclk_sep_str[i], start2))) goto xout;
+				if (last1 == 3) {
+					if (start1 || start2 != 4) {
+						fprintf(stderr, "Internal error in line %i.\n", __LINE__);
+						goto xout;
+					}
+					if ((rc = add_conn_range(model, NOPREF_BI_F,
+						model->center_y, x, model->tmp_str[x], 4, 7,
+						model->center_y, left_half ? model->left_gclk_sep_x : model->right_gclk_sep_x,
+						gclk_sep_str[i], 0))) goto xout;
+				}
+
+				if (left_half && is_atx(X_CENTER_CMTPLL_COL, model, x)) {
+					left_half = 0;
+					x--; // wire up cmtpll col on right side as well
+				}
+			}
+		}
+	}
+
+	//
+	// 5. ckpin 0:7
+	//
+
+	{
+		struct seed_data ckpin_seeds[] = {
+			{ X_OUTER_LEFT,			"REGL_CKPIN%i" },
+			{ X_INNER_LEFT,			"REGH_LTERM_CKPIN%i" },
+			{ X_FABRIC_ROUTING_COL
+			  | X_LEFT_IO_ROUTING_COL
+			  | X_RIGHT_IO_ROUTING_COL,	"REGH_CKPIN%i_INT" },
+			{ X_LEFT_IO_DEVS_COL
+			  | X_FABRIC_BRAM_MACC_ROUTING_COL
+			  | X_FABRIC_LOGIC_COL
+			  | X_RIGHT_IO_DEVS_COL,	"REGH_CKPIN%i_CLB" },
+			{ X_FABRIC_MACC_COL,		"REGH_CKPIN%i_DSP" },
+			{ X_CENTER_ROUTING_COL,		"REGC_INT_CKPIN%i_INT" },
+			{ X_CENTER_LOGIC_COL,		"REGC_CLECKPIN%i_CLB" },
+			{ X_CENTER_CMTPLL_COL,		"REGC_CMT_CKPIN%i" },
+			{ X_CENTER_REGS_COL,		"CLKC_CKLR%i" },
+			{ X_INNER_RIGHT,		"REGH_RTERM_CKPIN%i" },
+			{ X_OUTER_RIGHT,		"REGR_CKPIN%i" },
+			{ 0 }};
+	
+		left_half = 1;
+		seed_strx(model, ckpin_seeds);
+		for (x = 0; x < model->tile_x_range; x++) {
+			if (x == model->left_gclk_sep_x
+			    || x == model->right_gclk_sep_x)
+				continue;
+			if (!model->tmp_str[x])
+				continue;
+	
+			if (is_atx(X_CENTER_ROUTING_COL|X_CENTER_LOGIC_COL|X_CENTER_CMTPLL_COL, model, x))
+				start1 = 8;
+			else if (is_atx(X_CENTER_REGS_COL, model, x))
+				start1 = left_half ? 8 : 0;
+			else
+				start1 = 0;
+	
+			gclk_sep_pos = left_half ? model->left_gclk_sep_x : model->right_gclk_sep_x;
+			gclk_sep_str = ((x > gclk_sep_pos) ^ left_half) ? "REGH_DSP_IN_CKPIN%i" : "REGH_DSP_OUT_CKPIN%i";
+			if ((rc = add_conn_range(model, NOPREF_BI_F,
+				model->center_y, x, model->tmp_str[x], start1, start1+7,
+				model->center_y, gclk_sep_pos,
+				gclk_sep_str, 0))) goto xout;
+	
+			// In this loop we tie around the CENTER_REGS_COL, not the
+			// CENTER_CMTPLL_COL as before.
+			if (left_half && is_atx(X_CENTER_REGS_COL, model, x)) {
+				left_half = 0;
+				x--; // wire up center regs col on right side as well
+			}
+		}
+	}
+	return 0;
+xout:
+	return rc;
+}
+
 static char next_non_whitespace(const char* s)
 {
 	int i;
@@ -898,6 +1156,11 @@ int init_tiles(struct fpga_model* model)
 			tile_columns += 3; // 3 for bram or macc
 		else if (model->cfg_columns[i] == 'R')
 			tile_columns += 2+2; // 2+2 for middle IO+logic+PLL/DCM
+	}
+	model->tmp_str = malloc((tile_columns > tile_rows ? tile_columns : tile_rows) * sizeof(*model->tmp_str));
+	if (!model->tmp_str) {
+		fprintf(stderr, "%i: Out of memory.\n", __LINE__);
+		return -1;
 	}
 	model->tile_x_range = tile_columns;
 	model->tile_y_range = tile_rows;
@@ -1497,6 +1760,7 @@ int is_atyx(int check, struct fpga_model* model, int y, int x)
 void fpga_free_model(struct fpga_model* model)
 {
 	if (!model) return;
+	free(model->tmp_str);
 	strarray_free(&model->str);
 	free(model->tiles);
 	memset(model, 0, sizeof(*model));

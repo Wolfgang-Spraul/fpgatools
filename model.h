@@ -78,6 +78,10 @@ struct fpga_model
 
 	struct fpga_tile* tiles;
 	struct hashed_strarray str;
+
+	// tmp_str will be allocated to hold max(tile_x_range, tile_y_range)
+	// pointers, useful for string seeding when running wires.
+	const char** tmp_str;
 };
 
 enum fpga_tile_type
