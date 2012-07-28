@@ -208,7 +208,7 @@ const char* wpref(struct fpga_model* model, int y, int x, const char* wire_name)
 	char* prefix;
 
 	if (is_aty(Y_CHIP_HORIZ_REGS, model, y)) {
-		prefix = is_atx(X_CHIP_VERT_REGS, model, x+3)
+		prefix = is_atx(X_CENTER_REGS_COL, model, x+3)
 			? "REGC_INT_" : "REGH_";
 	} else if (is_aty(Y_ROW_HORIZ_AXSYMM, model, y))
 		prefix = "HCLK_";
@@ -401,7 +401,7 @@ int run_wires(struct fpga_model* model)
 {
 	struct fpga_tile* tile;
 	char buf[128];
-	int x, y, i, rc, row, row_top_y, is_break;
+	int x, y, i, rc, row, row_top_y, is_break, left_half;
 
 	rc = -1;
 	// GCLK
@@ -413,6 +413,7 @@ int run_wires(struct fpga_model* model)
 			row_top_y = TOP_IO_TILES + (model->cfg_rows-1-row)*(8+1/* middle of row */+8);
 			if (row < (model->cfg_rows/2)) row_top_y++; // center regs
 
+			// net that connects the hclk of half the chip together horizontally
 			gclk_net.last_inc = 15;
 			next_net_o = 0;
 			for (x = LEFT_IO_ROUTING;; x++) {
@@ -423,7 +424,7 @@ int run_wires(struct fpga_model* model)
 				gclk_net.pts[next_net_o].x = x;
 				if (is_atx(X_ROUTING_COL, model, x)) {
 					gclk_net.pts[next_net_o++].name = "HCLK_GCLK%i_INT";
-				} else if (is_atx(X_LOGIC_COL, model, x)) {
+				} else if (is_atx(X_LOGIC_COL|X_LEFT_IO_DEVS_COL, model, x)) {
 					gclk_net.pts[next_net_o++].name = "HCLK_GCLK%i_CLB";
 				} else if (is_atx(X_FABRIC_BRAM_MACC_ROUTING_COL, model, x)) {
 					gclk_net.pts[next_net_o++].name = "HCLK_GCLK%i_BRAM_INTER";
@@ -431,7 +432,7 @@ int run_wires(struct fpga_model* model)
 					gclk_net.pts[next_net_o++].name = "HCLK_GCLK%i_BRAM";
 				} else if (is_atx(X_FABRIC_MACC_COL, model, x)) {
 					gclk_net.pts[next_net_o++].name = "HCLK_GCLK%i_DSP";
-				} else if (is_atx(X_CHIP_VERT_REGS, model, x)) {
+				} else if (is_atx(X_CENTER_REGS_COL, model, x)) {
 					gclk_net.pts[next_net_o++].name = "CLKV_BUFH_LEFT_L%i";
 					break;
 				}
@@ -454,15 +455,19 @@ int run_wires(struct fpga_model* model)
 					if (row < (model->cfg_rows/2)) row_top_y++; // center regs
 
 					is_break = 0;
-					if (model->tiles[x].flags & TF_FABRIC_ROUTING_COL) {
+ 					if (is_atx(X_LEFT_IO_ROUTING_COL|X_RIGHT_IO_ROUTING_COL, model, x)) {
+						if (row && row != model->cfg_rows/2)
+							is_break = 1;
+					} else {
 						if (row)
 							is_break = 1;
 						else if (is_atx(X_ROUTING_TO_BRAM_COL|X_ROUTING_TO_MACC_COL, model, x))
 							is_break = 1;
-					} else if (row && row != model->cfg_rows/2)
-						is_break = 1;
+					}
 
-					// net inside row
+					// vertical net inside row, pulling together 16 gclk
+					// wires across top (8 tiles) and bottom (8 tiles) half
+					// of the row.
 					for (i = 0; i < 8; i++) {
 						gclk_net.pts[i].name = "GCLK%i";
 						gclk_net.pts[i].start_count = 0;
@@ -478,7 +483,7 @@ int run_wires(struct fpga_model* model)
 						gclk_net.pts[7].name = "GCLK%i_BRK";
 					if ((rc = add_conn_net(model, NOPREF_BI_F, &gclk_net))) goto xout;
 	
-					// connection to hclk
+					// connects gclk of each row tile to hclk tile at the middle of the row
 					for (i = 0; i < 8; i++) {
 						if ((rc = add_conn_range(model, NOPREF_BI_F,
 							row_top_y+i, x, "GCLK%i",  0, 15,
@@ -487,7 +492,61 @@ int run_wires(struct fpga_model* model)
 							row_top_y+9+i, x, (i == 7 && is_break) ? "GCLK%i_BRK" : "GCLK%i", 0, 15,
 							row_top_y+8, x, "HCLK_GCLK%i", 0))) goto xout;
 					}
+
+if (x < model->center_x) {
+					// long connection to CMT at center of chip
+					if ((rc = add_conn_range(model, NOPREF_BI_F,
+						row_top_y+8, x, "HCLK_GCLK%i_INT",  0, 15,
+						row_top_y+7, model->center_x-1, "HCLK_CMT_GCLK%i_CLB", 0))) goto xout;
+}
 				}
+			}
+		}
+		// wires running horizontally through the center regs, meeting
+		// in the middle of each half (left and right), and the center
+		// of the chip.
+		left_half = 1;
+		for (x = 0; x < model->tile_x_range; x++) {
+			const char* fmt;
+
+			if (x == model->left_gclk_sep_x
+			    || x == model->right_gclk_sep_x)
+				continue;
+			
+			if (is_atx(X_OUTER_LEFT, model, x)) {
+				fmt = "REGL_CLKPLL%i";
+			} else if (is_atx(X_INNER_LEFT, model, x)) {
+				fmt = "REGL_LTERM_CLKPLL%i";
+			} else if (is_atx(X_FABRIC_ROUTING_COL|X_LEFT_IO_ROUTING_COL|X_RIGHT_IO_ROUTING_COL, model, x)) {
+				fmt = "INT_CLKPLL%i";
+			} else if (is_atx(X_LEFT_IO_DEVS_COL|X_FABRIC_BRAM_MACC_ROUTING_COL|X_FABRIC_LOGIC_COL|X_RIGHT_IO_DEVS_COL, model, x)) {
+				fmt = "CLE_CLKPLL%i";
+			} else if (is_atx(X_FABRIC_MACC_COL, model, x)) {
+				fmt = "DSP_CLKPLL%i";
+			} else if (is_atx(X_CENTER_ROUTING_COL, model, x)) {
+				fmt = "REGC_INT_CLKPLL_IO_RT%i";
+			} else if (is_atx(X_CENTER_LOGIC_COL, model, x)) {
+				fmt = "REGC_CLECLKPLL_IO_LT%i";
+			} else if (is_atx(X_CENTER_CMTPLL_COL, model, x)) {
+				fmt = left_half ? "REGC_CLKPLL_IO_LT%i" : "REGC_CLKPLL_IO_RT%i";
+			} else if (is_atx(X_CENTER_REGS_COL, model, x)) {
+				fmt = "CLKC_PLL_IO_RT%i";
+			} else if (is_atx(X_INNER_RIGHT, model, x)) {
+				fmt = "REGR_RTERM_CLKPLL%i";
+			} else if (is_atx(X_OUTER_RIGHT, model, x)) {
+				fmt = "REGR_CLKPLL%i";
+			} else continue;
+
+			if ((rc = add_conn_range(model, NOPREF_BI_F,
+				model->center_y, x, fmt, 0, 1,
+				model->center_y, left_half ? model->left_gclk_sep_x : model->right_gclk_sep_x,
+				"INT_CLKPLL%i", 0))) goto xout;
+
+			if (left_half && is_atx(X_CENTER_CMTPLL_COL, model, x)) {
+				left_half = 0;
+				// x-- to redo the cmtpll col and wire
+				// it up with the right side as well
+				x--;
 			}
 		}
 	}
@@ -576,7 +635,7 @@ int run_wires(struct fpga_model* model)
 						}
 					}
 				}
-				if (is_atx(X_CHIP_VERT_REGS, model, x+3)) {
+				if (is_atx(X_CENTER_REGS_COL, model, x+3)) {
 					if (tile[2].flags & (TF_PLL_DEV|TF_DCM_DEV)) {
 						const char* prefix = (tile[2].flags & TF_PLL_DEV) ? "PLL_CLB2" : "DCM_CLB2";
 
@@ -807,23 +866,42 @@ xout:
 	return rc;
 }
 
+static char next_non_whitespace(const char* s)
+{
+	int i;
+	for (i = 0; s[i] == ' '; i++);
+	return s[i];
+}
+
+static char last_major(const char* str, int cur_o)
+{
+	for (; cur_o; cur_o--) {
+		if (str[cur_o-1] >= 'A' && str[cur_o-1] <= 'Z')
+			return str[cur_o-1];
+	}
+	return 0;
+}
+
 int init_tiles(struct fpga_model* model)
 {
-	int tile_rows, tile_columns, i, j, k, l, row_top_y, center_row, left_side;
-	int start, end;
+	int tile_rows, tile_columns, i, j, k, l, row_top_y, left_side;
+	int start, end, no_io;
+	char cur_cfgcol, last_col;
 	struct fpga_tile* tile_i0;
 
 	tile_rows = 1 /* middle */ + (8+1+8)*model->cfg_rows + 2+2 /* two extra tiles at top and bottom */;
 	tile_columns = 5 /* left */ + 5 /* right */;
 	for (i = 0; model->cfg_columns[i] != 0; i++) {
-		tile_columns += 2; // 2 for logic blocks L/M and minimum for others
-		if (model->cfg_columns[i] == 'B' || model->cfg_columns[i] == 'D')
-			tile_columns++; // 3 for bram or macc
+		if (model->cfg_columns[i] == 'L' || model->cfg_columns[i] == 'M')
+			tile_columns += 2; // 2 for logic blocks L/M
+		else if (model->cfg_columns[i] == 'B' || model->cfg_columns[i] == 'D')
+			tile_columns += 3; // 3 for bram or macc
 		else if (model->cfg_columns[i] == 'R')
-			tile_columns+=2; // 2+2 for middle IO+logic+PLL/DCM
+			tile_columns += 2+2; // 2+2 for middle IO+logic+PLL/DCM
 	}
 	model->tile_x_range = tile_columns;
 	model->tile_y_range = tile_rows;
+	model->center_x = -1;
 	model->tiles = calloc(tile_columns * tile_rows, sizeof(struct fpga_tile));
 	if (!model->tiles) {
 		fprintf(stderr, "%i: Out of memory.\n", __LINE__);
@@ -833,7 +911,7 @@ int init_tiles(struct fpga_model* model)
 		model->tiles[i].type = NA;
 	if (!(tile_rows % 2))
 		fprintf(stderr, "Unexpected even number of tile rows (%i).\n", tile_rows);
-	center_row = 2 /* top IO files */ + (model->cfg_rows/2)*(8+1/*middle of row clock*/+8);
+	model->center_y = 2 /* top IO files */ + (model->cfg_rows/2)*(8+1/*middle of row clock*/+8);
 
 	//
 	// top, bottom, center:
@@ -843,25 +921,29 @@ int init_tiles(struct fpga_model* model)
 	left_side = 1; // turn off (=right side) when reaching the 'R' middle column
 	i = 5; // skip left IO columns
 	for (j = 0; model->cfg_columns[j]; j++) {
-		switch (model->cfg_columns[j]) {
+		cur_cfgcol = model->cfg_columns[j];
+		switch (cur_cfgcol) {
 			case 'L':
 			case 'l':
 			case 'M':
 			case 'm':
+				no_io = (next_non_whitespace(&model->cfg_columns[j+1]) == 'n');
+				last_col = last_major(model->cfg_columns, j);
+
 				model->tiles[i].flags |= TF_FABRIC_ROUTING_COL;
 				model->tiles[i+1].flags |= TF_FABRIC_LOGIC_COL;
 				for (k = model->cfg_rows-1; k >= 0; k--) {
 					row_top_y = 2 /* top IO tiles */ + (model->cfg_rows-1-k)*(8+1/*middle of row clock*/+8);
 					if (k<(model->cfg_rows/2)) row_top_y++; // middle system tiles (center row)
-					start = ((k == model->cfg_rows-1 && (model->cfg_columns[j] == 'L' || model->cfg_columns[j] == 'M')) ? 2 : 0);
-					end = ((k == 0 && (model->cfg_columns[j] == 'L' || model->cfg_columns[j] == 'M')) ? 14 : 16);
+					start = ((k == model->cfg_rows-1 && !no_io) ? 2 : 0);
+					end = ((k == 0 && !no_io) ? 14 : 16);
 					for (l = start; l < end; l++) {
 						tile_i0 = &model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + i];
-						if (l < 15 || (!k && (model->cfg_columns[j] == 'l' || model->cfg_columns[j] == 'm')))
+						if (l < 15 || (!k && no_io))
 							tile_i0->type = ROUTING;
 						else
 							tile_i0->type = ROUTING_BRK;
-						if (model->cfg_columns[j] == 'L' || model->cfg_columns[j] == 'l') {
+						if (cur_cfgcol == 'L') {
 							tile_i0[1].flags |= TF_LOGIC_XL_DEV;
 							tile_i0[1].type = LOGIC_XL;
 						} else {
@@ -869,7 +951,7 @@ int init_tiles(struct fpga_model* model)
 							tile_i0[1].type = LOGIC_XM;
 						}
 					}
-					if (model->cfg_columns[j] == 'L' || model->cfg_columns[j] == 'l') {
+					if (cur_cfgcol == 'L') {
 						model->tiles[(row_top_y+8)*tile_columns + i].type = HCLK_ROUTING_XL;
 						model->tiles[(row_top_y+8)*tile_columns + i + 1].type = HCLK_LOGIC_XL;
 					} else {
@@ -878,17 +960,17 @@ int init_tiles(struct fpga_model* model)
 					}
 				}
 
-				if (j && model->cfg_columns[j-1] == 'R') {
+				if (last_col == 'R') {
 					model->tiles[tile_columns + i].type = IO_BUFPLL_TERM_T;
 					model->tiles[(tile_rows-2)*tile_columns + i].type = IO_BUFPLL_TERM_B;
 				} else {
 					model->tiles[tile_columns + i].type = IO_TERM_T;
-					if (model->cfg_columns[j] == 'L' || model->cfg_columns[j] == 'M')
+					if (!no_io)
 						model->tiles[(tile_rows-2)*tile_columns + i].type = IO_TERM_B;
 					else
 						model->tiles[(tile_rows-2)*tile_columns + i].type = LOGIC_ROUTING_TERM_B;
 				}
-				if (model->cfg_columns[j] == 'L' || model->cfg_columns[j] == 'M') {
+				if (!no_io) {
 					model->tiles[i].type = IO_T;
 					model->tiles[(tile_rows-1)*tile_columns + i].type = IO_B;
 					model->tiles[2*tile_columns + i].type = IO_ROUTING;
@@ -897,17 +979,17 @@ int init_tiles(struct fpga_model* model)
 					model->tiles[(tile_rows-3)*tile_columns + i].type = IO_ROUTING;
 				}
 
-				if (j && model->cfg_columns[j-1] == 'R') {
+				if (last_col == 'R') {
 					model->tiles[tile_columns + i + 1].type = IO_LOGIC_REG_TERM_T;
 					model->tiles[(tile_rows-2)*tile_columns + i + 1].type = IO_LOGIC_REG_TERM_B;
 				} else {
 					model->tiles[tile_columns + i + 1].type = IO_LOGIC_TERM_T;
-					if (model->cfg_columns[j] == 'L' || model->cfg_columns[j] == 'M')
+					if (!no_io)
 						model->tiles[(tile_rows-2)*tile_columns + i + 1].type = IO_LOGIC_TERM_B;
 					else
 						model->tiles[(tile_rows-2)*tile_columns + i + 1].type = LOGIC_NOIO_TERM_B;
 				}
-				if (model->cfg_columns[j] == 'L' || model->cfg_columns[j] == 'M') {
+				if (!no_io) {
 					model->tiles[2*tile_columns + i + 1].type = IO_OUTER_T;
 					model->tiles[2*tile_columns + i + 1].flags |= TF_IOLOGIC_DELAY_DEV;
 					model->tiles[3*tile_columns + i + 1].type = IO_INNER_T;
@@ -918,16 +1000,22 @@ int init_tiles(struct fpga_model* model)
 					model->tiles[(tile_rows-3)*tile_columns + i + 1].flags |= TF_IOLOGIC_DELAY_DEV;
 				}
 
-				if (model->cfg_columns[j] == 'L' || model->cfg_columns[j] == 'l') {
-					model->tiles[center_row*tile_columns + i].type = REGH_ROUTING_XL;
-					model->tiles[center_row*tile_columns + i + 1].type = REGH_LOGIC_XL;
+				if (cur_cfgcol == 'L') {
+					model->tiles[model->center_y*tile_columns + i].type = REGH_ROUTING_XL;
+					model->tiles[model->center_y*tile_columns + i + 1].type = REGH_LOGIC_XL;
 				} else {
-					model->tiles[center_row*tile_columns + i].type = REGH_ROUTING_XM;
-					model->tiles[center_row*tile_columns + i + 1].type = REGH_LOGIC_XM;
+					model->tiles[model->center_y*tile_columns + i].type = REGH_ROUTING_XM;
+					model->tiles[model->center_y*tile_columns + i + 1].type = REGH_LOGIC_XM;
 				}
 				i += 2;
 				break;
 			case 'B':
+				if (next_non_whitespace(&model->cfg_columns[j+1]) == 'g') {
+					if (left_side)
+						model->left_gclk_sep_x = i+2;
+					else
+						model->right_gclk_sep_x = i+2;
+				}
 				model->tiles[i].flags |= TF_FABRIC_ROUTING_COL;
 				model->tiles[i+1].flags |= TF_FABRIC_BRAM_MACC_ROUTING_COL;
 				model->tiles[i+2].flags |= TF_FABRIC_BRAM_COL;
@@ -958,9 +1046,9 @@ int init_tiles(struct fpga_model* model)
 				model->tiles[tile_columns + i + 2].type = left_side ? BRAM_TERM_LT : BRAM_TERM_RT;
 				model->tiles[(tile_rows-2)*tile_columns + i + 2].type = left_side ? BRAM_TERM_LB : BRAM_TERM_RB;
 
-				model->tiles[center_row*tile_columns + i].type = REGH_BRAM_ROUTING;
-				model->tiles[center_row*tile_columns + i + 1].type = REGH_BRAM_ROUTING_VIA;
-				model->tiles[center_row*tile_columns + i + 2].type = left_side ? REGH_BRAM_L : REGH_BRAM_R;
+				model->tiles[model->center_y*tile_columns + i].type = REGH_BRAM_ROUTING;
+				model->tiles[model->center_y*tile_columns + i + 1].type = REGH_BRAM_ROUTING_VIA;
+				model->tiles[model->center_y*tile_columns + i + 2].type = left_side ? REGH_BRAM_L : REGH_BRAM_R;
 				i += 3;
 				break;
 			case 'D':
@@ -994,21 +1082,18 @@ int init_tiles(struct fpga_model* model)
 				model->tiles[tile_columns + i + 2].type = left_side ? MACC_TERM_TL : MACC_TERM_TR;
 				model->tiles[(tile_rows-2)*tile_columns + i + 2].type = left_side ? MACC_TERM_BL : MACC_TERM_BR;
 
-				model->tiles[center_row*tile_columns + i].type = REGH_MACC_ROUTING;
-				model->tiles[center_row*tile_columns + i + 1].type = REGH_MACC_ROUTING_VIA;
-				model->tiles[center_row*tile_columns + i + 2].type = REGH_MACC_L;
+				model->tiles[model->center_y*tile_columns + i].type = REGH_MACC_ROUTING;
+				model->tiles[model->center_y*tile_columns + i + 1].type = REGH_MACC_ROUTING_VIA;
+				model->tiles[model->center_y*tile_columns + i + 2].type = REGH_MACC_L;
 				i += 3;
 				break;
 			case 'R':
-				if (model->cfg_columns[j+1] != 'M') {
+				if (next_non_whitespace(&model->cfg_columns[j+1]) != 'M') {
 					// We expect a LOGIC_XM column to follow the center for
 					// the top and bottom bufpll and reg routing.
 					fprintf(stderr, "Expecting LOGIC_XM after center but found '%c'\n", model->cfg_columns[j+1]);
 				}
-
-				model->tiles[i].flags |= TF_FABRIC_ROUTING_COL;
-				model->tiles[i+1].flags |= TF_FABRIC_LOGIC_COL;
-				model->tiles[i+3].flags |= TF_CHIP_VERT_REGS;
+				model->center_x = i+3;
 
 				left_side = 0;
 				for (k = model->cfg_rows-1; k >= 0; k--) {
@@ -1096,16 +1181,20 @@ int init_tiles(struct fpga_model* model)
 				model->tiles[tile_columns + i + 3].type = REGV_TERM_T;
 				model->tiles[(tile_rows-2)*tile_columns + i + 3].type = REGV_TERM_B;
 
-				model->tiles[center_row*tile_columns + i].type = REGC_ROUTING;
-				model->tiles[center_row*tile_columns + i + 1].type = REGC_LOGIC;
-				model->tiles[center_row*tile_columns + i + 2].type = REGC_CMT;
-				model->tiles[center_row*tile_columns + i + 3].type = CENTER;
+				model->tiles[model->center_y*tile_columns + i].type = REGC_ROUTING;
+				model->tiles[model->center_y*tile_columns + i + 1].type = REGC_LOGIC;
+				model->tiles[model->center_y*tile_columns + i + 2].type = REGC_CMT;
+				model->tiles[model->center_y*tile_columns + i + 3].type = CENTER;
 
 				i += 4;
 				break;
+			case ' ': // space used to make string more readable only
+			case 'g': // global clock separator
+			case 'n': // noio for logic blocks
+				break;
 			default:
-				fprintf(stderr, "Unexpected column identifier '%c'\n", model->cfg_columns[j]);
-					break;
+				fprintf(stderr, "Ignoring unexpected column identifier '%c'\n", cur_cfgcol);
+				break;
 		}
 	}
 
@@ -1192,22 +1281,22 @@ int init_tiles(struct fpga_model* model)
 		model->tiles[(row_top_y+8)*tile_columns + 4].type = HCLK_MCB;
 	}
 
-	model->tiles[(center_row-3)*tile_columns].type = IO_PCI_L;
-	model->tiles[(center_row-2)*tile_columns].type = IO_PCI_CONN_L;
-	model->tiles[(center_row-1)*tile_columns].type = IO_PCI_CONN_L;
-	model->tiles[center_row*tile_columns].type = REG_L;
-	model->tiles[(center_row+1)*tile_columns].type = IO_RDY_L;
+	model->tiles[(model->center_y-3)*tile_columns].type = IO_PCI_L;
+	model->tiles[(model->center_y-2)*tile_columns].type = IO_PCI_CONN_L;
+	model->tiles[(model->center_y-1)*tile_columns].type = IO_PCI_CONN_L;
+	model->tiles[model->center_y*tile_columns].type = REG_L;
+	model->tiles[(model->center_y+1)*tile_columns].type = IO_RDY_L;
 
-	model->tiles[center_row*tile_columns + 1].type = REGH_IO_TERM_L;
+	model->tiles[model->center_y*tile_columns + 1].type = REGH_IO_TERM_L;
 
 	model->tiles[tile_columns + 2].type = CORNER_TERM_T;
 	model->tiles[(tile_rows-2)*tile_columns + 2].type = CORNER_TERM_B;
-	model->tiles[center_row*tile_columns + 2].type = REGH_ROUTING_IO_L;
+	model->tiles[model->center_y*tile_columns + 2].type = REGH_ROUTING_IO_L;
 
 	model->tiles[tile_columns + 3].type = ROUTING_IO_PCI_CE_L;
 	model->tiles[(tile_rows-2)*tile_columns + 3].type = ROUTING_IO_PCI_CE_L;
-	model->tiles[center_row*tile_columns + 3].type = REGH_IO_L;
-	model->tiles[center_row*tile_columns + 4].type = REGH_MCB;
+	model->tiles[model->center_y*tile_columns + 3].type = REGH_IO_L;
+	model->tiles[model->center_y*tile_columns + 4].type = REGH_MCB;
 
 	//
 	// right IO
@@ -1308,11 +1397,11 @@ int init_tiles(struct fpga_model* model)
 	model->tiles[(tile_rows-2)*tile_columns + tile_columns - 5].type = CORNER_TERM_B;
 	model->tiles[tile_columns + tile_columns - 4].type = ROUTING_IO_PCI_CE_R;
 	model->tiles[(tile_rows-2)*tile_columns + tile_columns - 4].type = ROUTING_IO_PCI_CE_R;
-	model->tiles[center_row*tile_columns + tile_columns - 1].type = REG_R;
-	model->tiles[center_row*tile_columns + tile_columns - 2].type = REGH_IO_TERM_R;
-	model->tiles[center_row*tile_columns + tile_columns - 3].type = REGH_MCB;
-	model->tiles[center_row*tile_columns + tile_columns - 4].type = REGH_IO_R;
-	model->tiles[center_row*tile_columns + tile_columns - 5].type = REGH_ROUTING_IO_R;
+	model->tiles[model->center_y*tile_columns + tile_columns - 1].type = REG_R;
+	model->tiles[model->center_y*tile_columns + tile_columns - 2].type = REGH_IO_TERM_R;
+	model->tiles[model->center_y*tile_columns + tile_columns - 3].type = REGH_MCB;
+	model->tiles[model->center_y*tile_columns + tile_columns - 4].type = REGH_IO_R;
+	model->tiles[model->center_y*tile_columns + tile_columns - 5].type = REGH_ROUTING_IO_R;
 	return 0;
 }
 
@@ -1342,10 +1431,7 @@ int is_aty(int check, struct fpga_model* model, int y)
 	if (y < 0) return 0;
 	if (check & Y_INNER_TOP && y == 1) return 1;
 	if (check & Y_INNER_BOTTOM && y == model->tile_y_range-2) return 1;
-	if (check & Y_CHIP_HORIZ_REGS) {
-		int center_tile = 2 /* top IO files */ + (model->cfg_rows/2)*(8+1/*middle of row clock*/+8);
-		if (y == center_tile) return 1;
-	}
+	if (check & Y_CHIP_HORIZ_REGS && y == model->center_y) return 1;
 	if (check & (Y_ROW_HORIZ_AXSYMM|Y_BOTTOM_OF_ROW)) {
 		int row_pos;
 		if (is_in_row(model, y, &row_pos)) {
@@ -1359,12 +1445,14 @@ int is_aty(int check, struct fpga_model* model, int y)
 int is_atx(int check, struct fpga_model* model, int x)
 {
 	if (x < 0) return 0;
+	if (check & X_OUTER_LEFT && !x) return 1;
 	if (check & X_INNER_LEFT && x == 1) return 1;
 	if (check & X_INNER_RIGHT && x == model->tile_x_range-2) return 1;
-	if (check & X_CHIP_VERT_REGS && model->tiles[x].flags & TF_CHIP_VERT_REGS) return 1;
+	if (check & X_OUTER_RIGHT && x == model->tile_x_range-1) return 1;
 	if (check & X_ROUTING_COL
 	    && (model->tiles[x].flags & TF_FABRIC_ROUTING_COL
-	        || x == 2 || x == model->tile_x_range-5)) return 1;
+	        || x == LEFT_IO_ROUTING || x == model->tile_x_range-5
+		|| x == model->center_x-3)) return 1;
 	if (model->tiles[x].flags & TF_FABRIC_ROUTING_COL) {
 		if (check & X_ROUTING_TO_BRAM_COL
 		    && model->tiles[x+1].flags & TF_FABRIC_BRAM_MACC_ROUTING_COL
@@ -1375,10 +1463,21 @@ int is_atx(int check, struct fpga_model* model, int x)
 	}
 	if (check & X_LOGIC_COL
 	    && (model->tiles[x].flags & TF_FABRIC_LOGIC_COL
-	        || x == 3)) return 1;
+	        || x == model->center_x-2)) return 1;
+	if (check & X_FABRIC_ROUTING_COL && model->tiles[x].flags & TF_FABRIC_ROUTING_COL) return 1;
+	if (check & X_FABRIC_LOGIC_COL && model->tiles[x].flags & TF_FABRIC_LOGIC_COL) return 1;
 	if (check & X_FABRIC_BRAM_MACC_ROUTING_COL && model->tiles[x].flags & TF_FABRIC_BRAM_MACC_ROUTING_COL) return 1;
 	if (check & X_FABRIC_BRAM_COL && model->tiles[x].flags & TF_FABRIC_BRAM_COL) return 1;
 	if (check & X_FABRIC_MACC_COL && model->tiles[x].flags & TF_FABRIC_MACC_COL) return 1;
+	if (check & X_CENTER_ROUTING_COL && x == model->center_x-3) return 1;
+	if (check & X_CENTER_LOGIC_COL && x == model->center_x-2) return 1;
+	if (check & X_CENTER_CMTPLL_COL && x == model->center_x-1) return 1;
+	if (check & X_CENTER_REGS_COL && x == model->center_x) return 1;
+	if (check & X_LEFT_IO_ROUTING_COL && x == LEFT_IO_ROUTING) return 1;
+	if (check & X_LEFT_IO_DEVS_COL && x == LEFT_IO_DEVS) return 1;
+	if (check & X_RIGHT_IO_ROUTING_COL && x == model->tile_x_range-5) return 1;
+	if (check & X_RIGHT_IO_DEVS_COL && x == model->tile_x_range-4) return 1;
+	if (check & X_LEFT_SIDE && x < model->center_x) return 1;
 	return 0;
 }
 
@@ -1387,7 +1486,8 @@ int is_atyx(int check, struct fpga_model* model, int y, int x)
 	if (y < 0 || x < 0) return 0;
 	if (check & YX_ROUTING_TILE
 	    && (model->tiles[x].flags & TF_FABRIC_ROUTING_COL
-	        || x == 2 || x == model->tile_x_range-5)) {
+	        || x == LEFT_IO_ROUTING || x == model->tile_x_range-5
+		|| x == model->center_x-3)) {
 		int row_pos;
 		if (is_in_row(model, y, &row_pos) && row_pos != 8) return 1;
 	}
