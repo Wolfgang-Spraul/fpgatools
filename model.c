@@ -176,7 +176,7 @@ int fpga_build_model(struct fpga_model* model, int fpga_rows, const char* column
 	strncpy(model->cfg_columns, columns, sizeof(model->cfg_columns)-1);
 	strncpy(model->cfg_left_wiring, left_wiring, sizeof(model->cfg_left_wiring)-1);
 	strncpy(model->cfg_right_wiring, right_wiring, sizeof(model->cfg_right_wiring)-1);
-	strarray_init(&model->str);
+	strarray_init(&model->str, STRIDX_64K);
 
 	rc = init_tiles(model);
 	if (rc) return rc;
@@ -239,10 +239,16 @@ int add_conn_uni(struct fpga_model* model, int y1, int x1, const char* name1, in
 	int conn_start, num_conn_point_dests_for_this_wire, rc, i, j;
 
 	tile1 = &model->tiles[y1 * model->tile_x_range + x1];
-	rc = strarray_find_or_add(&model->str, name1, &name1_i);
-	if (!rc) return -1;
-	rc = strarray_find_or_add(&model->str, name2, &name2_i);
-	if (!rc) return -1;
+	rc = strarray_add(&model->str, name1, &i);
+	if (rc) return rc;
+	rc = strarray_add(&model->str, name2, &j);
+	if (rc) return rc;
+	if (i > 0xFFFF || j > 0xFFFF) {
+		fprintf(stderr, "Internal error in %s:%i\n", __FILE__, __LINE__);
+		return -1;
+	}
+	name1_i = i;
+	name2_i = j;
 
 	// Search for a connection set under name1.
 	for (i = 0; i < tile1->num_conn_point_names; i++) {
@@ -1773,146 +1779,3 @@ const char* fpga_tiletype_str(enum fpga_tile_type type)
 	return fpga_ttstr[type];
 }
 
-// Dan Bernstein's hash function
-uint32_t hash_djb2(const unsigned char* str)
-{
-	uint32_t hash = 5381;
-	int c;
-
-	while ((c = *str++) != 0)
-		hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
-        return hash;
-}
-
-//
-// The format of each entry in a bin is.
-//   uint16_t idx
-//   uint16_t entry len including 4-byte header
-//   char[]   zero-terminated string
-//
-// Offsets point to the zero-terminated string, so the len
-// is at off-2, the index at off-4. bin0 offset0 can thus be
-// used as a special value to signal 'no entry'.
-//
-
-const char* strarray_lookup(struct hashed_strarray* array, uint16_t idx)
-{
-	int bin, offset;
-
-	if (!array->index_to_bin || !array->bin_offsets || !idx)
-		return 0;
-
-	bin = array->index_to_bin[idx];
-	offset = array->bin_offsets[idx];
-
-	// bin 0 offset 0 is a special value that signals 'no
-	// entry'. Normal offsets cannot be less than 4.
-	if (!bin && !offset) return 0;
-
-	if (!array->bin_strings[bin] || offset >= array->bin_len[bin]
-	    || offset < 4) {
-		// This really should never happen and is an internal error.
-		fprintf(stderr, "Internal error.\n");
-		return 0;
-	}
-
-	return &array->bin_strings[bin][offset];
-}
-
-#define BIN_INCREMENT 32768
-
-int strarray_find_or_add(struct hashed_strarray* array, const char* str,
-	uint16_t* idx)
-{
-	int bin, search_off, str_len, i, free_index;
-	int new_alloclen, start_index;
-	unsigned long hash;
-	void* new_ptr;
-
-	hash = hash_djb2((const unsigned char*) str);
-	str_len = strlen(str);
-	bin = hash % (sizeof(array->bin_strings)/sizeof(array->bin_strings[0]));
-	// iterate over strings in bin to find match
-	if (array->bin_strings[bin]) {
-		search_off = 4;
-		while (search_off < array->bin_len[bin]) {
-			if (!strcmp(&array->bin_strings[bin][search_off],
-				str)) {
-				*idx = *(uint16_t*)&array->bin_strings
-					[bin][search_off-4];
-				if (!(*idx)) {
-					fprintf(stderr, "Internal error - index 0.\n");
-					return 0;
-				}
-				return 1;
-			}
-			search_off += *(uint16_t*)&array->bin_strings
-				[bin][search_off-2];
-		}
-	}
-	// search free index
-	start_index = (uint16_t) ((hash >> 16) ^ (hash & 0xFFFF));
-	for (i = 0; i < HASHARRAY_NUM_INDICES; i++) {
-		int cur_i = (start_index+i)%HASHARRAY_NUM_INDICES;
-		if (!cur_i) // never issue index 0
-			continue;
-		if (!array->bin_offsets[cur_i])
-			break;
-	}
-	if (i >= HASHARRAY_NUM_INDICES) {
-		fprintf(stderr, "All array indices full.\n");
-		return 0;
-	}
-	free_index = (start_index+i)%HASHARRAY_NUM_INDICES;
-	// check whether bin needs expansion
-	if (!(array->bin_len[bin]%BIN_INCREMENT)
-	    || array->bin_len[bin]%BIN_INCREMENT + 4+str_len+1 > BIN_INCREMENT)
-	{
-		new_alloclen = 
- 			((array->bin_len[bin]
-				+ 4+str_len+1)/BIN_INCREMENT + 1)
-			  * BIN_INCREMENT;
-		new_ptr = realloc(array->bin_strings[bin], new_alloclen);
-		if (!new_ptr) {
-			fprintf(stderr, "Out of memory.\n");
-			return 0;
-		}
-		array->bin_strings[bin] = new_ptr;
-	}
-	// append new string at end of bin
-	*(uint16_t*)&array->bin_strings[bin][array->bin_len[bin]] = free_index;
-	*(uint16_t*)&array->bin_strings[bin][array->bin_len[bin]+2] = 4+str_len+1;
-	strcpy(&array->bin_strings[bin][array->bin_len[bin]+4], str);
-	array->index_to_bin[free_index] = bin;
-	array->bin_offsets[free_index] = array->bin_len[bin]+4;
-	array->bin_len[bin] += 4+str_len+1;
-	*idx = free_index;
-	return 1;
-}
-
-int strarray_used_slots(struct hashed_strarray* array)
-{
-	int i, num_used_slots;
-	num_used_slots = 0;
-	if (!array->bin_offsets) return 0;
-	for (i = 0; i < sizeof(array->bin_offsets)/sizeof(*array->bin_offsets); i++) {
-		if (array->bin_offsets[i])
-			num_used_slots++;
-	}
-	return num_used_slots;
-}
-
-void strarray_init(struct hashed_strarray* array)
-{
-	memset(array, 0, sizeof(*array));
-}
-
-void strarray_free(struct hashed_strarray* array)
-{
-	int i;
-	for (i = 0; i < sizeof(array->bin_strings)/
-		sizeof(array->bin_strings[0]); i++) {
-		free(array->bin_strings[i]);
-		array->bin_strings[i] = 0;
-	}
-}

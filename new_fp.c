@@ -13,7 +13,6 @@
 #include <sys/stat.h>
 
 #include "model.h"
-#include "helper.h"
 
 #define PRINT_FLAG(f)	if (tf & f) { printf (" %s", #f); tf &= ~f; }
 

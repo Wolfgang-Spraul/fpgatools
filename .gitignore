@@ -6,3 +6,5 @@ helper.o
 model.o
 new_fp
 new_fp.o
+hstrrep
+hstrrep.o

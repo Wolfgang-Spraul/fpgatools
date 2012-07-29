@@ -9,9 +9,12 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <unistd.h>
+#include <fcntl.h>
 #include <sys/types.h>
 
 #define PROGRAM_REVISION "2012-06-27"
+#define MACRO_STR(arg)	#arg
 
 void printf_help();
 
@@ -69,4 +72,38 @@ void printf_extrabits(uint8_t* maj_bits, int start_minor, int num_minors,
 uint64_t read_lut64(uint8_t* two_minors, int off_in_frame);
 
 int get_vm_mb();
+int get_random();
 int compare_with_number(const char* a, const char* b);
+
+uint32_t hash_djb2(const unsigned char* str);
+
+// Strings are distributed among bins. Each bin is
+// one continuous stream of zero-terminated strings
+// prefixed with a 32+16=48-bit header. The allocation
+// increment for each bin is 32k.
+struct hashed_strarray
+{
+	int highest_index;
+	uint32_t* bin_offsets; // min offset is 4, 0 means no entry
+	uint16_t* index_to_bin;
+	char** bin_strings;
+	int* bin_len;
+	int num_bins;
+};
+
+#define STRIDX_64K	0xFFFF
+#define STRIDX_1M	1000000
+
+int strarray_init(struct hashed_strarray* array, int highest_index);
+void strarray_free(struct hashed_strarray* array);
+
+const char* strarray_lookup(struct hashed_strarray* array, int idx);
+// The found or created index will never be 0, so the caller
+// can use 0 as a special value to indicate 'no string'.
+#define STRIDX_NO_ENTRY 0
+int strarray_find(struct hashed_strarray* array, const char* str, int* idx);
+int strarray_add(struct hashed_strarray* array, const char* str, int* idx);
+// If you stash a string to a fixed index, you cannot use strarray_find()
+// anymore, only strarray_lookup().
+int strarray_stash(struct hashed_strarray* array, const char* str, int idx);
+int strarray_used_slots(struct hashed_strarray* array);

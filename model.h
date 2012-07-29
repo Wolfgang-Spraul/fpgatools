@@ -13,19 +13,7 @@
 #include <sys/stat.h>
 #define MACRO_STR(arg)	#arg
 
-#define HASHARRAY_NUM_INDICES (256*256)
-
-// Strings are distributed among 1024 bins. Each bin
-// is one continuous stream of zero-terminated strings
-// prefixed with a 2*16-bit header. The allocation
-// increment for each bin is 32k.
-struct hashed_strarray
-{
-	uint32_t bin_offsets[HASHARRAY_NUM_INDICES]; // min offset is 4, 0 means no entry
-	uint16_t index_to_bin[HASHARRAY_NUM_INDICES];
-	char* bin_strings[1024];
-	int bin_len[1024]; // points behind the last zero-termination
-};
+#include "helper.h"
 
 //
 // columns
@@ -241,14 +229,3 @@ int fpga_build_model(struct fpga_model* model,
 void fpga_free_model(struct fpga_model* model);
 
 const char* fpga_tiletype_str(enum fpga_tile_type type);
-
-uint32_t hash_djb2(const unsigned char* str);
-
-const char* strarray_lookup(struct hashed_strarray* array, uint16_t idx);
-// The found or created index will never be 0, so the caller
-// can use 0 as a special value to indicate 'no string'.
-int strarray_find_or_add(struct hashed_strarray* array, const char* str,
-	uint16_t* idx);
-int strarray_used_slots(struct hashed_strarray* array);
-void strarray_init(struct hashed_strarray* array);
-void strarray_free(struct hashed_strarray* array);
