@@ -8,3 +8,7 @@ new_fp
 new_fp.o
 hstrrep
 hstrrep.o
+sort_seq
+sort_seq.o
+merge_seq
+merge_seq.o
