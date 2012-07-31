@@ -51,8 +51,7 @@ compare.%: xc6slx9_empty.%
 	@echo Missing lines - compare_$*_diff.txt
 	@cat compare_$*_diff.txt | grep ^-y | wc -l
 	@cat compare_$*_diff.txt | grep ^+y > compare_$*_extra.txt || true
-	@echo Extra lines - compare_$*_extra.txt:
-	@if test -s compare_$*_extra.txt; then cat compare_$*_extra.txt; else echo None; fi;
+	@if test -s compare_$*_extra.txt; then echo Extra lines - compare_$*_extra.txt: ; cat compare_$*_extra.txt; fi;
 
 %.tiles: %.fp
 	cat $<|awk '{if ($$1=="tile" && $$4=="name") printf "%s %s %s\n",$$2,$$3,$$5}'|sort >$@

@@ -132,6 +132,7 @@ enum fpga_tile_type
 #define LEFT_IO_ROUTING 2
 #define LEFT_IO_DEVS	3
 #define TOP_IO_TILES	2
+#define BOTTOM_IO_TILES	2
 
 // tile flags
 

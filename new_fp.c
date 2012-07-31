@@ -17,7 +17,10 @@
 #define PRINT_FLAG(f)	if (tf & f) { printf (" %s", #f); tf &= ~f; }
 
 int printf_tiles(struct fpga_model* model);
-int printf_static_conns(struct fpga_model* model);
+int printf_devices(struct fpga_model* model);
+int printf_ports(struct fpga_model* model);
+int printf_conns(struct fpga_model* model);
+int printf_switches(struct fpga_model* model);
 
 int main(int argc, char** argv)
 {
@@ -50,15 +53,19 @@ int main(int argc, char** argv)
 	rc = printf_tiles(&model);
 	if (rc) goto fail;
 
-	rc = printf_static_conns(&model);
+	rc = printf_devices(&model);
 	if (rc) goto fail;
 
-	// todo: static_net <lists all wires connected together statically in a long line>
-	// port y01 x02 name
-	// device y01 x02 type
-	// switch y01 x02 from direction(->|<->) to
-	return EXIT_SUCCESS;
+	rc = printf_ports(&model);
+	if (rc) goto fail;
 
+	rc = printf_conns(&model);
+	if (rc) goto fail;
+
+	rc = printf_switches(&model);
+	if (rc) goto fail;
+
+	return EXIT_SUCCESS;
 fail:
 	return rc;
 }
@@ -104,7 +111,51 @@ int printf_tiles(struct fpga_model* model)
 	return 0;
 }
 
-int printf_static_conns(struct fpga_model* model)
+int printf_devices(struct fpga_model* model)
+{
+	// device y01 x02 type
+	return 0;
+}
+
+int printf_ports(struct fpga_model* model)
+{
+	struct fpga_tile* tile;
+	const char* conn_point_name_src;
+	int x, y, i, conn_point_dests_o, num_dests_for_this_conn_point;
+	int first_port_printed;
+
+	for (x = 0; x < model->tile_x_range; x++) {
+		for (y = 0; y < model->tile_y_range; y++) {
+			tile = &model->tiles[y*model->tile_x_range + x];
+
+			first_port_printed = 0;
+			for (i = 0; i < tile->num_conn_point_names; i++) {
+				conn_point_dests_o = tile->conn_point_names[i*2];
+				if (i < tile->num_conn_point_names-1)
+					num_dests_for_this_conn_point = tile->conn_point_names[(i+1)*2] - conn_point_dests_o;
+				else
+					num_dests_for_this_conn_point = tile->num_conn_point_dests - conn_point_dests_o;
+				if (num_dests_for_this_conn_point)
+					// ports is only for connection-less endpoints
+					continue;
+				conn_point_name_src = strarray_lookup(&model->str, tile->conn_point_names[i*2+1]);
+				if (!conn_point_name_src) {
+					fprintf(stderr, "Cannot lookup src conn point name index %i, x%i y%i i%i\n",
+						tile->conn_point_names[i*2+1], x, y, i);
+					continue;
+				}
+				if (!first_port_printed) {
+					first_port_printed = 1;
+					printf("\n");
+				}
+				printf("port y%02i x%02i %s\n", y, x, conn_point_name_src);
+			}
+		}
+	}
+	return 0;
+}
+
+int printf_conns(struct fpga_model* model)
 {
 	struct fpga_tile* tile;
 	char tmp_line[512];
@@ -160,5 +211,11 @@ int printf_static_conns(struct fpga_model* model)
 			}
 		}
 	}
+	return 0;
+}
+
+int printf_switches(struct fpga_model* model)
+{
+	// switch y01 x02 from direction(->|<->) to
 	return 0;
 }
