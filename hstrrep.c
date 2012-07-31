@@ -28,8 +28,8 @@ int main(int argc, char** argv)
 			"\n"
 			"hstrrep - hashed string replace\n"
 			"Usage: %s <data_file> <token_file>\n"
-			"  token_file has 2 words per line: First word is string\n"
-			"  that is to be replaced, second word is the replacement.\n", argv[0]);
+			"  token_file is parsed into two parts: first word is the string\n"
+			"  that is to be replaced, rest of line the replacement.\n", argv[0]);
 		goto xout;
 	}
 

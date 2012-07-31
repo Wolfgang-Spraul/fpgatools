@@ -378,7 +378,7 @@ struct w_net
 	// the %i in the name from 0:last_inc, for a total
 	// of last_inc+1 wires.
 	int last_inc;
-	struct w_point pts[22];
+	struct w_point pts[40];
 };
 
 int add_conn_net(struct fpga_model* model, add_conn_f add_conn_func, struct w_net* net)
@@ -423,6 +423,7 @@ void seed_strx(struct fpga_model* model, struct seed_data* data)
 
 int run_gclk(struct fpga_model* model);
 int run_gclk_horiz_regs(struct fpga_model* model);
+int run_gclk_vert_regs(struct fpga_model* model);
 
 int run_wires(struct fpga_model* model)
 {
@@ -432,6 +433,7 @@ int run_wires(struct fpga_model* model)
 
 	rc = run_gclk(model);
 	if (rc) goto xout;
+return 0;
 
 	for (y = 0; y < model->tile_y_range; y++) {
 		for (x = 0; x < model->tile_x_range; x++) {
@@ -848,6 +850,8 @@ if (x < model->center_x) {
 	}
 	rc = run_gclk_horiz_regs(model);
 	if (rc) goto xout;
+	rc = run_gclk_vert_regs(model);
+	if (rc) goto xout;
 	return 0;
 xout:
 	return rc;
@@ -1125,6 +1129,65 @@ int run_gclk_horiz_regs(struct fpga_model* model)
 			}
 		}
 	}
+	return 0;
+xout:
+	return rc;
+}
+
+int run_gclk_vert_regs(struct fpga_model* model)
+{
+	struct w_net net;
+	int rc, i;
+
+	// net tying together 15 gclk lines from row 10..27
+	net.last_inc = 15;
+	for (i = 0; i <= 17; i++) {
+		if (is_aty(Y_ROW_HORIZ_AXSYMM, model, i+10))
+			net.pts[i].name = "CLKV_GCLKH_MAIN%i_FOLD";
+		else if (i == 9) // row 19
+			net.pts[i].name = "CLKV_GCLK_MAIN%i_BUF";
+		else
+			net.pts[i].name = "CLKV_GCLK_MAIN%i_FOLD";
+		net.pts[i].start_count = 0;
+		net.pts[i].y = i+10;
+		net.pts[i].x = model->center_x;
+	}
+	net.pts[i].name = "";
+	if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) goto xout;
+
+	// net tying together 15 gclk lines from row 19..53
+	net.last_inc = 15;
+	for (i = 0; i <= 34; i++) { // row 19..53
+		if (is_aty(Y_ROW_HORIZ_AXSYMM, model, i+19))
+			net.pts[i].name = "REGV_GCLKH_MAIN%i";
+		else if (is_aty(Y_CHIP_HORIZ_REGS, model, i+19))
+			net.pts[i].name = "CLKC_GCLK_MAIN%i";
+		else if (i == 16) // row 35
+			net.pts[i].name = "CLKV_GCLK_MAIN%i_BRK";
+		else
+			net.pts[i].name = "CLKV_GCLK_MAIN%i";
+		net.pts[i].start_count = 0;
+		net.pts[i].y = i+19;
+		net.pts[i].x = model->center_x;
+	}
+	net.pts[i].name = "";
+	if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) goto xout;
+
+	// net tying together 15 gclk lines from row 45..62
+	net.last_inc = 15;
+	for (i = 0; i <= 17; i++) {
+		if (is_aty(Y_ROW_HORIZ_AXSYMM, model, i+45))
+			net.pts[i].name = "CLKV_GCLKH_MAIN%i_FOLD";
+		else if (i == 8) // row 53
+			net.pts[i].name = "CLKV_GCLK_MAIN%i_BUF";
+		else
+			net.pts[i].name = "CLKV_GCLK_MAIN%i_FOLD";
+		net.pts[i].start_count = 0;
+		net.pts[i].y = i+45;
+		net.pts[i].x = model->center_x;
+	}
+	net.pts[i].name = "";
+	if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) goto xout;
 	return 0;
 xout:
 	return rc;
@@ -1778,4 +1841,3 @@ const char* fpga_tiletype_str(enum fpga_tile_type type)
 	    || !fpga_ttstr[type]) return "UNK";
 	return fpga_ttstr[type];
 }
-

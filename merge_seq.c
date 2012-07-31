@@ -279,13 +279,17 @@ int main(int argc, char** argv)
 	if (argc < 2) {
 		fprintf(stderr,
 			"merge_seq - merge sequence (needs presorted file)\n"
-			"Usage: %s <data_file>\n", argv[0]);
+			"Usage: %s <data_file> | - for stdin\n", argv[0]);
 		goto xout;
 	}
-	fp = fopen(argv[1], "r");
-	if (!fp) {
-		fprintf(stderr, "Error opening %s.\n", argv[1]);
-		goto xout;
+	if (!strcmp(argv[1], "-"))
+		fp = stdin;
+	else {
+		fp = fopen(argv[1], "r");
+		if (!fp) {
+			fprintf(stderr, "Error opening %s.\n", argv[1]);
+			goto xout;
+		}
 	}
 
 	// read first line
@@ -317,7 +321,6 @@ int main(int argc, char** argv)
 	rc = print_line(&first_line);
 	if (rc) goto xout;
 out:
-	fclose(fp);
 	return EXIT_SUCCESS;
 xout:
 	return rc;
