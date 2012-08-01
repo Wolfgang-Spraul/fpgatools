@@ -118,9 +118,28 @@ static int init_devices(struct fpga_model* model)
 
 static int init_ports(struct fpga_model* model)
 {
-	int x, y, i, j, k, rc;
+	int x, y, i, j, k, row_num, row_pos, rc;
 
 	for (x = 0; x < model->tile_x_range; x++) {
+		if (is_atx(X_FABRIC_ROUTING_COL|X_CENTER_ROUTING_COL|X_LEFT_IO_ROUTING_COL|X_RIGHT_IO_ROUTING_COL, model, x)) {
+			for (y = TOP_IO_TILES; y < model->tile_y_range - BOTTOM_IO_TILES; y++) {
+				int keep_out = is_atx(X_ROUTING_NO_IO|X_LEFT_IO_ROUTING_COL|X_RIGHT_IO_ROUTING_COL, model, x) ? 0 : 2;
+				if (y < TOP_IO_TILES+keep_out
+					|| y > model->tile_y_range-BOTTOM_IO_TILES-keep_out-1) continue;
+				is_in_row(model, y, &row_num, &row_pos);
+				if (row_pos < 0 || row_pos == 8) continue;
+
+				if (is_atx(X_FABRIC_ROUTING_COL, model, x)
+				    || (is_atx(X_CENTER_ROUTING_COL, model, x) && (row_pos != 7 && (row_pos != 9 || row_num%2)))
+				    || (is_atx(X_LEFT_IO_ROUTING_COL, model, x) && !is_aty(Y_LEFT_WIRED, model, y))
+				    || (is_atx(X_RIGHT_IO_ROUTING_COL, model, x) && !is_aty(Y_RIGHT_WIRED, model, y))) {
+					for (i = 0; i <= 1; i++) {
+						rc = add_connpt_name(model, y, x, pf("GFAN%i", i));
+						if (rc) goto xout;
+					}
+				}
+			}
+		}
 		if (is_atx(X_ROUTING_COL, model, x)) {
 			for (y = TOP_IO_TILES; y < model->tile_y_range - BOTTOM_IO_TILES; y++) {
 				if (is_aty(Y_ROW_HORIZ_AXSYMM|Y_CHIP_HORIZ_REGS,
@@ -182,6 +201,16 @@ static int init_ports(struct fpga_model* model)
 				if (YX_TILE(model, y, x)->flags & TF_MACC_DEV) {
 					static const char* pref[] = {"CE", "RST", ""};
 					static const char* seq[] = {"A", "B", "C", "D", "M", "P", "OPMODE", ""};
+
+					is_in_row(model, y, &row_num, &row_pos);
+					if (!row_num && row_pos == LAST_POS_IN_ROW) {
+						rc = add_connpt_name(model, y, x, "CARRYIN_DSP48A1_SITE");
+						if (rc) goto xout;
+						for (i = 0; i <= 47; i++) {
+							rc = add_connpt_name(model, y, x, pf("PCIN%i_DSP48A1_SITE", i));
+							if (rc) goto xout;
+						}
+					}
 
 					rc = add_connpt_name(model, y, x, "CLK_DSP48A1_SITE");
 					if (rc) goto xout;
@@ -1299,6 +1328,7 @@ static int init_tiles(struct fpga_model* model)
 				last_col = last_major(model->cfg_columns, j);
 
 				model->tiles[i].flags |= TF_FABRIC_ROUTING_COL;
+				if (no_io) model->tiles[i].flags |= TF_ROUTING_NO_IO;
 				model->tiles[i+1].flags |= TF_FABRIC_LOGIC_COL;
 				for (k = model->cfg_rows-1; k >= 0; k--) {
 					row_top_y = 2 /* top IO tiles */ + (model->cfg_rows-1-k)*(8+1/*middle of row clock*/+8);
@@ -1385,6 +1415,7 @@ static int init_tiles(struct fpga_model* model)
 						model->right_gclk_sep_x = i+2;
 				}
 				model->tiles[i].flags |= TF_FABRIC_ROUTING_COL;
+				model->tiles[i].flags |= TF_ROUTING_NO_IO; // no_io always on for BRAM
 				model->tiles[i+1].flags |= TF_FABRIC_BRAM_MACC_ROUTING_COL;
 				model->tiles[i+2].flags |= TF_FABRIC_BRAM_COL;
 				for (k = model->cfg_rows-1; k >= 0; k--) {
@@ -1421,6 +1452,7 @@ static int init_tiles(struct fpga_model* model)
 				break;
 			case 'D':
 				model->tiles[i].flags |= TF_FABRIC_ROUTING_COL;
+				model->tiles[i].flags |= TF_ROUTING_NO_IO; // no_io always on for MACC
 				model->tiles[i+1].flags |= TF_FABRIC_BRAM_MACC_ROUTING_COL;
 				model->tiles[i+2].flags |= TF_FABRIC_MACC_COL;
 				for (k = model->cfg_rows-1; k >= 0; k--) {
@@ -1578,8 +1610,10 @@ static int init_tiles(struct fpga_model* model)
 			//
 			// +0
 			//
-			if (model->cfg_left_wiring[(model->cfg_rows-1-k)*16+l] == 'W')
+			if (model->cfg_left_wiring[(model->cfg_rows-1-k)*16+l] == 'W') {
+				model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns].flags |= TF_WIRED;
 				model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns].type = IO_L;
+			}
 			//
 			// +1
 			//
@@ -1678,6 +1712,9 @@ static int init_tiles(struct fpga_model* model)
 			//
 			// -1
 			//
+			if (model->cfg_right_wiring[(model->cfg_rows-1-k)*16+l] == 'W')
+				model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + tile_columns - 1].flags |= TF_WIRED;
+
 			if (k == model->cfg_rows/2 && l == 13)
 				model->tiles[(row_top_y+l+1)*tile_columns + tile_columns - 1].type = IO_RDY_R;
 			else if (k == model->cfg_rows/2 && l == 14)
@@ -2040,27 +2077,6 @@ static char last_major(const char* str, int cur_o)
 	return 0;
 }
 
-static int is_in_row(struct fpga_model* model, int y, int* row_pos)
-{
-	int dist_to_center;
-
-	if (y < 2) return 0;
-	// normalize y to beginning of rows
-	y -= 2;
-
-	// calculate distance to center and check
-	// that y is not pointing to the center
-	dist_to_center = (model->cfg_rows/2)*(8+1/*middle of row*/+8);
-	if (y == dist_to_center) return 0;
-	if (y > dist_to_center) y--;
-
-	// check that y is not pointing past the last row
-	if (y >= model->cfg_rows*(8+1+8)) return 0;
-
-	if (row_pos) *row_pos = y%(8+1+8);
-	return 1;
-}
-
 int is_aty(int check, struct fpga_model* model, int y)
 {
 	if (y < 0) return 0;
@@ -2069,11 +2085,12 @@ int is_aty(int check, struct fpga_model* model, int y)
 	if (check & Y_CHIP_HORIZ_REGS && y == model->center_y) return 1;
 	if (check & (Y_ROW_HORIZ_AXSYMM|Y_BOTTOM_OF_ROW)) {
 		int row_pos;
-		if (is_in_row(model, y, &row_pos)) {
-			if (check & Y_ROW_HORIZ_AXSYMM && row_pos == 8) return 1;
-			if (check & Y_BOTTOM_OF_ROW && row_pos == 16) return 1;
-		}
+		is_in_row(model, y, 0 /* row_num */, &row_pos);
+		if (check & Y_ROW_HORIZ_AXSYMM && row_pos == 8) return 1;
+		if (check & Y_BOTTOM_OF_ROW && row_pos == 16) return 1;
 	}
+	if (check & Y_LEFT_WIRED && model->tiles[y*model->tile_x_range].flags & TF_WIRED) return 1;
+	if (check & Y_RIGHT_WIRED && model->tiles[y*model->tile_x_range + model->tile_x_range-RIGHT_OUTER_O].flags & TF_WIRED) return 1;
 	return 0;
 }
 
@@ -2096,6 +2113,7 @@ int is_atx(int check, struct fpga_model* model, int x)
 		    && model->tiles[x+1].flags & TF_FABRIC_BRAM_MACC_ROUTING_COL
 		    && model->tiles[x+2].flags & TF_FABRIC_MACC_COL) return 1;
 	}
+	if (check & X_ROUTING_NO_IO && model->tiles[x].flags & TF_ROUTING_NO_IO) return 1;
 	if (check & X_LOGIC_COL
 	    && (model->tiles[x].flags & TF_FABRIC_LOGIC_COL
 	        || x == model->center_x-2)) return 1;
@@ -2126,9 +2144,34 @@ int is_atyx(int check, struct fpga_model* model, int y, int x)
 	        || x == LEFT_IO_ROUTING || x == model->tile_x_range-5
 		|| x == model->center_x-3)) {
 		int row_pos;
-		if (is_in_row(model, y, &row_pos) && row_pos != 8) return 1;
+		is_in_row(model, y, 0 /* row_num */, &row_pos);
+		if (row_pos >= 0 && row_pos != 8) return 1;
 	}
 	return 0;
+}
+
+void is_in_row(const struct fpga_model* model, int y,
+	int* row_num, int* row_pos)
+{
+	int dist_to_center;
+
+	if (row_num) *row_num = -1;
+	if (row_pos) *row_pos = -1;
+	if (y < 2) return;
+	// normalize y to beginning of rows
+	y -= 2;
+
+	// calculate distance to center and check
+	// that y is not pointing to the center
+	dist_to_center = (model->cfg_rows/2)*(8+1/*middle of row*/+8);
+	if (y == dist_to_center) return;
+	if (y > dist_to_center) y--;
+
+	// check that y is not pointing past the last row
+	if (y >= model->cfg_rows*(8+1+8)) return;
+
+	if (row_num) *row_num = model->cfg_rows-(y/(8+1+8))-1;
+	if (row_pos) *row_pos = y%(8+1+8);
 }
 
 static const char* fpga_ttstr[] = // tile type strings

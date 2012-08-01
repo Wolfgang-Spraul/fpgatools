@@ -102,6 +102,7 @@ int printf_tiles(struct fpga_model* model)
 				PRINT_FLAG(TF_IOLOGIC_DELAY_DEV);
 				PRINT_FLAG(TF_DCM_DEV);
 				PRINT_FLAG(TF_PLL_DEV);
+				PRINT_FLAG(TF_WIRED);
 
 				if (tf) printf(" 0x%x", tf);
 				printf("\n");
