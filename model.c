@@ -118,7 +118,7 @@ static int init_devices(struct fpga_model* model)
 
 static int init_ports(struct fpga_model* model)
 {
-	int x, y, rc;
+	int x, y, i, j, k, rc;
 
 	for (x = 0; x < model->tile_x_range; x++) {
 		if (is_atx(X_ROUTING_COL, model, x)) {
@@ -132,6 +132,147 @@ static int init_ports(struct fpga_model* model)
 				if (rc) goto xout;
 				rc = add_connpt_name(model, y, x, "KEEP1_WIRE");
 				if (rc) goto xout;
+				rc = add_connpt_name(model, y, x, "FAN");
+				if (rc) goto xout;
+				rc = add_connpt_name(model, y, x, "FAN_B");
+				if (rc) goto xout;
+			}
+		}
+		if (is_atx(X_FABRIC_BRAM_COL, model, x)) {
+			for (y = TOP_IO_TILES; y < model->tile_y_range - BOTTOM_IO_TILES; y++) {
+				if (YX_TILE(model, y, x)->flags & TF_BRAM_DEV) {
+
+					static const char* pass_str[3] = {"RAMB16BWER", "RAMB8BWER_0", "RAMB8BWER_1"};
+					// pass 0 is ramb16, pass 1 and 2 are for ramb8
+					for (i = 0; i <= 2; i++) {
+						for (j = 'A'; j <= 'B'; j++) {
+							rc = add_connpt_name(model, y, x, pf("%s_CLK%c", pass_str[i], j));
+							if (rc) goto xout;
+							rc = add_connpt_name(model, y, x, pf("%s_EN%c", pass_str[i], j));
+							if (rc) goto xout;
+							rc = add_connpt_name(model, y, x, pf("%s_REGCE%c", pass_str[i], j));
+							if (rc) goto xout;
+							rc = add_connpt_name(model, y, x, pf("%s_RST%c", pass_str[i], j));
+							if (rc) goto xout;
+							for (k = 0; k <= (!i ? 3 : 1); k++) {
+								rc = add_connpt_name(model, y, x, pf("%s_DIP%c%i", pass_str[i], j, k));
+								if (rc) goto xout;
+								rc = add_connpt_name(model, y, x, pf("%s_DOP%c%i", pass_str[i], j, k));
+								if (rc) goto xout;
+								rc = add_connpt_name(model, y, x, pf("%s_WE%c%i", pass_str[i], j, k));
+								if (rc) goto xout;
+							}
+							for (k = 0; k <= (!i ? 13 : 12); k++) {
+								rc = add_connpt_name(model, y, x, pf("%s_ADDR%c%i", pass_str[i], j, k));
+								if (rc) goto xout;
+							}
+							for (k = 0; k <= (!i ? 31 : 15); k++) {
+								rc = add_connpt_name(model, y, x, pf("%s_DI%c%i", pass_str[i], j, k));
+								if (rc) goto xout;
+								rc = add_connpt_name(model, y, x, pf("%s_DO%c%i", pass_str[i], j, k));
+								if (rc) goto xout;
+							}
+						}
+					}
+				}
+			}
+		}
+		if (is_atx(X_FABRIC_MACC_COL, model, x)) {
+			for (y = TOP_IO_TILES; y < model->tile_y_range - BOTTOM_IO_TILES; y++) {
+				if (YX_TILE(model, y, x)->flags & TF_MACC_DEV) {
+					static const char* pref[] = {"CE", "RST", ""};
+					static const char* seq[] = {"A", "B", "C", "D", "M", "P", "OPMODE", ""};
+
+					rc = add_connpt_name(model, y, x, "CLK_DSP48A1_SITE");
+					if (rc) goto xout;
+					rc = add_connpt_name(model, y, x, "CARRYOUT_DSP48A1_SITE");
+					if (rc) goto xout;
+					rc = add_connpt_name(model, y, x, "CARRYOUTF_DSP48A1_SITE");
+					if (rc) goto xout;
+
+					for (i = 0; pref[i][0]; i++) {
+						rc = add_connpt_name(model, y, x, pf("%sCARRYIN_DSP48A1_SITE", pref[i]));
+						if (rc) goto xout;
+						for (j = 0; seq[j][0]; j++) {
+							rc = add_connpt_name(model, y, x, pf("%s%s_DSP48A1_SITE", pref[i], seq[j]));
+							if (rc) goto xout;
+						}
+					}
+						
+					for (i = 0; i <= 17; i++) {
+						rc = add_connpt_name(model, y, x, pf("A%i_DSP48A1_SITE", i));
+						if (rc) goto xout;
+						rc = add_connpt_name(model, y, x, pf("B%i_DSP48A1_SITE", i));
+						if (rc) goto xout;
+						rc = add_connpt_name(model, y, x, pf("D%i_DSP48A1_SITE", i));
+						if (rc) goto xout;
+						rc = add_connpt_name(model, y, x, pf("BCOUT%i_DSP48A1_SITE", i));
+						if (rc) goto xout;
+					}
+					for (i = 0; i <= 47; i++) {
+						rc = add_connpt_name(model, y, x, pf("C%i_DSP48A1_SITE", i));
+						if (rc) goto xout;
+						rc = add_connpt_name(model, y, x, pf("P%i_DSP48A1_SITE", i));
+						if (rc) goto xout;
+						rc = add_connpt_name(model, y, x, pf("PCOUT%i_DSP48A1_SITE", i));
+						if (rc) goto xout;
+					}
+					for (i = 0; i <= 35; i++) {
+						rc = add_connpt_name(model, y, x, pf("M%i_DSP48A1_SITE", i));
+						if (rc) goto xout;
+					}
+					for (i = 0; i <= 7; i++) {
+						rc = add_connpt_name(model, y, x, pf("OPMODE%i_DSP48A1_SITE", i));
+						if (rc) goto xout;
+					}
+				}
+			}
+		}
+		if (is_atx(X_LOGIC_COL, model, x)) {
+			for (y = TOP_IO_TILES; y < model->tile_y_range - BOTTOM_IO_TILES; y++) {
+				if (YX_TILE(model, y, x)->flags & (TF_LOGIC_XM_DEV|TF_LOGIC_XL_DEV)) {
+					const char* pref[2];
+
+					if (YX_TILE(model, y, x)->flags & TF_LOGIC_XM_DEV) {
+						pref[0] = "M";
+						pref[1] = "X";
+						rc = add_connpt_name(model, y, x, "M_COUT");
+						if (rc) goto xout;
+						rc = add_connpt_name(model, y, x, "M_WE");
+						if (rc) goto xout;
+						for (i = 'A'; i <= 'D'; i++) {
+							rc = add_connpt_name(model, y, x, pf("M_%cI", i));
+							if (rc) goto xout;
+						}
+					} else { // LOGIC_XL
+						pref[0] = "L";
+						pref[1] = "XX";
+						rc = add_connpt_name(model, y, x, "XL_COUT");
+						if (rc) goto xout;
+					}
+					for (k = 0; k <= 1; k++) {
+						rc = add_connpt_name(model, y, x, pf("%s_CE", pref[k], i));
+						if (rc) goto xout;
+						rc = add_connpt_name(model, y, x, pf("%s_SR", pref[k], i));
+						if (rc) goto xout;
+						rc = add_connpt_name(model, y, x, pf("%s_CLK", pref[k], i));
+						if (rc) goto xout;
+						for (i = 'A'; i <= 'D'; i++) {
+							for (j = 1; j <= 6; j++) {
+								rc = add_connpt_name(model, y, x, pf("%s_%c%i", pref[k], i, j));
+								if (rc) goto xout;
+							}
+							rc = add_connpt_name(model, y, x, pf("%s_%c", pref[k], i));
+							if (rc) goto xout;
+							rc = add_connpt_name(model, y, x, pf("%s_%cMUX", pref[k], i));
+							if (rc) goto xout;
+							rc = add_connpt_name(model, y, x, pf("%s_%cQ", pref[k], i));
+							if (rc) goto xout;
+							rc = add_connpt_name(model, y, x, pf("%s_%cX", pref[k], i));
+							if (rc) goto xout;
+						}
+					}
+				}
 			}
 		}
 	}

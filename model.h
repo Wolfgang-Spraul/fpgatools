@@ -128,7 +128,7 @@ enum fpga_tile_type
 	HCLK_IO_BOT_DN_L, HCLK_IO_BOT_DN_R,
 };
 
-// Some constants to make the code more readable
+// Some macros to make the code more readable
 #define LEFT_OUTER_COL		0
 #define LEFT_INNER_COL		1
 #define LEFT_IO_ROUTING		2
@@ -140,6 +140,8 @@ enum fpga_tile_type
 #define TOP_INNER_ROW		1
 #define BOTTOM_IO_TILES		2
 #define HALF_ROW		8
+
+#define YX_TILE(model, y, x) (&(model)->tiles[(y)*model->tile_x_range+(x)])
 
 // Offsets on right side are deducted from width
 #define RIGHT_OUTER_O		1
