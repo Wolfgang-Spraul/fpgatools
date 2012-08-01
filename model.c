@@ -73,8 +73,10 @@ int fpga_build_model(struct fpga_model* model, int fpga_rows, const char* column
 	memset(model, 0, sizeof(*model));
 	model->cfg_rows = fpga_rows;
 	strncpy(model->cfg_columns, columns, sizeof(model->cfg_columns)-1);
-	strncpy(model->cfg_left_wiring, left_wiring, sizeof(model->cfg_left_wiring)-1);
-	strncpy(model->cfg_right_wiring, right_wiring, sizeof(model->cfg_right_wiring)-1);
+	strncpy(model->cfg_left_wiring, left_wiring,
+		sizeof(model->cfg_left_wiring)-1);
+	strncpy(model->cfg_right_wiring, right_wiring,
+		sizeof(model->cfg_right_wiring)-1);
 	strarray_init(&model->str, STRIDX_64K);
 
 	rc = init_tiles(model);
@@ -173,9 +175,14 @@ static int run_gclk(struct fpga_model* model)
 				fprintf(stderr, "Internal error in line %i\n", __LINE__);
 				goto xout;
 			}
+			gclk_net.pts[next_net_o].start_count = 0;
 			gclk_net.pts[next_net_o].x = x;
-			if (is_atx(X_ROUTING_COL, model, x)) {
+			gclk_net.pts[next_net_o].y = row_top_y+8;
+
+			if (is_atx(X_LEFT_IO_ROUTING_COL|X_FABRIC_ROUTING_COL|X_CENTER_ROUTING_COL, model, x)) {
 				gclk_net.pts[next_net_o++].name = "HCLK_GCLK%i_INT";
+			} else if (is_atx(X_LEFT_MCB, model, x)) {
+				gclk_net.pts[next_net_o++].name = "HCLK_GCLK%i_MCB";
 			} else if (is_atx(X_LOGIC_COL|X_LEFT_IO_DEVS_COL, model, x)) {
 				gclk_net.pts[next_net_o++].name = "HCLK_GCLK%i_CLB";
 			} else if (is_atx(X_FABRIC_BRAM_MACC_ROUTING_COL, model, x)) {
@@ -184,8 +191,29 @@ static int run_gclk(struct fpga_model* model)
 				gclk_net.pts[next_net_o++].name = "HCLK_GCLK%i_BRAM";
 			} else if (is_atx(X_FABRIC_MACC_COL, model, x)) {
 				gclk_net.pts[next_net_o++].name = "HCLK_GCLK%i_DSP";
+			} else if (is_atx(X_CENTER_CMTPLL_COL, model, x)) {
+				gclk_net.pts[next_net_o].y = row_top_y+7;
+				gclk_net.pts[next_net_o++].name = "HCLK_CMT_GCLK%i_CLB";
 			} else if (is_atx(X_CENTER_REGS_COL, model, x)) {
 				gclk_net.pts[next_net_o++].name = "CLKV_BUFH_LEFT_L%i";
+
+				// connect left half
+				gclk_net.pts[next_net_o].name = "";
+				if ((rc = add_conn_net(model, NOPREF_BI_F, &gclk_net))) goto xout;
+
+				// start right half
+				gclk_net.pts[0].start_count = 0;
+				gclk_net.pts[0].x = x;
+				gclk_net.pts[0].y = row_top_y+8;
+				gclk_net.pts[0].name = "CLKV_BUFH_RIGHT_R%i";
+				next_net_o = 1;
+
+			} else if (is_atx(X_RIGHT_IO_ROUTING_COL, model, x)) {
+				gclk_net.pts[next_net_o++].name = "HCLK_GCLK%i_INT";
+
+				// connect right half
+				gclk_net.pts[next_net_o].name = "";
+				if ((rc = add_conn_net(model, NOPREF_BI_F, &gclk_net))) goto xout;
 				break;
 			}
 			if (x >= model->tile_x_range) {
@@ -193,12 +221,6 @@ static int run_gclk(struct fpga_model* model)
 				goto xout;
 			}
 		}
-		for (i = 0; i < next_net_o; i++) {
-			gclk_net.pts[i].start_count = 0;
-			gclk_net.pts[i].y = row_top_y+8;
-		}
-		gclk_net.pts[next_net_o].name = "";
-		if ((rc = add_conn_net(model, NOPREF_BI_F, &gclk_net))) goto xout;
 	}
 	for (x = 0; x < model->tile_x_range; x++) {
 		if (is_atx(X_ROUTING_COL, model, x)) {
@@ -235,7 +257,8 @@ static int run_gclk(struct fpga_model* model)
 					gclk_net.pts[7].name = "GCLK%i_BRK";
 				if ((rc = add_conn_net(model, NOPREF_BI_F, &gclk_net))) goto xout;
 
-				// connects gclk of each row tile to hclk tile at the middle of the row
+				// vertically connects gclk of each row tile to
+				// hclk tile at the middle of the row
 				for (i = 0; i < 8; i++) {
 					if ((rc = add_conn_range(model, NOPREF_BI_F,
 						row_top_y+i, x, "GCLK%i",  0, 15,
@@ -244,13 +267,6 @@ static int run_gclk(struct fpga_model* model)
 						row_top_y+9+i, x, (i == 7 && is_break) ? "GCLK%i_BRK" : "GCLK%i", 0, 15,
 						row_top_y+8, x, "HCLK_GCLK%i", 0))) goto xout;
 				}
-
-if (x < model->center_x) {
-				// long connection to CMT at center of chip
-				if ((rc = add_conn_range(model, NOPREF_BI_F,
-					row_top_y+8, x, "HCLK_GCLK%i_INT",  0, 15,
-					row_top_y+7, model->center_x-1, "HCLK_CMT_GCLK%i_CLB", 0))) goto xout;
-}
 			}
 		}
 	}
@@ -535,6 +551,125 @@ static int run_gclk_horiz_regs(struct fpga_model* model)
 			}
 		}
 	}
+	// some local nets around the center on the left side
+	{ struct w_net net = {
+		3,
+		{{ "REGL_GCLK%i", 0, model->center_y, LEFT_OUTER_COL },
+		 { "REGH_LTERM_GCLK%i", 0, model->center_y, LEFT_INNER_COL },
+		 { "REGH_IOI_INT_GCLK%i", 0, model->center_y, LEFT_IO_ROUTING },
+		 { "" }}};
+	if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) goto xout; }
+	{
+		const char* str[3] = {"REGL_GCLK%i", "REGH_LTERM_GCLK%i", "REGH_IOI_INT_GCLK%i"};
+		if ((rc = add_conn_range(model, NOPREF_BI_F,
+			model->center_y-2, LEFT_IO_ROUTING, "INT_BUFPLL_GCLK%i", 2, 3,
+			model->center_y-1, LEFT_IO_ROUTING, "INT_BUFPLL_GCLK%i_EXT", 2))) goto xout;
+		for (x = LEFT_OUTER_COL; x <= LEFT_IO_ROUTING; x++) {
+			if ((rc = add_conn_range(model, NOPREF_BI_F,
+				model->center_y-1, LEFT_IO_ROUTING, "INT_BUFPLL_GCLK%i", 0, 1,
+				model->center_y, x, str[x], 0))) goto xout;
+			if ((rc = add_conn_range(model, NOPREF_BI_F,
+				model->center_y-1, LEFT_IO_ROUTING, "INT_BUFPLL_GCLK%i_EXT", 2, 3,
+				model->center_y, x, str[x], 2))) goto xout;
+			if ((rc = add_conn_range(model, NOPREF_BI_F,
+				model->center_y-2, LEFT_IO_ROUTING, "INT_BUFPLL_GCLK%i", 2, 3,
+				model->center_y, x, str[x], 2))) goto xout;
+		}
+	}
+	// and right side
+	{ struct w_net net = {
+		3,
+		{{ "REGH_RIOI_GCLK%i", 0, model->center_y, model->tile_x_range-RIGHT_IO_DEVS_O },
+		 { "MCB_REGH_GCLK%i", 0, model->center_y, model->tile_x_range-RIGHT_MCB_O },
+		 { "REGR_GCLK%i", 0, model->center_y, model->tile_x_range-RIGHT_OUTER_O },
+		 { "" }}};
+	if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) goto xout; }
+	{
+		const char* str[5] = {"REGH_IOI_INT_GCLK%i", "REGH_RIOI_GCLK%i", "MCB_REGH_GCLK%i", "REGR_RTERM_GCLK%i", "REGR_GCLK%i"};
+		if ((rc = add_conn_range(model, NOPREF_BI_F,
+			model->center_y-2, model->tile_x_range-RIGHT_IO_ROUTING_O, "INT_BUFPLL_GCLK%i", 2, 3,
+			model->center_y-1, model->tile_x_range-RIGHT_IO_ROUTING_O, "INT_BUFPLL_GCLK%i_EXT", 2))) goto xout;
+		for (x = model->tile_x_range-RIGHT_IO_ROUTING_O; x <= model->tile_x_range-RIGHT_OUTER_O; x++) {
+			if ((rc = add_conn_range(model, NOPREF_BI_F,
+				model->center_y-1, model->tile_x_range-RIGHT_IO_ROUTING_O, "INT_BUFPLL_GCLK%i_EXT", 2, 3,
+				model->center_y, x, str[x-(model->tile_x_range-RIGHT_IO_ROUTING_O)], 2))) goto xout;
+			if ((rc = add_conn_range(model, NOPREF_BI_F,
+				model->center_y-2, model->tile_x_range-RIGHT_IO_ROUTING_O, "INT_BUFPLL_GCLK%i", 2, 3,
+				model->center_y, x, str[x-(model->tile_x_range-RIGHT_IO_ROUTING_O)], 2))) goto xout;
+		}
+	}
+	{ struct w_net net = {
+		1,
+		{{ "INT_BUFPLL_GCLK%i", 0, model->center_y-1, model->tile_x_range-RIGHT_IO_ROUTING_O },
+		 { "REGH_RIOI_INT_GCLK%i", 0, model->center_y, model->tile_x_range-RIGHT_IO_ROUTING_O },
+		 { "REGH_RIOI_GCLK%i", 0, model->center_y, model->tile_x_range-RIGHT_IO_DEVS_O },
+		 { "REGH_RTERM_GCLK%i", 0, model->center_y, model->tile_x_range-RIGHT_INNER_O },
+		 { "" }}};
+	if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) goto xout; }
+
+	{ struct w_net net = {
+		1,
+		{{ "REGH_IOI_INT_GCLK%i", 2, model->center_y, model->tile_x_range-RIGHT_IO_ROUTING_O },
+		 { "REGH_RIOI_GCLK%i", 2, model->center_y, model->tile_x_range-RIGHT_IO_DEVS_O },
+		 { "REGR_RTERM_GCLK%i", 2, model->center_y, model->tile_x_range-RIGHT_INNER_O },
+		 { "" }}};
+	if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) goto xout; }
+
+	// the naming is a little messed up here, and the networks are
+	// actually simpler than represented here (with full 0:3 connections).
+	// But until we have better representation of wire networks, this has
+	// to suffice.
+	if ((rc = add_conn_range(model, NOPREF_BI_F,
+		model->center_y, model->tile_x_range-RIGHT_OUTER_O,
+			"REGR_GCLK%i", 0, 1,
+		model->center_y-1, model->tile_x_range-RIGHT_IO_ROUTING_O,
+			"INT_BUFPLL_GCLK%i", 0))) goto xout;
+	if ((rc = add_conn_range(model, NOPREF_BI_F,
+		model->center_y, model->tile_x_range-RIGHT_OUTER_O,
+			"REGR_GCLK%i", 0, 1,
+		model->center_y, model->tile_x_range-RIGHT_IO_ROUTING_O,
+			"REGH_RIOI_INT_GCLK%i", 0))) goto xout;
+	if ((rc = add_conn_range(model, NOPREF_BI_F,
+		model->center_y, model->tile_x_range-RIGHT_OUTER_O,
+			"REGR_GCLK%i", 2, 3,
+		model->center_y, model->tile_x_range-RIGHT_IO_ROUTING_O,
+			"REGH_IOI_INT_GCLK%i", 2))) goto xout;
+	if ((rc = add_conn_range(model, NOPREF_BI_F,
+		model->center_y, model->tile_x_range-RIGHT_OUTER_O,
+			"REGR_GCLK%i", 0, 1,
+		model->center_y, model->tile_x_range-RIGHT_INNER_O,
+			"REGH_RTERM_GCLK%i", 0))) goto xout;
+	if ((rc = add_conn_range(model, NOPREF_BI_F,
+		model->center_y, model->tile_x_range-RIGHT_OUTER_O,
+			"REGR_GCLK%i", 2, 3,
+		model->center_y, model->tile_x_range-RIGHT_INNER_O,
+			"REGR_RTERM_GCLK%i", 2))) goto xout;
+	// same from MCB_REGH_GCLK...
+	if ((rc = add_conn_range(model, NOPREF_BI_F,
+		model->center_y, model->tile_x_range-RIGHT_MCB_O,
+			"MCB_REGH_GCLK%i", 0, 1,
+		model->center_y-1, model->tile_x_range-RIGHT_IO_ROUTING_O,
+			"INT_BUFPLL_GCLK%i", 0))) goto xout;
+	if ((rc = add_conn_range(model, NOPREF_BI_F,
+		model->center_y, model->tile_x_range-RIGHT_MCB_O,
+			"MCB_REGH_GCLK%i", 0, 1,
+		model->center_y, model->tile_x_range-RIGHT_IO_ROUTING_O,
+			"REGH_RIOI_INT_GCLK%i", 0))) goto xout;
+	if ((rc = add_conn_range(model, NOPREF_BI_F,
+		model->center_y, model->tile_x_range-RIGHT_MCB_O,
+			"MCB_REGH_GCLK%i", 2, 3,
+		model->center_y, model->tile_x_range-RIGHT_IO_ROUTING_O,
+			"REGH_IOI_INT_GCLK%i", 2))) goto xout;
+	if ((rc = add_conn_range(model, NOPREF_BI_F,
+		model->center_y, model->tile_x_range-RIGHT_MCB_O,
+			"MCB_REGH_GCLK%i", 0, 1,
+		model->center_y, model->tile_x_range-RIGHT_INNER_O,
+			"REGH_RTERM_GCLK%i", 0))) goto xout;
+	if ((rc = add_conn_range(model, NOPREF_BI_F,
+		model->center_y, model->tile_x_range-RIGHT_MCB_O,
+			"MCB_REGH_GCLK%i", 2, 3,
+		model->center_y, model->tile_x_range-RIGHT_INNER_O,
+			"REGR_RTERM_GCLK%i", 2))) goto xout;
 	return 0;
 xout:
 	return rc;
@@ -594,6 +729,43 @@ static int run_gclk_vert_regs(struct fpga_model* model)
 	}
 	net.pts[i].name = "";
 	if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) goto xout;
+
+	// a few local gclk networks at the center top and bottom
+	{ struct w_net net = {
+		1,
+		{{ "REGT_GCLK%i",	0, TOP_OUTER_ROW, model->center_x-1 },
+		 { "REGT_TTERM_GCLK%i", 0, TOP_INNER_ROW, model->center_x-1 },
+		 { "REGV_TTERM_GCLK%i", 0, TOP_INNER_ROW, model->center_x },
+		 { "BUFPLL_TOP_GCLK%i", 0, TOP_INNER_ROW, model->center_x+1 },
+		 { "" }}};
+	if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) goto xout; }
+	{ struct w_net net = {
+		1,
+		{{ "REGB_GCLK%i",	0, model->tile_y_range-1, model->center_x-1 },
+		 { "REGB_BTERM_GCLK%i", 0, model->tile_y_range-2, model->center_x-1 },
+		 { "REGV_BTERM_GCLK%i", 0, model->tile_y_range-2, model->center_x },
+		 { "BUFPLL_BOT_GCLK%i", 0, model->tile_y_range-2, model->center_x+1 },
+		 { "" }}};
+	if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) goto xout; }
+
+	// wire up gclk from tterm down to top 8 rows at center_x+1
+	for (i = TOP_IO_TILES; i <= TOP_IO_TILES+HALF_ROW; i++) {
+		if ((rc = add_conn_range(model, NOPREF_BI_F,
+			TOP_INNER_ROW, model->center_x+1,
+				"IOI_TTERM_GCLK%i",  0, 15,
+			i, model->center_x+1,
+				(i == TOP_IO_TILES+HALF_ROW) ?
+				"HCLK_GCLK_UP%i" : "GCLK%i", 0))) goto xout;
+	}
+	// same at the bottom upwards
+	for (i = model->tile_y_range-2-1; i >= model->tile_y_range-2-HALF_ROW-1; i--) {
+		if ((rc = add_conn_range(model, NOPREF_BI_F,
+			model->tile_y_range-2, model->center_x+1,
+				"IOI_BTERM_GCLK%i",  0, 15,
+			i, model->center_x+1,
+				(i == model->tile_y_range-2-HALF_ROW-1) ?
+				"HCLK_GCLK%i" : "GCLK%i", 0))) goto xout;
+	}
 	return 0;
 xout:
 	return rc;
@@ -1800,6 +1972,8 @@ int is_atx(int check, struct fpga_model* model, int x)
 	if (check & X_RIGHT_IO_ROUTING_COL && x == model->tile_x_range-5) return 1;
 	if (check & X_RIGHT_IO_DEVS_COL && x == model->tile_x_range-4) return 1;
 	if (check & X_LEFT_SIDE && x < model->center_x) return 1;
+	if (check & X_LEFT_MCB && x == LEFT_MCB_COL) return 1;
+	if (check & X_RIGHT_MCB && x == model->tile_x_range-3) return 1;
 	return 0;
 }
 

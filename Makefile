@@ -65,8 +65,8 @@ compare.%: xc6slx9_empty.%
 %.ports: %.fp
 	cat $<|awk '{if ($$1=="port") printf "%s %s %s\n",$$2,$$3,$$4}'|sort >$@
 
-%.sw: %.fp
-	cat $<|awk '{if ($$1=="switch") printf "%s %s %s %s %s\n",$$2,$$3,$$4,$$5,$$6}'|sort >$@
+%.sw: %.fp sort_seq merge_seq
+	cat $<|awk '{if ($$1=="switch") printf "%s %s %s %s %s\n",$$2,$$3,$$4,$$5,$$6}'|sort|./sort_seq -|./merge_seq -|sort >$@
 
 clean:
 	rm -f bit2txt bit2txt.o \

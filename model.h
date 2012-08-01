@@ -128,11 +128,25 @@ enum fpga_tile_type
 	HCLK_IO_BOT_DN_L, HCLK_IO_BOT_DN_R,
 };
 
-// Some constant to make the core more readable
-#define LEFT_IO_ROUTING 2
-#define LEFT_IO_DEVS	3
-#define TOP_IO_TILES	2
-#define BOTTOM_IO_TILES	2
+// Some constants to make the code more readable
+#define LEFT_OUTER_COL		0
+#define LEFT_INNER_COL		1
+#define LEFT_IO_ROUTING		2
+#define LEFT_IO_DEVS		3
+#define LEFT_MCB_COL		4
+
+#define TOP_IO_TILES		2
+#define TOP_OUTER_ROW		0
+#define TOP_INNER_ROW		1
+#define BOTTOM_IO_TILES		2
+#define HALF_ROW		8
+
+// Offsets on right side are deducted from width
+#define RIGHT_OUTER_O		1
+#define RIGHT_INNER_O		2
+#define RIGHT_MCB_O		3
+#define RIGHT_IO_DEVS_O		4
+#define RIGHT_IO_ROUTING_O	5
 
 // tile flags
 
@@ -180,6 +194,8 @@ int is_aty(int check, struct fpga_model* model, int y);
 #define X_RIGHT_IO_ROUTING_COL		0x00080000
 #define X_RIGHT_IO_DEVS_COL		0x00100000
 #define X_LEFT_SIDE			0x00200000 // true for anything left of the center (not including center)
+#define X_LEFT_MCB			0x00400000
+#define X_RIGHT_MCB			0x00800000
 
 // multiple checks are combined with OR logic
 int is_atx(int check, struct fpga_model* model, int x);
