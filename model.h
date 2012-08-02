@@ -56,7 +56,7 @@ struct fpga_model
 	char cfg_columns[512];
 	char cfg_left_wiring[1024], cfg_right_wiring[1024];
 
-	int tile_x_range, tile_y_range;
+	int x_width, y_height;
 	int center_x;
 	int center_y;
 	// Left and right gclk separators will be located on
@@ -67,7 +67,7 @@ struct fpga_model
 	struct fpga_tile* tiles;
 	struct hashed_strarray str;
 
-	// tmp_str will be allocated to hold max(tile_x_range, tile_y_range)
+	// tmp_str will be allocated to hold max(x_width, y_height)
 	// pointers, useful for string seeding when running wires.
 	const char** tmp_str;
 };
@@ -138,18 +138,21 @@ enum fpga_tile_type
 #define TOP_IO_TILES		2
 #define TOP_OUTER_ROW		0
 #define TOP_INNER_ROW		1
-#define BOTTOM_IO_TILES		2
+#define BOT_IO_TILES		2
 #define HALF_ROW		8
 #define LAST_POS_IN_ROW		16 // including hclk at 8
 
-#define YX_TILE(model, y, x) (&(model)->tiles[(y)*model->tile_x_range+(x)])
-
-// Offsets on right side are deducted from width
+// Some offsets that are being deducted from their origin
+#define BOT_OUTER_ROW		1
+#define BOT_INNER_ROW		2
 #define RIGHT_OUTER_O		1
 #define RIGHT_INNER_O		2
 #define RIGHT_MCB_O		3
 #define RIGHT_IO_DEVS_O		4
 #define RIGHT_IO_ROUTING_O	5
+#define CMTPLL_FROM_CENTER_O	1
+
+#define YX_TILE(model, y, x) (&(model)->tiles[(y)*model->x_width+(x)])
 
 // tile flags
 
@@ -169,7 +172,7 @@ enum fpga_tile_type
 #define TF_IOLOGIC_DELAY_DEV		0x00000400
 #define TF_DCM_DEV			0x00000800
 #define TF_PLL_DEV			0x00001000
-// TF_WIRED is only set for x==0 on the left side or x==tile_x_range-1
+// TF_WIRED is only set for x==0 on the left side or x==x_width-1
 // on the right side.
 #define TF_WIRED			0x00002000
 
@@ -194,21 +197,22 @@ int is_aty(int check, struct fpga_model* model, int y);
 #define X_ROUTING_NO_IO			0x00000080
 #define X_LOGIC_COL			0x00000100 // includes the center logic col
 #define X_FABRIC_ROUTING_COL		0x00000200
-#define X_FABRIC_LOGIC_COL		0x00000400
-#define X_FABRIC_BRAM_MACC_ROUTING_COL	0x00000800
-#define X_FABRIC_BRAM_COL		0x00001000
-#define X_FABRIC_MACC_COL		0x00002000
-#define X_CENTER_ROUTING_COL		0x00004000
-#define X_CENTER_LOGIC_COL		0x00008000
-#define X_CENTER_CMTPLL_COL		0x00010000
-#define X_CENTER_REGS_COL		0x00020000
-#define X_LEFT_IO_ROUTING_COL		0x00040000
-#define X_LEFT_IO_DEVS_COL		0x00080000
-#define X_RIGHT_IO_ROUTING_COL		0x00100000
-#define X_RIGHT_IO_DEVS_COL		0x00200000
-#define X_LEFT_SIDE			0x00400000 // true for anything left of the center (not including center)
-#define X_LEFT_MCB			0x00800000
-#define X_RIGHT_MCB			0x01000000
+#define X_FABRIC_LOGIC_ROUTING_COL	0x00000400
+#define X_FABRIC_LOGIC_COL		0x00000800
+#define X_FABRIC_BRAM_MACC_ROUTING_COL	0x00001000
+#define X_FABRIC_BRAM_COL		0x00002000
+#define X_FABRIC_MACC_COL		0x00004000
+#define X_CENTER_ROUTING_COL		0x00008000
+#define X_CENTER_LOGIC_COL		0x00010000
+#define X_CENTER_CMTPLL_COL		0x00020000
+#define X_CENTER_REGS_COL		0x00040000
+#define X_LEFT_IO_ROUTING_COL		0x00080000
+#define X_LEFT_IO_DEVS_COL		0x00100000
+#define X_RIGHT_IO_ROUTING_COL		0x00200000
+#define X_RIGHT_IO_DEVS_COL		0x00400000
+#define X_LEFT_SIDE			0x00800000 // true for anything left of the center (not including center)
+#define X_LEFT_MCB			0x01000000
+#define X_RIGHT_MCB			0x02000000
 
 // multiple checks are combined with OR logic
 int is_atx(int check, struct fpga_model* model, int x);
@@ -229,8 +233,15 @@ enum fpgadev_type
 	DEV_LOGIC_M,
 	DEV_LOGIC_L,
 	DEV_LOGIC_X,
+	DEV_TIEOFF,
 	DEV_MACC,
-	DEV_BRAM
+	DEV_IOBM,
+	DEV_IOBS,
+	DEV_ILOGIC,
+	DEV_OLOGIC,
+	DEV_IODELAY,
+	DEV_BRAM16,
+	DEV_BRAM8
 };
 
 struct fpgadev_logic_x

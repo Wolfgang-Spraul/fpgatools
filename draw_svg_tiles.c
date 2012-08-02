@@ -75,8 +75,8 @@ int main(int argc, char** argv)
 		goto fail;
 	}
 
-	for (i = 0; i < model.tile_y_range; i++) {
-		for (j = 0; j < model.tile_x_range; j++) {
+	for (i = 0; i < model.y_height; i++) {
+		for (j = 0; j < model.x_width; j++) {
 			sprintf(str, "y%i x%i:", i, j);
 			new_node = xmlNewChild(xpathObj->nodesetval->nodeTab[0],
 			   0 /* xmlNsPtr */, BAD_CAST "text", BAD_CAST str);
@@ -87,7 +87,7 @@ int main(int argc, char** argv)
 			  + VERT_TILE_SPACING + i*VERT_TILE_SPACING));
 
 			strcpy(str, fpga_tiletype_str(
-				model.tiles[i*model.tile_x_range+j].type));
+				model.tiles[i*model.x_width+j].type));
 			new_node = xmlNewChild(xpathObj->nodesetval->nodeTab[0],
 			   0 /* xmlNsPtr */, BAD_CAST "text", BAD_CAST str);
 			xmlSetProp(new_node, BAD_CAST "x",
@@ -99,10 +99,10 @@ int main(int argc, char** argv)
 		}
 	}
 	xmlSetProp(xpathObj->nodesetval->nodeTab[0], BAD_CAST "width",
-		BAD_CAST xmlXPathCastNumberToString(model.tile_x_range * HORIZ_TILE_SPACING + HORIZ_TILE_SPACING/2));
+		BAD_CAST xmlXPathCastNumberToString(model.x_width * HORIZ_TILE_SPACING + HORIZ_TILE_SPACING/2));
 	xmlSetProp(xpathObj->nodesetval->nodeTab[0], BAD_CAST "height",
 		BAD_CAST xmlXPathCastNumberToString(20 + VERT_TILE_SPACING
-		+ model.tile_y_range * VERT_TILE_SPACING + 20));
+		+ model.y_height * VERT_TILE_SPACING + 20));
 
 	xmlDocFormatDump(stdout, doc, 1 /* format */);
 	xmlXPathFreeObject(xpathObj);

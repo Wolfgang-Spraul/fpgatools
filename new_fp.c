@@ -75,10 +75,10 @@ int printf_tiles(struct fpga_model* model)
 	struct fpga_tile* tile;
 	int x, y;
 
-	for (x = 0; x < model->tile_x_range; x++) {
+	for (x = 0; x < model->x_width; x++) {
 		printf("\n");
-		for (y = 0; y < model->tile_y_range; y++) {
-			tile = &model->tiles[y*model->tile_x_range + x];
+		for (y = 0; y < model->y_height; y++) {
+			tile = &model->tiles[y*model->x_width + x];
 
 			if (tile->type != NA)
 				printf("tile y%02i x%02i name %s\n", y, x,
@@ -117,8 +117,8 @@ int printf_devices(struct fpga_model* model)
 	int x, y, i;
 	struct fpga_tile* tile;
 
-	for (x = 0; x < model->tile_x_range; x++) {
-		for (y = 0; y < model->tile_y_range; y++) {
+	for (x = 0; x < model->x_width; x++) {
+		for (y = 0; y < model->y_height; y++) {
 			tile = YX_TILE(model, y, x);
 			for (i = 0; i < tile->num_devices; i++) {
 				switch (tile->devices[i].type) {
@@ -134,8 +134,29 @@ int printf_devices(struct fpga_model* model)
 					case DEV_MACC:
 						printf("device y%02i x%02i DSP48A1\n", y, x);
 						break;
-					case DEV_BRAM:
+					case DEV_TIEOFF:
+						printf("device y%02i x%02i TIEOFF\n", y, x);
+						break;
+					case DEV_IOBM:
+						printf("device y%02i x%02i IOBM\n", y, x);
+						break;
+					case DEV_IOBS:
+						printf("device y%02i x%02i IOBS\n", y, x);
+						break;
+					case DEV_ILOGIC:
+						printf("device y%02i x%02i ILOGIC2\n", y, x);
+						break;
+					case DEV_OLOGIC:
+						printf("device y%02i x%02i OLOGIC2\n", y, x);
+						break;
+					case DEV_IODELAY:
+						printf("device y%02i x%02i IODELAY2\n", y, x);
+						break;
+					case DEV_BRAM16:
 						printf("device y%02i x%02i RAMB16BWER\n", y, x);
+						break;
+					case DEV_BRAM8:
+						printf("device y%02i x%02i RAMB8BWER\n", y, x);
 						break;
 				}
 			}
@@ -151,9 +172,9 @@ int printf_ports(struct fpga_model* model)
 	int x, y, i, conn_point_dests_o, num_dests_for_this_conn_point;
 	int first_port_printed;
 
-	for (x = 0; x < model->tile_x_range; x++) {
-		for (y = 0; y < model->tile_y_range; y++) {
-			tile = &model->tiles[y*model->tile_x_range + x];
+	for (x = 0; x < model->x_width; x++) {
+		for (y = 0; y < model->y_height; y++) {
+			tile = &model->tiles[y*model->x_width + x];
 
 			first_port_printed = 0;
 			for (i = 0; i < tile->num_conn_point_names; i++) {
@@ -191,9 +212,9 @@ int printf_conns(struct fpga_model* model)
 	int x, y, i, j, k, conn_point_dests_o, num_dests_for_this_conn_point;
 	int other_tile_x, other_tile_y, first_conn_printed;
 
-	for (x = 0; x < model->tile_x_range; x++) {
-		for (y = 0; y < model->tile_y_range; y++) {
-			tile = &model->tiles[y*model->tile_x_range + x];
+	for (x = 0; x < model->x_width; x++) {
+		for (y = 0; y < model->y_height; y++) {
+			tile = &model->tiles[y*model->x_width + x];
 
 			first_conn_printed = 0;
 			for (i = 0; i < tile->num_conn_point_names; i++) {
