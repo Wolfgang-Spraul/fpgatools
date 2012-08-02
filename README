@@ -16,3 +16,4 @@ Utilities
 - hstrrep        high-speed hashed array based search and replace util
 - sort_seq       sorts line-based text file by sequence numbers in strings
 - merge_seq      merges a pre-sorted text file into wire sequences
+- pair2net       reads the first two words per line and builds nets

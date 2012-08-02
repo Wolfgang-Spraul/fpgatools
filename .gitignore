@@ -12,3 +12,5 @@ sort_seq
 sort_seq.o
 merge_seq
 merge_seq.o
+pair2net
+pair2net.o

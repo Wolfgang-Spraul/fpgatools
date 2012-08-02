@@ -25,11 +25,15 @@ bit2txt: bit2txt.o helper.o
 
 bit2txt.o: bit2txt.c helper.h
 
-hstrrep: hstrrep.o helper.o
+pair2net: pair2net.o helper.o
+
+pair2net.o: pair2net.c helper.h
 
 sort_seq: sort_seq.o
 
 merge_seq: merge_seq.o
+
+hstrrep: hstrrep.o helper.o
 
 helper.o: helper.c helper.h
 
@@ -54,19 +58,28 @@ compare.%: xc6slx9_empty.%
 	@if test -s compare_$*_extra.txt; then echo Extra lines - compare_$*_extra.txt: ; cat compare_$*_extra.txt; fi;
 
 %.tiles: %.fp
-	cat $<|awk '{if ($$1=="tile" && $$4=="name") printf "%s %s %s\n",$$2,$$3,$$5}'|sort >$@
+	@cat $<|awk '{if ($$1=="tile" && $$4=="name") printf "%s %s %s\n",$$2,$$3,$$5}'|sort >$@
 
 %.devices: %.fp
-	cat $<|awk '{if ($$1=="device") printf "%s %s %s\n",$$2,$$3,$$4}'|sort >$@
+	@cat $<|awk '{if ($$1=="device") printf "%s %s %s\n",$$2,$$3,$$4}'|sort >$@
+
+%.nets: %.fp pair2net
+	cat $<|awk '{if ($$1=="static_conn") printf "%s-%s-%s %s-%s-%s\n",$$2,$$3,$$4,$$5,$$6,$$7}' |./pair2net -|sort >$@
+	@echo Number of nets:
+	@cat $@|wc -l
+	@echo Number of connection points:
+	@cat $@|wc -w
+	@echo Largest net:
+	@cat $@|awk '{if (NF>max) max=NF} END {print max}'
 
 %.conns: %.fp sort_seq merge_seq
-	cat $<|awk '{if ($$1=="static_conn") printf "%s %s %s %s %s %s\n",$$2,$$3,$$5,$$6,$$4,$$7}'|sort|./sort_seq -|./merge_seq -|awk '{printf "%s %s %s %s %s %s\n",$$1,$$2,$$5,$$3,$$4,$$6}'|sort >$@
+	@cat $<|awk '{if ($$1=="static_conn") printf "%s %s %s %s %s %s\n",$$2,$$3,$$5,$$6,$$4,$$7}'|sort|./sort_seq -|./merge_seq -|awk '{printf "%s %s %s %s %s %s\n",$$1,$$2,$$5,$$3,$$4,$$6}'|sort >$@
 	
 %.ports: %.fp
-	cat $<|awk '{if ($$1=="port") printf "%s %s %s\n",$$2,$$3,$$4}'|sort >$@
+	@cat $<|awk '{if ($$1=="port") printf "%s %s %s\n",$$2,$$3,$$4}'|sort >$@
 
 %.sw: %.fp sort_seq merge_seq
-	cat $<|awk '{if ($$1=="switch") printf "%s %s %s %s %s\n",$$2,$$3,$$4,$$5,$$6}'|sort|./sort_seq -|./merge_seq -|sort >$@
+	@cat $<|awk '{if ($$1=="switch") printf "%s %s %s %s %s\n",$$2,$$3,$$4,$$5,$$6}'|sort|./sort_seq -|./merge_seq -|sort >$@
 
 clean:
 	rm -f bit2txt bit2txt.o \

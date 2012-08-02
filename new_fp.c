@@ -114,7 +114,33 @@ int printf_tiles(struct fpga_model* model)
 
 int printf_devices(struct fpga_model* model)
 {
-	// device y01 x02 type
+	int x, y, i;
+	struct fpga_tile* tile;
+
+	for (x = 0; x < model->tile_x_range; x++) {
+		for (y = 0; y < model->tile_y_range; y++) {
+			tile = YX_TILE(model, y, x);
+			for (i = 0; i < tile->num_devices; i++) {
+				switch (tile->devices[i].type) {
+					case DEV_LOGIC_M:
+						printf("device y%02i x%02i SLICEM\n", y, x);
+						break;
+					case DEV_LOGIC_L:
+						printf("device y%02i x%02i SLICEL\n", y, x);
+						break;
+					case DEV_LOGIC_X:
+						printf("device y%02i x%02i SLICEX\n", y, x);
+						break;
+					case DEV_MACC:
+						printf("device y%02i x%02i DSP48A1\n", y, x);
+						break;
+					case DEV_BRAM:
+						printf("device y%02i x%02i RAMB16BWER\n", y, x);
+						break;
+				}
+			}
+		}
+	}
 	return 0;
 }
 

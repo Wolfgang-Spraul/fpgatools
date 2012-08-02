@@ -113,6 +113,28 @@ static int init_switches(struct fpga_model* model)
 
 static int init_devices(struct fpga_model* model)
 {
+	int x, y;
+	struct fpga_tile* tile;
+
+	for (x = 0; x < model->tile_x_range; x++) {
+		if (is_atx(X_LOGIC_COL, model, x)) {
+			for (y = TOP_IO_TILES; y < model->tile_y_range - BOTTOM_IO_TILES; y++) {
+				tile = YX_TILE(model, y, x);
+				if (tile->flags & TF_LOGIC_XM_DEV) {
+					tile->devices[tile->num_devices].type = DEV_LOGIC_X;
+					tile->num_devices++;
+					tile->devices[tile->num_devices].type = DEV_LOGIC_M;
+					tile->num_devices++;
+				}
+				if (tile->flags & TF_LOGIC_XL_DEV) {
+					tile->devices[tile->num_devices].type = DEV_LOGIC_X;
+					tile->num_devices++;
+					tile->devices[tile->num_devices].type = DEV_LOGIC_L;
+					tile->num_devices++;
+				}
+			}
+		}
+	}
 	return 0;
 }
 
@@ -121,7 +143,7 @@ static int init_ports(struct fpga_model* model)
 	int x, y, i, j, k, row_num, row_pos, rc;
 
 	for (x = 0; x < model->tile_x_range; x++) {
-		if (is_atx(X_FABRIC_ROUTING_COL|X_CENTER_ROUTING_COL|X_LEFT_IO_ROUTING_COL|X_RIGHT_IO_ROUTING_COL, model, x)) {
+		if (is_atx(X_ROUTING_COL, model, x)) {
 			for (y = TOP_IO_TILES; y < model->tile_y_range - BOTTOM_IO_TILES; y++) {
 				int keep_out = is_atx(X_ROUTING_NO_IO|X_LEFT_IO_ROUTING_COL|X_RIGHT_IO_ROUTING_COL, model, x) ? 0 : 2;
 				if (y < TOP_IO_TILES+keep_out

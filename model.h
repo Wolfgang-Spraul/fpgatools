@@ -224,6 +224,40 @@ int is_atyx(int check, struct fpga_model* model, int y, int x);
 void is_in_row(const struct fpga_model* model, int y,
 	int* row_num, int* row_pos);
 
+enum fpgadev_type
+{
+	DEV_LOGIC_M,
+	DEV_LOGIC_L,
+	DEV_LOGIC_X,
+	DEV_MACC,
+	DEV_BRAM
+};
+
+struct fpgadev_logic_x
+{
+	int a;
+};
+
+struct fpgadev_logic_l
+{
+	int b;
+};
+
+struct fpgadev_logic_m
+{
+	int c;
+};
+
+struct fpga_device
+{
+	enum fpgadev_type type;
+	union {
+		struct fpgadev_logic_m log_m;
+		struct fpgadev_logic_l log_l;
+		struct fpgadev_logic_x log_x;
+	};
+};
+
 #define SWITCH_BIDIRECTIONAL		0x40000000
 
 struct fpga_tile
@@ -233,7 +267,7 @@ struct fpga_tile
 
 	// expect up to 64 devices per tile
 	int num_devices;
-	struct fpga_device* devices;
+	struct fpga_device devices[32];
 
 	// expect up to 5k connection point names per tile
 	// 2*16 bit per entry
