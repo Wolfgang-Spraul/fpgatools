@@ -264,6 +264,39 @@ int printf_conns(struct fpga_model* model)
 
 int printf_switches(struct fpga_model* model)
 {
-	// switch y01 x02 from direction(->|<->) to
+	struct fpga_tile* tile;
+	int x, y, i, from_connpt_o, to_connpt_o, from_str_i, to_str_i;
+	int first_switch_printed, is_bidirectional;
+	const char* from_str, *to_str;
+
+	for (x = 0; x < model->x_width; x++) {
+		for (y = 0; y < model->y_height; y++) {
+			tile = YX_TILE(model, y, x);
+
+			first_switch_printed = 0;
+			for (i = 0; i < tile->num_switches; i++) {
+				from_connpt_o = (tile->switches[i] & 0x3FFF8000) >> 15;
+				to_connpt_o = tile->switches[i] & 0x00007FFF;
+				is_bidirectional = (tile->switches[i] & SWITCH_BIDIRECTIONAL) != 0;
+
+				from_str_i = tile->conn_point_names[from_connpt_o*2+1];
+				to_str_i = tile->conn_point_names[to_connpt_o*2+1];
+
+				from_str = strarray_lookup(&model->str, from_str_i);
+				to_str = strarray_lookup(&model->str, to_str_i);
+				if (!from_str || !to_str) {
+					fprintf(stderr, "Internal error in %s:%i, cannot lookup from_i %i or to_i %i\n",
+						__FILE__, __LINE__, from_str_i, to_str_i);
+					continue;
+				}
+				if (!first_switch_printed) {
+					first_switch_printed = 1;	
+					printf("\n");
+				}
+				printf("switch y%02i x%02i %s %s %s\n", y, x, from_str,
+					is_bidirectional ? "<->" : "->", to_str);
+			}
+		}
+	}
 	return 0;
 }

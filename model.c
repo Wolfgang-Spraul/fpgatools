@@ -57,6 +57,9 @@ struct w_net
 
 static int add_conn_net(struct fpga_model* model, add_conn_f add_conn_func, struct w_net* net);
 
+static int add_switch(struct fpga_model* model, int y, int x, const char* from,
+	const char* to, int is_bidirectional);
+
 struct seed_data
 {
 	int x_flags;
@@ -108,7 +111,24 @@ void fpga_free_model(struct fpga_model* model)
 
 static int init_switches(struct fpga_model* model)
 {
+	int x, y, rc;
+
+	for (x = 0; x < model->x_width; x++) {
+		if (!is_atx(X_ROUTING_COL, model, x))
+			continue;
+		for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
+			if (is_aty(Y_ROW_HORIZ_AXSYMM|Y_CHIP_HORIZ_REGS,
+					model, y))
+				continue;
+
+			if (y != 68 || x != 12) continue;
+			rc = add_switch(model, y, x, "LOGICOUT0", "NN2B0", 0 /* bidir */);
+			if (rc) goto xout;
+		}
+	}
 	return 0;
+xout:
+	return rc;
 }
 
 static int init_devices(struct fpga_model* model)
@@ -2223,6 +2243,76 @@ static int add_conn_net(struct fpga_model* model, add_conn_f add_conn_func, stru
 			if (rc) goto xout;
 		}
 	}
+	return 0;
+xout:
+	return rc;
+}
+
+#define SWITCH_ALLOC_INCREMENT 64
+
+static int add_switch(struct fpga_model* model, int y, int x, const char* from,
+	const char* to, int is_bidirectional)
+{
+	struct fpga_tile* tile = YX_TILE(model, y, x);
+	int rc, i, from_idx, to_idx, from_connpt_o, to_connpt_o;
+	uint32_t new_switch;
+
+	rc = strarray_find(&model->str, from, &from_idx);
+	if (rc) goto xout;
+	rc = strarray_find(&model->str, to, &to_idx);
+	if (rc) goto xout;
+	if (from_idx == STRIDX_NO_ENTRY || to_idx == STRIDX_NO_ENTRY) {
+		fprintf(stderr, "No string for switch from %s (%i) or %s (%i).\n",
+			from, from_idx, to, to_idx);
+		return -1;
+	}
+
+	from_connpt_o = -1;
+	for (i = 0; i < tile->num_conn_point_names; i++) {
+		if (tile->conn_point_names[i*2+1] == from_idx) {
+			from_connpt_o = i;
+			break;
+		}
+	}
+	to_connpt_o = -1;
+	for (i = 0; i < tile->num_conn_point_names; i++) {
+		if (tile->conn_point_names[i*2+1] == to_idx) {
+			to_connpt_o = i;
+			break;
+		}
+	}
+	if (from_connpt_o == -1 || to_connpt_o == -1) {
+		fprintf(stderr, "No conn point for switch from %s (%i/%i) or %s (%i/%i).\n",
+			from, from_idx, from_connpt_o, to, to_idx, to_connpt_o);
+		return -1;
+	}
+	if (from_connpt_o > SWITCH_MAX_CONNPT_O
+	    || to_connpt_o > SWITCH_MAX_CONNPT_O) {
+		fprintf(stderr, "Internal error in %s:%i (from_o %i to_o %i)\n",
+			__FILE__, __LINE__, from_connpt_o, to_connpt_o);
+		return -1;
+	}
+	new_switch = (from_connpt_o << 15) | to_connpt_o;
+	if (is_bidirectional)
+		new_switch |= SWITCH_BIDIRECTIONAL;
+
+	for (i = 0; i < tile->num_switches; i++) {
+		if ((tile->switches[i] & 0x3FFFFFFF) == (new_switch & 0x3FFFFFFF)) {
+			fprintf(stderr, "Internal error in %s:%i duplicate switch from %s to %s\n",
+				__FILE__, __LINE__, from, to);
+			return -1;
+		}
+	}
+	if (!(tile->num_switches % SWITCH_ALLOC_INCREMENT)) {
+		uint32_t* new_ptr = realloc(tile->switches,
+			(tile->num_switches+SWITCH_ALLOC_INCREMENT)*sizeof(*tile->switches));
+		if (!new_ptr) {
+			fprintf(stderr, "Out of memory %s:%i\n", __FILE__, __LINE__);
+			return -1;
+		}
+		tile->switches = new_ptr;
+	}
+	tile->switches[tile->num_switches++] = new_switch;
 	return 0;
 xout:
 	return rc;

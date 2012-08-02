@@ -269,7 +269,9 @@ struct fpga_device
 	};
 };
 
+#define SWITCH_ON			0x80000000
 #define SWITCH_BIDIRECTIONAL		0x40000000
+#define SWITCH_MAX_CONNPT_O		0x7FFF // 15 bits
 
 struct fpga_tile
 {
