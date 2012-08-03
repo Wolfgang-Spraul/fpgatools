@@ -9,6 +9,8 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include "helper.h"
+
 #define LINE_LENGTH	1024
 
 struct line_buf
@@ -55,24 +57,8 @@ static int print_line(const struct line_buf* line)
 	return 0;
 }
 
-static void next_word(const char*s, int start, int* beg, int* end)
-{
-	int i = start;
-	while (s[i] == ' ' || s[i] == '\t' || s[i] == '\n') i++;
-	*beg = i;
-	while (s[i] != ' ' && s[i] != '\t' && s[i] != '\n' && s[i]) i++;
-	*end = i;
-}
-
-static int to_i(const char* s, int len)
-{
-	int num, base;
-	for (base = 1, num = 0; len; num += base*(s[--len]-'0'), base *= 10);
-	return num;
-}
-
 // Finds the positions of two non-equal numbers that must meet
-// two number of criteria:
+// the following two criteria:
 // - prefixed by at least one capital 'A'-'Z' or '_'
 // - suffixed by matching or empty strings
 static void find_non_matching_number(const char* a, int a_len,
@@ -129,6 +115,22 @@ static void find_non_matching_number(const char* a, int a_len,
 	if (a_len - a_o != b_len - b_o) return;
 	if ((a_len - a_o) && strncmp(&a[a_o], &b[b_o], a_len-a_o)) return;
 
+	// some known suffixes include numbers and must never be
+	// part of merging
+	if (a_len - a_o == 0) {
+		// _S0 _N3
+		if (a_o > 3
+		    && ((a[a_o-3] == '_' && a[a_o-2] == 'S' && a[a_o-1] == '0')
+		        || (a[a_o-3] == '_' && a[a_o-2] == 'N' && a[a_o-1] == '3')))
+			return;
+		// _INT0 _INT1 _INT2 _INT3
+		if (a_o > 5
+		    && a[a_o-5] == '_' && a[a_o-4] == 'I' && a[a_o-3] == 'N'
+		    && a[a_o-2] == 'T'
+		    && a[a_o-1] >= '0' && a[a_o-1] <= '3')
+			return;
+	}
+
 	*ab_start = digit_start;
 	*a_end = a_o;
 	*b_end = b_o;
@@ -174,6 +176,12 @@ static int merge_line(struct line_buf* first_l, struct line_buf* second_l)
 			fprintf(stderr, "Internal error in %s:%i\n", __FILE__, __LINE__);
 			return -1;
 		}
+		// We must be looking at the same digit, for example
+		// if we have a sequence SW2M0:3, and now the second
+		// line is SW4M0 - the '4' must not be seen as a
+		// continuation of the '3'.
+		if (s_start != first_l->left_digit_start_o)
+			return 0;
 		if (second_num != first_l->left_digit_base + first_l->sequence_size + 1)
 			return 0;
 	} else {
@@ -270,9 +278,33 @@ static int merge_line(struct line_buf* first_l, struct line_buf* second_l)
 	return 0;
 }
 
+static void read_line(FILE* fp, struct line_buf* line)
+{
+	*line->buf = 0;
+	line->left_digit_start_o = -1;
+	line->right_digit_start_o = -1;
+	line->sequence_size = 0;
+	if (!fgets(line->buf, sizeof(line->buf), fp))
+		*line->buf = 0;
+}
+
+static void increment(int *off, struct line_buf* lines, int num_lines, int end_of_ringbuf)
+{
+	if (++(*off) >= num_lines)
+		*off = 0;
+	while (!lines[*off].buf[0] && *off != end_of_ringbuf) {
+		if (++(*off) >= num_lines)
+			*off = 0;
+	}
+}
+
+#define READ_AHEAD_SIZE		100
+#define LAST_MERGE_TRY		2 // how far to look forward for a mergable seq
+
 int main(int argc, char** argv)
 {
-	struct line_buf first_line, second_line;
+	struct line_buf read_ahead[READ_AHEAD_SIZE];
+	int read_ahead_get, read_ahead_put, second_line, eof_reached, try_count;
 	FILE* fp = 0;
 	int rc;
 
@@ -292,34 +324,59 @@ int main(int argc, char** argv)
 		}
 	}
 
-	// read first line
-	first_line.buf[0] = 0;
-	first_line.left_digit_start_o = -1;
-	first_line.right_digit_start_o = -1;
-	first_line.sequence_size = 0;
-	if (!fgets(first_line.buf, sizeof(first_line.buf), fp)
-	    || !first_line.buf[0]) goto out;
-
+	read_line(fp, &read_ahead[0]);
+	if (!read_ahead[0].buf[0]) goto out;
+	read_ahead_get = 0;
+	read_ahead_put = 1;
+	eof_reached = 0;
 	while (1) {
-		// read second line
-		second_line.buf[0] = 0;
-		second_line.left_digit_start_o = -1;
-		second_line.right_digit_start_o = -1;
-		second_line.sequence_size = 0;
-		if (!fgets(second_line.buf, sizeof(second_line.buf), fp))
-			break;
-		// can the two be merged?
-		rc = merge_line(&first_line, &second_line);
-		if (rc) goto xout;
-		if (second_line.buf[0]) {
-			// no: print first line and move second line to first
-			rc = print_line(&first_line);
+		// fill up read ahead buffer
+		while (!eof_reached
+		       && read_ahead_put != read_ahead_get) {
+			read_line(fp, &read_ahead[read_ahead_put]);
+			if (!read_ahead[read_ahead_put].buf[0]) {
+				eof_reached = 1;
+				break;
+			}
+			if (++read_ahead_put >= READ_AHEAD_SIZE)
+				read_ahead_put = 0;
+		}
+
+		// find second line in read ahead buffer
+		second_line = read_ahead_get;
+		increment(&second_line, read_ahead, READ_AHEAD_SIZE, read_ahead_put);
+
+		if (!read_ahead[second_line].buf[0]) {
+			// if no more lines, print first one and exit
+			rc = print_line(&read_ahead[read_ahead_get]);
 			if (rc) goto xout;
-			first_line = second_line;
+			break;
+		}
+
+		try_count = 0;
+		while (1) {
+			// try to merge
+			rc = merge_line(&read_ahead[read_ahead_get], &read_ahead[second_line]);
+			if (rc) goto xout;
+			if (!read_ahead[second_line].buf[0]) // merge successful
+				break;
+
+			// try next one
+			increment(&second_line, read_ahead,
+				READ_AHEAD_SIZE, read_ahead_put);
+
+			if (second_line == read_ahead_put
+			    || ++try_count >= LAST_MERGE_TRY) {
+				// read-ahead empty or stop trying
+				rc = print_line(&read_ahead[read_ahead_get]);
+				if (rc) goto xout;
+				read_ahead[read_ahead_get].buf[0] = 0;
+				increment(&read_ahead_get, read_ahead,
+					READ_AHEAD_SIZE, read_ahead_put);
+				break;
+			}
 		}
 	}
-	rc = print_line(&first_line);
-	if (rc) goto xout;
 out:
 	return EXIT_SUCCESS;
 xout:

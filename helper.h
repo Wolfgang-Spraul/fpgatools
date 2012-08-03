@@ -74,6 +74,8 @@ uint64_t read_lut64(uint8_t* two_minors, int off_in_frame);
 int get_vm_mb();
 int get_random();
 int compare_with_number(const char* a, const char* b);
+void next_word(const char* s, int start, int* beg, int* end);
+int to_i(const char* s, int len);
 
 uint32_t hash_djb2(const unsigned char* str);
 

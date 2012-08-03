@@ -29,9 +29,13 @@ pair2net: pair2net.o helper.o
 
 pair2net.o: pair2net.c helper.h
 
-sort_seq: sort_seq.o
+sort_seq: sort_seq.o helper.o
 
-merge_seq: merge_seq.o
+sort_seq.o: sort_seq.c helper.h
+
+merge_seq: merge_seq.o helper.o
+
+merge_seq.o: merge_seq.c helper.h
 
 hstrrep: hstrrep.o helper.o
 

@@ -1146,20 +1146,40 @@ static int run_logic_inout(struct fpga_model* model)
 	char buf[128];
 	int x, y, i, rc;
 
+	// LOGICOUT
+	for (x = 0; x < model->x_width; x++) {
+		if (is_atx(X_FABRIC_LOGIC_ROUTING_COL|X_CENTER_ROUTING_COL, model, x)) {
+			for (y = 0; y < model->y_height; y++) {
+				tile = &model->tiles[y * model->x_width + x];
+				if (tile[1].flags & TF_LOGIC_XM_DEV) {
+					if ((rc = add_conn_range(model, NOPREF_BI_F, y, x, "LOGICOUT%i", 0, 23, y, x+1, "CLEXM_LOGICOUT%i", 0))) goto xout;
+				}
+				if (tile[1].flags & TF_LOGIC_XL_DEV) {
+					if ((rc = add_conn_range(model, NOPREF_BI_F, y, x, "LOGICOUT%i", 0, 23, y, x+1, "CLEXL_LOGICOUT%i", 0))) goto xout;
+				}
+				if (tile[1].flags & TF_IOLOGIC_DELAY_DEV) {
+					if ((rc = add_conn_range(model, NOPREF_BI_F, y, x, "LOGICOUT%i", 0, 23, y, x+1, "IOI_LOGICOUT%i", 0))) goto xout;
+				}
+			}
+		}
+		if (is_atx(X_FABRIC_BRAM_ROUTING_COL, model, x)) {
+			for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
+				if (is_aty(Y_ROW_HORIZ_AXSYMM|Y_CHIP_HORIZ_REGS,
+						model, y))
+					continue;
+				if ((rc = add_conn_range(model, NOPREF_BI_F, y, x, "LOGICOUT%i", 0, 23, y, x+1, "INT_INTERFACE_LOGICOUT%i", 0))) goto xout;
+				if (YX_TILE(model, y, x)[2].flags & TF_BRAM_DEV) {
+					if ((rc = add_conn_range(model, NOPREF_BI_F, y-3, x+1, "INT_INTERFACE_LOGICOUT_%i", 0, 23, y, x+2, "BRAM_LOGICOUT%i_INT3", 0))) goto xout;
+					if ((rc = add_conn_range(model, NOPREF_BI_F, y-2, x+1, "INT_INTERFACE_LOGICOUT_%i", 0, 23, y, x+2, "BRAM_LOGICOUT%i_INT2", 0))) goto xout;
+					if ((rc = add_conn_range(model, NOPREF_BI_F, y-1, x+1, "INT_INTERFACE_LOGICOUT_%i", 0, 23, y, x+2, "BRAM_LOGICOUT%i_INT1", 0))) goto xout;
+					if ((rc = add_conn_range(model, NOPREF_BI_F, y, x+1, "INT_INTERFACE_LOGICOUT_%i", 0, 23, y, x+2, "BRAM_LOGICOUT%i_INT0", 0))) goto xout;
+				}
+			}
+		}
+	}
 	for (y = 0; y < model->y_height; y++) {
 		for (x = 0; x < model->x_width; x++) {
 			tile = &model->tiles[y * model->x_width + x];
-
-			// LOGICOUT
-			if (tile[1].flags & TF_LOGIC_XM_DEV) {
-				if ((rc = add_conn_range(model, NOPREF_BI_F, y, x, "LOGICOUT%i", 0, 23, y, x+1, "CLEXM_LOGICOUT%i", 0))) goto xout;
-			}
-			if (tile[1].flags & TF_LOGIC_XL_DEV) {
-				if ((rc = add_conn_range(model, NOPREF_BI_F, y, x, "LOGICOUT%i", 0, 23, y, x+1, "CLEXL_LOGICOUT%i", 0))) goto xout;
-			}
-			if (tile[1].flags & TF_IOLOGIC_DELAY_DEV) {
-				if ((rc = add_conn_range(model, NOPREF_BI_F, y, x, "LOGICOUT%i", 0, 23, y, x+1, "IOI_LOGICOUT%i", 0))) goto xout;
-			}
 
 			// LOGICIN
 			if (is_atyx(YX_ROUTING_TILE, model, y, x)) {
@@ -2392,6 +2412,14 @@ int is_atx(int check, struct fpga_model* model, int x)
 	    && model->tiles[x].flags & TF_FABRIC_ROUTING_COL
 	    && model->tiles[x+1].flags & TF_FABRIC_LOGIC_COL) return 1;
 	if (check & X_FABRIC_LOGIC_COL && model->tiles[x].flags & TF_FABRIC_LOGIC_COL) return 1;
+	if (check & X_FABRIC_BRAM_ROUTING_COL
+	    && model->tiles[x].flags & TF_FABRIC_ROUTING_COL
+	    && model->tiles[x+1].flags & TF_FABRIC_BRAM_MACC_ROUTING_COL
+	    && model->tiles[x+2].flags & TF_FABRIC_BRAM_COL) return 1;
+	if (check & X_FABRIC_MACC_ROUTING_COL
+	    && model->tiles[x].flags & TF_FABRIC_ROUTING_COL
+	    && model->tiles[x+1].flags & TF_FABRIC_BRAM_MACC_ROUTING_COL
+	    && model->tiles[x+2].flags & TF_FABRIC_MACC_COL) return 1;
 	if (check & X_FABRIC_BRAM_MACC_ROUTING_COL && model->tiles[x].flags & TF_FABRIC_BRAM_MACC_ROUTING_COL) return 1;
 	if (check & X_FABRIC_BRAM_COL && model->tiles[x].flags & TF_FABRIC_BRAM_COL) return 1;
 	if (check & X_FABRIC_MACC_COL && model->tiles[x].flags & TF_FABRIC_MACC_COL) return 1;

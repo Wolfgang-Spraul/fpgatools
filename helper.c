@@ -693,6 +693,22 @@ int compare_with_number(const char* a, const char* b)
 	return a_num - b_num;
 }
 
+void next_word(const char*s, int start, int* beg, int* end)
+{
+	int i = start;
+	while (s[i] == ' ' || s[i] == '\t' || s[i] == '\n') i++;
+	*beg = i;
+	while (s[i] != ' ' && s[i] != '\t' && s[i] != '\n' && s[i]) i++;
+	*end = i;
+}
+
+int to_i(const char* s, int len)
+{
+	int num, base;
+	for (base = 1, num = 0; len; num += base*(s[--len]-'0'), base *= 10);
+	return num;
+}
+
 // Dan Bernstein's hash function
 uint32_t hash_djb2(const unsigned char* str)
 {
