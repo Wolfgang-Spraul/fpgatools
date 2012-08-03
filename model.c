@@ -136,6 +136,92 @@ static int init_devices(struct fpga_model* model)
 	int x, y, i, j;
 	struct fpga_tile* tile;
 
+	// DCM, PLL_ADV
+	for (i = 0; i < model->cfg_rows; i++) {
+		y = TOP_IO_TILES + HALF_ROW + i*ROW_SIZE;
+		if (y > model->center_y) y++; // central regs
+		tile = YX_TILE(model, y-1, model->center_x-CMTPLL_FROM_CENTER_O);
+		if (i%2) {
+			tile->devices[tile->num_devices++].type = DEV_DCM;
+			tile->devices[tile->num_devices++].type = DEV_DCM;
+		} else
+			tile->devices[tile->num_devices++].type = DEV_PLL_ADV;
+	}
+
+	// BSCAN
+	tile = YX_TILE(model, TOP_IO_TILES, model->x_width-RIGHT_IO_DEVS_O);
+	tile->devices[tile->num_devices++].type = DEV_BSCAN;
+	tile->devices[tile->num_devices++].type = DEV_BSCAN;
+
+	// BSCAN, OCT_CALIBRATE
+	tile = YX_TILE(model, TOP_IO_TILES+1, model->x_width-RIGHT_IO_DEVS_O);
+	tile->devices[tile->num_devices++].type = DEV_BSCAN;
+	tile->devices[tile->num_devices++].type = DEV_BSCAN;
+	tile->devices[tile->num_devices++].type = DEV_OCT_CALIBRATE;
+
+	// ICAP, SPI_ACCESS, OCT_CALIBRATE
+	tile = YX_TILE(model, model->y_height-BOT_IO_TILES-1,
+		model->x_width-RIGHT_IO_DEVS_O);
+	tile->devices[tile->num_devices++].type = DEV_ICAP;
+	tile->devices[tile->num_devices++].type = DEV_SPI_ACCESS;
+	tile->devices[tile->num_devices++].type = DEV_OCT_CALIBRATE;
+
+	// STARTUP, POST_CRC_INTERNAL, SLAVE_SPI, SUSPEND_SYNC
+	tile = YX_TILE(model, model->y_height-BOT_IO_TILES-2,
+		model->x_width-RIGHT_IO_DEVS_O);
+	tile->devices[tile->num_devices++].type = DEV_STARTUP;
+	tile->devices[tile->num_devices++].type = DEV_POST_CRC_INTERNAL;
+	tile->devices[tile->num_devices++].type = DEV_SLAVE_SPI;
+	tile->devices[tile->num_devices++].type = DEV_SUSPEND_SYNC;
+
+	// BUFGMUX
+	tile = YX_TILE(model, model->center_y, model->center_x);
+	for (i = 0; i < 16; i++)
+		tile->devices[tile->num_devices++].type = DEV_BUFGMUX;
+
+	// BUFIO, BUFIO_FB, BUFPLL, BUFPLL_MCB
+	tile = YX_TILE(model, TOP_OUTER_ROW, model->center_x-CMTPLL_FROM_CENTER_O);
+	tile->devices[tile->num_devices++].type = DEV_BUFPLL;
+	tile->devices[tile->num_devices++].type = DEV_BUFPLL;
+	tile->devices[tile->num_devices++].type = DEV_BUFPLL_MCB;
+	for (j = 0; j < 8; j++) {
+		tile->devices[tile->num_devices++].type = DEV_BUFIO;
+		tile->devices[tile->num_devices++].type = DEV_BUFIO_FB;
+	}
+	tile = YX_TILE(model, model->center_y, LEFT_OUTER_COL);
+	tile->devices[tile->num_devices++].type = DEV_BUFPLL;
+	tile->devices[tile->num_devices++].type = DEV_BUFPLL;
+	tile->devices[tile->num_devices++].type = DEV_BUFPLL_MCB;
+	for (j = 0; j < 8; j++) {
+		tile->devices[tile->num_devices++].type = DEV_BUFIO;
+		tile->devices[tile->num_devices++].type = DEV_BUFIO_FB;
+	}
+	tile = YX_TILE(model, model->center_y, model->x_width - RIGHT_OUTER_O);
+	tile->devices[tile->num_devices++].type = DEV_BUFPLL;
+	tile->devices[tile->num_devices++].type = DEV_BUFPLL;
+	tile->devices[tile->num_devices++].type = DEV_BUFPLL_MCB;
+	for (j = 0; j < 8; j++) {
+		tile->devices[tile->num_devices++].type = DEV_BUFIO;
+		tile->devices[tile->num_devices++].type = DEV_BUFIO_FB;
+	}
+	tile = YX_TILE(model, model->y_height - BOT_OUTER_ROW, model->center_x-CMTPLL_FROM_CENTER_O);
+	tile->devices[tile->num_devices++].type = DEV_BUFPLL;
+	tile->devices[tile->num_devices++].type = DEV_BUFPLL;
+	tile->devices[tile->num_devices++].type = DEV_BUFPLL_MCB;
+	for (j = 0; j < 8; j++) {
+		tile->devices[tile->num_devices++].type = DEV_BUFIO;
+		tile->devices[tile->num_devices++].type = DEV_BUFIO_FB;
+	}
+	
+	// BUFH
+	for (i = 0; i < model->cfg_rows; i++) {
+		y = TOP_IO_TILES + HALF_ROW + i*ROW_SIZE;
+		if (y > model->center_y) y++; // central regs
+		tile = YX_TILE(model, y, model->center_x);
+		for (j = 0; j < 32; j++)
+			tile->devices[tile->num_devices++].type = DEV_BUFH;
+	}
+
 	// BRAM
 	for (x = 0; x < model->x_width; x++) {
 		if (is_atx(X_FABRIC_BRAM_COL, model, x)) {
@@ -513,10 +599,10 @@ static int init_wires(struct fpga_model* model)
 {
 	int rc;
 
-	rc = run_gclk(model);
+	rc = run_logic_inout(model);
 	if (rc) goto xout;
 
-	rc = run_logic_inout(model);
+	rc = run_gclk(model);
 	if (rc) goto xout;
 
 	rc = run_direction_wires(model);
@@ -1162,7 +1248,7 @@ static int run_logic_inout(struct fpga_model* model)
 				}
 			}
 		}
-		if (is_atx(X_FABRIC_BRAM_ROUTING_COL, model, x)) {
+		if (is_atx(X_FABRIC_BRAM_ROUTING_COL|X_FABRIC_MACC_ROUTING_COL, model, x)) {
 			for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
 				if (is_aty(Y_ROW_HORIZ_AXSYMM|Y_CHIP_HORIZ_REGS,
 						model, y))
@@ -1173,6 +1259,52 @@ static int run_logic_inout(struct fpga_model* model)
 					if ((rc = add_conn_range(model, NOPREF_BI_F, y-2, x+1, "INT_INTERFACE_LOGICOUT_%i", 0, 23, y, x+2, "BRAM_LOGICOUT%i_INT2", 0))) goto xout;
 					if ((rc = add_conn_range(model, NOPREF_BI_F, y-1, x+1, "INT_INTERFACE_LOGICOUT_%i", 0, 23, y, x+2, "BRAM_LOGICOUT%i_INT1", 0))) goto xout;
 					if ((rc = add_conn_range(model, NOPREF_BI_F, y, x+1, "INT_INTERFACE_LOGICOUT_%i", 0, 23, y, x+2, "BRAM_LOGICOUT%i_INT0", 0))) goto xout;
+				}
+				if (YX_TILE(model, y, x)[2].flags & TF_MACC_DEV) {
+					if ((rc = add_conn_range(model, NOPREF_BI_F, y-3, x+1, "INT_INTERFACE_LOGICOUT_%i", 0, 23, y, x+2, "MACC_LOGICOUT%i_INT3", 0))) goto xout;
+					if ((rc = add_conn_range(model, NOPREF_BI_F, y-2, x+1, "INT_INTERFACE_LOGICOUT_%i", 0, 23, y, x+2, "MACC_LOGICOUT%i_INT2", 0))) goto xout;
+					if ((rc = add_conn_range(model, NOPREF_BI_F, y-1, x+1, "INT_INTERFACE_LOGICOUT_%i", 0, 23, y, x+2, "MACC_LOGICOUT%i_INT1", 0))) goto xout;
+					if ((rc = add_conn_range(model, NOPREF_BI_F, y, x+1, "INT_INTERFACE_LOGICOUT_%i", 0, 23, y, x+2, "MACC_LOGICOUT%i_INT0", 0))) goto xout;
+				}
+			}
+		}
+		if (is_atx(X_CENTER_ROUTING_COL, model, x)) {
+			for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
+				if (is_aty(Y_ROW_HORIZ_AXSYMM, model, y)) {
+					if ((rc = add_conn_range(model, NOPREF_BI_F, y-1, x, "LOGICOUT%i", 0, 23, y-1, x+1, "INT_INTERFACE_LOGICOUT%i", 0))) goto xout;
+					if ((rc = add_conn_range(model, NOPREF_BI_F, y+1, x, "LOGICOUT%i", 0, 23, y+1, x+1, "INT_INTERFACE_LOGICOUT%i", 0))) goto xout;
+					if (YX_TILE(model, y-1, x+2)->flags & TF_DCM_DEV) {
+						if ((rc = add_conn_range(model, NOPREF_BI_F, y-1, x+1, "INT_INTERFACE_LOGICOUT_%i", 0, 23, y-1, x+2, "DCM_CLB2_LOGICOUT%i", 0))) goto xout;
+						if ((rc = add_conn_range(model, NOPREF_BI_F, y+1, x+1, "INT_INTERFACE_LOGICOUT_%i", 0, 23, y-1, x+2, "DCM_CLB1_LOGICOUT%i", 0))) goto xout;
+					} else if (YX_TILE(model, y-1, x+2)->flags & TF_PLL_DEV) {
+						if ((rc = add_conn_range(model, NOPREF_BI_F, y-1, x+1, "INT_INTERFACE_LOGICOUT_%i", 0, 23, y-1, x+2, "PLL_CLB2_LOGICOUT%i", 0))) goto xout;
+						if ((rc = add_conn_range(model, NOPREF_BI_F, y+1, x+1, "INT_INTERFACE_LOGICOUT_%i", 0, 23, y-1, x+2, "PLL_CLB1_LOGICOUT%i", 0))) goto xout;
+					}
+				}
+				if (is_aty(Y_CHIP_HORIZ_REGS, model, y)) {
+					if ((rc = add_conn_range(model, NOPREF_BI_F, y-1, x, "LOGICOUT%i", 0, 23, y-1, x+1, "INT_INTERFACE_REGC_LOGICOUT%i", 0))) goto xout;
+				}
+			}
+		}
+		if (is_atx(X_LEFT_IO_ROUTING_COL|X_RIGHT_IO_ROUTING_COL, model, x)) {
+			int wired_side, local_size;
+			if (is_atx(X_LEFT_IO_ROUTING_COL, model, x)) {
+				local_size = 1;
+				wired_side = Y_LEFT_WIRED;
+			} else {
+				local_size = 2;
+				wired_side = Y_RIGHT_WIRED;
+			}
+			for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
+				if (is_aty(Y_ROW_HORIZ_AXSYMM|Y_CHIP_HORIZ_REGS,
+						model, y))
+					continue;
+				if (y < TOP_IO_TILES+local_size || y > model->y_height-BOT_IO_TILES-local_size-1) {
+					if ((rc = add_conn_range(model, NOPREF_BI_F, y, x, "LOGICOUT%i", 0, 23, y, x+1, "INT_INTERFACE_LOCAL_LOGICOUT%i", 0))) goto xout;
+				} else if (is_aty(wired_side, model, y)) {
+					if ((rc = add_conn_range(model, NOPREF_BI_F, y, x, "LOGICOUT%i", 0, 23, y, x+1, "IOI_LOGICOUT%i", 0))) goto xout;
+				} else {
+					if ((rc = add_conn_range(model, NOPREF_BI_F, y, x, "LOGICOUT%i", 0, 23, y, x+1, "INT_INTERFACE_LOGICOUT%i", 0))) goto xout;
 				}
 			}
 		}

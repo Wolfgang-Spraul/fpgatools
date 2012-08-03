@@ -138,11 +138,12 @@ enum fpga_tile_type
 #define TOP_IO_TILES		2
 #define TOP_OUTER_ROW		0
 #define TOP_INNER_ROW		1
-#define BOT_IO_TILES		2
 #define HALF_ROW		8
 #define LAST_POS_IN_ROW		16 // including hclk at 8
+#define ROW_SIZE		(HALF_ROW+1+HALF_ROW)
 
 // Some offsets that are being deducted from their origin
+#define BOT_IO_TILES		2
 #define BOT_OUTER_ROW		1
 #define BOT_INNER_ROW		2
 #define RIGHT_OUTER_O		1
@@ -244,7 +245,23 @@ enum fpgadev_type
 	DEV_OLOGIC,
 	DEV_IODELAY,
 	DEV_BRAM16,
-	DEV_BRAM8
+	DEV_BRAM8,
+	DEV_BUFH,
+	DEV_BUFIO,
+	DEV_BUFIO_FB,
+	DEV_BUFPLL,
+	DEV_BUFPLL_MCB,
+	DEV_BUFGMUX,
+	DEV_BSCAN,
+	DEV_DCM,
+	DEV_PLL_ADV,
+	DEV_ICAP,
+	DEV_POST_CRC_INTERNAL,
+	DEV_STARTUP,
+	DEV_SLAVE_SPI,
+	DEV_SUSPEND_SYNC,
+	DEV_OCT_CALIBRATE,
+	DEV_SPI_ACCESS
 };
 
 struct fpgadev_logic_x

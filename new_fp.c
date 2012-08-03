@@ -158,6 +158,54 @@ int printf_devices(struct fpga_model* model)
 					case DEV_BRAM8:
 						printf("device y%02i x%02i RAMB8BWER\n", y, x);
 						break;
+					case DEV_BUFH:
+						printf("device y%02i x%02i BUFH\n", y, x);
+						break;
+					case DEV_BUFIO:
+						printf("device y%02i x%02i BUFIO2\n", y, x);
+						break;
+					case DEV_BUFIO_FB:
+						printf("device y%02i x%02i BUFIO2FB\n", y, x);
+						break;
+					case DEV_BUFPLL:
+						printf("device y%02i x%02i BUFPLL\n", y, x);
+						break;
+					case DEV_BUFPLL_MCB:
+						printf("device y%02i x%02i BUFPLL_MCB\n", y, x);
+						break;
+					case DEV_BUFGMUX:
+						printf("device y%02i x%02i BUFGMUX\n", y, x);
+						break;
+					case DEV_BSCAN:
+						printf("device y%02i x%02i BSCAN\n", y, x);
+						break;
+					case DEV_DCM:
+						printf("device y%02i x%02i DCM\n", y, x);
+						break;
+					case DEV_PLL_ADV:
+						printf("device y%02i x%02i PLL_ADV\n", y, x);
+						break;
+					case DEV_ICAP:
+						printf("device y%02i x%02i ICAP\n", y, x);
+						break;
+					case DEV_POST_CRC_INTERNAL:
+						printf("device y%02i x%02i POST_CRC_INTERNAL\n", y, x);
+						break;
+					case DEV_STARTUP:
+						printf("device y%02i x%02i STARTUP\n", y, x);
+						break;
+					case DEV_SLAVE_SPI:
+						printf("device y%02i x%02i SLAVE_SPI\n", y, x);
+						break;
+					case DEV_SUSPEND_SYNC:
+						printf("device y%02i x%02i SUSPEND_SYNC\n", y, x);
+						break;
+					case DEV_OCT_CALIBRATE:
+						printf("device y%02i x%02i OCT_CALIBRATE\n", y, x);
+						break;
+					case DEV_SPI_ACCESS:
+						printf("device y%02i x%02i SPI_ACCESS\n", y, x);
+						break;
 				}
 			}
 		}
