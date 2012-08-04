@@ -139,6 +139,7 @@ enum fpga_tile_type
 #define TOP_OUTER_ROW		0
 #define TOP_INNER_ROW		1
 #define HALF_ROW		8
+#define HCLK_POS		8  // hclk pos in row
 #define LAST_POS_IN_ROW		16 // including hclk at 8
 #define ROW_SIZE		(HALF_ROW+1+HALF_ROW)
 
@@ -151,7 +152,9 @@ enum fpga_tile_type
 #define RIGHT_MCB_O		3
 #define RIGHT_IO_DEVS_O		4
 #define RIGHT_IO_ROUTING_O	5
-#define CMTPLL_FROM_CENTER_O	1
+#define CENTER_CMTPLL_O		1
+#define CENTER_LOGIC_O		2
+#define CENTER_ROUTING_O	3
 
 #define YX_TILE(model, y, x) (&(model)->tiles[(y)*model->x_width+(x)])
 
@@ -218,6 +221,11 @@ int is_aty(int check, struct fpga_model* model, int y);
 #define X_LEFT_MCB			0x04000000
 #define X_RIGHT_MCB			0x08000000
 
+#define IS_TOP_ROW(row, model)		((row) == (model)->cfg_rows-1)
+#define IS_BOTTOM_ROW(row, model)	((row) == 0)
+#define IS_CENTER_Y(row, model)		((row) == (model)->center_y)
+#define BOT_TERM(model)			((model)->y_height-BOT_INNER_ROW)
+
 // multiple checks are combined with OR logic
 int is_atx(int check, struct fpga_model* model, int x);
 
@@ -231,6 +239,10 @@ int is_atyx(int check, struct fpga_model* model, int y, int x);
 // 8 for the hclk, and 9..16 for the lower half.
 void is_in_row(const struct fpga_model* model, int y,
 	int* row_num, int* row_pos);
+
+// row_num() and row_pos() return -1 if y is outside of a row
+int row_num(int y, struct fpga_model* model);
+int row_pos(int y, struct fpga_model* model);
 
 enum fpgadev_type
 {

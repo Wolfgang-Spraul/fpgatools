@@ -140,7 +140,7 @@ static int init_devices(struct fpga_model* model)
 	for (i = 0; i < model->cfg_rows; i++) {
 		y = TOP_IO_TILES + HALF_ROW + i*ROW_SIZE;
 		if (y > model->center_y) y++; // central regs
-		tile = YX_TILE(model, y-1, model->center_x-CMTPLL_FROM_CENTER_O);
+		tile = YX_TILE(model, y-1, model->center_x-CENTER_CMTPLL_O);
 		if (i%2) {
 			tile->devices[tile->num_devices++].type = DEV_DCM;
 			tile->devices[tile->num_devices++].type = DEV_DCM;
@@ -180,7 +180,7 @@ static int init_devices(struct fpga_model* model)
 		tile->devices[tile->num_devices++].type = DEV_BUFGMUX;
 
 	// BUFIO, BUFIO_FB, BUFPLL, BUFPLL_MCB
-	tile = YX_TILE(model, TOP_OUTER_ROW, model->center_x-CMTPLL_FROM_CENTER_O);
+	tile = YX_TILE(model, TOP_OUTER_ROW, model->center_x-CENTER_CMTPLL_O);
 	tile->devices[tile->num_devices++].type = DEV_BUFPLL;
 	tile->devices[tile->num_devices++].type = DEV_BUFPLL;
 	tile->devices[tile->num_devices++].type = DEV_BUFPLL_MCB;
@@ -204,7 +204,7 @@ static int init_devices(struct fpga_model* model)
 		tile->devices[tile->num_devices++].type = DEV_BUFIO;
 		tile->devices[tile->num_devices++].type = DEV_BUFIO_FB;
 	}
-	tile = YX_TILE(model, model->y_height - BOT_OUTER_ROW, model->center_x-CMTPLL_FROM_CENTER_O);
+	tile = YX_TILE(model, model->y_height - BOT_OUTER_ROW, model->center_x-CENTER_CMTPLL_O);
 	tile->devices[tile->num_devices++].type = DEV_BUFPLL;
 	tile->devices[tile->num_devices++].type = DEV_BUFPLL;
 	tile->devices[tile->num_devices++].type = DEV_BUFPLL_MCB;
@@ -335,7 +335,7 @@ static int init_devices(struct fpga_model* model)
 	tile->devices[tile->num_devices++].type = DEV_TIEOFF;
 	tile = YX_TILE(model, TOP_OUTER_ROW, model->center_x-1);
 	tile->devices[tile->num_devices++].type = DEV_TIEOFF;
-	tile = YX_TILE(model, model->y_height-BOT_OUTER_ROW, model->center_x-CMTPLL_FROM_CENTER_O);
+	tile = YX_TILE(model, model->y_height-BOT_OUTER_ROW, model->center_x-CENTER_CMTPLL_O);
 	tile->devices[tile->num_devices++].type = DEV_TIEOFF;
 
 	for (x = 0; x < model->x_width; x++) {
@@ -599,13 +599,13 @@ static int init_wires(struct fpga_model* model)
 {
 	int rc;
 
+	rc = run_direction_wires(model);
+	if (rc) goto xout;
+
 	rc = run_logic_inout(model);
 	if (rc) goto xout;
 
 	rc = run_gclk(model);
-	if (rc) goto xout;
-
-	rc = run_direction_wires(model);
 	if (rc) goto xout;
 
 	return 0;
@@ -1309,11 +1309,70 @@ static int run_logic_inout(struct fpga_model* model)
 			}
 		}
 	}
+	// LOGICIN
+	for (i = 0; i < model->cfg_rows; i++) {
+		y = TOP_IO_TILES + HALF_ROW + i*ROW_SIZE;
+		if (y > model->center_y) y++; // central regs
+
+		if (i%2) { // DCM
+			if ((rc = add_conn_range(model, NOPREF_BI_F,
+				y-1, model->center_x-CENTER_LOGIC_O, "INT_INTERFACE_LOGICBIN%i",  0,  3,
+				y-1, model->center_x-CENTER_CMTPLL_O, "DCM_CLB2_LOGICINB%i", 0))) goto xout;
+			if ((rc = add_conn_bi(model,
+				y-1, model->center_x-CENTER_LOGIC_O, "INT_INTERFACE_IOI_LOGICBIN4",
+				y-1, model->center_x-CENTER_CMTPLL_O, "DCM_CLB2_LOGICINB4"))) goto xout;
+			if ((rc = add_conn_range(model, NOPREF_BI_F,
+				y-1, model->center_x-CENTER_LOGIC_O, "INT_INTERFACE_LOGICBIN%i",  5,  9,
+				y-1, model->center_x-CENTER_CMTPLL_O, "DCM_CLB2_LOGICINB%i", 5))) goto xout;
+			if ((rc = add_conn_bi(model,
+				y-1, model->center_x-CENTER_LOGIC_O, "INT_INTERFACE_IOI_LOGICBIN10",
+				y-1, model->center_x-CENTER_CMTPLL_O, "DCM_CLB2_LOGICINB10"))) goto xout;
+			if ((rc = add_conn_range(model, NOPREF_BI_F,
+				y-1, model->center_x-CENTER_LOGIC_O, "INT_INTERFACE_LOGICBIN%i", 11, 62,
+				y-1, model->center_x-CENTER_CMTPLL_O, "DCM_CLB2_LOGICINB%i", 11))) goto xout;
+
+			if ((rc = add_conn_range(model, NOPREF_BI_F,
+				y+1, model->center_x-CENTER_LOGIC_O, "INT_INTERFACE_LOGICBIN%i",  0,  3,
+				y-1, model->center_x-CENTER_CMTPLL_O, "DCM_CLB1_LOGICINB%i", 0))) goto xout;
+			if ((rc = add_conn_bi(model,
+				y+1, model->center_x-CENTER_LOGIC_O, "INT_INTERFACE_IOI_LOGICBIN4",
+				y-1, model->center_x-CENTER_CMTPLL_O, "DCM_CLB1_LOGICINB4"))) goto xout;
+			if ((rc = add_conn_range(model, NOPREF_BI_F,
+				y+1, model->center_x-CENTER_LOGIC_O, "INT_INTERFACE_LOGICBIN%i",  5,  9,
+				y-1, model->center_x-CENTER_CMTPLL_O, "DCM_CLB1_LOGICINB%i", 5))) goto xout;
+			if ((rc = add_conn_bi(model,
+				y+1, model->center_x-CENTER_LOGIC_O, "INT_INTERFACE_IOI_LOGICBIN10",
+				y-1, model->center_x-CENTER_CMTPLL_O, "DCM_CLB1_LOGICINB10"))) goto xout;
+			if ((rc = add_conn_range(model, NOPREF_BI_F,
+				y+1, model->center_x-CENTER_LOGIC_O, "INT_INTERFACE_LOGICBIN%i", 11, 62,
+				y-1, model->center_x-CENTER_CMTPLL_O, "DCM_CLB1_LOGICINB%i", 11))) goto xout;
+		} else { // PLL
+			if ((rc = add_conn_range(model, NOPREF_BI_F,
+				y-1, model->center_x-CENTER_LOGIC_O, "INT_INTERFACE_LOGICBIN%i",  0,  3,
+				y-1, model->center_x-CENTER_CMTPLL_O, "PLL_CLB2_LOGICINB%i", 0))) goto xout;
+			if ((rc = add_conn_bi(model,
+				y-1, model->center_x-CENTER_LOGIC_O, "INT_INTERFACE_IOI_LOGICBIN4",
+				y-1, model->center_x-CENTER_CMTPLL_O, "PLL_CLB2_LOGICINB4"))) goto xout;
+			if ((rc = add_conn_range(model, NOPREF_BI_F,
+				y-1, model->center_x-CENTER_LOGIC_O, "INT_INTERFACE_LOGICBIN%i",  5,  9,
+				y-1, model->center_x-CENTER_CMTPLL_O, "PLL_CLB2_LOGICINB%i", 5))) goto xout;
+			if ((rc = add_conn_bi(model,
+				y-1, model->center_x-CENTER_LOGIC_O, "INT_INTERFACE_IOI_LOGICBIN10",
+				y-1, model->center_x-CENTER_CMTPLL_O, "PLL_CLB2_LOGICINB10"))) goto xout;
+			if ((rc = add_conn_range(model, NOPREF_BI_F,
+				y-1, model->center_x-CENTER_LOGIC_O, "INT_INTERFACE_LOGICBIN%i", 11, 62,
+				y-1, model->center_x-CENTER_CMTPLL_O, "PLL_CLB2_LOGICINB%i", 11))) goto xout;
+
+			if ((rc = add_conn_range(model, NOPREF_BI_F,
+				y+1, model->center_x-CENTER_LOGIC_O, "INT_INTERFACE_LOGICBIN%i", 0, 62,
+				y-1, model->center_x-CENTER_CMTPLL_O, "PLL_CLB1_LOGICINB%i", 0))) goto xout;
+		}
+	}
+
 	for (y = 0; y < model->y_height; y++) {
 		for (x = 0; x < model->x_width; x++) {
 			tile = &model->tiles[y * model->x_width + x];
 
-			// LOGICIN
 			if (is_atyx(YX_ROUTING_TILE, model, y, x)) {
 				static const int north_p[4] = {21, 28, 52, 60};
 				static const int south_p[4] = {20, 36, 44, 62};
@@ -1426,9 +1485,63 @@ xout:
 	return rc;
 }
 
+static const char* s_4wire = "BAMCE";
+
 static int run_direction_wires(struct fpga_model* model)
 {
-	int x, y, rc;
+	int x, y, i, j, _row_num, _row_pos, rc;
+	struct w_net net;
+
+	// NN4
+	for (x = 0; x < model->x_width; x++) {
+		if (!is_atx(X_ROUTING_COL, model, x))
+			continue;
+		for (y = 0; y < model->y_height; y++) {
+			is_in_row(model, y, &_row_num, &_row_pos);
+			if (_row_pos >= 0 && _row_pos != 8) {
+
+				net.last_inc = 3;
+				j = 0;
+				for (i = 0; i < 5; i++) { // go through "BAMCE"
+					net.pts[j].start_count = 0;
+					net.pts[j].y = y-j;
+					net.pts[j].x = x;
+					if (y-j == TOP_INNER_ROW) {
+						ABORT(!i);
+						net.pts[j].name = pf("NN4%c%%i", s_4wire[i-1]);
+						j++;
+						break;
+					}
+					net.pts[j].name = pf("NN4%c%%i", s_4wire[i]);
+					if (IS_CENTER_Y(y-j, model)
+					    || row_pos(y-j, model) == HCLK_POS) {
+						ABORT(!i);
+						i--;
+					}
+					j++;
+				}
+				net.pts[j].name = "";
+				if ((rc = add_conn_net(model, PREF_BI_F, &net))) goto xout;
+			}
+		}
+		if (!is_atx(X_FABRIC_BRAM_ROUTING_COL, model, x)) {
+			net.last_inc = 3;
+			for (i = 1; i < 5; i++) { // go through "BAMCE"
+				net.pts[0].start_count = 0;
+				net.pts[0].y = BOT_TERM(model);
+				net.pts[0].x = x;
+				net.pts[0].name = pf("NN4%c%%i", s_4wire[i]);
+				for (j = i; j < 5; j++) {
+					net.pts[j-i+1].start_count = 0;
+					net.pts[j-i+1].y = BOT_TERM(model)-(j-i+1);
+					net.pts[j-i+1].x = x;
+					net.pts[j-i+1].name = pf("NN4%c%%i", s_4wire[j]);
+				}
+				net.pts[j-i+1].name = "";
+				if ((rc = add_conn_net(model, PREF_BI_F, &net))) goto xout;
+			}
+		}
+	}
 
 	for (y = 0; y < model->y_height; y++) {
 		for (x = 0; x < model->x_width; x++) {
@@ -2165,13 +2278,16 @@ static int init_tiles(struct fpga_model* model)
 // helper funcs
 //
 
+#define NUM_PF_BUFS	16
+
 static const char* pf(const char* fmt, ...)
 {
-	// safe to call it 8 times in 1 expression (such as function params)
-	static char pf_buf[8][128];
+	// safe to call it NUM_PF_BUFStimes in 1 expression,
+	// such as function params or a net structure
+	static char pf_buf[NUM_PF_BUFS][128];
 	static int last_buf = 0;
 	va_list list;
-	last_buf = (last_buf+1)%8;
+	last_buf = (last_buf+1)%NUM_PF_BUFS;
 	pf_buf[last_buf][0] = 0;
 	va_start(list, fmt);
 	vsnprintf(pf_buf[last_buf], sizeof(pf_buf[0]), fmt, list);
@@ -2605,6 +2721,20 @@ void is_in_row(const struct fpga_model* model, int y,
 
 	if (row_num) *row_num = model->cfg_rows-(y/(8+1+8))-1;
 	if (row_pos) *row_pos = y%(8+1+8);
+}
+
+int row_num(int y, struct fpga_model* model)
+{
+	int result;
+	is_in_row(model, y, &result, 0 /* row_pos */);
+	return result;
+}
+
+int row_pos(int y, struct fpga_model* model)
+{
+	int result;
+	is_in_row(model, y, 0 /* row_num */, &result);
+	return result;
 }
 
 static const char* fpga_ttstr[] = // tile type strings
