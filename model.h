@@ -225,6 +225,7 @@ int is_aty(int check, struct fpga_model* model, int y);
 #define IS_BOTTOM_ROW(row, model)	((row) == 0)
 #define IS_CENTER_Y(row, model)		((row) == (model)->center_y)
 #define BOT_TERM(model)			((model)->y_height-BOT_INNER_ROW)
+#define TOP_TERM(model)			(TOP_INNER_ROW)
 
 // multiple checks are combined with OR logic
 int is_atx(int check, struct fpga_model* model, int x);

@@ -45,9 +45,11 @@ struct w_point // wire point
 	int y, x;
 };
 
+#define NO_INCREMENT 0
+
 struct w_net
 {
-	// if !last_inc, no incrementing will happen
+	// if !last_inc, no incrementing will happen (NO_INCREMENT)
 	// if last_inc > 0, incrementing will happen to
 	// the %i in the name from 0:last_inc, for a total
 	// of last_inc+1 wires.
@@ -1487,10 +1489,107 @@ xout:
 
 static const char* s_4wire = "BAMCE";
 
+int wire_SS4E_N3(struct fpga_model* model, const struct w_net* net)
+{
+	int i, j, rc, e_y, e_x, extra_n3;
+
+	for (i = 0; net->pts[i].name[0] != 0; i++);
+	if (!i || net->pts[i-1].name[3] != 'E') return 0;
+
+	// i-1 is 'E', i-2 is 'C' which if it's double
+	// because of HCLK is also in i-3
+	e_y = net->pts[i-1].y;
+	e_x = net->pts[i-1].x;
+	if (e_y == BOT_TERM(model)-1
+	    && !is_atx(X_FABRIC_BRAM_ROUTING_COL, model, e_x))
+		if ((rc = add_conn_bi_pref(model, e_y, e_x, "SS4E_N3", e_y+1, e_x, "SS4E_N3"))) goto xout;
+	if ((rc = add_conn_bi_pref(model, e_y, e_x, "SS4E3", e_y-1, e_x, "SS4E_N3"))) goto xout;
+	if (row_pos(e_y-1, model) == HCLK_POS
+	    || IS_CENTER_Y(e_y-1, model)) {
+		if ((rc = add_conn_bi_pref(model, e_y, e_x, "SS4E3", e_y-2, e_x, "SS4E_N3"))) goto xout;
+		if ((rc = add_conn_bi_pref(model, e_y-1, e_x, "SS4E_N3", e_y-2, e_x, "SS4E_N3"))) goto xout;
+		if ((rc = add_conn_bi_pref(model, e_y-1, e_x, "SS4C3", e_y-2, e_x, "SS4E_N3"))) goto xout;
+		if ((rc = add_conn_bi_pref(model, e_y-2, e_x, "SS4C3", e_y-1, e_x, "SS4E_N3"))) goto xout;
+		extra_n3 = 1;
+		j = i-4;
+	} else {
+		extra_n3 = 0;
+		j = i-3;
+	}
+	for (; j >= 0; j--) {
+		if ((rc = add_conn_bi_pref(model, net->pts[j].y, e_x, pf("%.4s3", net->pts[j].name), e_y-1, e_x, "SS4E_N3"))) goto xout;
+		if (extra_n3)
+			if ((rc = add_conn_bi_pref(model, net->pts[j].y, e_x, pf("%.4s3", net->pts[j].name), e_y-2, e_x, "SS4E_N3"))) goto xout;
+	}
+	return 0;
+xout:
+	return rc;
+}
+
 static int run_direction_wires(struct fpga_model* model)
 {
 	int x, y, i, j, _row_num, _row_pos, rc;
 	struct w_net net;
+
+	// SS4
+	for (x = 0; x < model->x_width; x++) {
+		if (!is_atx(X_ROUTING_COL, model, x))
+			continue;
+		// some wiring at the top
+		net.last_inc = 3;
+		for (i = 1; i < 5; i++) { // go through "BAMCE"
+			net.pts[0].start_count = 0;
+			net.pts[0].y = TOP_TERM(model);
+			net.pts[0].x = x;
+			net.pts[0].name = pf("SS4%c%%i", s_4wire[i]);
+			for (j = i; j < 5; j++) {
+				net.pts[j-i+1].start_count = 0;
+				net.pts[j-i+1].y = TOP_TERM(model)+(j-i+1);
+				net.pts[j-i+1].x = x;
+				net.pts[j-i+1].name = pf("SS4%c%%i", s_4wire[j]);
+			}
+			net.pts[j-i+1].name = "";
+			if ((rc = add_conn_net(model, PREF_BI_F, &net))) goto xout;
+			if ((rc = wire_SS4E_N3(model, &net))) goto xout;
+		}
+		// rest going down to bottom termination
+		for (y = 0; y < model->y_height; y++) {
+			is_in_row(model, y, &_row_num, &_row_pos);
+			if (is_atx(X_FABRIC_BRAM_ROUTING_COL, model, x)
+			    && y > BOT_TERM(model)-5)
+				break;
+			if (_row_pos < 0 || _row_pos == 8)
+				continue;
+
+			net.last_inc = 3;
+			j = 0;
+			for (i = 0; i < 5; i++) { // go through "BAMCE"
+				net.pts[j].start_count = 0;
+				net.pts[j].y = y+j;
+				net.pts[j].x = x;
+				if (y+j == BOT_TERM(model)) {
+					ABORT(!i);
+					net.pts[j].name = pf("SS4%c%%i", s_4wire[i-1]);
+					j++;
+					break;
+				}
+				if (IS_CENTER_Y(y+j, model)
+				    || row_pos(y+j, model) == HCLK_POS) {
+					ABORT(!i);
+					net.pts[j].name = pf("SS4%c%%i", s_4wire[i-1]);
+					j++;
+					net.pts[j].start_count = 0;
+					net.pts[j].y = y+j;
+					net.pts[j].x = x;
+				}
+				net.pts[j].name = pf("SS4%c%%i", s_4wire[i]);
+				j++;
+			}
+			net.pts[j].name = "";
+			if ((rc = add_conn_net(model, PREF_BI_F, &net))) goto xout;
+			if ((rc = wire_SS4E_N3(model, &net))) goto xout;
+		}
+	}
 
 	// NN4
 	for (x = 0; x < model->x_width; x++) {
@@ -1499,7 +1598,6 @@ static int run_direction_wires(struct fpga_model* model)
 		for (y = 0; y < model->y_height; y++) {
 			is_in_row(model, y, &_row_num, &_row_pos);
 			if (_row_pos >= 0 && _row_pos != 8) {
-
 				net.last_inc = 3;
 				j = 0;
 				for (i = 0; i < 5; i++) { // go through "BAMCE"
