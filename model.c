@@ -87,6 +87,7 @@ int fpga_build_model(struct fpga_model* model, int fpga_rows, const char* column
 	rc = init_tiles(model);
 	if (rc) return rc;
 
+#if 0
 	rc = init_wires(model);
 	if (rc) return rc;
 
@@ -95,6 +96,7 @@ int fpga_build_model(struct fpga_model* model, int fpga_rows, const char* column
 
 	rc = init_devices(model);
 	if (rc) return rc;
+#endif
 
 	rc = init_switches(model);
 	if (rc) return rc;
@@ -111,10 +113,484 @@ void fpga_free_model(struct fpga_model* model)
 	memset(model, 0, sizeof(*model));
 }
 
+// The wires are ordered clockwise. Order is important for
+// wire_to_NESW4().
+enum wire_type
+{
+	FIRST_LEN1 = 1,
+	W_NL1 = FIRST_LEN1,
+	W_NR1,
+	W_EL1,
+	W_ER1,
+	W_SL1,
+	W_SR1,
+	W_WL1,
+	W_WR1,
+	LAST_LEN1 = W_WR1,
+
+	FIRST_LEN2,
+	W_NN2 = FIRST_LEN2,
+	W_NE2,
+	W_EE2,
+	W_SE2,
+	W_SS2,
+	W_SW2,
+	W_WW2,
+	W_NW2,
+	LAST_LEN2 = W_NW2,
+
+	FIRST_LEN4,
+	W_NN4 = FIRST_LEN4,
+	W_NE4,
+	W_EE4,
+	W_SE4,
+	W_SS4,
+	W_SW4,
+	W_WW4,
+	W_NW4,
+	LAST_LEN4 = W_NW4
+};
+
+static const char* wire_base(enum wire_type w)
+{
+	switch (w) {
+		case W_NL1: return "NL1";
+		case W_NR1: return "NR1";
+		case W_EL1: return "EL1";
+		case W_ER1: return "ER1";
+		case W_SL1: return "SL1";
+		case W_SR1: return "SR1";
+		case W_WL1: return "WL1";
+		case W_WR1: return "WR1";
+
+		case W_NN2: return "NN2";
+		case W_NE2: return "NE2";
+		case W_EE2: return "EE2";
+		case W_SE2: return "SE2";
+		case W_SS2: return "SS2";
+		case W_SW2: return "SW2";
+		case W_WW2: return "WW2";
+		case W_NW2: return "NW2";
+
+		case W_NN4: return "NN4";
+		case W_NE4: return "NE4";
+		case W_EE4: return "EE4";
+		case W_SE4: return "SE4";
+		case W_SS4: return "SS4";
+		case W_SW4: return "SW4";
+		case W_WW4: return "WW4";
+		case W_NW4: return "NW4";
+	}
+	ABORT(1);
+}
+
+#define W_CLOCKWISE(w)			rotate_wire((w), 1)
+#define W_CLOCKWISE_2(w)		rotate_wire((w), 2)
+#define W_COUNTER_CLOCKWISE(w)		rotate_wire((w), -1)
+#define W_COUNTER_CLOCKWISE_2(w)	rotate_wire((w), -2)
+
+#define W_IS_LEN1(w)			((w) >= FIRST_LEN1 && (w) <= LAST_LEN1)
+#define W_IS_LEN2(w)			((w) >= FIRST_LEN2 && (w) <= LAST_LEN2)
+#define W_IS_LEN4(w)			((w) >= FIRST_LEN4 && (w) <= LAST_LEN4)
+
+#define W_TO_LEN1(w)			wire_to_len(w, FIRST_LEN1)
+#define W_TO_LEN2(w)			wire_to_len(w, FIRST_LEN2)
+#define W_TO_LEN4(w)			wire_to_len(w, FIRST_LEN4)
+
+int rotate_num(int cur, int off, int first, int last)
+{
+	if (cur+off > last)
+		return first + (cur+off-last-1) % ((last+1)-first);
+	if (cur+off < first)
+		return last - (first-(cur+off)-1) % ((last+1)-first);
+	return cur+off;
+}
+
+enum wire_type rotate_wire(enum wire_type cur, int off)
+{
+	if (W_IS_LEN1(cur))
+		return rotate_num(cur, off, FIRST_LEN1, LAST_LEN1);
+	if (W_IS_LEN2(cur))
+		return rotate_num(cur, off, FIRST_LEN2, LAST_LEN2);
+	if (W_IS_LEN4(cur))
+		return rotate_num(cur, off, FIRST_LEN4, LAST_LEN4);
+	ABORT(1);
+}
+
+enum wire_type wire_to_len(enum wire_type w, int first_len)
+{
+	if (W_IS_LEN1(w))
+		return w-FIRST_LEN1 + first_len;
+	if (W_IS_LEN2(w))
+		return w-FIRST_LEN2 + first_len;
+	if (W_IS_LEN4(w))
+		return w-FIRST_LEN4 + first_len;
+	ABORT(1);
+}
+
+enum wire_type wire_to_NESW4(enum wire_type w)
+{
+	// normalizes any of the 8 directions to just N/E/S/W
+	// by going back to an even number.
+	w = W_TO_LEN4(w);
+	return w - (w-FIRST_LEN4)%2;
+}
+	
+// longest should be something like "WW2E_N3"?
+typedef char WIRE_NAME[8];
+
+struct one_switch
+{
+	WIRE_NAME from;
+	WIRE_NAME to;
+};
+
+struct set_of_switches
+{
+	int num_s;
+	struct one_switch s[64];
+};
+
+void add_switch_range(struct set_of_switches* dest,
+	enum wire_type end_wire, int end_from, int end_to,
+	enum wire_type beg_wire, int beg_from)
+{
+	int i;
+	for (i = end_from; i <= end_to; i++) {
+		sprintf(dest->s[dest->num_s].from, "%sE%i", wire_base(end_wire), i);
+		sprintf(dest->s[dest->num_s].to, "%sB%i", wire_base(beg_wire), beg_from + (i-end_from));
+		dest->num_s++;
+	}
+}
+
+void add_switch_E3toB0(struct set_of_switches* dest,
+	enum wire_type end_wire, enum wire_type beg_wire)
+{
+	const char* end_wire_s = wire_base(end_wire);
+	const char* beg_wire_s = wire_base(beg_wire);
+
+	sprintf(dest->s[dest->num_s].from, "%sE3", end_wire_s);
+	sprintf(dest->s[dest->num_s].to, "%sB0", beg_wire_s);
+	dest->num_s++;
+	add_switch_range(dest, end_wire, 0, 2, beg_wire, 1);
+}
+
+void add_switch_E0toB3(struct set_of_switches* dest,
+	enum wire_type end_wire, enum wire_type beg_wire)
+{
+	const char* end_wire_s = wire_base(end_wire);
+	const char* beg_wire_s = wire_base(beg_wire);
+
+	sprintf(dest->s[dest->num_s].from, "%sE0", end_wire_s);
+	sprintf(dest->s[dest->num_s].to, "%sB3", beg_wire_s);
+	dest->num_s++;
+	add_switch_range(dest, end_wire, 1, 3, beg_wire, 0);
+}
+
+int add_switches(struct set_of_switches* dest,
+	enum wire_type end_wire, enum wire_type beg_wire)
+{
+	const char* end_wire_s, *beg_wire_s;
+	int i;
+
+	end_wire_s = wire_base(end_wire);
+	beg_wire_s = wire_base(beg_wire);
+
+	//
+	// First the directional routing at the end of len-1 wires.
+	//
+
+	if (W_IS_LEN1(end_wire)) {
+		if (end_wire == W_WL1) {
+			if (beg_wire == W_NL1) {
+				sprintf(dest->s[dest->num_s].from, "%sE_N3",
+					end_wire_s);
+				sprintf(dest->s[dest->num_s].to, "%sB3",
+					beg_wire_s);
+				dest->num_s++;
+				add_switch_range(dest, end_wire,
+					0, 2, beg_wire, 0);
+				return 0;
+			}
+			if (beg_wire == W_WR1) {
+				add_switch_range(dest, end_wire,
+					0, 1, beg_wire, 2);
+				sprintf(dest->s[dest->num_s].from, "%sE_N3",
+					end_wire_s);
+				sprintf(dest->s[dest->num_s].to, "%sB1",
+					beg_wire_s);
+				dest->num_s++;
+				sprintf(dest->s[dest->num_s].from, "%sE2",
+					end_wire_s);
+				sprintf(dest->s[dest->num_s].to, "%sB0",
+					beg_wire_s);
+				dest->num_s++;
+				return 0;
+			}
+			if (beg_wire == W_NN2 || beg_wire == W_NW2) {
+				sprintf(dest->s[dest->num_s].from, "%sE_N3",
+					end_wire_s);
+				sprintf(dest->s[dest->num_s].to, "%sB0",
+					beg_wire_s);
+				dest->num_s++;
+				add_switch_range(dest, end_wire,
+					0, 2, beg_wire, 1);
+				return 0;
+			}
+			if (beg_wire == W_SR1) {
+				add_switch_E3toB0(dest, end_wire, beg_wire);
+				return 0;
+			}
+			if (beg_wire == W_WL1) {
+				add_switch_E0toB3(dest, end_wire, beg_wire);
+				return 0;
+			}
+			add_switch_range(dest, end_wire, 0, 3, beg_wire, 0);
+			return 0;
+		}
+		if (end_wire == W_WR1) {
+			if (beg_wire == W_SW2 || beg_wire == W_WW2) {
+				add_switch_range(dest, end_wire,
+					1, 3, beg_wire, 0);
+				sprintf(dest->s[dest->num_s].from, "%sE_S0",
+					end_wire_s);
+				sprintf(dest->s[dest->num_s].to, "%sB3",
+					beg_wire_s);
+				dest->num_s++;
+				return 0;
+			}
+			if (beg_wire == W_SR1) {
+				sprintf(dest->s[dest->num_s].from, "%sE_S0",
+					end_wire_s);
+				sprintf(dest->s[dest->num_s].to, "%sB0",
+					beg_wire_s);
+				dest->num_s++;
+				add_switch_range(dest, end_wire,
+					1, 3, beg_wire, 1);
+				return 0;
+			}
+			if (beg_wire == W_WL1) {
+				add_switch_range(dest, end_wire,
+					2, 1, beg_wire, 0);
+				sprintf(dest->s[dest->num_s].from, "%sE_S0",
+					end_wire_s);
+				sprintf(dest->s[dest->num_s].to, "%sB2",
+					beg_wire_s);
+				dest->num_s++;
+				sprintf(dest->s[dest->num_s].from, "%sE1",
+					end_wire_s);
+				sprintf(dest->s[dest->num_s].to, "%sB3",
+					beg_wire_s);
+				dest->num_s++;
+				return 0;
+			}
+			if (beg_wire == W_WR1) {
+				add_switch_E3toB0(dest, end_wire, beg_wire);
+				return 0;
+			}
+			if (beg_wire == W_NL1) {
+				add_switch_E0toB3(dest, end_wire, beg_wire);
+				return 0;
+			}
+			add_switch_range(dest, end_wire, 0, 3, beg_wire, 0);
+			return 0;
+		}
+		if (beg_wire == W_WR1 || beg_wire == W_ER1
+		    || beg_wire == W_SR1) {
+			add_switch_E3toB0(dest, end_wire, beg_wire);
+			return 0;
+		}
+		if (beg_wire == W_NL1 || beg_wire == W_EL1
+		    || beg_wire == W_WL1) {
+			add_switch_E0toB3(dest, end_wire, beg_wire);
+			return 0;
+		}
+		add_switch_range(dest, end_wire, 0, 3, beg_wire, 0);
+		return 0;
+	}
+
+	//
+	// The rest of the function is for directional routing
+	// at the end of len-2 and len-4 wires.
+	//
+
+	if (end_wire == W_WW2) {
+		if (beg_wire == W_NL1) {
+			add_switch_range(dest, end_wire, 0, 2, beg_wire, 0);
+			sprintf(dest->s[dest->num_s].from, "%sE_N3",
+				end_wire_s);
+			sprintf(dest->s[dest->num_s].to, "%sB3",
+				beg_wire_s);
+			dest->num_s++;
+			return 0;
+		}
+		if (beg_wire == W_WR1) {
+			add_switch_range(dest, end_wire, 0, 1, beg_wire, 2);
+			sprintf(dest->s[dest->num_s].from, "%sE_N3",
+				end_wire_s);
+			sprintf(dest->s[dest->num_s].to, "%sB1",
+				beg_wire_s);
+			dest->num_s++;
+			sprintf(dest->s[dest->num_s].from, "%sE2",
+				end_wire_s);
+			sprintf(dest->s[dest->num_s].to, "%sB0",
+				beg_wire_s);
+			dest->num_s++;
+			return 0;
+		}
+		if (beg_wire == W_WL1) {
+			add_switch_E0toB3(dest, end_wire, beg_wire);
+			return 0;
+		}
+		if (beg_wire == W_SR1) {
+			add_switch_E3toB0(dest, end_wire, beg_wire);
+			return 0;
+		}
+		if (beg_wire == W_WW4 || beg_wire == W_NN2
+		    || beg_wire == W_NW2 || beg_wire == W_NE4
+		    || beg_wire == W_NN4 || beg_wire == W_NW4) {
+			add_switch_range(dest, end_wire, 0, 2, beg_wire, 1);
+			sprintf(dest->s[dest->num_s].from, "%sE_N3",
+				end_wire_s);
+			sprintf(dest->s[dest->num_s].to, "%sB0",
+				beg_wire_s);
+			dest->num_s++;
+			return 0;
+		}
+		add_switch_range(dest, end_wire, 0, 3, beg_wire, 0);
+		return 0;
+	}
+
+	if (end_wire == W_NW2 || end_wire == W_NW4
+	    || end_wire == W_WW4) {
+		if (beg_wire == W_NL1) {
+			add_switch_E0toB3(dest, end_wire, beg_wire);
+			return 0;
+		}
+		if (beg_wire == W_WR1) {
+			add_switch_E3toB0(dest, end_wire, beg_wire);
+			return 0;
+		}
+		if (beg_wire == W_SR1) {
+			sprintf(dest->s[dest->num_s].from, "%sE_S0",
+				end_wire_s);
+			sprintf(dest->s[dest->num_s].to, "%sB0",
+				beg_wire_s);
+			dest->num_s++;
+			add_switch_range(dest, end_wire, 1, 3, beg_wire, 1);
+			return 0;
+		}
+		if (beg_wire == W_WL1) {
+			sprintf(dest->s[dest->num_s].from, "%sE_S0",
+				end_wire_s);
+			sprintf(dest->s[dest->num_s].to, "%sB2",
+				beg_wire_s);
+			dest->num_s++;
+			sprintf(dest->s[dest->num_s].from, "%sE1", end_wire_s);
+			sprintf(dest->s[dest->num_s].to, "%sB3", beg_wire_s);
+			dest->num_s++;
+			add_switch_range(dest, end_wire, 2, 3, beg_wire, 0);
+			return 0;
+		}
+		if (beg_wire == W_SS4 || beg_wire == W_SW2
+		    || beg_wire == W_SW4 || beg_wire == W_WW2) {
+			add_switch_range(dest, end_wire, 1, 3, beg_wire, 0);
+			sprintf(dest->s[dest->num_s].from, "%sE_S0", end_wire_s);
+			sprintf(dest->s[dest->num_s].to, "%sB3", beg_wire_s);
+			dest->num_s++;
+			return 0;
+		}
+		add_switch_range(dest, end_wire, 0, 3, beg_wire, 0);
+		return 0;
+	}
+
+	if ((end_wire == W_SS2 || end_wire == W_SS4
+	     || end_wire == W_SW2 || end_wire == W_SW4)
+	    && (beg_wire == W_NW4 || beg_wire == W_WW4)) {
+		for (i = 0; i <= 2; i++) {
+			sprintf(dest->s[dest->num_s].from, "%sE%i",
+				end_wire_s, i);
+			sprintf(dest->s[dest->num_s].to, "%sB%i",
+				beg_wire_s, i+1);
+			dest->num_s++;
+		}
+		sprintf(dest->s[dest->num_s].from, "%sE_N3", end_wire_s);
+		sprintf(dest->s[dest->num_s].to, "%sB0", beg_wire_s);
+		dest->num_s++;
+		return 0;
+	}
+
+	if (beg_wire == W_WR1 || beg_wire == W_ER1 || beg_wire == W_SR1) {
+		add_switch_E3toB0(dest, end_wire, beg_wire);
+		return 0;
+	}
+
+	if (beg_wire == W_WL1 || beg_wire == W_EL1 || beg_wire == W_NL1) {
+		add_switch_E0toB3(dest, end_wire, beg_wire);
+		return 0;
+	}
+
+	add_switch_range(dest, end_wire, 0, 3, beg_wire, 0);
+	return 0;
+}
+
+static int build_dirwire_switches(struct set_of_switches* dest,
+	enum wire_type src_wire)
+{
+	enum wire_type cur;
+	int i, rc;
+
+	dest->num_s = 0;
+	if (W_IS_LEN1(src_wire)) {
+		cur = W_COUNTER_CLOCKWISE(W_TO_LEN2(wire_to_NESW4(src_wire)));
+		for (i = 0; i < 4; i++) {
+			rc = add_switches(dest, src_wire, cur);
+			if (rc) goto xout;
+			cur = W_CLOCKWISE(cur);
+		}
+		cur = W_COUNTER_CLOCKWISE(W_TO_LEN1(wire_to_NESW4(src_wire)));
+		for (i = 0; i < 4; i++) {
+			rc = add_switches(dest, src_wire, cur);
+			if (rc) goto xout;
+			cur = W_CLOCKWISE(cur);
+		}
+		return 0;
+	}
+	// rest is for len2 and len4
+	cur = W_COUNTER_CLOCKWISE_2(wire_to_NESW4(src_wire));
+	for (i = 0; i < 6; i++) {
+		rc = add_switches(dest, src_wire, cur);
+		if (rc) goto xout;
+		cur = W_CLOCKWISE(cur);
+	}
+	cur = W_COUNTER_CLOCKWISE(W_TO_LEN2(wire_to_NESW4(src_wire)));
+	for (i = 0; i < 4; i++) {
+		rc = add_switches(dest, src_wire, cur);
+		if (rc) goto xout;
+		cur = W_CLOCKWISE(cur);
+	}
+	cur = W_COUNTER_CLOCKWISE(W_TO_LEN1(wire_to_NESW4(src_wire)));
+	for (i = 0; i < 4; i++) {
+		rc = add_switches(dest, src_wire, cur);
+		if (rc) goto xout;
+		cur = W_CLOCKWISE(cur);
+	}
+	return 0;
+xout:
+	return rc;
+}
+
 static int init_switches(struct fpga_model* model)
 {
-	int x, y, rc;
+	int x, y, i, rc;
+	struct set_of_switches dir_EB_switches;
+	enum wire_type wire;
 
+//groups:
+// 1. VCC/GND/KEEP1, GFAN, GCLK, FAN_B
+// 2. dirwires
+// 3. logicin
+// 4. logicout
 	for (x = 0; x < model->x_width; x++) {
 		if (!is_atx(X_ROUTING_COL, model, x))
 			continue;
@@ -126,6 +602,37 @@ static int init_switches(struct fpga_model* model)
 			if (y != 68 || x != 12) continue;
 			rc = add_switch(model, y, x, "LOGICOUT0", "NN2B0", 0 /* bidir */);
 			if (rc) goto xout;
+			wire = W_NN2;
+			do {
+				rc = build_dirwire_switches(&dir_EB_switches, W_TO_LEN1(wire));
+				if (rc) goto xout;
+				for (i = 0; i < dir_EB_switches.num_s; i++) {
+					rc = add_switch(model, y, x,
+						dir_EB_switches.s[i].from,
+						dir_EB_switches.s[i].to, 0 /* bidir */);
+					if (rc) goto xout;
+				}
+
+				rc = build_dirwire_switches(&dir_EB_switches, W_TO_LEN2(wire));
+				if (rc) goto xout;
+				for (i = 0; i < dir_EB_switches.num_s; i++) {
+					rc = add_switch(model, y, x,
+						dir_EB_switches.s[i].from,
+						dir_EB_switches.s[i].to, 0 /* bidir */);
+					if (rc) goto xout;
+				}
+
+				rc = build_dirwire_switches(&dir_EB_switches, W_TO_LEN4(wire));
+				if (rc) goto xout;
+				for (i = 0; i < dir_EB_switches.num_s; i++) {
+					rc = add_switch(model, y, x,
+						dir_EB_switches.s[i].from,
+						dir_EB_switches.s[i].to, 0 /* bidir */);
+					if (rc) goto xout;
+				}
+
+				wire = W_CLOCKWISE(wire);
+			} while (wire != W_NN2); // one full turn
 		}
 	}
 	return 0;
@@ -2616,6 +3123,8 @@ xout:
 
 #define SWITCH_ALLOC_INCREMENT 64
 
+#define DBG_ALLOW_ADDPOINTS
+
 static int add_switch(struct fpga_model* model, int y, int x, const char* from,
 	const char* to, int is_bidirectional)
 {
@@ -2623,10 +3132,19 @@ static int add_switch(struct fpga_model* model, int y, int x, const char* from,
 	int rc, i, from_idx, to_idx, from_connpt_o, to_connpt_o;
 	uint32_t new_switch;
 
+// later this can be strarray_find() and not strarray_add(), but
+// then we need all wires and ports to be present first...
+#ifdef DBG_ALLOW_ADDPOINTS
+	rc = strarray_add(&model->str, from, &from_idx);
+	if (rc) goto xout;
+	rc = strarray_add(&model->str, to, &to_idx);
+	if (rc) goto xout;
+#else
 	rc = strarray_find(&model->str, from, &from_idx);
 	if (rc) goto xout;
 	rc = strarray_find(&model->str, to, &to_idx);
 	if (rc) goto xout;
+#endif
 	if (from_idx == STRIDX_NO_ENTRY || to_idx == STRIDX_NO_ENTRY) {
 		fprintf(stderr, "No string for switch from %s (%i) or %s (%i).\n",
 			from, from_idx, to, to_idx);
@@ -2640,6 +3158,18 @@ static int add_switch(struct fpga_model* model, int y, int x, const char* from,
 			break;
 		}
 	}
+#ifdef DBG_ALLOW_ADDPOINTS
+	if (from_connpt_o == -1) {
+		rc = add_connpt_name(model, y, x, from);
+		if (rc) goto xout;
+		for (i = 0; i < tile->num_conn_point_names; i++) {
+			if (tile->conn_point_names[i*2+1] == from_idx) {
+				from_connpt_o = i;
+				break;
+			}
+		}
+	}
+#endif
 	to_connpt_o = -1;
 	for (i = 0; i < tile->num_conn_point_names; i++) {
 		if (tile->conn_point_names[i*2+1] == to_idx) {
@@ -2647,6 +3177,18 @@ static int add_switch(struct fpga_model* model, int y, int x, const char* from,
 			break;
 		}
 	}
+#ifdef DBG_ALLOW_ADDPOINTS
+	if (to_connpt_o == -1) {
+		rc = add_connpt_name(model, y, x, to);
+		if (rc) goto xout;
+		for (i = 0; i < tile->num_conn_point_names; i++) {
+			if (tile->conn_point_names[i*2+1] == to_idx) {
+				to_connpt_o = i;
+				break;
+			}
+		}
+	}
+#endif
 	if (from_connpt_o == -1 || to_connpt_o == -1) {
 		fprintf(stderr, "No conn point for switch from %s (%i/%i) or %s (%i/%i).\n",
 			from, from_idx, from_connpt_o, to, to_idx, to_connpt_o);

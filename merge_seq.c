@@ -299,19 +299,18 @@ static void increment(int *off, struct line_buf* lines, int num_lines, int end_o
 }
 
 #define READ_AHEAD_SIZE		100
-#define LAST_MERGE_TRY		2 // how far to look forward for a mergable seq
 
 int main(int argc, char** argv)
 {
 	struct line_buf read_ahead[READ_AHEAD_SIZE];
 	int read_ahead_get, read_ahead_put, second_line, eof_reached, try_count;
 	FILE* fp = 0;
-	int rc;
+	int last_merge_try, rc;
 
 	if (argc < 2) {
 		fprintf(stderr,
 			"merge_seq - merge sequence (needs presorted file)\n"
-			"Usage: %s <data_file> | - for stdin\n", argv[0]);
+			"Usage: %s <data_file> | - for stdin [--try 2]\n", argv[0]);
 		goto xout;
 	}
 	if (!strcmp(argv[1], "-"))
@@ -323,6 +322,11 @@ int main(int argc, char** argv)
 			goto xout;
 		}
 	}
+	// how far to look ahead for mergable sequences
+	if (argc >= 4 && !strcmp(argv[2], "--try"))
+		last_merge_try = atoi(argv[3]);
+	else
+		last_merge_try = 2;
 
 	read_line(fp, &read_ahead[0]);
 	if (!read_ahead[0].buf[0]) goto out;
@@ -366,7 +370,7 @@ int main(int argc, char** argv)
 				READ_AHEAD_SIZE, read_ahead_put);
 
 			if (second_line == read_ahead_put
-			    || ++try_count >= LAST_MERGE_TRY) {
+			    || ++try_count >= last_merge_try) {
 				// read-ahead empty or stop trying
 				rc = print_line(&read_ahead[read_ahead_get]);
 				if (rc) goto xout;
