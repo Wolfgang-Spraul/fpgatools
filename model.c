@@ -371,7 +371,7 @@ int add_switches(struct set_of_switches* dest,
 			}
 			if (beg_wire == W_WL1) {
 				add_switch_range(dest, end_wire,
-					2, 1, beg_wire, 0);
+					2, 3, beg_wire, 0);
 				sprintf(dest->s[dest->num_s].from, "%sE_S0",
 					end_wire_s);
 				sprintf(dest->s[dest->num_s].to, "%sB2",
@@ -572,7 +572,7 @@ xout:
 #define LWF_WIRE_MASK	0x0FF // namespace for the enum
 #define LWF_UNDEF	0xFF
 
-enum logic_wire {
+enum logicin_wire {
 	X_A1 = 0,
 	      X_A2, X_A3, X_A4, X_A5, X_A6, X_AX,
 	X_B1, X_B2, X_B3, X_B4, X_B5, X_B6, X_BX,
@@ -584,6 +584,110 @@ enum logic_wire {
 	M_D1, M_D2, M_D3, M_D4, M_D5, M_D6, M_DX, M_DI,
 	M_WE
 };
+
+enum logicout_wire {
+	X_A = 0,
+             X_AMUX, X_AQ, X_B, X_BMUX, X_BQ,
+	X_C, X_CMUX, X_CQ, X_D, X_DMUX, X_DQ,
+	M_A, M_AMUX, M_AQ, M_B, M_BMUX, M_BQ,
+	M_C, M_CMUX, M_CQ, M_D, M_DMUX, M_DQ
+};
+
+int add_logicout_switches(struct fpga_model* model, int y, int x)
+{
+	// 8 groups of 3. The order inside the group does not matter,
+	// but the order of the groups does.
+	static int out_wires[] = {
+		/* group 0 */ M_A,    M_CMUX, X_AQ,
+		/* group 1 */ M_AQ,   X_A,    X_CMUX,
+		/* group 2 */ M_BQ,   X_B,    X_DMUX,
+		/* group 3 */ M_B,    M_DMUX, X_BQ,
+		/* group 4 */ M_AMUX, M_C,    X_CQ,
+		/* group 5 */ M_CQ,   X_AMUX, X_C,
+		/* group 6 */ M_BMUX, M_D,    X_DQ,
+		/* group 7 */ M_DQ,   X_BMUX, X_D
+	};
+	// Those are the logicout wires going back into logicin, for
+	// each group of out wires. Again the order inside the groups
+	// does not matter, but the group order must match the out wire
+	// group order.
+	static int logicin_wires[] = {
+		/* group 0 */ M_AI, M_B6, M_C1, M_D3, X_A6, X_AX, X_B1, X_C3,
+		/* group 1 */ M_A6, M_AX, M_B2, M_C3, M_WE, X_B6, X_C2, X_D3,
+		/* group 2 */ M_A2, M_B5, M_BI, M_BX, M_D4, X_A5, X_C4, X_D2,
+		/* group 3 */ M_A5, M_C4, M_D1, X_A1, X_B5, X_BX, X_CE, X_D4,
+		/* group 4 */ M_A1, M_B4, M_CE, M_D5, X_A4, X_C5, X_CX, X_D1,
+		/* group 5 */ M_A4, M_C5, M_CI, M_CX, M_D2, X_A2, X_B4, X_D5,
+		/* group 6 */ M_A3, M_B1, M_C6, M_DI, X_B3, X_C1, X_D6, X_DX,
+		/* group 7 */ M_B3, M_C2, M_D6, M_DX, X_A3, X_B2, X_C6 /*FAN_B*/
+	};
+	enum wire_type wire;
+	char from_str[16], to_str[16];
+	int i, j, rc;
+
+	for (i = 0; i < sizeof(out_wires)/sizeof(out_wires[0]); i++) {
+		// out to dirwires
+		snprintf(from_str, sizeof(from_str), "LOGICOUT%i",
+			out_wires[i]);
+		wire = W_NN2;
+		do {
+			// len 2
+			snprintf(to_str, sizeof(to_str), "%sB%i",
+				wire_base(wire), i/(2*3));
+			rc = add_switch(model, y, x, from_str, to_str,
+				0 /* bidir */);
+			if (rc) goto xout;
+
+			// len 4
+			snprintf(to_str, sizeof(to_str), "%sB%i",
+				wire_base(W_TO_LEN4(wire)), i/(2*3));
+			rc = add_switch(model, y, x, from_str, to_str,
+				0 /* bidir */);
+			if (rc) goto xout;
+
+			wire = W_CLOCKWISE(wire);
+		} while (wire != W_NN2); // one full turn
+
+		// NR1, SL1
+		snprintf(to_str, sizeof(to_str), "NR1B%i", i/(2*3));
+		rc = add_switch(model, y, x, from_str, to_str, 0 /* bidir */);
+		if (rc) goto xout;
+		snprintf(to_str, sizeof(to_str), "SL1B%i", i/(2*3));
+		rc = add_switch(model, y, x, from_str, to_str, 0 /* bidir */);
+		if (rc) goto xout;
+
+		// ER1, SR1, WR1 (+1)
+		// NL1, EL1, WL1 (+3)
+		{
+			static const char* plus1[] = {"ER1B%i", "SR1B%i", "WR1B%i"};
+			static const char* plus3[] = {"NL1B%i", "EL1B%i", "WL1B%i"};
+			for (j = 0; j < 3; j++) {
+				snprintf(to_str, sizeof(to_str), plus1[j], (i/(2*3)+1)%4);
+				rc = add_switch(model, y, x, from_str, to_str, 0 /* bidir */);
+				if (rc) goto xout;
+
+				snprintf(to_str, sizeof(to_str), plus3[j], (i/(2*3)+3)%4);
+				rc = add_switch(model, y, x, from_str, to_str, 0 /* bidir */);
+				if (rc) goto xout;
+			}
+		}
+			
+		// back to logicin
+		for (j = 0; j < 8; j++) {
+			if ((i/3) == 7 && j == 7) // FAN_B
+				strcpy(to_str, "FAN_B");
+			else
+				snprintf(to_str, sizeof(to_str), "LOGICIN_B%i",
+					logicin_wires[(i/3)*8 + j]);
+			rc = add_switch(model, y, x, from_str, to_str,
+				0 /* bidir */);
+			if (rc) goto xout;
+		}
+	}
+	return 0;
+xout:
+	return rc;
+}
 
 int add_logicin_switch(struct fpga_model* model, int y, int x,
 	enum wire_type dirwire, int dirwire_num,
@@ -732,15 +836,10 @@ xout:
 
 static int init_switches(struct fpga_model* model)
 {
-	int x, y, i, rc;
+	int x, y, i, j, rc;
 	struct set_of_switches dir_EB_switches;
 	enum wire_type wire;
 
-//groups:
-// 1. VCC/GND/KEEP1, GFAN, GCLK, FAN_B
-// 2. dirwires
-// 3. logicin
-// 4. logicout
 	for (x = 0; x < model->x_width; x++) {
 		if (!is_atx(X_ROUTING_COL, model, x))
 			continue;
@@ -750,12 +849,40 @@ static int init_switches(struct fpga_model* model)
 				continue;
 
 			if (y != 68 || x != 12) continue;
-			rc = add_switch(model, y, x, "LOGICOUT0", "NN2B0", 0 /* bidir */);
-			if (rc) goto xout;
 
+			for (i = X_A1; i <= M_WE; i++) {
+				rc = add_switch(model, y, x, "KEEP1_WIRE",
+					pf("LOGICIN_B%i", i), 0 /* bidir */);
+				if (rc) goto xout;
+			}
+
+			// GCLK0:15 -> CLK0:1, GFAN0:1/SR0:1
+			for (i = 0; i <= 15; i++) {
+				for (j = 0; j <= 1; j++) {
+					rc = add_switch(model, y, x,
+						pf("GCLK%i", i),
+						pf("CLK%i", j), 0 /* bidir */);
+					if (rc) goto xout;
+					rc = add_switch(model, y, x,
+						pf("GCLK%i", i),
+						(i < 8) ? pf("GFAN%i", j)
+							: pf("SR%i", j),
+						0 /* bidir */);
+					if (rc) goto xout;
+				}
+			}
+
+			// connecting directional wires endpoints to logicin
 			rc = add_logicin_switches(model, y, x);
 			if (rc) goto xout;
 
+			// connecting logicout back to directional wires
+			// beginning points (and some back to logicin)
+			rc = add_logicout_switches(model, y, x);
+			if (rc) goto xout;
+
+			// connecting the directional wires from one's end
+			// to another one's beginning
 			wire = W_NN2;
 			do {
 				rc = build_dirwire_switches(&dir_EB_switches, W_TO_LEN1(wire));
