@@ -567,10 +567,11 @@ xout:
 }
 
 // The LWF flags are OR'ed into the logic_wire enum
-#define LWF_SOUTH0	0x100
-#define LWF_NORTH3	0x200
-#define LWF_WIRE_MASK	0x0FF // namespace for the enum
-#define LWF_UNDEF	0xFF
+#define LWF_SOUTH0		0x0100
+#define LWF_NORTH3		0x0200
+#define LWF_BIDIR		0x0400
+#define LWF_FAN_B		0x0800
+#define LWF_WIRE_MASK		0x00FF // namespace for the enums
 
 enum logicin_wire {
 	X_A1 = 0,
@@ -592,6 +593,116 @@ enum logicout_wire {
 	M_A, M_AMUX, M_AQ, M_B, M_BMUX, M_BQ,
 	M_C, M_CMUX, M_CQ, M_D, M_DMUX, M_DQ
 };
+
+// The extra wires must not overlap with logicin_wire or logicout_wire
+// namespaces so that they can be combined with either of them.
+enum extra_wires {
+	UNDEF = 100,
+	FAN_B,
+	GFAN0,
+	GFAN1,
+	LOGICIN20,
+	LOGICIN21,
+	LOGICIN44,
+	LOGICIN52,
+	LOGICIN_N21,
+	LOGICIN_N28,
+	LOGICIN_N52,
+	LOGICIN_N60,
+	LOGICIN_S20,
+	LOGICIN_S36,
+	LOGICIN_S44,
+	LOGICIN_S62
+};
+
+int add_logicio_extra(struct fpga_model* model, int y, int x)
+{
+	// 16 groups of 4. The order inside the group does not matter,
+	// but the order of the groups must match the order in src_w.
+	static int dest_w[] = {
+		/* group  0 */ M_D1, X_A1, X_CE, X_BX  | LWF_BIDIR,
+		/* group  1 */ M_B2, M_WE, X_C2, M_AX  | LWF_BIDIR,
+		/* group  2 */ M_C1, M_AI, X_B1, X_AX  | LWF_BIDIR,
+		/* group  3 */ M_A2, M_BI, X_D2, M_BX  | LWF_BIDIR,
+		/* group  4 */ M_C2, M_DX, X_B2, FAN_B | LWF_BIDIR,
+		/* group  5 */ M_A1, X_CX, X_D1, M_CE  | LWF_BIDIR,
+		/* group  6 */ M_CX, M_D2, X_A2, M_CI  | LWF_BIDIR,
+		/* group  7 */ M_B1, X_C1, X_DX, M_DI  | LWF_BIDIR,
+		/* group  8 */ M_A5, M_C4, X_B5, X_D4,
+		/* group  9 */ M_A6, M_C3, X_B6, X_D3,
+		/* group 10 */ M_B5, M_D4, X_A5, X_C4,
+		/* group 11 */ M_B6, M_D3, X_A6, X_C3,
+		/* group 12 */ M_B4, M_D5, X_A4, X_C5,
+		/* group 13 */ M_B3, M_D6, X_A3, X_C6,
+		/* group 14 */ M_A3, M_C6, X_B3, X_D6,
+		/* group 15 */ M_A4, M_C5, X_B4, X_D5,
+	};
+	// 16 groups of 5. Order of groups in sync with in_w.
+	// Each dest_w group can only have 1 bidir wire, which is
+	// flagged there. The flag in src_w signals whether that one
+	// bidir line in dest_w is to be driven as bidir or not.
+	static int src_w[] = {
+		/* group  0 */ GFAN0,   	  M_AX,			M_CI | LWF_BIDIR,  M_DI | LWF_BIDIR, LOGICIN_N28,
+		/* group  1 */ GFAN0 | LWF_BIDIR, LOGICIN20,   		M_CI | LWF_BIDIR,  LOGICIN_N52,	     LOGICIN_N28,
+		/* group  2 */ GFAN0 | LWF_BIDIR, M_CE | LWF_BIDIR,	LOGICIN_N21,	   LOGICIN44,        LOGICIN_N60,
+		/* group  3 */ GFAN0,  	          FAN_B | LWF_BIDIR,	X_AX,   	   M_CE | LWF_BIDIR, LOGICIN_N60,
+		/* group  4 */ GFAN1,     	  M_BX | LWF_BIDIR,	LOGICIN21,	   LOGICIN_S44,      LOGICIN_S36,
+		/* group  5 */ GFAN1 | LWF_BIDIR, FAN_B,		M_BX | LWF_BIDIR,  X_AX | LWF_BIDIR, LOGICIN_S36,
+		/* group  6 */ GFAN1 | LWF_BIDIR, M_AX | LWF_BIDIR,	X_BX | LWF_BIDIR,  M_DI,             LOGICIN_S62,
+		/* group  7 */ GFAN1,             LOGICIN52,		X_BX | LWF_BIDIR,  LOGICIN_S20,	     LOGICIN_S62,
+
+		/* group  8 */ M_AX,      M_CI,        M_DI,        LOGICIN_N28, UNDEF,
+		/* group  9 */ LOGICIN20, M_CI,        LOGICIN_N52, LOGICIN_N28, UNDEF,
+		/* group 10 */ FAN_B,     X_AX,        M_CE,        LOGICIN_N60, UNDEF,
+		/* group 11 */ M_CE,      LOGICIN_N21, LOGICIN44,   LOGICIN_N60, UNDEF,
+		/* group 12 */ FAN_B,     M_BX,        X_AX,        LOGICIN_S36, UNDEF,
+		/* group 13 */ M_BX,      LOGICIN21,   LOGICIN_S44, LOGICIN_S36, UNDEF,
+		/* group 14 */ LOGICIN52, X_BX,        LOGICIN_S20, LOGICIN_S62, UNDEF,
+		/* group 15 */ M_AX,      X_BX,        M_DI,        LOGICIN_S62, UNDEF
+	};
+	char from_str[16], to_str[16];
+	int i, j, cur_w, rc;
+
+	for (i = 0; i < sizeof(src_w)/sizeof(src_w[0]); i++) {
+		for (j = 0; j < 4; j++) {
+			switch (src_w[i] & LWF_WIRE_MASK) {
+				case UNDEF: continue;
+				default:
+					snprintf(from_str, sizeof(from_str), "LOGICIN_B%i",
+						src_w[i] & LWF_WIRE_MASK);
+					break;
+				case FAN_B:		strcpy(from_str, "FAN_B"); break;
+				case GFAN0:		strcpy(from_str, "GFAN0"); break;
+				case GFAN1:		strcpy(from_str, "GFAN1"); break;
+				case LOGICIN20:		strcpy(from_str, "LOGICIN20"); break;
+				case LOGICIN21:		strcpy(from_str, "LOGICIN21"); break;
+				case LOGICIN44:		strcpy(from_str, "LOGICIN44"); break;
+				case LOGICIN52:		strcpy(from_str, "LOGICIN52"); break;
+				case LOGICIN_N21:	strcpy(from_str, "LOGICIN_N21"); break;
+				case LOGICIN_N28:	strcpy(from_str, "LOGICIN_N28"); break;
+				case LOGICIN_N52:	strcpy(from_str, "LOGICIN_N52"); break;
+				case LOGICIN_N60:	strcpy(from_str, "LOGICIN_N60"); break;
+				case LOGICIN_S20:	strcpy(from_str, "LOGICIN_S20"); break;
+				case LOGICIN_S36:	strcpy(from_str, "LOGICIN_S36"); break;
+				case LOGICIN_S44:	strcpy(from_str, "LOGICIN_S44"); break;
+				case LOGICIN_S62:	strcpy(from_str, "LOGICIN_S62"); break;
+			}
+			cur_w = dest_w[(i/5)*4 + j];
+			if ((cur_w & LWF_WIRE_MASK) == FAN_B)
+				strcpy(to_str, "FAN_B");
+			else
+				snprintf(to_str, sizeof(from_str), "LOGICIN_B%i",
+					cur_w & LWF_WIRE_MASK);
+				
+			rc = add_switch(model, y, x, from_str, to_str,
+				(cur_w & LWF_BIDIR) && (src_w[i] & LWF_BIDIR));
+			if (rc) goto xout;
+		}
+	}
+	return 0;
+xout:
+	return rc;
+}
 
 int add_logicout_switches(struct fpga_model* model, int y, int x)
 {
@@ -619,7 +730,7 @@ int add_logicout_switches(struct fpga_model* model, int y, int x)
 		/* group 4 */ M_A1, M_B4, M_CE, M_D5, X_A4, X_C5, X_CX, X_D1,
 		/* group 5 */ M_A4, M_C5, M_CI, M_CX, M_D2, X_A2, X_B4, X_D5,
 		/* group 6 */ M_A3, M_B1, M_C6, M_DI, X_B3, X_C1, X_D6, X_DX,
-		/* group 7 */ M_B3, M_C2, M_D6, M_DX, X_A3, X_B2, X_C6 /*FAN_B*/
+		/* group 7 */ M_B3, M_C2, M_D6, M_DX, X_A3, X_B2, X_C6, FAN_B
 	};
 	enum wire_type wire;
 	char from_str[16], to_str[16];
@@ -674,7 +785,7 @@ int add_logicout_switches(struct fpga_model* model, int y, int x)
 			
 		// back to logicin
 		for (j = 0; j < 8; j++) {
-			if ((i/3) == 7 && j == 7) // FAN_B
+			if (logicin_wires[(i/3)*8 + j] == FAN_B)
 				strcpy(to_str, "FAN_B");
 			else
 				snprintf(to_str, sizeof(to_str), "LOGICIN_B%i",
@@ -772,7 +883,7 @@ static int loop_and_rotate_over_wires(struct fpga_model* model, int y, int x,
 	//
 
 	for (i = 0; i < num_wires*4; i++) {
-		if ((wires[i/4] & LWF_WIRE_MASK) == LWF_UNDEF)
+		if ((wires[i/4] & LWF_WIRE_MASK) == UNDEF)
 			continue;
 		rc = add_logicin_switch_quart(model, y, x, FIRST_LEN2+(i%4)*2,
 			3-((i+early_decrement)/4)%4, wires[i/4]);
@@ -809,10 +920,10 @@ int add_logicin_switches(struct fpga_model* model, int y, int x)
 	if (rc) goto xout; }
 
 	{ static int decrement_at_SS[] =
-		{ LWF_UNDEF, M_CE, M_BI, M_AI | LWF_NORTH3,
-		       X_B2, M_A1, M_A2, X_B1 | LWF_NORTH3,
-		       X_C6, X_C5, X_C4, X_C3 | LWF_NORTH3,
-		       M_D6, M_D5, M_D4, M_D3 | LWF_NORTH3 };
+		{ UNDEF, M_CE, M_BI, M_AI | LWF_NORTH3,
+		   X_B2, M_A1, M_A2, X_B1 | LWF_NORTH3,
+		   X_C6, X_C5, X_C4, X_C3 | LWF_NORTH3,
+		   M_D6, M_D5, M_D4, M_D3 | LWF_NORTH3 };
 
 	rc = loop_and_rotate_over_wires(model, y, x, decrement_at_SS,
 		sizeof(decrement_at_SS)/sizeof(decrement_at_SS[0]),
@@ -850,6 +961,28 @@ static int init_switches(struct fpga_model* model)
 
 			if (y != 68 || x != 12) continue;
 
+			// some logicin wires are singled out
+			{ int logic_singles[] = {X_CE, X_CX, X_DX,
+				M_AI, M_BI, M_CX, M_DX, M_WE};
+			for (i = 0; i < sizeof(logic_singles)/sizeof(logic_singles[0]); i++) {
+				rc = add_switch(model, y, x, pf("LOGICIN_B%i", logic_singles[i]),
+					pf("LOGICIN%i", logic_singles[i]), 0 /* bidir */);
+				if (rc) goto xout;
+			}}
+		
+			// VCC to logicin
+		 	{ int vcc_dest[] = {
+				X_A3, X_A4, X_A5, X_A6, X_B3, X_B4, X_B5, X_B6,
+				X_C3, X_C4, X_C5, X_C6, X_D3, X_D4, X_D5, X_D6,
+				M_A3, M_A4, M_A5, M_A6, M_B3, M_B4, M_B5, M_B6,
+				M_C3, M_C4, M_C5, M_C6, M_D3, M_D4, M_D5, M_D6 };
+			for (i = 0; i < sizeof(vcc_dest)/sizeof(vcc_dest[0]); i++) {
+				rc = add_switch(model, y, x, "VCC_WIRE",
+					pf("LOGICIN_B%i", vcc_dest[i]), 0 /* bidir */);
+				if (rc) goto xout;
+			}}
+
+			// KEEP1
 			for (i = X_A1; i <= M_WE; i++) {
 				rc = add_switch(model, y, x, "KEEP1_WIRE",
 					pf("LOGICIN_B%i", i), 0 /* bidir */);
@@ -879,6 +1012,11 @@ static int init_switches(struct fpga_model* model)
 			// connecting logicout back to directional wires
 			// beginning points (and some back to logicin)
 			rc = add_logicout_switches(model, y, x);
+			if (rc) goto xout;
+
+			// there are extra wires to send signals to logicin, or
+			// to share/multiply logicin signals
+			rc = add_logicio_extra(model, y, x);
 			if (rc) goto xout;
 
 			// connecting the directional wires from one's end
