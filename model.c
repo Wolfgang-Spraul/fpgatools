@@ -816,8 +816,11 @@ int add_logicin_switch(struct fpga_model* model, int y, int x,
 	else
 		snprintf(from_str, sizeof(from_str), "%sE%i",
 			wire_base(dirwire), dirwire_num);
-	snprintf(to_str, sizeof(to_str), "LOGICIN_B%i",
-		logicin_num & LWF_WIRE_MASK);
+	if ((logicin_num & LWF_WIRE_MASK) == FAN_B)
+		strcpy(to_str, "FAN_B");
+	else
+		snprintf(to_str, sizeof(to_str), "LOGICIN_B%i",
+			logicin_num & LWF_WIRE_MASK);
 	rc = add_switch(model, y, x, from_str, to_str, 0 /* bidir */);
 	if (rc) goto xout;
 	return 0;
@@ -883,8 +886,6 @@ static int loop_and_rotate_over_wires(struct fpga_model* model, int y, int x,
 	//
 
 	for (i = 0; i < num_wires*4; i++) {
-		if ((wires[i/4] & LWF_WIRE_MASK) == UNDEF)
-			continue;
 		rc = add_logicin_switch_quart(model, y, x, FIRST_LEN2+(i%4)*2,
 			3-((i+early_decrement)/4)%4, wires[i/4]);
 		if (rc) goto xout;
@@ -920,7 +921,7 @@ int add_logicin_switches(struct fpga_model* model, int y, int x)
 	if (rc) goto xout; }
 
 	{ static int decrement_at_SS[] =
-		{ UNDEF, M_CE, M_BI, M_AI | LWF_NORTH3,
+		{ FAN_B, M_CE, M_BI, M_AI | LWF_NORTH3,
 		   X_B2, M_A1, M_A2, X_B1 | LWF_NORTH3,
 		   X_C6, X_C5, X_C4, X_C3 | LWF_NORTH3,
 		   M_D6, M_D5, M_D4, M_D3 | LWF_NORTH3 };
@@ -961,16 +962,17 @@ static int init_switches(struct fpga_model* model)
 
 			if (y != 68 || x != 12) continue;
 
-			// some logicin wires are singled out
-			{ int logic_singles[] = {X_CE, X_CX, X_DX,
-				M_AI, M_BI, M_CX, M_DX, M_WE};
-			for (i = 0; i < sizeof(logic_singles)/sizeof(logic_singles[0]); i++) {
-				rc = add_switch(model, y, x, pf("LOGICIN_B%i", logic_singles[i]),
-					pf("LOGICIN%i", logic_singles[i]), 0 /* bidir */);
+			// GND
+			for (i = 0; i <= 1; i++) {
+				rc = add_switch(model, y, x, "GND_WIRE",
+					pf("GFAN%i", i), 0 /* bidir */);
 				if (rc) goto xout;
-			}}
-		
-			// VCC to logicin
+			}
+			rc = add_switch(model, y, x, "GND_WIRE", "SR1",
+				0 /* bidir */);
+			if (rc) goto xout;
+
+			// VCC
 		 	{ int vcc_dest[] = {
 				X_A3, X_A4, X_A5, X_A6, X_B3, X_B4, X_B5, X_B6,
 				X_C3, X_C4, X_C5, X_C6, X_D3, X_D4, X_D5, X_D6,
@@ -987,6 +989,25 @@ static int init_switches(struct fpga_model* model)
 				rc = add_switch(model, y, x, "KEEP1_WIRE",
 					pf("LOGICIN_B%i", i), 0 /* bidir */);
 				if (rc) goto xout;
+			}
+			rc = add_switch(model, y, x, "KEEP1_WIRE", "FAN_B",
+				0 /* bidir */);
+			if (rc) goto xout;
+
+			// VCC and KEEP1 to clk, sr, gfan
+			{ static const char* src[] = {"VCC_WIRE", "KEEP1_WIRE"};
+			for (i = 0; i <= 1; i++)
+				for (j = 0; j <= 1; j++) {
+					rc = add_switch(model, y, x, src[i],
+						pf("CLK%i", j), 0 /* bidir */);
+					if (rc) goto xout;
+					rc = add_switch(model, y, x, src[i],
+						pf("SR%i", j), 0 /* bidir */);
+					if (rc) goto xout;
+					rc = add_switch(model, y, x, src[i],
+						pf("GFAN%i", j), 0 /* bidir */);
+					if (rc) goto xout;
+				}
 			}
 
 			// GCLK0:15 -> CLK0:1, GFAN0:1/SR0:1
@@ -1005,6 +1026,22 @@ static int init_switches(struct fpga_model* model)
 				}
 			}
 
+			// FAN_B to SR0:1
+			for (i = 0; i <= 1; i++) {
+				rc = add_switch(model, y, x, "FAN_B",
+					pf("SR%i", i), 0 /* bidir */);
+				if (rc) goto xout;
+			}
+
+			// some logicin wires are singled out
+			{ int logic_singles[] = {X_CE, X_CX, X_DX,
+				M_AI, M_BI, M_CX, M_DX, M_WE};
+			for (i = 0; i < sizeof(logic_singles)/sizeof(logic_singles[0]); i++) {
+				rc = add_switch(model, y, x, pf("LOGICIN_B%i", logic_singles[i]),
+					pf("LOGICIN%i", logic_singles[i]), 0 /* bidir */);
+				if (rc) goto xout;
+			}}
+
 			// connecting directional wires endpoints to logicin
 			rc = add_logicin_switches(model, y, x);
 			if (rc) goto xout;
@@ -1018,6 +1055,37 @@ static int init_switches(struct fpga_model* model)
 			// to share/multiply logicin signals
 			rc = add_logicio_extra(model, y, x);
 			if (rc) goto xout;
+
+			// extra wires going to SR, CLK and GFAN
+			{ int to_sr[] = {X_BX, M_BX, M_DI};
+			for (i = 0; i < sizeof(to_sr)/sizeof(to_sr[0]); i++) {
+				for (j = 0; j <= 1; j++) {
+					rc = add_switch(model, y, x,
+						pf("LOGICIN_B%i", to_sr[i]),
+						pf("SR%i", j), 0 /* bidir */);
+					if (rc) goto xout;
+				}
+			}}
+			{ int to_clk[] = {M_BX, M_CI};
+			for (i = 0; i < sizeof(to_clk)/sizeof(to_clk[0]); i++) {
+				for (j = 0; j <= 1; j++) {
+					rc = add_switch(model, y, x,
+						pf("LOGICIN_B%i", to_clk[i]),
+						pf("CLK%i", j), 0 /* bidir */);
+					if (rc) goto xout;
+				}
+			}}
+			{ int to_gf[] = {M_AX, X_AX, M_CE, M_CI};
+			for (i = 0; i < sizeof(to_gf)/sizeof(to_gf[0]); i++) {
+				for (j = 0; j <= 1; j++) {
+					int bidir = (!j && i < 2)
+						|| (j && i >= 2);
+					rc = add_switch(model, y, x,
+						pf("LOGICIN_B%i", to_gf[i]),
+						pf("GFAN%i", j), bidir);
+					if (rc) goto xout;
+				}
+			}}
 
 			// connecting the directional wires from one's end
 			// to another one's beginning
@@ -1052,6 +1120,46 @@ static int init_switches(struct fpga_model* model)
 
 				wire = W_CLOCKWISE(wire);
 			} while (wire != W_NN2); // one full turn
+
+			// and finally, some end wires go to CLK, SR and GFAN
+			{ static const char* from[] = {"NR1E2", "WR1E2"};
+			for (i = 0; i < sizeof(from)/sizeof(from[0]); i++) {
+				for (j = 0; j <= 1; j++) {
+					rc = add_switch(model, y, x, from[i],
+						pf("CLK%i", j), 0 /* bidir */);
+					if (rc) goto xout;
+					rc = add_switch(model, y, x, from[i],
+						pf("SR%i", j), 0 /* bidir */);
+					if (rc) goto xout;
+				}
+			}}
+			{ static const char* from[] = {"ER1E1", "SR1E1"};
+			for (i = 0; i < sizeof(from)/sizeof(from[0]); i++) {
+				for (j = 0; j <= 1; j++) {
+					rc = add_switch(model, y, x, from[i],
+						pf("CLK%i", j), 0 /* bidir */);
+					if (rc) goto xout;
+					rc = add_switch(model, y, x, from[i],
+						pf("GFAN%i", j), 0 /* bidir */);
+					if (rc) goto xout;
+				}
+			}}
+			{ static const char* from[] = {"NR1E1", "WR1E1"};
+			for (i = 0; i < sizeof(from)/sizeof(from[0]); i++) {
+				for (j = 0; j <= 1; j++) {
+					rc = add_switch(model, y, x, from[i],
+						pf("GFAN%i", j), 0 /* bidir */);
+					if (rc) goto xout;
+				}
+			}}
+			{ static const char* from[] = {"ER1E2", "SR1E2"};
+			for (i = 0; i < sizeof(from)/sizeof(from[0]); i++) {
+				for (j = 0; j <= 1; j++) {
+					rc = add_switch(model, y, x, from[i],
+						pf("SR%i", j), 0 /* bidir */);
+					if (rc) goto xout;
+				}
+			}}
 		}
 	}
 	return 0;
