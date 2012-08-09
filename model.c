@@ -24,6 +24,7 @@ static const char* pf(const char* fmt, ...);
 static const char* wpref(struct fpga_model* model, int y, int x, const char* wire_name);
 static char next_non_whitespace(const char* s);
 static char last_major(const char* str, int cur_o);
+int has_connpt(struct fpga_model* model, int y, int x, const char* name);
 static int add_connpt_name(struct fpga_model* model, int y, int x, const char* connpt_name);
 
 typedef int (*add_conn_f)(struct fpga_model* model, int y1, int x1, const char* name1, int y2, int x2, const char* name2);
@@ -87,7 +88,6 @@ int fpga_build_model(struct fpga_model* model, int fpga_rows, const char* column
 	rc = init_tiles(model);
 	if (rc) return rc;
 
-#if 0
 	rc = init_wires(model);
 	if (rc) return rc;
 
@@ -96,7 +96,6 @@ int fpga_build_model(struct fpga_model* model, int fpga_rows, const char* column
 
 	rc = init_devices(model);
 	if (rc) return rc;
-#endif
 
 	rc = init_switches(model);
 	if (rc) return rc;
@@ -574,24 +573,24 @@ xout:
 #define LWF_WIRE_MASK		0x00FF // namespace for the enums
 
 enum logicin_wire {
-	X_A1 = 0,
-	      X_A2, X_A3, X_A4, X_A5, X_A6, X_AX,
-	X_B1, X_B2, X_B3, X_B4, X_B5, X_B6, X_BX,
-	X_C1, X_C2, X_C3, X_C4, X_C5, X_C6, X_CE, X_CX,
-	X_D1, X_D2, X_D3, X_D4, X_D5, X_D6, X_DX,
-	M_A1, M_A2, M_A3, M_A4, M_A5, M_A6, M_AX, M_AI,
-	M_B1, M_B2, M_B3, M_B4, M_B5, M_B6, M_BX, M_BI,
-	M_C1, M_C2, M_C3, M_C4, M_C5, M_C6, M_CE, M_CX, M_CI,
-	M_D1, M_D2, M_D3, M_D4, M_D5, M_D6, M_DX, M_DI,
-	M_WE
+    /*  0 */	X_A1 = 0,
+		      X_A2, X_A3, X_A4, X_A5, X_A6, X_AX,
+    /*  7 */	X_B1, X_B2, X_B3, X_B4, X_B5, X_B6, X_BX,
+    /* 14 */	X_C1, X_C2, X_C3, X_C4, X_C5, X_C6, X_CE, X_CX,
+    /* 22 */	X_D1, X_D2, X_D3, X_D4, X_D5, X_D6, X_DX,
+    /* 29 */	M_A1, M_A2, M_A3, M_A4, M_A5, M_A6, M_AX, M_AI,
+    /* 37 */	M_B1, M_B2, M_B3, M_B4, M_B5, M_B6, M_BX, M_BI,
+    /* 45 */	M_C1, M_C2, M_C3, M_C4, M_C5, M_C6, M_CE, M_CX, M_CI,
+    /* 54 */	M_D1, M_D2, M_D3, M_D4, M_D5, M_D6, M_DX, M_DI,
+    /* 62 */	M_WE
 };
 
 enum logicout_wire {
-	X_A = 0,
-             X_AMUX, X_AQ, X_B, X_BMUX, X_BQ,
-	X_C, X_CMUX, X_CQ, X_D, X_DMUX, X_DQ,
-	M_A, M_AMUX, M_AQ, M_B, M_BMUX, M_BQ,
-	M_C, M_CMUX, M_CQ, M_D, M_DMUX, M_DQ
+    /*  0 */	X_A = 0,
+		     X_AMUX, X_AQ, X_B, X_BMUX, X_BQ,
+    /*  6 */	X_C, X_CMUX, X_CQ, X_D, X_DMUX, X_DQ,
+    /* 12 */	M_A, M_AMUX, M_AQ, M_B, M_BMUX, M_BQ,
+    /* 18 */	M_C, M_CMUX, M_CQ, M_D, M_DMUX, M_DQ
 };
 
 // The extra wires must not overlap with logicin_wire or logicout_wire
@@ -615,7 +614,14 @@ enum extra_wires {
 	LOGICIN_S62
 };
 
-int add_logicio_extra(struct fpga_model* model, int y, int x)
+static const char* logicin_s(int wire, int routing_io)
+{
+	if (routing_io && ((wire & LWF_WIRE_MASK) == X_A5 || (wire & LWF_WIRE_MASK) == X_B4))
+		return pf("INT_IOI_LOGICIN_B%i", wire & LWF_WIRE_MASK);
+	return pf("LOGICIN_B%i", wire & LWF_WIRE_MASK);
+}
+
+int add_logicio_extra(struct fpga_model* model, int y, int x, int routing_io)
 {
 	// 16 groups of 4. The order inside the group does not matter,
 	// but the order of the groups must match the order in src_w.
@@ -660,20 +666,36 @@ int add_logicio_extra(struct fpga_model* model, int y, int x)
 		/* group 14 */ LOGICIN52, X_BX,        LOGICIN_S20, LOGICIN_S62, UNDEF,
 		/* group 15 */ M_AX,      X_BX,        M_DI,        LOGICIN_S62, UNDEF
 	};
-	char from_str[16], to_str[16];
-	int i, j, cur_w, rc;
+	char from_str[32], to_str[32];
+	int i, j, cur_dest_w, is_bidir, rc;
 
 	for (i = 0; i < sizeof(src_w)/sizeof(src_w[0]); i++) {
 		for (j = 0; j < 4; j++) {
+
+			cur_dest_w = dest_w[(i/5)*4 + j];
+			is_bidir = (cur_dest_w & LWF_BIDIR) && (src_w[i] & LWF_BIDIR);
+			if ((cur_dest_w & LWF_WIRE_MASK) == FAN_B)
+				strcpy(to_str, "FAN_B");
+			else
+				strcpy(to_str, logicin_s(cur_dest_w, routing_io));
+
 			switch (src_w[i] & LWF_WIRE_MASK) {
 				case UNDEF: continue;
 				default:
 					snprintf(from_str, sizeof(from_str), "LOGICIN_B%i",
 						src_w[i] & LWF_WIRE_MASK);
 					break;
+				case GFAN0:
+				case GFAN1:
+					if (routing_io) {
+						is_bidir = 0;
+						strcpy(from_str, "VCC_WIRE");
+					} else {
+						strcpy(from_str, (src_w[i] & LWF_WIRE_MASK)
+							== GFAN0 ? "GFAN0" : "GFAN1");
+					}
+					break;
 				case FAN_B:		strcpy(from_str, "FAN_B"); break;
-				case GFAN0:		strcpy(from_str, "GFAN0"); break;
-				case GFAN1:		strcpy(from_str, "GFAN1"); break;
 				case LOGICIN20:		strcpy(from_str, "LOGICIN20"); break;
 				case LOGICIN21:		strcpy(from_str, "LOGICIN21"); break;
 				case LOGICIN44:		strcpy(from_str, "LOGICIN44"); break;
@@ -687,15 +709,7 @@ int add_logicio_extra(struct fpga_model* model, int y, int x)
 				case LOGICIN_S44:	strcpy(from_str, "LOGICIN_S44"); break;
 				case LOGICIN_S62:	strcpy(from_str, "LOGICIN_S62"); break;
 			}
-			cur_w = dest_w[(i/5)*4 + j];
-			if ((cur_w & LWF_WIRE_MASK) == FAN_B)
-				strcpy(to_str, "FAN_B");
-			else
-				snprintf(to_str, sizeof(from_str), "LOGICIN_B%i",
-					cur_w & LWF_WIRE_MASK);
-				
-			rc = add_switch(model, y, x, from_str, to_str,
-				(cur_w & LWF_BIDIR) && (src_w[i] & LWF_BIDIR));
+			rc = add_switch(model, y, x, from_str, to_str, is_bidir);
 			if (rc) goto xout;
 		}
 	}
@@ -704,7 +718,7 @@ xout:
 	return rc;
 }
 
-int add_logicout_switches(struct fpga_model* model, int y, int x)
+int add_logicout_switches(struct fpga_model* model, int y, int x, int routing_io)
 {
 	// 8 groups of 3. The order inside the group does not matter,
 	// but the order of the groups does.
@@ -733,7 +747,7 @@ int add_logicout_switches(struct fpga_model* model, int y, int x)
 		/* group 7 */ M_B3, M_C2, M_D6, M_DX, X_A3, X_B2, X_C6, FAN_B
 	};
 	enum wire_type wire;
-	char from_str[16], to_str[16];
+	char from_str[32], to_str[32];
 	int i, j, rc;
 
 	for (i = 0; i < sizeof(out_wires)/sizeof(out_wires[0]); i++) {
@@ -788,8 +802,7 @@ int add_logicout_switches(struct fpga_model* model, int y, int x)
 			if (logicin_wires[(i/3)*8 + j] == FAN_B)
 				strcpy(to_str, "FAN_B");
 			else
-				snprintf(to_str, sizeof(to_str), "LOGICIN_B%i",
-					logicin_wires[(i/3)*8 + j]);
+				strcpy(to_str, logicin_s(logicin_wires[(i/3)*8 + j], routing_io));
 			rc = add_switch(model, y, x, from_str, to_str,
 				0 /* bidir */);
 			if (rc) goto xout;
@@ -800,11 +813,11 @@ xout:
 	return rc;
 }
 
-int add_logicin_switch(struct fpga_model* model, int y, int x,
+static int add_logicin_switch(struct fpga_model* model, int y, int x,
 	enum wire_type dirwire, int dirwire_num,
 	int logicin_num)
 {
-	char from_str[16], to_str[16];
+	char from_str[32], to_str[32];
 	int rc;
 
 	if (dirwire_num == 0 && logicin_num & LWF_SOUTH0)
@@ -818,9 +831,11 @@ int add_logicin_switch(struct fpga_model* model, int y, int x,
 			wire_base(dirwire), dirwire_num);
 	if ((logicin_num & LWF_WIRE_MASK) == FAN_B)
 		strcpy(to_str, "FAN_B");
-	else
-		snprintf(to_str, sizeof(to_str), "LOGICIN_B%i",
-			logicin_num & LWF_WIRE_MASK);
+	else {
+		struct fpga_tile* tile = YX_TILE(model, y, x);
+		int routing_io = (tile->type == IO_ROUTING || tile->type == ROUTING_IO_L);
+		strcpy(to_str, logicin_s(logicin_num, routing_io));
+	}
 	rc = add_switch(model, y, x, from_str, to_str, 0 /* bidir */);
 	if (rc) goto xout;
 	return 0;
@@ -832,7 +847,7 @@ xout:
 // quarter belonging to dirwire. So dirwire should only be
 // one of W_NN2, W_EE2, W_SS2 or W_WW2 - the rest is handled
 // inside the function.
-int add_logicin_switch_quart(struct fpga_model* model, int y, int x,
+static int add_logicin_switch_quart(struct fpga_model* model, int y, int x,
 	enum wire_type dirwire, int dirwire_num,
 	int logicin_num)
 {
@@ -948,9 +963,11 @@ xout:
 
 static int init_switches(struct fpga_model* model)
 {
-	int x, y, i, j, rc;
+	int x, y, i, j, routing_io, rc;
 	struct set_of_switches dir_EB_switches;
 	enum wire_type wire;
+	struct fpga_tile* tile;
+	const char* gfan_s, *gclk_s;
 
 	for (x = 0; x < model->x_width; x++) {
 		if (!is_atx(X_ROUTING_COL, model, x))
@@ -959,13 +976,14 @@ static int init_switches(struct fpga_model* model)
 			if (is_aty(Y_ROW_HORIZ_AXSYMM|Y_CHIP_HORIZ_REGS,
 					model, y))
 				continue;
-
-			if (y != 68 || x != 12) continue;
+			tile = YX_TILE(model, y, x);
+			routing_io = (tile->type == IO_ROUTING || tile->type == ROUTING_IO_L);
+			gfan_s = routing_io ? "INT_IOI_GFAN%i" : "GFAN%i";
 
 			// GND
 			for (i = 0; i <= 1; i++) {
 				rc = add_switch(model, y, x, "GND_WIRE",
-					pf("GFAN%i", i), 0 /* bidir */);
+					pf(gfan_s, i), 0 /* bidir */);
 				if (rc) goto xout;
 			}
 			rc = add_switch(model, y, x, "GND_WIRE", "SR1",
@@ -978,23 +996,26 @@ static int init_switches(struct fpga_model* model)
 				X_C3, X_C4, X_C5, X_C6, X_D3, X_D4, X_D5, X_D6,
 				M_A3, M_A4, M_A5, M_A6, M_B3, M_B4, M_B5, M_B6,
 				M_C3, M_C4, M_C5, M_C6, M_D3, M_D4, M_D5, M_D6 };
+
 			for (i = 0; i < sizeof(vcc_dest)/sizeof(vcc_dest[0]); i++) {
 				rc = add_switch(model, y, x, "VCC_WIRE",
-					pf("LOGICIN_B%i", vcc_dest[i]), 0 /* bidir */);
+					logicin_s(vcc_dest[i], routing_io),
+					0 /* bidir */);
 				if (rc) goto xout;
 			}}
 
 			// KEEP1
 			for (i = X_A1; i <= M_WE; i++) {
 				rc = add_switch(model, y, x, "KEEP1_WIRE",
-					pf("LOGICIN_B%i", i), 0 /* bidir */);
+					logicin_s(i, routing_io),
+					0 /* bidir */);
 				if (rc) goto xout;
 			}
 			rc = add_switch(model, y, x, "KEEP1_WIRE", "FAN_B",
 				0 /* bidir */);
 			if (rc) goto xout;
 
-			// VCC and KEEP1 to clk, sr, gfan
+			// VCC and KEEP1 to CLK0:1, SR0:1, GFAN0:1
 			{ static const char* src[] = {"VCC_WIRE", "KEEP1_WIRE"};
 			for (i = 0; i <= 1; i++)
 				for (j = 0; j <= 1; j++) {
@@ -1004,23 +1025,32 @@ static int init_switches(struct fpga_model* model)
 					rc = add_switch(model, y, x, src[i],
 						pf("SR%i", j), 0 /* bidir */);
 					if (rc) goto xout;
-					rc = add_switch(model, y, x, src[i],
-						pf("GFAN%i", j), 0 /* bidir */);
+					rc = add_switch(model, y, x,
+						src[i],
+						pf(gfan_s, j),
+						0 /* bidir */);
 					if (rc) goto xout;
 				}
 			}
 
 			// GCLK0:15 -> CLK0:1, GFAN0:1/SR0:1
+			if (tile->type == ROUTING_BRK
+			    || tile->type == BRAM_ROUTING_BRK)
+				gclk_s = "GCLK%i_BRK";
+			else
+				gclk_s = "GCLK%i";
 			for (i = 0; i <= 15; i++) {
 				for (j = 0; j <= 1; j++) {
 					rc = add_switch(model, y, x,
-						pf("GCLK%i", i),
-						pf("CLK%i", j), 0 /* bidir */);
+						pf(gclk_s, i),
+						pf("CLK%i", j),
+						0 /* bidir */);
 					if (rc) goto xout;
 					rc = add_switch(model, y, x,
-						pf("GCLK%i", i),
-						(i < 8) ? pf("GFAN%i", j)
-							: pf("SR%i", j),
+						pf(gclk_s, i),
+						(i < 8)
+						  ? pf(gfan_s, j)
+						  : pf("SR%i", j),
 						0 /* bidir */);
 					if (rc) goto xout;
 				}
@@ -1048,12 +1078,12 @@ static int init_switches(struct fpga_model* model)
 
 			// connecting logicout back to directional wires
 			// beginning points (and some back to logicin)
-			rc = add_logicout_switches(model, y, x);
+			rc = add_logicout_switches(model, y, x, routing_io);
 			if (rc) goto xout;
 
 			// there are extra wires to send signals to logicin, or
 			// to share/multiply logicin signals
-			rc = add_logicio_extra(model, y, x);
+			rc = add_logicio_extra(model, y, x, routing_io);
 			if (rc) goto xout;
 
 			// extra wires going to SR, CLK and GFAN
@@ -1078,11 +1108,11 @@ static int init_switches(struct fpga_model* model)
 			{ int to_gf[] = {M_AX, X_AX, M_CE, M_CI};
 			for (i = 0; i < sizeof(to_gf)/sizeof(to_gf[0]); i++) {
 				for (j = 0; j <= 1; j++) {
-					int bidir = (!j && i < 2)
-						|| (j && i >= 2);
+					int bidir = !routing_io
+					  && ((!j && i < 2) || (j && i >= 2));
 					rc = add_switch(model, y, x,
 						pf("LOGICIN_B%i", to_gf[i]),
-						pf("GFAN%i", j), bidir);
+						pf(gfan_s, j), bidir);
 					if (rc) goto xout;
 				}
 			}}
@@ -1140,7 +1170,7 @@ static int init_switches(struct fpga_model* model)
 						pf("CLK%i", j), 0 /* bidir */);
 					if (rc) goto xout;
 					rc = add_switch(model, y, x, from[i],
-						pf("GFAN%i", j), 0 /* bidir */);
+						pf(gfan_s, j), 0 /* bidir */);
 					if (rc) goto xout;
 				}
 			}}
@@ -1148,7 +1178,7 @@ static int init_switches(struct fpga_model* model)
 			for (i = 0; i < sizeof(from)/sizeof(from[0]); i++) {
 				for (j = 0; j <= 1; j++) {
 					rc = add_switch(model, y, x, from[i],
-						pf("GFAN%i", j), 0 /* bidir */);
+						pf(gfan_s, j), 0 /* bidir */);
 					if (rc) goto xout;
 				}
 			}}
@@ -1439,6 +1469,7 @@ static int init_devices(struct fpga_model* model)
 
 static int init_ports(struct fpga_model* model)
 {
+	struct fpga_tile* tile;
 	int x, y, i, j, k, row_num, row_pos, rc;
 
 	for (x = 0; x < model->x_width; x++) {
@@ -1450,10 +1481,14 @@ static int init_ports(struct fpga_model* model)
 				is_in_row(model, y, &row_num, &row_pos);
 				if (row_pos < 0 || row_pos == 8) continue;
 
+				tile = YX_TILE(model, y, x);
+#if 0
 				if (is_atx(X_FABRIC_ROUTING_COL, model, x)
 				    || (is_atx(X_CENTER_ROUTING_COL, model, x) && (row_pos != 7 && (row_pos != 9 || row_num%2)))
 				    || (is_atx(X_LEFT_IO_ROUTING_COL, model, x) && !is_aty(Y_LEFT_WIRED, model, y))
 				    || (is_atx(X_RIGHT_IO_ROUTING_COL, model, x) && !is_aty(Y_RIGHT_WIRED, model, y))) {
+#endif
+				if (tile->type != IO_ROUTING && tile->type != ROUTING_IO_L) {
 					for (i = 0; i <= 1; i++) {
 						rc = add_connpt_name(model, y, x, pf("GFAN%i", i));
 						if (rc) goto xout;
@@ -3450,6 +3485,27 @@ static const char* wpref(struct fpga_model* model, int y, int x, const char* wir
 	strcpy(buf[last_buf], prefix);
 	strcat(buf[last_buf], wire_name);
 	return buf[last_buf];
+}
+
+int has_connpt(struct fpga_model* model, int y, int x,
+	const char* name)
+{
+	struct fpga_tile* tile;
+	uint16_t name_i;
+	int i;
+
+	if (strarray_find(&model->str, name, &i))
+		ABORT(1);
+	if (i == STRIDX_NO_ENTRY)
+		return 0;
+	name_i = i;
+
+	tile = YX_TILE(model, y, x);
+	for (i = 0; i < tile->num_conn_point_names; i++) {
+		if (tile->conn_point_names[i*2+1] == name_i)
+			return 1;
+	}
+	return 0;
 }
 
 static int _add_connpt_name(struct fpga_model* model, int y, int x,
