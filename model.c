@@ -18,6 +18,7 @@ static int run_gclk(struct fpga_model* model);
 static int run_gclk_horiz_regs(struct fpga_model* model);
 static int run_gclk_vert_regs(struct fpga_model* model);
 static int run_logic_inout(struct fpga_model* model);
+static int run_io_wires(struct fpga_model* model);
 static int run_direction_wires(struct fpga_model* model);
 
 static const char* pf(const char* fmt, ...);
@@ -42,6 +43,11 @@ int add_conn_uni_pref(struct fpga_model* model, int y1, int x1, const char* name
 static int add_conn_bi(struct fpga_model* model, int y1, int x1, const char* name1, int y2, int x2, const char* name2);
 static int add_conn_bi_pref(struct fpga_model* model, int y1, int x1, const char* name1, int y2, int x2, const char* name2);
 static int add_conn_range(struct fpga_model* model, add_conn_f add_conn_func, int y1, int x1, const char* name1, int start1, int last1, int y2, int x2, const char* name2, int start2);
+
+// COUNT_DOWN can be OR'ed to start_count to make
+// the enumerated wires count from start_count down.
+#define COUNT_DOWN		0x100
+#define COUNT_MASK		0xFF
 
 struct w_point // wire point
 {
@@ -1924,6 +1930,10 @@ static int init_wires(struct fpga_model* model)
 {
 	int rc;
 
+	rc = run_io_wires(model);
+	if (rc) goto xout;
+return 0;
+
 	rc = run_direction_wires(model);
 	if (rc) goto xout;
 
@@ -1933,6 +1943,106 @@ static int init_wires(struct fpga_model* model)
 	rc = run_gclk(model);
 	if (rc) goto xout;
 
+	return 0;
+xout:
+	return rc;
+}
+
+int run_io_wires(struct fpga_model* model)
+{
+	static const char* s[] = { "IBUF", "O", "T", "" };
+	int x, y, i, rc;
+
+	//
+	// 1. input wires from IBUF into the chip "IBUF"
+	// 2. output wires from the chip into O "O"
+	// 3. T wires "T"
+	//
+
+	for (x = LEFT_SIDE_WIDTH; x < model->x_width - RIGHT_SIDE_WIDTH; x++) {
+
+		y = 0;
+		if (has_device(model, y, x, DEV_IOBM)) {
+			for (i = 0; s[i][0]; i++) {
+				struct w_net net1 = {
+					1,
+					{{ pf("TIOB_%s%%i",		s[i]), 0,   y,   x },
+					 { pf("IOI_TTERM_IOIUP_%s%%i",	s[i]), 0, y+1,   x },
+					 { pf("TTERM_IOIUP_%s%%i",	s[i]), 0, y+1, x+1 },
+					 { pf("TIOI_OUTER_%s%%i",	s[i]), 0, y+2, x+1 },
+					 { "" }}};
+				struct w_net net2 = {
+					1,
+					{{ pf("TIOB_%s%%i",		s[i]), 2,   y,   x },
+					 { pf("IOI_TTERM_IOIBOT_%s%%i",	s[i]), 0, y+1,   x },
+					 { pf("TTERM_IOIBOT_%s%%i",	s[i]), 0, y+1, x+1 },
+					 { pf("TIOI_OUTER_%s%%i_EXT",	s[i]), 0, y+2, x+1 },
+					 { pf("TIOI_INNER_%s%%i",	s[i]), 0, y+3, x+1 },
+					 { "" }}};
+
+				if ((rc = add_conn_net(model, NOPREF_BI_F, &net1))) goto xout;
+				if ((rc = add_conn_net(model, NOPREF_BI_F, &net2))) goto xout;
+			}
+		}
+
+		y = model->y_height - BOT_OUTER_ROW;
+		if (has_device(model, y, x, DEV_IOBM)) {
+			for (i = 0; s[i][0]; i++) {
+				struct w_net net1 = {
+					1,
+					{{ pf("BIOB_%s%%i",		s[i]), 0,   y,   x },
+					 { pf("IOI_BTERM_IOIUP_%s%%i",	s[i]), 0, y-1,   x },
+					 { pf("BTERM_IOIUP_%s%%i",	s[i]), 0, y-1, x+1 },
+					 { pf("BIOI_OUTER_%s%%i_EXT",	s[i]), 0, y-2, x+1 },
+					 { pf("BIOI_INNER_%s%%i",	s[i]), 0, y-3, x+1 },
+					 { "" }}};
+
+				if ((rc = add_conn_net(model, NOPREF_BI_F, &net1))) goto xout;
+ 				// The following is actually a net, but add_conn_net()/w_net
+ 				// does not support COUNT_DOWN ranges right now.
+				rc = add_conn_range(model, NOPREF_BI_F,   y,   x, pf("BIOB_%s%%i", s[i]), 2, 3, y-1, x, pf("IOI_BTERM_IOIBOT_%s%%i", s[i]), 1 | COUNT_DOWN);
+				if (rc) goto xout;
+				rc = add_conn_range(model, NOPREF_BI_F,   y,   x, pf("BIOB_%s%%i", s[i]), 2, 3, y-1, x+1, pf("BTERM_IOIBOT_%s%%i", s[i]), 1 | COUNT_DOWN);
+				if (rc) goto xout;
+				rc = add_conn_range(model, NOPREF_BI_F,   y,   x, pf("BIOB_%s%%i", s[i]), 2, 3, y-2, x+1, pf("BIOI_OUTER_%s%%i", s[i]), 1 | COUNT_DOWN);
+				if (rc) goto xout;
+				rc = add_conn_range(model, NOPREF_BI_F, y-1,   x, pf("IOI_BTERM_IOIBOT_%s%%i", s[i]), 0, 1, y-1, x+1, pf("BTERM_IOIBOT_%s%%i", s[i]), 0);
+				if (rc) goto xout;
+				rc = add_conn_range(model, NOPREF_BI_F, y-1,   x, pf("IOI_BTERM_IOIBOT_%s%%i", s[i]), 0, 1, y-2, x+1, pf("BIOI_OUTER_%s%%i", s[i]), 0);
+				if (rc) goto xout;
+				rc = add_conn_range(model, NOPREF_BI_F, y-1, x+1, pf("BTERM_IOIBOT_%s%%i", s[i]), 0, 1, y-2, x+1, pf("BIOI_OUTER_%s%%i", s[i]), 0);
+				if (rc) goto xout;
+			}
+		}
+	}
+	for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
+		if (has_device(model, y, LEFT_IO_DEVS, DEV_ILOGIC)) {
+			x = 0;
+			for (i = 0; s[i][0]; i++) {
+				struct w_net net = {
+					1,
+					{{ pf("LIOB_%s%%i",		s[i]), 0, y,   x },
+					 { pf("LTERM_IOB_%s%%i",	s[i]), 0, y, x+1 },
+					 { pf("LIOI_INT_%s%%i",		s[i]), 0, y, x+2 },
+					 { pf("LIOI_IOB_%s%%i",		s[i]), 0, y, x+3 },
+					 { "" }}};
+				if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) goto xout;
+			}
+		}
+		if (has_device(model, y, model->x_width - RIGHT_IO_DEVS_O, DEV_ILOGIC)) {
+			x = model->x_width - RIGHT_OUTER_O;
+			for (i = 0; s[i][0]; i++) {
+				struct w_net net = {
+					1,
+					{{ pf("RIOB_%s%%i",		s[i]), 0, y,   x },
+					 { pf("RTERM_IOB_%s%%i",	s[i]), 0, y, x-1 },
+					 { pf("MCB_%s%%i",		s[i]), 0, y, x-2 },
+					 { pf("RIOI_IOB_%s%%i",		s[i]), 0, y, x-3 },
+					 { "" }}};
+				if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) goto xout;
+			}
+		}
+	}
 	return 0;
 xout:
 	return rc;
@@ -3958,7 +4068,10 @@ static int add_conn_range(struct fpga_model* model, add_conn_f add_conn_func, in
 		return (*add_conn_func)(model, y1, x1, name1, y2, x2, name2);
 	for (i = start1; i <= last1; i++) {
 		snprintf(buf1, sizeof(buf1), name1, i);
-		snprintf(buf2, sizeof(buf2), name2, start2+(i-start1));
+		if (start2 & COUNT_DOWN)
+			snprintf(buf2, sizeof(buf2), name2, (start2 & COUNT_MASK)-(i-start1));
+		else
+			snprintf(buf2, sizeof(buf2), name2, (start2 & COUNT_MASK)+(i-start1));
 		rc = (*add_conn_func)(model, y1, x1, buf1, y2, x2, buf2);
 		if (rc) return rc;
 	}
