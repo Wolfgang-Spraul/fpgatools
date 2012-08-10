@@ -134,10 +134,16 @@ enum fpga_tile_type
 #define LEFT_IO_ROUTING		2
 #define LEFT_IO_DEVS		3
 #define LEFT_MCB_COL		4
+#define LEFT_SIDE_WIDTH		5
+#define RIGHT_SIDE_WIDTH	5
 
 #define TOP_IO_TILES		2
+// todo: maybe rename TOP_OUTER_ROW to TOP_OUTER_TERM and
+//       TOP_INNER_ROW to TOP_INNER_TERM?
 #define TOP_OUTER_ROW		0
 #define TOP_INNER_ROW		1
+#define TOP_OUTER_IO		2
+#define TOP_INNER_IO		3
 #define HALF_ROW		8
 #define HCLK_POS		8  // hclk pos in row
 #define LAST_POS_IN_ROW		16 // including hclk at 8
@@ -147,6 +153,8 @@ enum fpga_tile_type
 #define BOT_IO_TILES		2
 #define BOT_OUTER_ROW		1
 #define BOT_INNER_ROW		2
+#define BOT_OUTER_IO		3
+#define BOT_INNER_IO		4
 #define RIGHT_OUTER_O		1
 #define RIGHT_INNER_O		2
 #define RIGHT_MCB_O		3
@@ -187,6 +195,9 @@ enum fpga_tile_type
 #define Y_BOTTOM_OF_ROW		0x0010
 #define Y_LEFT_WIRED		0x0020
 #define Y_RIGHT_WIRED		0x0040
+// Y_TOPBOT_IO_RANGE checks if y points to the top or bottom outer or
+// inner rows.
+#define Y_TOPBOT_IO_RANGE	0x0080
 
 // multiple checks are combined with OR logic
 int is_aty(int check, struct fpga_model* model, int y);
@@ -232,6 +243,7 @@ int is_atx(int check, struct fpga_model* model, int x);
 
 // True for all tiles that are in the regular 0..15 row tiles of a routing col
 #define YX_ROUTING_TILE		0x0001
+#define YX_IO_ROUTING		0x0002
 
 int is_atyx(int check, struct fpga_model* model, int y, int x);
 
