@@ -1933,6 +1933,7 @@ static int init_conns(struct fpga_model* model)
 
 	rc = run_term_wires(model);
 	if (rc) goto xout;
+return 0;
 
 	rc = run_io_wires(model);
 	if (rc) goto xout;
@@ -1951,9 +1952,27 @@ xout:
 	return rc;
 }
 
+static int pcice_conn(struct fpga_model* model, int y, int x, int i)
+{
+	static const char* src_str;
+	int to_center;
+
+	to_center = (i < x) ^ (x < model->center_x);
+	if (is_atx(X_FABRIC_BRAM_COL, model, x))
+		src_str = to_center ?
+			"BRAM_TTERM_PCICE_OUT" : "BRAM_TTERM_PCICE_IN";
+	else if (is_atx(X_FABRIC_MACC_COL, model, x))
+		src_str = to_center ?
+			"MACCSITE2_TTERM_PCICE_OUT" : "MACCSITE2_TTERM_PCICE_IN";
+	else
+		ABORT(1);
+	return add_conn_bi(model, y, x, src_str, y, i, "BTERM_CLB_PCICE");
+}
+
 static int run_term_wires(struct fpga_model* model)
 {
-	int x, y, i, rc;
+	struct w_net net;
+	int x, y, i, next_net_o, rightmost_local_net, rc;
 
 	//
 	// wires going from the top and bottom term tiles vertically to
@@ -2329,6 +2348,69 @@ static int run_term_wires(struct fpga_model* model)
 			// connect all (PLL) or just right side
 			net.pts[next_net_o].name = "";
 			if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) goto xout;
+		}
+	}
+
+	//
+	// PCICE east-west wiring
+	//
+	
+	// First find BRAM or MACC device columns which are the focal
+	// points of the east-west PCICE wiring.
+	rightmost_local_net = -1;
+	for (x = LEFT_SIDE_WIDTH; x < model->x_width - RIGHT_SIDE_WIDTH; x++) {
+		if (is_atx(X_FABRIC_BRAM_COL|X_FABRIC_MACC_COL, model, x)) {
+			// From the BRAM/MACC focal points, search left and right
+			// for local east-west hubs
+			net.last_inc = 0;
+			next_net_o = 0;
+			for (i = x-1; i >= LEFT_SIDE_WIDTH; i--) {
+				if (is_atx(X_FABRIC_BRAM_COL|X_FABRIC_MACC_COL|X_CENTER_REGS_COL, model, i))
+					break;
+				// center logic cannot be found when going left.
+				if ((is_atx(X_FABRIC_LOGIC_COL, model, i)
+				     && !is_atx(X_ROUTING_NO_IO, model, i-1))
+				    || is_atx(X_FABRIC_MACC_VIA_COL, model, i)) {
+					rc = pcice_conn(model, y, x, i);
+					if (rc) goto xout;
+					net.pts[next_net_o].start_count = 0;
+					net.pts[next_net_o].x = i;
+					net.pts[next_net_o].y = y;
+					net.pts[next_net_o].name = "BTERM_CLB_PCICE";
+					next_net_o++;
+				}
+			}
+			// TODO: there are more sub-cases here: all points in the
+			//       subnet must be connected to the x coords that are
+			//       not in the net... and some more cases on left and right
+			//       side...
+			if (next_net_o && net.pts[0].x > rightmost_local_net) {
+				net.pts[next_net_o].name = "";
+				if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) goto xout;
+			}
+
+			net.last_inc = 0;
+			next_net_o = 0;
+			for (i = x+1; i < model->x_width - RIGHT_SIDE_WIDTH; i++) {
+				if (is_atx(X_FABRIC_BRAM_COL|X_FABRIC_MACC_COL|X_CENTER_CMTPLL_COL, model, i))
+					break;
+				if ((is_atx(X_FABRIC_LOGIC_COL|X_CENTER_LOGIC_COL, model, i)
+				     && !is_atx(X_ROUTING_NO_IO, model, i-1))
+				    || is_atx(X_FABRIC_MACC_VIA_COL, model, i)) {
+					rc = pcice_conn(model, y, x, i);
+					if (rc) goto xout;
+					net.pts[next_net_o].start_count = 0;
+					net.pts[next_net_o].x = i;
+					net.pts[next_net_o].y = y;
+					net.pts[next_net_o].name = "BTERM_CLB_PCICE";
+					next_net_o++;
+				}
+			}
+			if (next_net_o) {
+				rightmost_local_net = net.pts[next_net_o-1].x;
+				net.pts[next_net_o].name = "";
+				if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) goto xout;
+			}
 		}
 	}
 	return 0;
