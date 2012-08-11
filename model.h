@@ -151,6 +151,8 @@ enum fpga_tile_type
 
 // Some offsets that are being deducted from their origin
 #define BOT_IO_TILES		2
+// todo: rename BOT_OUTER_ROW to BOT_OUTER_TERM and BOT_INNER_ROW
+//       to BOT_INNER_TERM?
 #define BOT_OUTER_ROW		1
 #define BOT_INNER_ROW		2
 #define BOT_OUTER_IO		3
@@ -170,23 +172,24 @@ enum fpga_tile_type
 
 #define TF_FABRIC_ROUTING_COL		0x00000001 // only set in y==0, not for left and right IO routing or center
 #define TF_FABRIC_LOGIC_COL		0x00000002 // only set in y==0
-#define TF_FABRIC_BRAM_MACC_ROUTING_COL	0x00000004 // only set in y==0
-#define TF_FABRIC_BRAM_COL		0x00000008 // only set in y==0
-#define TF_FABRIC_MACC_COL		0x00000010 // only set in y==0
+#define TF_FABRIC_BRAM_VIA_COL		0x00000004 // only set in y==0
+#define TF_FABRIC_MACC_VIA_COL		0x00000008 // only set in y==0
+#define TF_FABRIC_BRAM_COL		0x00000010 // only set in y==0
+#define TF_FABRIC_MACC_COL		0x00000020 // only set in y==0
 // TF_ROUTING_NO_IO is only set in y==0 - automatically for BRAM and MACC
 // routing, and manually for logic routing with the noio flag in the column
 // configuration string
-#define TF_ROUTING_NO_IO		0x00000020
-#define TF_BRAM_DEV			0x00000040
-#define TF_MACC_DEV			0x00000080
-#define TF_LOGIC_XL_DEV			0x00000100
-#define TF_LOGIC_XM_DEV			0x00000200
-#define TF_IOLOGIC_DELAY_DEV		0x00000400
-#define TF_DCM_DEV			0x00000800
-#define TF_PLL_DEV			0x00001000
+#define TF_ROUTING_NO_IO		0x00000040
+#define TF_BRAM_DEV			0x00000080
+#define TF_MACC_DEV			0x00000100
+#define TF_LOGIC_XL_DEV			0x00000200
+#define TF_LOGIC_XM_DEV			0x00000400
+#define TF_IOLOGIC_DELAY_DEV		0x00000800
+#define TF_DCM_DEV			0x00001000
+#define TF_PLL_DEV			0x00002000
 // TF_WIRED is only set for x==0 on the left side or x==x_width-1
 // on the right side.
-#define TF_WIRED			0x00002000
+#define TF_WIRED			0x00004000
 
 #define Y_INNER_TOP		0x0001
 #define Y_INNER_BOTTOM		0x0002
@@ -217,20 +220,21 @@ int is_aty(int check, struct fpga_model* model, int y);
 #define X_FABRIC_LOGIC_COL		0x00000800
 #define X_FABRIC_BRAM_ROUTING_COL	0x00001000 // BRAM only
 #define X_FABRIC_MACC_ROUTING_COL	0x00002000 // MACC only
-#define X_FABRIC_BRAM_MACC_ROUTING_COL	0x00004000 // second routing col for BRAM/MACC
-#define X_FABRIC_BRAM_COL		0x00008000
-#define X_FABRIC_MACC_COL		0x00010000
-#define X_CENTER_ROUTING_COL		0x00020000
-#define X_CENTER_LOGIC_COL		0x00040000
-#define X_CENTER_CMTPLL_COL		0x00080000
-#define X_CENTER_REGS_COL		0x00100000
-#define X_LEFT_IO_ROUTING_COL		0x00200000
-#define X_LEFT_IO_DEVS_COL		0x00400000
-#define X_RIGHT_IO_ROUTING_COL		0x00800000
-#define X_RIGHT_IO_DEVS_COL		0x01000000
-#define X_LEFT_SIDE			0x02000000 // true for anything left of the center (not including center)
-#define X_LEFT_MCB			0x04000000
-#define X_RIGHT_MCB			0x08000000
+#define X_FABRIC_BRAM_VIA_COL		0x00004000 // second routing col for BRAM
+#define X_FABRIC_MACC_VIA_COL		0x00008000 // second routing col for MACC
+#define X_FABRIC_BRAM_COL		0x00010000
+#define X_FABRIC_MACC_COL		0x00020000
+#define X_CENTER_ROUTING_COL		0x00040000
+#define X_CENTER_LOGIC_COL		0x00080000
+#define X_CENTER_CMTPLL_COL		0x00100000
+#define X_CENTER_REGS_COL		0x00200000
+#define X_LEFT_IO_ROUTING_COL		0x00400000
+#define X_LEFT_IO_DEVS_COL		0x00800000
+#define X_RIGHT_IO_ROUTING_COL		0x01000000
+#define X_RIGHT_IO_DEVS_COL		0x02000000
+#define X_LEFT_SIDE			0x04000000 // true for anything left of the center (not including center)
+#define X_LEFT_MCB			0x08000000
+#define X_RIGHT_MCB			0x10000000
 
 #define IS_TOP_ROW(row, model)		((row) == (model)->cfg_rows-1)
 #define IS_BOTTOM_ROW(row, model)	((row) == 0)
