@@ -11,13 +11,15 @@
 CFLAGS = -Wall -g
 LDLIBS = -lxml2
 
+MODEL_OBJ = model_main.o model_tiles.o model_devices.o model_ports.o model_conns.o model_switches.o model_helper.o
+
 all: bit2txt draw_svg_tiles new_fp hstrrep sort_seq merge_seq
 
-new_fp: new_fp.o model.o helper.o
+new_fp: new_fp.o $(MODEL_OBJ) helper.o
 
 new_fp.o: new_fp.c model.h helper.h
 
-draw_svg_tiles: draw_svg_tiles.o model.o helper.o
+draw_svg_tiles: draw_svg_tiles.o $(MODEL_OBJ) helper.o
 
 draw_svg_tiles.o: draw_svg_tiles.c model.h helper.h
 
@@ -41,9 +43,21 @@ hstrrep: hstrrep.o helper.o
 
 helper.o: helper.c helper.h
 
-model.o: model.c model.h
+model_main.o: model_main.c model.h
 
-xc6slx9_empty.fp: new_fp model.c model.h
+model_tiles.o: model_tiles.c model.h
+
+model_devices.o: model_devices.c model.h
+
+model_ports.o: model_ports.c model.h
+
+model_conns.o: model_conns.c model.h
+
+model_switches.o: model_switches.c model.h
+
+model_helper.o: model_helper.c model.h
+
+xc6slx9_empty.fp: new_fp
 	./new_fp > $@
 
 xc6slx9.svg: draw_svg_tiles
@@ -89,7 +103,7 @@ clean:
 	rm -f bit2txt bit2txt.o \
 		draw_svg_tiles draw_svg_tiles.o \
 		new_fp new_fp.o \
-		helper.o model.o hstrrep hstrrep.o \
+		helper.o $(MODEL_OBJ) hstrrep hstrrep.o \
 		sort_seq sort_seq.o \
 		merge_seq merge_seq.o \
 		xc6slx9_empty.fp xc6slx9_empty.conns xc6slx9_empty.ports \

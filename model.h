@@ -261,6 +261,8 @@ void is_in_row(const struct fpga_model* model, int y,
 int row_num(int y, struct fpga_model* model);
 int row_pos(int y, struct fpga_model* model);
 
+const char* logicin_s(int wire, int routing_io);
+
 enum fpgadev_type
 {
 	DEV_LOGIC_M,
@@ -361,3 +363,118 @@ int fpga_build_model(struct fpga_model* model,
 void fpga_free_model(struct fpga_model* model);
 
 const char* fpga_tiletype_str(enum fpga_tile_type type);
+
+int init_tiles(struct fpga_model* model);
+int init_conns(struct fpga_model* model);
+int init_ports(struct fpga_model* model);
+int init_devices(struct fpga_model* model);
+int init_switches(struct fpga_model* model);
+
+const char* pf(const char* fmt, ...);
+const char* wpref(struct fpga_model* model, int y, int x, const char* wire_name);
+char next_non_whitespace(const char* s);
+char last_major(const char* str, int cur_o);
+int has_connpt(struct fpga_model* model, int y, int x, const char* name);
+int add_connpt_name(struct fpga_model* model, int y, int x, const char* connpt_name);
+
+int has_device(struct fpga_model* model, int y, int x, int dev);
+int add_connpt_2(struct fpga_model* model, int y, int x,
+	const char* connpt_name, const char* suffix1, const char* suffix2);
+
+typedef int (*add_conn_f)(struct fpga_model* model, int y1, int x1, const char* name1, int y2, int x2, const char* name2);
+#define NOPREF_BI_F	add_conn_bi
+#define PREF_BI_F	add_conn_bi_pref
+#define NOPREF_UNI_F	add_conn_uni
+#define PREF_UNI_F	add_conn_uni_pref
+
+int add_conn_uni(struct fpga_model* model, int y1, int x1, const char* name1, int y2, int x2, const char* name2);
+int add_conn_uni_pref(struct fpga_model* model, int y1, int x1, const char* name1, int y2, int x2, const char* name2);
+int add_conn_bi(struct fpga_model* model, int y1, int x1, const char* name1, int y2, int x2, const char* name2);
+int add_conn_bi_pref(struct fpga_model* model, int y1, int x1, const char* name1, int y2, int x2, const char* name2);
+int add_conn_range(struct fpga_model* model, add_conn_f add_conn_func, int y1, int x1, const char* name1, int start1, int last1, int y2, int x2, const char* name2, int start2);
+
+// COUNT_DOWN can be OR'ed to start_count to make
+// the enumerated wires count from start_count down.
+#define COUNT_DOWN		0x100
+#define COUNT_MASK		0xFF
+
+struct w_point // wire point
+{
+	const char* name;
+	int start_count; // if there is a %i in the name, this is the start number
+	int y, x;
+};
+
+#define NO_INCREMENT 0
+
+struct w_net
+{
+	// if !last_inc, no incrementing will happen (NO_INCREMENT)
+	// if last_inc > 0, incrementing will happen to
+	// the %i in the name from 0:last_inc, for a total
+	// of last_inc+1 wires.
+	int last_inc;
+	struct w_point pts[40];
+};
+
+int add_conn_net(struct fpga_model* model, add_conn_f add_conn_func, struct w_net* net);
+
+int add_switch(struct fpga_model* model, int y, int x, const char* from,
+	const char* to, int is_bidirectional);
+
+struct seed_data
+{
+	int x_flags;
+	const char* str;
+};
+
+void seed_strx(struct fpga_model* model, struct seed_data* data);
+
+// The LWF flags are OR'ed into the logic_wire enum
+#define LWF_SOUTH0		0x0100
+#define LWF_NORTH3		0x0200
+#define LWF_BIDIR		0x0400
+#define LWF_FAN_B		0x0800
+#define LWF_WIRE_MASK		0x00FF // namespace for the enums
+
+enum logicin_wire {
+    /*  0 */	X_A1 = 0,
+		      X_A2, X_A3, X_A4, X_A5, X_A6, X_AX,
+    /*  7 */	X_B1, X_B2, X_B3, X_B4, X_B5, X_B6, X_BX,
+    /* 14 */	X_C1, X_C2, X_C3, X_C4, X_C5, X_C6, X_CE, X_CX,
+    /* 22 */	X_D1, X_D2, X_D3, X_D4, X_D5, X_D6, X_DX,
+    /* 29 */	M_A1, M_A2, M_A3, M_A4, M_A5, M_A6, M_AX, M_AI,
+    /* 37 */	M_B1, M_B2, M_B3, M_B4, M_B5, M_B6, M_BX, M_BI,
+    /* 45 */	M_C1, M_C2, M_C3, M_C4, M_C5, M_C6, M_CE, M_CX, M_CI,
+    /* 54 */	M_D1, M_D2, M_D3, M_D4, M_D5, M_D6, M_DX, M_DI,
+    /* 62 */	M_WE
+};
+
+enum logicout_wire {
+    /*  0 */	X_A = 0,
+		     X_AMUX, X_AQ, X_B, X_BMUX, X_BQ,
+    /*  6 */	X_C, X_CMUX, X_CQ, X_D, X_DMUX, X_DQ,
+    /* 12 */	M_A, M_AMUX, M_AQ, M_B, M_BMUX, M_BQ,
+    /* 18 */	M_C, M_CMUX, M_CQ, M_D, M_DMUX, M_DQ
+};
+
+// The extra wires must not overlap with logicin_wire or logicout_wire
+// namespaces so that they can be combined with either of them.
+enum extra_wires {
+	UNDEF = 100,
+	FAN_B,
+	GFAN0,
+	GFAN1,
+	LOGICIN20,
+	LOGICIN21,
+	LOGICIN44,
+	LOGICIN52,
+	LOGICIN_N21,
+	LOGICIN_N28,
+	LOGICIN_N52,
+	LOGICIN_N60,
+	LOGICIN_S20,
+	LOGICIN_S36,
+	LOGICIN_S44,
+	LOGICIN_S62
+};

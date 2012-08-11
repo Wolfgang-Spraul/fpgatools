@@ -3,7 +3,13 @@ bit2txt.o
 draw_svg_tiles
 draw_svg_tiles.o
 helper.o
-model.o
+model_main.o
+model_tiles.o
+model_devices.o
+model_ports.o
+model_conns.o
+model_switches.o
+model_helper.o
 new_fp
 new_fp.o
 hstrrep
