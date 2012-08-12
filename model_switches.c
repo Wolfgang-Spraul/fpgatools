@@ -801,15 +801,120 @@ xout:
 	return rc;
 }
 
+static int init_io_switches(struct fpga_model* model);
 static int init_routing_switches(struct fpga_model* model);
 
 int init_switches(struct fpga_model* model)
 {
 	int rc;
 
+// todo: IO_B, IO_TERM_B, IO_LOGIC_TERM_B, IO_OUTER_B, IO_INNER_B, LOGIC_XM
+	rc = init_io_switches(model);
+	if (rc) goto xout;
+return 0;
+
 	rc = init_routing_switches(model);
 	if (rc) goto xout;
-// todo: IO_B, IO_TERM_B, IO_LOGIC_TERM_B, IO_OUTER_B, IO_INNER_B, LOGIC_XM
+	return 0;
+xout:
+	return rc;
+}
+
+static int init_io_tile(struct fpga_model* model, int y, int x)
+{
+	const char* prefix;
+	int i, num_devs, rc;
+
+	if (!y) {
+		prefix = "TIOB";
+		rc = add_switch(model, y, x,
+			pf("%s_DIFFO_OUT2", prefix), 
+			pf("%s_DIFFO_IN3", prefix), 0 /* bidir */);
+		if (rc) goto xout;
+		num_devs = 2;
+	} else if (y == model->y_height - BOT_OUTER_ROW) {
+		prefix = "BIOB";
+		rc = add_switch(model, y, x,
+			pf("%s_DIFFO_OUT3", prefix), 
+			pf("%s_DIFFO_IN2", prefix), 0 /* bidir */);
+		if (rc) goto xout;
+		num_devs = 2;
+	} else if (!x) {
+		prefix = "LIOB";
+		num_devs = 1;
+	} else if (x == model->x_width - RIGHT_OUTER_O) {
+		prefix = "RIOB";
+		num_devs = 1;
+	} else
+		ABORT(1);
+
+	for (i = 0; i < num_devs*2; i++) {
+		rc = add_switch(model, y, x,
+			pf("%s_IBUF%i_PINW", prefix, i),
+			pf("%s_IBUF%i", prefix, i), 0 /* bidir */);
+		if (rc) goto xout;
+		rc = add_switch(model, y, x,
+			pf("%s_O%i", prefix, i),
+			pf("%s_O%i_PINW", prefix, i), 0 /* bidir */);
+		if (rc) goto xout;
+		rc = add_switch(model, y, x,
+			pf("%s_T%i", prefix, i),
+			pf("%s_T%i_PINW", prefix, i), 0 /* bidir */);
+		if (rc) goto xout;
+	}
+	rc = add_switch(model, y, x,
+		pf("%s_DIFFO_OUT0", prefix),
+		pf("%s_DIFFO_IN1", prefix), 0 /* bidir */);
+	if (rc) goto xout;
+	for (i = 0; i <= 1; i++) {
+		rc = add_switch(model, y, x,
+			pf("%s_PADOUT%i", prefix, i),
+			pf("%s_DIFFI_IN%i", prefix, 1-i),
+			0 /* bidir */);
+		if (rc) goto xout;
+	}
+	if (num_devs > 1) {
+		for (i = 0; i <= 1; i++) {
+			rc = add_switch(model, y, x,
+				pf("%s_PADOUT%i", prefix, i+2),
+				pf("%s_DIFFI_IN%i", prefix, 3-i),
+				0 /* bidir */);
+			if (rc) goto xout;
+		}
+	}
+	return 0;
+xout:
+	return rc;
+}
+
+static int init_io_switches(struct fpga_model* model)
+{
+	int x, y, i, rc;
+
+	for (x = 0; x < model->x_width; x++) {
+		if (has_device(model, /*y*/ 0, x, DEV_IOBM)) {
+			rc = init_io_tile(model, 0, x);
+			if (rc) goto xout;
+		}
+		if (has_device(model, model->y_height - BOT_OUTER_ROW, x,
+			DEV_IOBM)) {
+			rc = init_io_tile(model,
+				model->y_height-BOT_OUTER_ROW, x);
+			if (rc) goto xout;
+		}
+	}
+	for (y = 0; y < model->y_height; y++) {
+		if (has_device(model, y, /*x*/ 0, DEV_IOBM)) {
+			rc = init_io_tile(model, y, 0);
+			if (rc) goto xout;
+		}
+		if (has_device(model, y, model->x_width - RIGHT_OUTER_O,
+			DEV_IOBM)) {
+			rc = init_io_tile(model,
+				y, model->x_width - RIGHT_OUTER_O);
+			if (rc) goto xout;
+		}
+	}
 	return 0;
 xout:
 	return rc;
