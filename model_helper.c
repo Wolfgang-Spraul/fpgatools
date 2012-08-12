@@ -472,6 +472,7 @@ int is_atx(int check, struct fpga_model* model, int x)
 		    && model->tiles[x+2].flags & TF_FABRIC_MACC_COL) return 1;
 	}
 	if (check & X_ROUTING_NO_IO && model->tiles[x].flags & TF_ROUTING_NO_IO) return 1;
+	if (check & X_ROUTING_HAS_IO && !(model->tiles[x].flags & TF_ROUTING_NO_IO)) return 1;
 	if (check & X_LOGIC_COL
 	    && (model->tiles[x].flags & TF_FABRIC_LOGIC_COL
 	        || x == model->center_x-2)) return 1;

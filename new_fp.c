@@ -181,8 +181,8 @@ int printf_devices(struct fpga_model* model)
 					case DEV_DCM:
 						printf("device y%02i x%02i DCM\n", y, x);
 						break;
-					case DEV_PLL_ADV:
-						printf("device y%02i x%02i PLL_ADV\n", y, x);
+					case DEV_PLL:
+						printf("device y%02i x%02i PLL\n", y, x);
 						break;
 					case DEV_ICAP:
 						printf("device y%02i x%02i ICAP\n", y, x);

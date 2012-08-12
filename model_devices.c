@@ -22,7 +22,7 @@ int init_devices(struct fpga_model* model)
 			tile->devices[tile->num_devices++].type = DEV_DCM;
 			tile->devices[tile->num_devices++].type = DEV_DCM;
 		} else
-			tile->devices[tile->num_devices++].type = DEV_PLL_ADV;
+			tile->devices[tile->num_devices++].type = DEV_PLL;
 	}
 
 	// BSCAN

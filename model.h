@@ -136,8 +136,11 @@ enum fpga_tile_type
 #define LEFT_MCB_COL		4
 #define LEFT_SIDE_WIDTH		5
 #define RIGHT_SIDE_WIDTH	5
+#define LEFT_LOCAL_HEIGHT	1
+#define RIGHT_LOCAL_HEIGHT	2
 
 #define TOP_IO_TILES		2
+#define TOPBOT_IO_ROWS		2 // OUTER and INNER IO
 // todo: maybe rename TOP_OUTER_ROW to TOP_OUTER_TERM and
 //       TOP_INNER_ROW to TOP_INNER_TERM?
 #define TOP_OUTER_ROW		0
@@ -213,28 +216,29 @@ int is_aty(int check, struct fpga_model* model, int y);
 #define X_ROUTING_TO_BRAM_COL		0x00000020
 #define X_ROUTING_TO_MACC_COL		0x00000040
 #define X_ROUTING_NO_IO			0x00000080
-#define X_LOGIC_COL			0x00000100 // includes the center logic col
+#define X_ROUTING_HAS_IO		0x00000100
+#define X_LOGIC_COL			0x00000200 // includes the center logic col
 // todo: maybe X_FABRIC_ROUTING_COL could be logic+bram+macc?
-#define X_FABRIC_ROUTING_COL		0x00000200 // logic+BRAM+MACC
-#define X_FABRIC_LOGIC_ROUTING_COL	0x00000400 // logic only
-#define X_FABRIC_LOGIC_COL		0x00000800
-#define X_FABRIC_BRAM_ROUTING_COL	0x00001000 // BRAM only
-#define X_FABRIC_MACC_ROUTING_COL	0x00002000 // MACC only
-#define X_FABRIC_BRAM_VIA_COL		0x00004000 // second routing col for BRAM
-#define X_FABRIC_MACC_VIA_COL		0x00008000 // second routing col for MACC
-#define X_FABRIC_BRAM_COL		0x00010000
-#define X_FABRIC_MACC_COL		0x00020000
-#define X_CENTER_ROUTING_COL		0x00040000
-#define X_CENTER_LOGIC_COL		0x00080000
-#define X_CENTER_CMTPLL_COL		0x00100000
-#define X_CENTER_REGS_COL		0x00200000
-#define X_LEFT_IO_ROUTING_COL		0x00400000
-#define X_LEFT_IO_DEVS_COL		0x00800000
-#define X_RIGHT_IO_ROUTING_COL		0x01000000
-#define X_RIGHT_IO_DEVS_COL		0x02000000
-#define X_LEFT_SIDE			0x04000000 // true for anything left of the center (not including center)
-#define X_LEFT_MCB			0x08000000
-#define X_RIGHT_MCB			0x10000000
+#define X_FABRIC_ROUTING_COL		0x00000400 // logic+BRAM+MACC
+#define X_FABRIC_LOGIC_ROUTING_COL	0x00000800 // logic only
+#define X_FABRIC_LOGIC_COL		0x00001000
+#define X_FABRIC_BRAM_ROUTING_COL	0x00002000 // BRAM only
+#define X_FABRIC_MACC_ROUTING_COL	0x00004000 // MACC only
+#define X_FABRIC_BRAM_VIA_COL		0x00008000 // second routing col for BRAM
+#define X_FABRIC_MACC_VIA_COL		0x00010000 // second routing col for MACC
+#define X_FABRIC_BRAM_COL		0x00020000
+#define X_FABRIC_MACC_COL		0x00040000
+#define X_CENTER_ROUTING_COL		0x00080000
+#define X_CENTER_LOGIC_COL		0x00100000
+#define X_CENTER_CMTPLL_COL		0x00200000
+#define X_CENTER_REGS_COL		0x00400000
+#define X_LEFT_IO_ROUTING_COL		0x00800000
+#define X_LEFT_IO_DEVS_COL		0x01000000
+#define X_RIGHT_IO_ROUTING_COL		0x02000000
+#define X_RIGHT_IO_DEVS_COL		0x04000000
+#define X_LEFT_SIDE			0x08000000 // true for anything left of the center (not including center)
+#define X_LEFT_MCB			0x10000000
+#define X_RIGHT_MCB			0x20000000
 
 #define IS_TOP_ROW(row, model)		((row) == (model)->cfg_rows-1)
 #define IS_BOTTOM_ROW(row, model)	((row) == 0)
@@ -285,7 +289,7 @@ enum fpgadev_type
 	DEV_BUFGMUX,
 	DEV_BSCAN,
 	DEV_DCM,
-	DEV_PLL_ADV,
+	DEV_PLL,
 	DEV_ICAP,
 	DEV_POST_CRC_INTERNAL,
 	DEV_STARTUP,

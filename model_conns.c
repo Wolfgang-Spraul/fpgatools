@@ -15,11 +15,24 @@ static int run_logic_inout(struct fpga_model* model);
 static int run_term_wires(struct fpga_model* model);
 static int run_io_wires(struct fpga_model* model);
 static int run_direction_wires(struct fpga_model* model);
-
+static int run_gfan(struct fpga_model* model);
+static int connect_clk_sr(struct fpga_model* model, const char* clk_sr);
+static int connect_logic_carry(struct fpga_model* model);
 
 int init_conns(struct fpga_model* model)
 {
 	int rc;
+
+	rc = connect_logic_carry(model);
+	if (rc) goto xout;
+
+	rc = connect_clk_sr(model, "CLK");
+	if (rc) goto xout;
+	rc = connect_clk_sr(model, "SR");
+	if (rc) goto xout;
+
+	rc = run_gfan(model);
+	if (rc) goto xout;
 
 	rc = run_term_wires(model);
 	if (rc) goto xout;
@@ -36,6 +49,236 @@ int init_conns(struct fpga_model* model)
 	rc = run_gclk(model);
 	if (rc) goto xout;
 
+	return 0;
+xout:
+	return rc;
+}
+
+static int connect_logic_carry(struct fpga_model* model)
+{
+	int x, y, rc;
+
+	for (x = 0; x < model->x_width; x++) {
+		if (is_atx(X_LOGIC_COL, model, x)) {
+			for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
+				if (has_device(model, y, x, DEV_LOGIC_M)) {
+					if (is_aty(Y_CHIP_HORIZ_REGS, model, y-1)
+					    && has_device(model, y-2, x, DEV_LOGIC_M)) {
+						struct w_net net = {
+							0,
+							{{ "M_CIN",		0, y-2, x },
+							 { "REGH_CLEXM_COUT",	0, y-1, x },
+							 { "M_COUT_N",		0,   y, x },
+							 { "" }}};
+						if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) goto xout;
+					} else if (is_aty(Y_ROW_HORIZ_AXSYMM, model, y-1)
+					    && has_device(model, y-2, x, DEV_LOGIC_M)) {
+						struct w_net net = {
+							0,
+							{{ "M_CIN",		0, y-2, x },
+							 { "HCLK_CLEXM_COUT",	0, y-1, x },
+							 { "M_COUT_N",		0,   y, x },
+							 { "" }}};
+						if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) goto xout;
+					} else if (has_device(model, y-1, x, DEV_LOGIC_M)) {
+						if ((rc = add_conn_bi(model, y, x, "M_COUT_N", y-1, x, "M_CIN"))) goto xout;
+					}
+				}
+			}
+		}
+	}
+	return 0;
+xout:
+	return rc;
+}
+
+static int connect_clk_sr(struct fpga_model* model, const char* clk_sr)
+{
+	int x, y, rc;
+
+	// fabric logic, bram, macc
+	for (x = LEFT_SIDE_WIDTH; x < model->x_width - RIGHT_SIDE_WIDTH; x++) {
+		if (is_atx(X_FABRIC_BRAM_ROUTING_COL|X_FABRIC_MACC_ROUTING_COL, model, x)) {
+			for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
+				if (is_aty(Y_ROW_HORIZ_AXSYMM|Y_CHIP_HORIZ_REGS,
+						model, y))
+					continue;
+				if ((rc = add_conn_range(model, NOPREF_BI_F, y, x, pf("%s%%i", clk_sr), 0, 1, y, x+1, pf("INT_INTERFACE_%s%%i", clk_sr), 0))) goto xout;
+				if (has_device(model, y, x+2, DEV_BRAM16)) {
+					if ((rc = add_conn_range(model, NOPREF_BI_F, y-3, x, pf("%s%%i", clk_sr), 0, 1, y, x+2, pf("BRAM_%s%%i_INT3", clk_sr), 0))) goto xout;
+					if ((rc = add_conn_range(model, NOPREF_BI_F, y-2, x, pf("%s%%i", clk_sr), 0, 1, y, x+2, pf("BRAM_%s%%i_INT2", clk_sr), 0))) goto xout;
+					if ((rc = add_conn_range(model, NOPREF_BI_F, y-1, x, pf("%s%%i", clk_sr), 0, 1, y, x+2, pf("BRAM_%s%%i_INT1", clk_sr), 0))) goto xout;
+					if ((rc = add_conn_range(model, NOPREF_BI_F,   y, x, pf("%s%%i", clk_sr), 0, 1, y, x+2, pf("BRAM_%s%%i_INT0", clk_sr), 0))) goto xout;
+				}
+				if (has_device(model, y, x+2, DEV_MACC)) {
+					if ((rc = add_conn_range(model, NOPREF_BI_F, y-3, x, pf("%s%%i", clk_sr), 0, 1, y, x+2, pf("MACC_%s%%i_INT3", clk_sr), 0))) goto xout;
+					if ((rc = add_conn_range(model, NOPREF_BI_F, y-2, x, pf("%s%%i", clk_sr), 0, 1, y, x+2, pf("MACC_%s%%i_INT2", clk_sr), 0))) goto xout;
+					if ((rc = add_conn_range(model, NOPREF_BI_F, y-1, x, pf("%s%%i", clk_sr), 0, 1, y, x+2, pf("MACC_%s%%i_INT1", clk_sr), 0))) goto xout;
+					if ((rc = add_conn_range(model, NOPREF_BI_F,   y, x, pf("%s%%i", clk_sr), 0, 1, y, x+2, pf("MACC_%s%%i_INT0", clk_sr), 0))) goto xout;
+				}
+			}
+		}
+		if (is_atx(X_FABRIC_LOGIC_ROUTING_COL|X_CENTER_ROUTING_COL, model, x)) {
+			for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
+				if (has_device(model, y, x+1, DEV_LOGIC_M)) {
+					if ((rc = add_conn_range(model,
+						NOPREF_BI_F,
+						y, x, pf("%s%%i", clk_sr), 0, 1,
+						y, x+1, pf("CLEXM_%s%%i", clk_sr), 0)))
+							goto xout;
+				} else if (has_device(model, y, x+1, DEV_LOGIC_L)) {
+					if ((rc = add_conn_range(model,
+						NOPREF_BI_F,
+						y, x, pf("%s%%i", clk_sr), 0, 1,
+						y, x+1, pf("CLEXL_%s%%i", clk_sr), 0)))
+							goto xout;
+				} else if (has_device(model, y, x+1, DEV_ILOGIC)) {
+					if ((rc = add_conn_range(model,
+						NOPREF_BI_F,
+						y, x, pf("%s%%i", clk_sr), 0, 1,
+						y, x+1, pf("IOI_%s%%i", clk_sr), 0)))
+							goto xout;
+				}
+			}
+		}
+	}
+	// center PLLs and DCMs
+	if ((rc = add_conn_range(model, NOPREF_BI_F,
+		model->center_y-1, model->center_x-CENTER_ROUTING_O, pf("%s%%i", clk_sr), 0, 1,
+		model->center_y-1, model->center_x-CENTER_LOGIC_O, pf("INT_INTERFACE_REGC_%s%%i", clk_sr), 0)))
+			goto xout;
+
+	for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
+		if (is_aty(Y_ROW_HORIZ_AXSYMM, model, y)) {
+			if (has_device(model, y-1, model->center_x-CENTER_CMTPLL_O, DEV_PLL)) {
+				{ struct w_net net = {
+					1,
+					{{ pf("%s%%i", clk_sr), 0, y-1, model->center_x-CENTER_ROUTING_O },
+					 { pf("INT_INTERFACE_%s%%i", clk_sr), 0, y-1, model->center_x-CENTER_LOGIC_O },
+					 { pf("PLL_CLB2_%s%%i", clk_sr), 0, y-1, model->center_x-CENTER_CMTPLL_O },
+					 { "" }}};
+				if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) goto xout; }
+				{ struct w_net net = {
+					1,
+					{{ pf("%s%%i", clk_sr), 0, y+1, model->center_x-CENTER_ROUTING_O },
+					 { pf("INT_INTERFACE_%s%%i", clk_sr), 0, y+1, model->center_x-CENTER_LOGIC_O },
+					 { pf("PLL_CLB1_%s%%i", clk_sr), 0, y-1, model->center_x-CENTER_CMTPLL_O },
+					 { "" }}};
+				if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) goto xout; }
+			}
+			if (has_device(model, y-1, model->center_x-CENTER_CMTPLL_O, DEV_DCM)) {
+				{ struct w_net net = {
+					1,
+					{{ pf("%s%%i", clk_sr), 0, y-1, model->center_x-CENTER_ROUTING_O },
+					 { pf("INT_INTERFACE_%s%%i", clk_sr), 0, y-1, model->center_x-CENTER_LOGIC_O },
+					 { pf("DCM_CLB2_%s%%i", clk_sr), 0, y-1, model->center_x-CENTER_CMTPLL_O },
+					 { "" }}};
+				if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) goto xout; }
+				{ struct w_net net = {
+					1,
+					{{ pf("%s%%i", clk_sr), 0, y+1, model->center_x-CENTER_ROUTING_O },
+					 { pf("INT_INTERFACE_%s%%i", clk_sr), 0, y+1, model->center_x-CENTER_LOGIC_O },
+					 { pf("DCM_CLB1_%s%%i", clk_sr), 0, y-1, model->center_x-CENTER_CMTPLL_O },
+					 { "" }}};
+				if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) goto xout; }
+			}
+		}
+	}
+	// left and right side
+	for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
+		if (is_aty(Y_ROW_HORIZ_AXSYMM|Y_CHIP_HORIZ_REGS,
+				model, y))
+			continue;
+
+		x = LEFT_IO_ROUTING;
+		if (y < TOP_IO_TILES+LEFT_LOCAL_HEIGHT || y > model->y_height-BOT_IO_TILES-LEFT_LOCAL_HEIGHT-1) {
+			if ((rc = add_conn_range(model, NOPREF_BI_F, y, x, pf("%s%%i", clk_sr), 0, 1, y, x+1, pf("INT_INTERFACE_LOCAL_%s%%i", clk_sr), 0))) goto xout;
+		} else if (is_aty(Y_LEFT_WIRED, model, y)) {
+			if ((rc = add_conn_range(model, NOPREF_BI_F, y, x, pf("%s%%i", clk_sr), 0, 1, y, x+1, pf("IOI_%s%%i", clk_sr), 0))) goto xout;
+		} else {
+			if ((rc = add_conn_range(model, NOPREF_BI_F, y, x, pf("%s%%i", clk_sr), 0, 1, y, x+1, pf("INT_INTERFACE_%s%%i", clk_sr), 0))) goto xout;
+		}
+
+		x = model->x_width - RIGHT_IO_ROUTING_O;
+		if (y < TOP_IO_TILES+RIGHT_LOCAL_HEIGHT || y > model->y_height-BOT_IO_TILES-RIGHT_LOCAL_HEIGHT-1) {
+			if ((rc = add_conn_range(model, NOPREF_BI_F, y, x, pf("%s%%i", clk_sr), 0, 1, y, x+1, pf("INT_INTERFACE_LOCAL_%s%%i", clk_sr), 0))) goto xout;
+		} else if (is_aty(Y_RIGHT_WIRED, model, y)) {
+			if ((rc = add_conn_range(model, NOPREF_BI_F, y, x, pf("%s%%i", clk_sr), 0, 1, y, x+1, pf("IOI_%s%%i", clk_sr), 0))) goto xout;
+		} else {
+			if ((rc = add_conn_range(model, NOPREF_BI_F, y, x, pf("%s%%i", clk_sr), 0, 1, y, x+1, pf("INT_INTERFACE_%s%%i", clk_sr), 0))) goto xout;
+		}
+	}
+	return 0;
+xout:
+	return rc;
+}
+
+static int run_gfan(struct fpga_model* model)
+{
+	int x, y, i, rc;
+
+	// left and right IO devs
+	for (y = TOP_IO_TILES; y < model->y_height-BOT_IO_TILES; y++) {
+		if (is_aty(Y_LEFT_WIRED, model, y)) {
+			if ((rc = add_conn_range(model, NOPREF_BI_F,
+				y, LEFT_IO_ROUTING, "INT_IOI_GFAN%i", 0, 1,
+				y, LEFT_IO_DEVS, "IOI_GFAN%i", 0))) goto xout;
+		}
+		if (is_aty(Y_RIGHT_WIRED, model, y)) {
+			if ((rc = add_conn_range(model, NOPREF_BI_F,
+				y, model->x_width-RIGHT_IO_ROUTING_O,
+					"INT_IOI_GFAN%i", 0, 1,
+				y, model->x_width-RIGHT_IO_DEVS_O,
+					"IOI_GFAN%i", 0))) goto xout;
+		}
+	}
+	// top and bottom IO devs
+	for (x = LEFT_SIDE_WIDTH; x < model->x_width - RIGHT_SIDE_WIDTH; x++) {
+		if (is_atx(X_FABRIC_LOGIC_ROUTING_COL|X_CENTER_ROUTING_COL, model, x)
+		    && is_atx(X_ROUTING_HAS_IO, model, x)) {
+			for (i = 0; i < TOPBOT_IO_ROWS; i++) {
+				if ((rc = add_conn_range(model, NOPREF_BI_F,
+					TOP_OUTER_IO+i, x,
+						"INT_IOI_GFAN%i", 0, 1,
+					TOP_OUTER_IO+i, x+1,
+						"IOI_GFAN%i", 0))) goto xout;
+				if ((rc = add_conn_range(model, NOPREF_BI_F,
+					model->y_height-BOT_OUTER_IO-i, x,
+						"INT_IOI_GFAN%i", 0, 1,
+					model->y_height-BOT_OUTER_IO-i, x+1,
+						"IOI_GFAN%i", 0))) goto xout;
+			}
+		}
+	}
+	// center devs
+	for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
+		if (is_aty(Y_ROW_HORIZ_AXSYMM, model, y)) {
+			if (YX_TILE(model, y-1, model->center_x-CENTER_CMTPLL_O)->flags & TF_DCM_DEV) {
+				{ struct w_net net = {
+					1,
+					{{ "INT_IOI_GFAN%i", 0, y-1, model->center_x-CENTER_ROUTING_O },
+					 { "INT_INTERFACE_GFAN%i", 0, y-1, model->center_x-CENTER_LOGIC_O },
+					 { "DCM2_GFAN%i", 0, y-1, model->center_x-CENTER_CMTPLL_O },
+					 { "" }}};
+				if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) goto xout; }
+				{ struct w_net net = {
+					1,
+					{{ "INT_IOI_GFAN%i", 0, y+1, model->center_x-CENTER_ROUTING_O },
+					 { "INT_INTERFACE_GFAN%i", 0, y+1, model->center_x-CENTER_LOGIC_O },
+					 { "DCM1_GFAN%i", 0, y-1, model->center_x-CENTER_CMTPLL_O },
+					 { "" }}};
+				if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) goto xout; }
+			} else if (YX_TILE(model, y-1, model->center_x-CENTER_CMTPLL_O)->flags & TF_PLL_DEV) {
+				struct w_net net = {
+					1,
+					{{ "INT_IOI_GFAN%i", 0, y-1, model->center_x-CENTER_ROUTING_O },
+					 { "INT_INTERFACE_GFAN%i", 0, y-1, model->center_x-CENTER_LOGIC_O },
+					 { "PLL_CLB2_GFAN%i", 0, y-1, model->center_x-CENTER_CMTPLL_O },
+					 { "" }}};
+				if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) goto xout;
+			}
+		}
+	}
 	return 0;
 xout:
 	return rc;
@@ -1288,10 +1531,10 @@ static int run_logic_inout(struct fpga_model* model)
 		if (is_atx(X_LEFT_IO_ROUTING_COL|X_RIGHT_IO_ROUTING_COL, model, x)) {
 			int wired_side, local_size;
 			if (is_atx(X_LEFT_IO_ROUTING_COL, model, x)) {
-				local_size = 1;
+				local_size = LEFT_LOCAL_HEIGHT;
 				wired_side = Y_LEFT_WIRED;
 			} else {
-				local_size = 2;
+				local_size = RIGHT_LOCAL_HEIGHT;
 				wired_side = Y_RIGHT_WIRED;
 			}
 			for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
