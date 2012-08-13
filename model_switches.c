@@ -8,6 +8,344 @@
 #include <stdarg.h>
 #include "model.h"
 
+static int init_ce_clk_switches(struct fpga_model* model);
+static int init_io_switches(struct fpga_model* model);
+static int init_routing_switches(struct fpga_model* model);
+static int init_north_south_dirwire_term(struct fpga_model* model);
+
+int init_switches(struct fpga_model* model)
+{
+	int rc;
+
+// todo: IO_TERM_B, IO_OUTER_B, IO_INNER_B, LOGIC_XM
+   	rc = init_north_south_dirwire_term(model);
+	if (rc) goto xout;
+
+return 0;
+   	rc = init_ce_clk_switches(model);
+	if (rc) goto xout;
+
+	rc = init_io_switches(model);
+	if (rc) goto xout;
+
+	rc = init_routing_switches(model);
+	if (rc) goto xout;
+	return 0;
+xout:
+	return rc;
+}
+
+static int init_north_south_dirwire_term(struct fpga_model* model)
+{
+	static const int logicin_pairs[] = {21,20, 28,36, 52,44, 60,62};
+	int x, i, rc;
+
+	for (x = 0; x < model->x_width; x++) {
+		if (!is_atx(X_ROUTING_COL, model, x))
+			continue;
+
+		// top
+		for (i = 0; i < 4; i++) {
+			rc = add_switch(model,
+				TOP_INNER_ROW, x,
+				pf("IOI_TTERM_LOGICIN%i", logicin_pairs[i*2]),
+				pf("IOI_TTERM_LOGICIN_S%i", logicin_pairs[i*2+1]),
+				0 /* bidir */);
+			if (rc) goto xout;
+		}
+		{ const char* s0_switches[] = {
+			"ER1E3",   "EL1E_S0",
+			"SR1E_N3", "NL1E_S0",
+			"SS2E_N3", "NN2E_S0",
+			"SS4E3",   "NW4E_S0",
+			"SW2E3",   "NE2E_S0",
+			"SW4E3",   "WW4E_S0",
+			"WL1E3",   "WR1E_S0",
+			"WW2E3",   "NW2E_S0", "" };
+		if ((rc = add_switch_set(model, TOP_INNER_ROW, x,
+			"IOI_TTERM_", s0_switches, /*inc*/ 0))) goto xout; }
+		{ const char* dir[] = {
+			"NN4B", "SS4A", "NN4A", "SS4M", "NN4M", "SS4C", "NN4C", "SS4E",
+			"NN2B", "SS2M", "NN2M", "SS2E",
+			"NE4B", "SE4A", "NE4A", "SE4M",
+			"NE2B", "SE2M",
+			"NW4B", "SW4A", "NW4A", "SW4M", "NW2B", "SW2M",
+			"NL1B", "SL1E",
+			"NR1B", "SR1E", "" };
+		if ((rc = add_switch_set(model, TOP_INNER_ROW, x,
+			"IOI_TTERM_", dir, /*inc*/ 3))) goto xout; }
+
+		// bottom
+		if (is_atx(X_ROUTING_TO_BRAM_COL, model, x))
+			continue;
+		for (i = 0; i < 4; i++) {
+			rc = add_switch(model,
+				model->y_height-BOT_INNER_ROW, x,
+				pf("IOI_BTERM_LOGICIN%i", logicin_pairs[i*2+1]),
+				pf("IOI_BTERM_LOGICIN_N%i", logicin_pairs[i*2]),
+				0 /* bidir */);
+			if (rc) goto xout;
+		}
+		{ const char* n3_switches[] = {
+			"EL1E0",	"ER1E_N3",
+			"NE2E0",	"SW2E_N3",
+			"NL1E_S0",	"SR1E_N3",
+			"NN2E_S0",	"SS2E_N3",
+			"NW2E0",	"WW2E_N3",
+			"NW4E0",	"SS4E_N3",
+			"WR1E0",	"WL1E_N3",
+			"WW4E0",	"SW4E_N3", "" };
+		if ((rc = add_switch_set(model, model->y_height-BOT_INNER_ROW,
+			x, "IOI_BTERM_", n3_switches, /*inc*/ 0))) goto xout; }
+		{ const char* dir[] = {
+			"SS4B", "NN4A", "SS4A", "NN4M", "SS4M", "NN4C", "SS4C", "NN4E",
+			"SS2B", "NN2M", "SS2M", "NN2E",
+			"SE4B", "NE4A", "SE4A", "NE4M",
+			"SE2B", "NE2M",
+			"SW4B", "NW4A", "SW4A", "NW4M", "SW2B", "NW2M",
+			"NL1E", "SL1B",
+			"SR1B", "NR1E", "" };
+		if ((rc = add_switch_set(model, model->y_height-BOT_INNER_ROW,
+			x, "IOI_BTERM_", dir, /*inc*/ 3))) goto xout; }
+	}
+	return 0;
+xout:
+	return rc;
+}
+
+static int init_ce_clk_switches(struct fpga_model* model)
+{
+	int x, y, i, rc;
+
+	// There are CE and CLK wires for IO and PLL that are going
+	// horizontally through the HCLK and vertically through the logic
+	// dev columns (except no-io).
+	// The following sets up their corresponding switches in the term
+	// tiles.
+	for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
+		if (is_aty(Y_ROW_HORIZ_AXSYMM, model, y)) {
+			// left
+			for (i = 0; i <= 3; i++) {
+				rc = add_switch(model, y, LEFT_INNER_COL,
+					pf("HCLK_IOI_LTERM_IOCE%i", i), 
+					pf("HCLK_IOI_LTERM_IOCE%i_E", i),
+					0 /* bidir */);
+				if (rc) goto xout;
+				rc = add_switch(model, y, LEFT_INNER_COL,
+					pf("HCLK_IOI_LTERM_IOCLK%i", i), 
+					pf("HCLK_IOI_LTERM_IOCLK%i_E", i),
+					0 /* bidir */);
+				if (rc) goto xout;
+			}
+			for (i = 0; i <= 1; i++) {
+				rc = add_switch(model, y, LEFT_INNER_COL,
+					pf("HCLK_IOI_LTERM_PLLCE%i", i), 
+					pf("HCLK_IOI_LTERM_PLLCE%i_E", i),
+					0 /* bidir */);
+				if (rc) goto xout;
+				rc = add_switch(model, y, LEFT_INNER_COL,
+					pf("HCLK_IOI_LTERM_PLLCLK%i", i), 
+					pf("HCLK_IOI_LTERM_PLLCLK%i_E", i),
+					0 /* bidir */);
+				if (rc) goto xout;
+			}
+			// right
+			for (i = 0; i <= 3; i++) {
+				rc = add_switch(model, y, model->x_width-RIGHT_INNER_O,
+					pf("HCLK_IOI_RTERM_IOCE%i", i), 
+					pf("HCLK_IOI_RTERM_IOCE%i_W", 3-i),
+					0 /* bidir */);
+				if (rc) goto xout;
+				rc = add_switch(model, y, model->x_width-RIGHT_INNER_O,
+					pf("HCLK_IOI_RTERM_IOCLK%i", i), 
+					pf("HCLK_IOI_RTERM_IOCLK%i_W", 3-i),
+					0 /* bidir */);
+				if (rc) goto xout;
+			}
+			for (i = 0; i <= 1; i++) {
+				rc = add_switch(model, y, model->x_width-RIGHT_INNER_O,
+					pf("HCLK_IOI_RTERM_PLLCEOUT%i", i), 
+					pf("HCLK_IOI_RTERM_PLLCEOUT%i_W", i),
+					0 /* bidir */);
+				if (rc) goto xout;
+				rc = add_switch(model, y, model->x_width-RIGHT_INNER_O,
+					pf("HCLK_IOI_RTERM_PLLCLKOUT%i", i), 
+					pf("HCLK_IOI_RTERM_PLLCLKOUT%i_W", i),
+					0 /* bidir */);
+				if (rc) goto xout;
+			}
+		}
+	}
+	for (x = LEFT_SIDE_WIDTH; x < model->x_width - RIGHT_SIDE_WIDTH; x++) {
+		if ((is_atx(X_FABRIC_LOGIC_IO_COL|X_CENTER_LOGIC_COL, model, x))) {
+			// top
+			for (i = 0; i <= 3; i++) {
+				rc = add_switch(model, TOP_INNER_ROW, x,
+					pf("TTERM_CLB_IOCE%i", i), 
+					pf("TTERM_CLB_IOCE%i_S", i),
+					0 /* bidir */);
+				if (rc) goto xout;
+				rc = add_switch(model, TOP_INNER_ROW, x,
+					pf("TTERM_CLB_IOCLK%i", i), 
+					pf("TTERM_CLB_IOCLK%i_S", i),
+					0 /* bidir */);
+				if (rc) goto xout;
+			}
+			for (i = 0; i <= 1; i++) {
+				rc = add_switch(model, TOP_INNER_ROW, x,
+					pf("TTERM_CLB_PLLCE%i", i), 
+					pf("TTERM_CLB_PLLCE%i_S", i),
+					0 /* bidir */);
+				if (rc) goto xout;
+				rc = add_switch(model, TOP_INNER_ROW, x,
+					pf("TTERM_CLB_PLLCLK%i", i), 
+					pf("TTERM_CLB_PLLCLK%i_S", i),
+					0 /* bidir */);
+				if (rc) goto xout;
+			}
+			rc = add_switch(model, TOP_INNER_ROW, x,
+				"TTERM_CLB_PCICE", 
+				"TTERM_CLB_PCICE_S",
+				0 /* bidir */);
+
+			// bottom
+			if (rc) goto xout;
+			for (i = 0; i <= 3; i++) {
+				rc = add_switch(model, model->y_height - BOT_INNER_ROW, x,
+					pf("BTERM_CLB_CEOUT%i", i), 
+					pf("BTERM_CLB_CEOUT%i_N", i),
+					0 /* bidir */);
+				if (rc) goto xout;
+				rc = add_switch(model, model->y_height - BOT_INNER_ROW, x,
+					pf("BTERM_CLB_CLKOUT%i", i), 
+					pf("BTERM_CLB_CLKOUT%i_N", i),
+					0 /* bidir */);
+				if (rc) goto xout;
+			}
+			for (i = 0; i <= 1; i++) {
+				rc = add_switch(model, model->y_height - BOT_INNER_ROW, x,
+					pf("BTERM_CLB_PLLCEOUT%i", i), 
+					pf("BTERM_CLB_PLLCEOUT%i_N", i),
+					0 /* bidir */);
+				if (rc) goto xout;
+				rc = add_switch(model, model->y_height - BOT_INNER_ROW, x,
+					pf("BTERM_CLB_PLLCLKOUT%i", i), 
+					pf("BTERM_CLB_PLLCLKOUT%i_N", i),
+					0 /* bidir */);
+				if (rc) goto xout;
+			}
+			rc = add_switch(model, model->y_height - BOT_INNER_ROW, x,
+				"BTERM_CLB_PCICE", 
+				"BTERM_CLB_PCICE_N",
+				0 /* bidir */);
+			if (rc) goto xout;
+		}
+	}
+	return 0;
+xout:
+	return rc;
+}
+
+static int init_io_tile(struct fpga_model* model, int y, int x)
+{
+	const char* prefix;
+	int i, num_devs, rc;
+
+	if (!y) {
+		prefix = "TIOB";
+		rc = add_switch(model, y, x,
+			pf("%s_DIFFO_OUT2", prefix), 
+			pf("%s_DIFFO_IN3", prefix), 0 /* bidir */);
+		if (rc) goto xout;
+		num_devs = 2;
+	} else if (y == model->y_height - BOT_OUTER_ROW) {
+		prefix = "BIOB";
+		rc = add_switch(model, y, x,
+			pf("%s_DIFFO_OUT3", prefix), 
+			pf("%s_DIFFO_IN2", prefix), 0 /* bidir */);
+		if (rc) goto xout;
+		num_devs = 2;
+	} else if (!x) {
+		prefix = "LIOB";
+		num_devs = 1;
+	} else if (x == model->x_width - RIGHT_OUTER_O) {
+		prefix = "RIOB";
+		num_devs = 1;
+	} else
+		ABORT(1);
+
+	for (i = 0; i < num_devs*2; i++) {
+		rc = add_switch(model, y, x,
+			pf("%s_IBUF%i_PINW", prefix, i),
+			pf("%s_IBUF%i", prefix, i), 0 /* bidir */);
+		if (rc) goto xout;
+		rc = add_switch(model, y, x,
+			pf("%s_O%i", prefix, i),
+			pf("%s_O%i_PINW", prefix, i), 0 /* bidir */);
+		if (rc) goto xout;
+		rc = add_switch(model, y, x,
+			pf("%s_T%i", prefix, i),
+			pf("%s_T%i_PINW", prefix, i), 0 /* bidir */);
+		if (rc) goto xout;
+	}
+	rc = add_switch(model, y, x,
+		pf("%s_DIFFO_OUT0", prefix),
+		pf("%s_DIFFO_IN1", prefix), 0 /* bidir */);
+	if (rc) goto xout;
+	for (i = 0; i <= 1; i++) {
+		rc = add_switch(model, y, x,
+			pf("%s_PADOUT%i", prefix, i),
+			pf("%s_DIFFI_IN%i", prefix, 1-i),
+			0 /* bidir */);
+		if (rc) goto xout;
+	}
+	if (num_devs > 1) {
+		for (i = 0; i <= 1; i++) {
+			rc = add_switch(model, y, x,
+				pf("%s_PADOUT%i", prefix, i+2),
+				pf("%s_DIFFI_IN%i", prefix, 3-i),
+				0 /* bidir */);
+			if (rc) goto xout;
+		}
+	}
+	return 0;
+xout:
+	return rc;
+}
+
+static int init_io_switches(struct fpga_model* model)
+{
+	int x, y, rc;
+
+	for (x = 0; x < model->x_width; x++) {
+		if (has_device(model, /*y*/ 0, x, DEV_IOBM)) {
+			rc = init_io_tile(model, 0, x);
+			if (rc) goto xout;
+		}
+		if (has_device(model, model->y_height - BOT_OUTER_ROW, x,
+			DEV_IOBM)) {
+			rc = init_io_tile(model,
+				model->y_height-BOT_OUTER_ROW, x);
+			if (rc) goto xout;
+		}
+	}
+	for (y = 0; y < model->y_height; y++) {
+		if (has_device(model, y, /*x*/ 0, DEV_IOBM)) {
+			rc = init_io_tile(model, y, 0);
+			if (rc) goto xout;
+		}
+		if (has_device(model, y, model->x_width - RIGHT_OUTER_O,
+			DEV_IOBM)) {
+			rc = init_io_tile(model,
+				y, model->x_width - RIGHT_OUTER_O);
+			if (rc) goto xout;
+		}
+	}
+	return 0;
+xout:
+	return rc;
+}
+
 // The wires are ordered clockwise. Order is important for
 // wire_to_NESW4().
 enum wire_type
@@ -46,6 +384,23 @@ enum wire_type
 	LAST_LEN4 = W_NW4
 };
 
+#define W_CLOCKWISE(w)			rotate_wire((w), 1)
+#define W_CLOCKWISE_2(w)		rotate_wire((w), 2)
+#define W_COUNTER_CLOCKWISE(w)		rotate_wire((w), -1)
+#define W_COUNTER_CLOCKWISE_2(w)	rotate_wire((w), -2)
+
+#define W_IS_LEN1(w)			((w) >= FIRST_LEN1 && (w) <= LAST_LEN1)
+#define W_IS_LEN2(w)			((w) >= FIRST_LEN2 && (w) <= LAST_LEN2)
+#define W_IS_LEN4(w)			((w) >= FIRST_LEN4 && (w) <= LAST_LEN4)
+
+#define W_TO_LEN1(w)			wire_to_len(w, FIRST_LEN1)
+#define W_TO_LEN2(w)			wire_to_len(w, FIRST_LEN2)
+#define W_TO_LEN4(w)			wire_to_len(w, FIRST_LEN4)
+
+static const char* wire_base(enum wire_type w);
+static enum wire_type rotate_wire(enum wire_type cur, int off);
+static enum wire_type wire_to_len(enum wire_type w, int first_len);
+
 static const char* wire_base(enum wire_type w)
 {
 	switch (w) {
@@ -79,20 +434,7 @@ static const char* wire_base(enum wire_type w)
 	ABORT(1);
 }
 
-#define W_CLOCKWISE(w)			rotate_wire((w), 1)
-#define W_CLOCKWISE_2(w)		rotate_wire((w), 2)
-#define W_COUNTER_CLOCKWISE(w)		rotate_wire((w), -1)
-#define W_COUNTER_CLOCKWISE_2(w)	rotate_wire((w), -2)
-
-#define W_IS_LEN1(w)			((w) >= FIRST_LEN1 && (w) <= LAST_LEN1)
-#define W_IS_LEN2(w)			((w) >= FIRST_LEN2 && (w) <= LAST_LEN2)
-#define W_IS_LEN4(w)			((w) >= FIRST_LEN4 && (w) <= LAST_LEN4)
-
-#define W_TO_LEN1(w)			wire_to_len(w, FIRST_LEN1)
-#define W_TO_LEN2(w)			wire_to_len(w, FIRST_LEN2)
-#define W_TO_LEN4(w)			wire_to_len(w, FIRST_LEN4)
-
-int rotate_num(int cur, int off, int first, int last)
+static int rotate_num(int cur, int off, int first, int last)
 {
 	if (cur+off > last)
 		return first + (cur+off-last-1) % ((last+1)-first);
@@ -796,125 +1138,6 @@ int add_logicin_switches(struct fpga_model* model, int y, int x)
 		sizeof(decrement_at_WW)/sizeof(decrement_at_WW[0]),
 		1 /* early_decrement */);
 	if (rc) goto xout; }
-	return 0;
-xout:
-	return rc;
-}
-
-static int init_io_switches(struct fpga_model* model);
-static int init_routing_switches(struct fpga_model* model);
-
-int init_switches(struct fpga_model* model)
-{
-	int rc;
-
-// todo: IO_B, IO_TERM_B, IO_LOGIC_TERM_B, IO_OUTER_B, IO_INNER_B, LOGIC_XM
-	rc = init_io_switches(model);
-	if (rc) goto xout;
-return 0;
-
-	rc = init_routing_switches(model);
-	if (rc) goto xout;
-	return 0;
-xout:
-	return rc;
-}
-
-static int init_io_tile(struct fpga_model* model, int y, int x)
-{
-	const char* prefix;
-	int i, num_devs, rc;
-
-	if (!y) {
-		prefix = "TIOB";
-		rc = add_switch(model, y, x,
-			pf("%s_DIFFO_OUT2", prefix), 
-			pf("%s_DIFFO_IN3", prefix), 0 /* bidir */);
-		if (rc) goto xout;
-		num_devs = 2;
-	} else if (y == model->y_height - BOT_OUTER_ROW) {
-		prefix = "BIOB";
-		rc = add_switch(model, y, x,
-			pf("%s_DIFFO_OUT3", prefix), 
-			pf("%s_DIFFO_IN2", prefix), 0 /* bidir */);
-		if (rc) goto xout;
-		num_devs = 2;
-	} else if (!x) {
-		prefix = "LIOB";
-		num_devs = 1;
-	} else if (x == model->x_width - RIGHT_OUTER_O) {
-		prefix = "RIOB";
-		num_devs = 1;
-	} else
-		ABORT(1);
-
-	for (i = 0; i < num_devs*2; i++) {
-		rc = add_switch(model, y, x,
-			pf("%s_IBUF%i_PINW", prefix, i),
-			pf("%s_IBUF%i", prefix, i), 0 /* bidir */);
-		if (rc) goto xout;
-		rc = add_switch(model, y, x,
-			pf("%s_O%i", prefix, i),
-			pf("%s_O%i_PINW", prefix, i), 0 /* bidir */);
-		if (rc) goto xout;
-		rc = add_switch(model, y, x,
-			pf("%s_T%i", prefix, i),
-			pf("%s_T%i_PINW", prefix, i), 0 /* bidir */);
-		if (rc) goto xout;
-	}
-	rc = add_switch(model, y, x,
-		pf("%s_DIFFO_OUT0", prefix),
-		pf("%s_DIFFO_IN1", prefix), 0 /* bidir */);
-	if (rc) goto xout;
-	for (i = 0; i <= 1; i++) {
-		rc = add_switch(model, y, x,
-			pf("%s_PADOUT%i", prefix, i),
-			pf("%s_DIFFI_IN%i", prefix, 1-i),
-			0 /* bidir */);
-		if (rc) goto xout;
-	}
-	if (num_devs > 1) {
-		for (i = 0; i <= 1; i++) {
-			rc = add_switch(model, y, x,
-				pf("%s_PADOUT%i", prefix, i+2),
-				pf("%s_DIFFI_IN%i", prefix, 3-i),
-				0 /* bidir */);
-			if (rc) goto xout;
-		}
-	}
-	return 0;
-xout:
-	return rc;
-}
-
-static int init_io_switches(struct fpga_model* model)
-{
-	int x, y, i, rc;
-
-	for (x = 0; x < model->x_width; x++) {
-		if (has_device(model, /*y*/ 0, x, DEV_IOBM)) {
-			rc = init_io_tile(model, 0, x);
-			if (rc) goto xout;
-		}
-		if (has_device(model, model->y_height - BOT_OUTER_ROW, x,
-			DEV_IOBM)) {
-			rc = init_io_tile(model,
-				model->y_height-BOT_OUTER_ROW, x);
-			if (rc) goto xout;
-		}
-	}
-	for (y = 0; y < model->y_height; y++) {
-		if (has_device(model, y, /*x*/ 0, DEV_IOBM)) {
-			rc = init_io_tile(model, y, 0);
-			if (rc) goto xout;
-		}
-		if (has_device(model, y, model->x_width - RIGHT_OUTER_O,
-			DEV_IOBM)) {
-			rc = init_io_tile(model,
-				y, model->x_width - RIGHT_OUTER_O);
-			if (rc) goto xout;
-		}
-	}
 	return 0;
 xout:
 	return rc;

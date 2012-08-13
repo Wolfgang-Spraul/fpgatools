@@ -404,6 +404,36 @@ xout:
 	return rc;
 }
 
+int add_switch_set(struct fpga_model* model, int y, int x, const char* prefix,
+	const char** pairs, int suffix_inc)
+{
+	int i, j, from_len, to_len, rc;
+	char from[64], to[64];
+
+	for (i = 0; pairs[i*2][0]; i++) {
+		snprintf(from, sizeof(from), "%s%s", prefix, pairs[i*2]);
+		snprintf(to, sizeof(to), "%s%s", prefix, pairs[i*2+1]);
+		if (!suffix_inc) {
+			rc = add_switch(model, y, x, from, to,
+				0 /* bidir */);
+			if (rc) goto xout;
+		} else {
+			from_len = strlen(from);
+			to_len = strlen(to);
+			for (j = 0; j <= suffix_inc; j++) {
+				snprintf(&from[from_len], sizeof(from)-from_len, "%i", j);
+				snprintf(&to[to_len], sizeof(to)-to_len, "%i", j);
+				rc = add_switch(model, y, x, from, to,
+					0 /* bidir */);
+				if (rc) goto xout;
+			}
+		}
+	}
+	return 0;
+xout:
+	return rc;
+}
+
 void seed_strx(struct fpga_model* model, struct seed_data* data)
 {
 	int x, i;
@@ -482,6 +512,7 @@ int is_atx(int check, struct fpga_model* model, int x)
 	    && model->tiles[x].flags & TF_FABRIC_ROUTING_COL
 	    && model->tiles[x+1].flags & TF_FABRIC_LOGIC_COL) return 1;
 	if (check & X_FABRIC_LOGIC_COL && model->tiles[x].flags & TF_FABRIC_LOGIC_COL) return 1;
+	if (check & X_FABRIC_LOGIC_IO_COL && model->tiles[x].flags & TF_FABRIC_LOGIC_COL && !(model->tiles[x-1].flags & TF_ROUTING_NO_IO)) return 1;
 	if (check & X_FABRIC_BRAM_ROUTING_COL
 	    && model->tiles[x].flags & TF_FABRIC_ROUTING_COL
 	    && model->tiles[x+1].flags & TF_FABRIC_BRAM_VIA_COL

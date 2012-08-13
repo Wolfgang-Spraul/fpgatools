@@ -222,23 +222,26 @@ int is_aty(int check, struct fpga_model* model, int y);
 #define X_FABRIC_ROUTING_COL		0x00000400 // logic+BRAM+MACC
 #define X_FABRIC_LOGIC_ROUTING_COL	0x00000800 // logic only
 #define X_FABRIC_LOGIC_COL		0x00001000
-#define X_FABRIC_BRAM_ROUTING_COL	0x00002000 // BRAM only
-#define X_FABRIC_MACC_ROUTING_COL	0x00004000 // MACC only
-#define X_FABRIC_BRAM_VIA_COL		0x00008000 // second routing col for BRAM
-#define X_FABRIC_MACC_VIA_COL		0x00010000 // second routing col for MACC
-#define X_FABRIC_BRAM_COL		0x00020000
-#define X_FABRIC_MACC_COL		0x00040000
-#define X_CENTER_ROUTING_COL		0x00080000
-#define X_CENTER_LOGIC_COL		0x00100000
-#define X_CENTER_CMTPLL_COL		0x00200000
-#define X_CENTER_REGS_COL		0x00400000
-#define X_LEFT_IO_ROUTING_COL		0x00800000
-#define X_LEFT_IO_DEVS_COL		0x01000000
-#define X_RIGHT_IO_ROUTING_COL		0x02000000
-#define X_RIGHT_IO_DEVS_COL		0x04000000
-#define X_LEFT_SIDE			0x08000000 // true for anything left of the center (not including center)
-#define X_LEFT_MCB			0x10000000
-#define X_RIGHT_MCB			0x20000000
+// X_FABRIC_LOGIC_IO_COL is like X_FABRIC_LOGIC_COL but
+// excluding those that have the no-io flag set.
+#define X_FABRIC_LOGIC_IO_COL		0x00002000
+#define X_FABRIC_BRAM_ROUTING_COL	0x00004000 // BRAM only
+#define X_FABRIC_MACC_ROUTING_COL	0x00008000 // MACC only
+#define X_FABRIC_BRAM_VIA_COL		0x00010000 // second routing col for BRAM
+#define X_FABRIC_MACC_VIA_COL		0x00020000 // second routing col for MACC
+#define X_FABRIC_BRAM_COL		0x00040000
+#define X_FABRIC_MACC_COL		0x00080000
+#define X_CENTER_ROUTING_COL		0x00100000
+#define X_CENTER_LOGIC_COL		0x00200000
+#define X_CENTER_CMTPLL_COL		0x00400000
+#define X_CENTER_REGS_COL		0x00800000
+#define X_LEFT_IO_ROUTING_COL		0x01000000
+#define X_LEFT_IO_DEVS_COL		0x02000000
+#define X_RIGHT_IO_ROUTING_COL		0x04000000
+#define X_RIGHT_IO_DEVS_COL		0x08000000
+#define X_LEFT_SIDE			0x10000000 // true for anything left of the center (not including center)
+#define X_LEFT_MCB			0x20000000
+#define X_RIGHT_MCB			0x40000000
 
 #define IS_TOP_ROW(row, model)		((row) == (model)->cfg_rows-1)
 #define IS_BOTTOM_ROW(row, model)	((row) == 0)
@@ -425,6 +428,8 @@ int add_conn_net(struct fpga_model* model, add_conn_f add_conn_func, struct w_ne
 
 int add_switch(struct fpga_model* model, int y, int x, const char* from,
 	const char* to, int is_bidirectional);
+int add_switch_set(struct fpga_model* model, int y, int x, const char* prefix,
+	const char** pairs, int suffix_inc);
 
 struct seed_data
 {
