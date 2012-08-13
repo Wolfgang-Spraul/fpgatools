@@ -604,3 +604,107 @@ const char* logicin_s(int wire, int routing_io)
 		return pf("INT_IOI_LOGICIN_B%i", wire & LWF_WIRE_MASK);
 	return pf("LOGICIN_B%i", wire & LWF_WIRE_MASK);
 }
+
+const char* logicin_str(enum logicin_wire w)
+{
+	switch (w) {
+		case M_A1:
+		case X_A1: return "A1";
+		case M_A2:
+		case X_A2: return "A2";
+		case M_A3:
+		case X_A3: return "A3";
+		case M_A4:
+		case X_A4: return "A4";
+		case M_A5:
+		case X_A5: return "A5";
+		case M_A6:
+		case X_A6: return "A6";
+		case M_AX:
+		case X_AX: return "AX";
+		case M_B1:
+		case X_B1: return "B1";
+		case M_B2:
+		case X_B2: return "B2";
+		case M_B3:
+		case X_B3: return "B3";
+		case M_B4:
+		case X_B4: return "B4";
+		case M_B5:
+		case X_B5: return "B5";
+		case M_B6:
+		case X_B6: return "B6";
+		case M_BX:
+		case X_BX: return "BX";
+		case M_C1:
+		case X_C1: return "C1";
+		case M_C2:
+		case X_C2: return "C2";
+		case M_C3:
+		case X_C3: return "C3";
+		case M_C4:
+		case X_C4: return "C4";
+		case M_C5:
+		case X_C5: return "C5";
+		case M_C6:
+		case X_C6: return "C6";
+		case M_CE:
+		case X_CE: return "CE";
+		case M_CX:
+		case X_CX: return "CX";
+		case M_D1:
+		case X_D1: return "D1";
+		case M_D2:
+		case X_D2: return "D2";
+		case M_D3:
+		case X_D3: return "D3";
+		case M_D4:
+		case X_D4: return "D4";
+		case M_D5:
+		case X_D5: return "D5";
+		case M_D6:
+		case X_D6: return "D6";
+		case M_DX:
+		case X_DX: return "DX";
+
+		case M_AI: return "AI";
+		case M_BI: return "BI";
+		case M_CI: return "CI";
+		case M_DI: return "DI";
+		case M_WE: return "WE";
+	}
+	ABORT(1);
+	return 0;
+}
+
+const char* logicout_str(enum logicout_wire w)
+{
+	switch (w) {
+		case X_A:   
+		case M_A:    return "A";
+		case X_AMUX:
+		case M_AMUX: return "AMUX";
+		case X_AQ:
+		case M_AQ:   return "AQ";
+		case X_B:
+		case M_B:    return "B";
+		case X_BMUX:
+		case M_BMUX: return "BMUX";
+		case X_BQ:
+		case M_BQ:   return "BQ";
+		case X_C:
+		case M_C:    return "C";
+		case X_CMUX:
+		case M_CMUX: return "CMUX";
+		case X_CQ:
+		case M_CQ:   return "CQ";
+		case X_D:
+		case M_D:    return "D";
+		case X_DMUX:
+		case M_DMUX: return "DMUX";
+		case X_DQ:
+		case M_DQ:   return "DQ";
+	}
+	ABORT(1);
+	return 0;
+}

@@ -13,15 +13,18 @@ static int init_io_switches(struct fpga_model* model);
 static int init_routing_switches(struct fpga_model* model);
 static int init_north_south_dirwire_term(struct fpga_model* model);
 static int init_iologic_switches(struct fpga_model* model);
+static int init_logic_switches(struct fpga_model* model);
 
 int init_switches(struct fpga_model* model)
 {
 	int rc;
 
-// todo: IO_OUTER_B, IO_INNER_B, LOGIC_XM
-   	rc = init_iologic_switches(model);
+	rc = init_logic_switches(model);
 	if (rc) goto xout;
 return 0;
+
+   	rc = init_iologic_switches(model);
+	if (rc) goto xout;
 
    	rc = init_north_south_dirwire_term(model);
 	if (rc) goto xout;
@@ -34,6 +37,114 @@ return 0;
 
 	rc = init_routing_switches(model);
 	if (rc) goto xout;
+	return 0;
+xout:
+	return rc;
+}
+
+static int init_logic_tile(struct fpga_model* model, int y, int x)
+{
+	int rc, i, j, ml;
+	const char* xp;
+
+	if (has_device(model, y, x, DEV_LOGIC_M)) {
+		ml = 'M';
+		xp = "X";
+	} else if (has_device(model, y, x, DEV_LOGIC_L)) {
+		ml = 'L';
+		xp = "XX";
+	} else
+		ABORT(1);
+
+	if ((rc = add_switch(model, y, x,
+		pf("CLEX%c_CLK0", ml), pf("%s_CLK", xp), 0 /* bidir */))) goto xout;
+	if ((rc = add_switch(model, y, x,
+		pf("CLEX%c_CLK1", ml), pf("%c_CLK", ml), 0 /* bidir */))) goto xout;
+	if ((rc = add_switch(model, y, x,
+		pf("CLEX%c_SR0", ml), pf("%s_SR", xp), 0 /* bidir */))) goto xout;
+	if ((rc = add_switch(model, y, x,
+		pf("CLEX%c_SR1", ml), pf("%c_SR", ml), 0 /* bidir */))) goto xout;
+	for (i = X_A1; i <= X_DX; i++) {
+		if ((rc = add_switch(model,y, x,
+			pf("CLEX%c_LOGICIN_B%i", ml, i),
+			pf("%s_%s", xp, logicin_str(i)),
+			0 /* bidir */))) goto xout;
+	}
+	for (i = M_A1; i <= M_WE; i++) {
+		if (ml == 'L' &&
+		    (i == M_AI || i == M_BI || i == M_CI
+		     || i == M_DI || i == M_WE))
+			continue;
+		if ((rc = add_switch(model,y, x,
+			pf("CLEX%c_LOGICIN_B%i", ml, i),
+			pf("%c_%s", ml, logicin_str(i)),
+			0 /* bidir */))) goto xout;
+	}
+	for (i = X_A; i <= X_DQ; i++) {
+		if ((rc = add_switch(model, y, x,
+			pf("%s_%s", xp, logicout_str(i)),
+			pf("CLEX%c_LOGICOUT%i", ml, i),
+			0 /* bidir */))) goto xout;
+	}
+	for (i = M_A; i <= M_DQ; i++) {
+		if ((rc = add_switch(model, y, x,
+			pf("%c_%s", ml, logicout_str(i)),
+			pf("CLEX%c_LOGICOUT%i", ml, i),
+			0 /* bidir */))) goto xout;
+	}
+	for (i = 'A'; i <= 'D'; i++) {
+		for (j = 1; j <= 6; j++) {
+			if ((rc = add_switch(model, y, x,
+				pf("%c_%c%i", ml, i, j),
+				pf("%c_%c", ml, i),
+				0 /* bidir */))) goto xout;
+			if ((rc = add_switch(model, y, x,
+				pf("%s_%c%i", xp, i, j),
+				pf("%s_%c", xp, i),
+				0 /* bidir */))) goto xout;
+		}
+		if ((rc = add_switch(model, y, x,
+			pf("%c_%c", ml, i),
+			pf("%c_%cMUX", ml, i),
+			0 /* bidir */))) goto xout;
+	}
+	if (ml == 'L') {
+		if (has_connpt(model, y, x, "XL_COUT_N")) {
+			if ((rc = add_switch(model, y, x,
+				"XL_COUT", "XL_COUT_N",
+				0 /* bidir */))) goto xout;
+		}
+		if ((rc = add_switch(model, y, x,
+			"XL_COUT", "L_DMUX", 0 /* bidir */))) goto xout;
+	} else {
+		if (has_connpt(model, y, x, "M_COUT_N")) {
+			if ((rc = add_switch(model, y, x,
+				"M_COUT", "M_COUT_N",
+				0 /* bidir */))) goto xout;
+		}
+		if ((rc = add_switch(model, y, x,
+			"M_COUT", "M_DMUX", 0 /* bidir */))) goto xout;
+	}
+	return 0;
+xout:
+	return rc;
+}
+
+static int init_logic_switches(struct fpga_model* model)
+{
+	int x, y, rc;
+
+	for (x = LEFT_SIDE_WIDTH; x < model->x_width-RIGHT_SIDE_WIDTH; x++) {
+		if (!is_atx(X_LOGIC_COL, model, x))
+			continue;
+		for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
+			if (has_device(model, y, x, DEV_LOGIC_M)
+			    || has_device(model, y, x, DEV_LOGIC_L)) {
+				rc = init_logic_tile(model, y, x);
+				if (rc) goto xout;
+			}
+		}
+	}
 	return 0;
 xout:
 	return rc;

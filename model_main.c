@@ -35,10 +35,8 @@ int fpga_build_model(struct fpga_model* model, int fpga_rows, const char* column
 	rc = init_ports(model);
 	if (rc) return rc;
 
-#if 0
 	rc = init_conns(model);
 	if (rc) return rc;
-#endif
 
 	rc = init_switches(model);
 	if (rc) return rc;

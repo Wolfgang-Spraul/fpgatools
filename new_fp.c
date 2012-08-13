@@ -25,11 +25,15 @@ int printf_switches(struct fpga_model* model);
 int main(int argc, char** argv)
 {
 	struct fpga_model model;
-	int rc;
+	int no_conns, rc;
 
 	if ((rc = fpga_build_model(&model, XC6SLX9_ROWS, XC6SLX9_COLUMNS,
 			XC6SLX9_LEFT_WIRING, XC6SLX9_RIGHT_WIRING)))
 		goto fail;
+
+	no_conns = 0;
+	if (argc > 1 && !strcmp(argv[1], "--no-conns"))
+		no_conns = 1;
 
 	printf("fpga_floorplan_format 1\n");
 
@@ -59,8 +63,10 @@ int main(int argc, char** argv)
 	rc = printf_ports(&model);
 	if (rc) goto fail;
 
-	rc = printf_conns(&model);
-	if (rc) goto fail;
+	if (!no_conns) {
+		rc = printf_conns(&model);
+		if (rc) goto fail;
+	}
 
 	rc = printf_switches(&model);
 	if (rc) goto fail;

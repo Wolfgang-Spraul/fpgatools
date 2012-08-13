@@ -467,6 +467,9 @@ enum logicout_wire {
     /* 18 */	M_C, M_CMUX, M_CQ, M_D, M_DMUX, M_DQ
 };
 
+const char* logicin_str(enum logicin_wire w);
+const char* logicout_str(enum logicout_wire w);
+
 // The extra wires must not overlap with logicin_wire or logicout_wire
 // namespaces so that they can be combined with either of them.
 enum extra_wires {
