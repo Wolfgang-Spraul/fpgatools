@@ -1,0 +1,6 @@
+fpgatools (0.0+201208) UNRELEASED; urgency=low
+
+  * Takoen from commit 884c036
+  * Initial release. (Closes: #XXXXXX)
+
+ -- Xiangfu Liu <xiangfu.z@gmail.com>  Tue, 14 Aug 2012 10:03:41 +0800

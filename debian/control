@@ -1,0 +1,19 @@
+Source: fpgatools
+Section: electronics
+Priority: extra
+Maintainer: Xiangfu Liu <xiangfu@openmobilefree.net>
+Build-Depends: debhelper (>=  7.4.10), pkg-config, 
+	libxml2-dev
+Standards-Version: 3.9.3
+Homepage: https://github.com/Wolfgang-Spraul/fpgatools
+
+Package: fpgatools
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: tools for create fpga bitstream
+ small independent command line utilities, no GUI
+ plain C, no C++
+ simple Makefiles
+ text-based file formats
+ no documentation - read the sources
+ automatic test suite

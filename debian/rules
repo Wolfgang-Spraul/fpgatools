@@ -1,0 +1,47 @@
+#!/usr/bin/make -f
+# This file is in the public domain.
+# You may freely use, modify, distribute, and relicense it.
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+export PREFIX=/usr
+
+build clean install binary-arch binary-indep binary:
+	+dh --parallel $(opt_no_act) $@
+
+override_dh_auto_clean:
+	$(MAKE) clean
+	sh debian/clean.sh
+
+override_dh_installchangelogs:
+	dpkg-parsechangelog --format rfc822 --all | \
+		awk -f debian/changelog.upstream.awk
+	dh_installchangelogs debian/changelog.upstream
+
+opt_optimize = CFLAGS="-g -O2"
+opt_no_act =
+opt_quiet =
+
+ifneq (,$(filter noopt,$(DEB_BUILD_OPTIONS)))
+    opt_optimize = CFLAGS="-g -O0"
+endif
+
+ifneq (,$(findstring n,$(MAKEFLAGS)))
+    opt_no_act = --no-act
+endif
+
+ifneq (,$(filter quiet,$(DEB_BUILD_OPTIONS)))
+    opt_quiet = --quiet
+    MAKEFLAGS += --quiet
+endif
+
+REPO = git://github.com/Wolfgang-Spraul/fpgatools.git
+BRANCH = master
+debiandir_SQ = $(subst ','\'',$(dir $(lastword $(MAKEFILE_LIST))))
+get-orig-source:
+	REPO='$(REPO)' BRANCH='$(BRANCH)' \
+		sh '$(debiandir_SQ)'get-orig-source.sh
+
+%:
+	dh $@
