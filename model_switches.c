@@ -12,16 +12,20 @@ static int init_ce_clk_switches(struct fpga_model* model);
 static int init_io_switches(struct fpga_model* model);
 static int init_routing_switches(struct fpga_model* model);
 static int init_north_south_dirwire_term(struct fpga_model* model);
+static int init_iologic_switches(struct fpga_model* model);
 
 int init_switches(struct fpga_model* model)
 {
 	int rc;
 
-// todo: IO_TERM_B, IO_OUTER_B, IO_INNER_B, LOGIC_XM
+// todo: IO_OUTER_B, IO_INNER_B, LOGIC_XM
+   	rc = init_iologic_switches(model);
+	if (rc) goto xout;
+return 0;
+
    	rc = init_north_south_dirwire_term(model);
 	if (rc) goto xout;
 
-return 0;
    	rc = init_ce_clk_switches(model);
 	if (rc) goto xout;
 
@@ -30,6 +34,154 @@ return 0;
 
 	rc = init_routing_switches(model);
 	if (rc) goto xout;
+	return 0;
+xout:
+	return rc;
+}
+
+static int init_iologic_tile(struct fpga_model* model, int y, int x)
+{
+	int i, j, rc;
+	const char* io_prefix;
+
+	if (x < LEFT_SIDE_WIDTH) {
+		ABORT(x != LEFT_IO_DEVS);
+		io_prefix = "IOI_";
+	} else if (x >= model->x_width-RIGHT_SIDE_WIDTH) {
+		ABORT(x != model->x_width - RIGHT_IO_DEVS_O);
+		io_prefix = "RIOI_";
+	} else {
+		if (y == TOP_OUTER_IO) {
+			io_prefix = "TIOI_";
+		} else if (y == TOP_INNER_IO) {
+			io_prefix = "TIOI_INNER_";
+		} else if (y == model->y_height-BOT_INNER_IO) {
+			io_prefix = "BIOI_INNER_";
+		} else if (y == model->y_height-BOT_OUTER_IO) {
+			io_prefix = "TIOI_";
+		} else
+			ABORT(1);
+	}
+
+	for (i = 0; i <= 23; i++) {
+		if ((rc = add_switch(model, y, x,
+			pf("IOI_INTER_LOGICOUT%i", i),
+			pf("IOI_LOGICOUT%i", i), 0 /* bidir */))) goto xout;
+	}
+	// switches going to IOI_INTER_LOGICOUT0:15
+	{ static const char* logicout_src[16] = {
+	  /*  0 */ "FABRICOUT_ILOGIC_SITE",
+		   "Q1_ILOGIC_SITE", "Q2_ILOGIC_SITE",
+		   "Q3_ILOGIC_SITE", "Q4_ILOGIC_SITE",
+		   "INCDEC_ILOGIC_SITE", "VALID_ILOGIC_SITE",
+	  /*  7 */ "FABRICOUT_ILOGIC_SITE_S",
+	 	   "Q1_ILOGIC_SITE_S", "Q2_ILOGIC_SITE_S",
+		   "Q3_ILOGIC_SITE_S", "Q4_ILOGIC_SITE_S",
+	  /* 12 */ "", "",
+	  /* 14 */ "BUSY_IODELAY_SITE", "BUSY_IODELAY_SITE_S" };
+	for (i = 0; i < sizeof(logicout_src)/sizeof(logicout_src[0]); i++) {
+		if (logicout_src[i][0]) {
+			if ((rc = add_switch(model, y, x, logicout_src[i],
+				pf("IOI_INTER_LOGICOUT%i", i),
+				0 /* bidir */))) goto xout;
+		}
+	}}
+	// The 6 CE lines (4*IO_CE and 2*PLL_CE) can be switched
+	// to 4 IOCE destinations. Each IOCE line can be driven
+	// by 6 CE lines.
+	for (i = 0; i <= 3; i++) {
+		for (j = 0; j <= 3; j++) {
+			if ((rc = add_switch(model, y, x,
+				pf("%sIOCE%i", io_prefix, j),
+				pf("IOI_CLKDIST_IOCE%i%s",i/2,i%2?"_M":"_S"),
+				0 /* bidir */))) goto xout;
+		}
+		for (j = 0; j <= 1; j++) {
+			if ((rc = add_switch(model, y, x,
+				pf("%sPLLCE%i", io_prefix, j),
+				pf("IOI_CLKDIST_IOCE%i%s",i/2,i%2?"_M":"_S"),
+				0 /* bidir */))) goto xout;
+		}
+	}
+	// Incoming clocks and fan can be switched to intermediates
+	// (5 sources per intermediate), and then to the ilogic/ologic
+	// devices (3 sources each) or 2*CLK1 (2 sources each).
+	for (i = 0; i < 4; i++) {
+		if ((rc = add_switch(model, y, x,
+			pf("IOI_CLK%i", i/2),
+			pf("IOI_CLK%iINTER%s",i%2,i<2?"_M":"_S"),
+			0 /* bidir */))) goto xout;
+		if ((rc = add_switch(model, y, x,
+			pf("IOI_GFAN%i", i/2),
+			pf("IOI_CLK%iINTER%s",i%2,i<2?"_M":"_S"),
+			0 /* bidir */))) goto xout;
+		if ((rc = add_switch(model, y, x,
+			pf("%sIOCLK%i", io_prefix, i),
+			pf("IOI_CLK%iINTER%s",i%2,i<2?"_M":"_S"),
+			0 /* bidir */))) goto xout;
+		if ((rc = add_switch(model, y, x,
+			pf("%sPLLCLK%i", io_prefix, i/2),
+			pf("IOI_CLK%iINTER%s",i/2,i%2?"_M":"_S"),
+			0 /* bidir */))) goto xout;
+		// only PLLCLK goes to CLK2 intermediate
+		if ((rc = add_switch(model, y, x,
+			pf("%sPLLCLK%i", io_prefix, i/2),
+			pf("IOI_CLK2INTER%s",i%2?"_S":"_M"),
+			0 /* bidir */))) goto xout;
+		// 2 sources each for IOI_CLKDIST_CLK1_M/_S
+		if ((rc = add_switch(model, y, x,
+			pf("IOI_CLK%iINTER%s", i%2, i<2?"_M":"_S"),
+			pf("IOI_CLKDIST_CLK1%s", i<2?"_M":"_S"),
+			0 /* bidir */))) goto xout;
+	}
+	// 3 sources each:
+	for (i = 0; i < 6; i++) {
+		if ((rc = add_switch(model, y, x,
+			pf("IOI_CLK%iINTER%s", i%3, i<3?"_M":"_S"),
+			pf("IOI_CLKDIST_CLK0_ILOGIC%s", i<3?"_M":"_S"),
+			0 /* bidir */))) goto xout;
+		if ((rc = add_switch(model, y, x,
+			pf("IOI_CLK%iINTER%s", i%3, i<3?"_M":"_S"),
+			pf("IOI_CLKDIST_CLK0_OLOGIC%s", i<3?"_M":"_S"),
+			0 /* bidir */))) goto xout;
+	}
+	return 0;
+xout:
+	return rc;
+}
+
+static int init_iologic_switches(struct fpga_model* model)
+{
+	int x, y, rc;
+
+	for (x = LEFT_SIDE_WIDTH; x < model->x_width - RIGHT_SIDE_WIDTH; x++) {
+		if (has_device(model, TOP_OUTER_IO, x, DEV_ILOGIC)) {
+			if ((rc = init_iologic_tile(model,
+				TOP_OUTER_IO, x))) goto xout;
+		}
+		if (has_device(model, TOP_INNER_IO, x, DEV_ILOGIC)) {
+			if ((rc = init_iologic_tile(model,
+				TOP_INNER_IO, x))) goto xout;
+		}
+		if (has_device(model, model->y_height-BOT_INNER_IO, x, DEV_ILOGIC)) {
+			if ((rc = init_iologic_tile(model,
+				model->y_height-BOT_INNER_IO, x))) goto xout;
+		}
+		if (has_device(model, model->y_height-BOT_OUTER_IO, x, DEV_ILOGIC)) {
+			if ((rc = init_iologic_tile(model,
+				model->y_height-BOT_OUTER_IO, x))) goto xout;
+		}
+	}
+	for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
+		if (has_device(model, y, LEFT_IO_DEVS, DEV_ILOGIC)) {
+			if ((rc = init_iologic_tile(model,
+				y, LEFT_IO_DEVS))) goto xout;
+		}
+		if (has_device(model, y, model->x_width-RIGHT_IO_DEVS_O, DEV_ILOGIC)) {
+			if ((rc = init_iologic_tile(model,
+				y, model->x_width-RIGHT_IO_DEVS_O))) goto xout;
+		}
+	}
 	return 0;
 xout:
 	return rc;
