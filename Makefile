@@ -17,17 +17,21 @@ LDLIBS += `pkg-config libxml-2.0 --libs`
 
 MODEL_OBJ = model_main.o model_tiles.o model_devices.o model_ports.o model_conns.o model_switches.o model_helper.o
 
-all: autotest bit2txt draw_svg_tiles new_fp hstrrep sort_seq merge_seq
+all: autotest bit2txt draw_svg_tiles new_fp fp2bit hstrrep sort_seq merge_seq
 
-autotest: autotest.o $(MODEL_OBJ) floorplan.o control.o helper.o
+autotest: autotest.o $(MODEL_OBJ) floorplan.o control.o helper.o model.h
 
 new_fp: new_fp.o $(MODEL_OBJ) floorplan.o helper.o
 
 new_fp.o: new_fp.c floorplan.h model.h helper.h
 
-floorplan.o: floorplan.c floorplan.h
+fp2bit: fp2bit.c $(MODEL_OBJ) bits.o helper.o
 
-control.o: control.c control.h
+floorplan.o: floorplan.c floorplan.h model.h
+
+bits.o: bits.c bits.h model.h
+
+control.o: control.c control.h model.h
 
 draw_svg_tiles: draw_svg_tiles.o $(MODEL_OBJ) helper.o
 

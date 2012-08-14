@@ -21,23 +21,23 @@ int main(int argc, char** argv)
 	if (argc > 1 && !strcmp(argv[1], "--no-conns"))
 		no_conns = 1;
 
-	printf_version();
+	printf_version(stdout);
 
-	rc = printf_tiles(&model);
+	rc = printf_tiles(stdout, &model);
 	if (rc) goto fail;
 
-	rc = printf_devices(&model);
+	rc = printf_devices(stdout, &model, /*config_only*/ 0);
 	if (rc) goto fail;
 
-	rc = printf_ports(&model);
+	rc = printf_ports(stdout, &model);
 	if (rc) goto fail;
 
 	if (!no_conns) {
-		rc = printf_conns(&model);
+		rc = printf_conns(stdout, &model);
 		if (rc) goto fail;
 	}
 
-	rc = printf_switches(&model);
+	rc = printf_switches(stdout, &model, /*enabled_only*/ 0);
 	if (rc) goto fail;
 
 	return EXIT_SUCCESS;

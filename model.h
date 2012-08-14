@@ -301,6 +301,10 @@ enum fpgadev_type
 	DEV_SPI_ACCESS
 };
 
+// All device configuration is structured so that the value
+// 0 is never a valid configured setting. That way all config
+// data can safely be initialized to 0 meaning unconfigured.
+
 struct fpgadev_logic_x
 {
 	int a;
@@ -316,13 +320,41 @@ struct fpgadev_logic_m
 	int c;
 };
 
+typedef char IOSTANDARD[32];
+#define IO_LVCMOS33	"LVCMOS33"
+enum { BYPASS_MUX_I = 1, BYPASS_MUX_O, BYPASS_MUX_T };
+enum { IMUX_I_B = 1, IMUX_I };
+enum { SLEW_SLOW = 1, SLEW_FAST, SLEW_QUIETIO };
+enum { SUSP_LAST_VAL = 1, SUSP_3STATE, SUSP_3STATE_PULLUP,
+	SUSP_3STATE_PULLDOWN, SUSP_3STATE_KEEPER, SUSP_3STATE_OCT_ON };
+enum { ITERM_NONE = 1, ITERM_UNTUNED_25, ITERM_UNTUNED_50,
+	ITERM_UNTUNED_75 };
+enum { OTERM_NONE = 1, OTERM_UNTUNED_25, OTERM_UNTUNED_50,
+	OTERM_UNTUNED_75 };
+
+struct fpgadev_iob
+{
+	IOSTANDARD istandard;
+	IOSTANDARD ostandard;
+	int bypass_mux;
+	int imux;
+	int drive_strength; // supports 2,4,6,8,12,16 and 24
+	int slew;
+	int o_used;
+	int suspend;
+	int in_term;
+	int out_term;
+};
+
 struct fpga_device
 {
 	enum fpgadev_type type;
+	int instantiated;
 	union {
 		struct fpgadev_logic_m log_m;
 		struct fpgadev_logic_l log_l;
 		struct fpgadev_logic_x log_x;
+		struct fpgadev_iob iob;
 	};
 };
 
@@ -335,7 +367,7 @@ struct fpga_tile
 	enum fpga_tile_type type;
 	int flags;
 
-	// expect up to 64 devices per tile
+	// we currently support a maximum of 32 devices per tile
 	int num_devices;
 	struct fpga_device devices[32];
 
@@ -387,17 +419,29 @@ int has_device(struct fpga_model* model, int y, int x, int dev);
 int add_connpt_2(struct fpga_model* model, int y, int x,
 	const char* connpt_name, const char* suffix1, const char* suffix2);
 
-typedef int (*add_conn_f)(struct fpga_model* model, int y1, int x1, const char* name1, int y2, int x2, const char* name2);
+typedef int (*add_conn_f)(struct fpga_model* model,
+	int y1, int x1, const char* name1,
+	int y2, int x2, const char* name2);
 #define NOPREF_BI_F	add_conn_bi
 #define PREF_BI_F	add_conn_bi_pref
 #define NOPREF_UNI_F	add_conn_uni
 #define PREF_UNI_F	add_conn_uni_pref
 
-int add_conn_uni(struct fpga_model* model, int y1, int x1, const char* name1, int y2, int x2, const char* name2);
-int add_conn_uni_pref(struct fpga_model* model, int y1, int x1, const char* name1, int y2, int x2, const char* name2);
-int add_conn_bi(struct fpga_model* model, int y1, int x1, const char* name1, int y2, int x2, const char* name2);
-int add_conn_bi_pref(struct fpga_model* model, int y1, int x1, const char* name1, int y2, int x2, const char* name2);
-int add_conn_range(struct fpga_model* model, add_conn_f add_conn_func, int y1, int x1, const char* name1, int start1, int last1, int y2, int x2, const char* name2, int start2);
+int add_conn_uni(struct fpga_model* model,
+	int y1, int x1, const char* name1,
+	int y2, int x2, const char* name2);
+int add_conn_uni_pref(struct fpga_model* model,
+	int y1, int x1, const char* name1,
+	int y2, int x2, const char* name2);
+int add_conn_bi(struct fpga_model* model,
+	int y1, int x1, const char* name1,
+	int y2, int x2, const char* name2);
+int add_conn_bi_pref(struct fpga_model* model,
+	int y1, int x1, const char* name1,
+	int y2, int x2, const char* name2);
+int add_conn_range(struct fpga_model* model, add_conn_f add_conn_func,
+	int y1, int x1, const char* name1, int start1, int last1,
+	int y2, int x2, const char* name2, int start2);
 
 // COUNT_DOWN can be OR'ed to start_count to make
 // the enumerated wires count from start_count down.

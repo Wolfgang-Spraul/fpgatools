@@ -24,3 +24,7 @@ floorplan.o
 control.o
 autotest
 autotest.o
+bits.o
+fp2bit
+fp2bit.o
+autotest.tmp/

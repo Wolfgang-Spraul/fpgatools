@@ -8,55 +8,56 @@
 #include "model.h"
 #include "floorplan.h"
 
-void printf_version(void)
+void printf_version(FILE* f)
 {
-	printf("fpga_floorplan_format 1\n");
+	fprintf(f, "fpga_floorplan_format 1\n");
 }
 
-#define PRINT_FLAG(f)	if (tf & f) { printf (" %s", #f); tf &= ~f; }
+#define PRINT_FLAG(fp, flag)	if ((tf) & (flag)) \
+				  { fprintf (fp, " %s", #flag); tf &= ~(flag); }
 
-int printf_tiles(struct fpga_model* model)
+int printf_tiles(FILE* f, struct fpga_model* model)
 {
 	struct fpga_tile* tile;
 	int x, y;
 
 	for (x = 0; x < model->x_width; x++) {
-		printf("\n");
+		fprintf(f, "\n");
 		for (y = 0; y < model->y_height; y++) {
 			tile = &model->tiles[y*model->x_width + x];
 
 			if (tile->type != NA)
-				printf("tile y%02i x%02i name %s\n", y, x,
+				fprintf(f, "tile y%02i x%02i name %s\n", y, x,
 					fpga_tiletype_str(tile->type));
 			if (tile->flags) {
 				int tf = tile->flags;
-				printf("tile y%02i x%02i flags", y, x);
+				fprintf(f, "tile y%02i x%02i flags", y, x);
 
-				PRINT_FLAG(TF_FABRIC_ROUTING_COL);
-				PRINT_FLAG(TF_FABRIC_LOGIC_COL);
-				PRINT_FLAG(TF_FABRIC_BRAM_VIA_COL);
-				PRINT_FLAG(TF_FABRIC_MACC_VIA_COL);
-				PRINT_FLAG(TF_FABRIC_BRAM_COL);
-				PRINT_FLAG(TF_FABRIC_MACC_COL);
-				PRINT_FLAG(TF_ROUTING_NO_IO);
-				PRINT_FLAG(TF_BRAM_DEV);
-				PRINT_FLAG(TF_MACC_DEV);
-				PRINT_FLAG(TF_LOGIC_XL_DEV);
-				PRINT_FLAG(TF_LOGIC_XM_DEV);
-				PRINT_FLAG(TF_IOLOGIC_DELAY_DEV);
-				PRINT_FLAG(TF_DCM_DEV);
-				PRINT_FLAG(TF_PLL_DEV);
-				PRINT_FLAG(TF_WIRED);
+				PRINT_FLAG(f, TF_FABRIC_ROUTING_COL);
+				PRINT_FLAG(f, TF_FABRIC_LOGIC_COL);
+				PRINT_FLAG(f, TF_FABRIC_BRAM_VIA_COL);
+				PRINT_FLAG(f, TF_FABRIC_MACC_VIA_COL);
+				PRINT_FLAG(f, TF_FABRIC_BRAM_COL);
+				PRINT_FLAG(f, TF_FABRIC_MACC_COL);
+				PRINT_FLAG(f, TF_ROUTING_NO_IO);
+				PRINT_FLAG(f, TF_BRAM_DEV);
+				PRINT_FLAG(f, TF_MACC_DEV);
+				PRINT_FLAG(f, TF_LOGIC_XL_DEV);
+				PRINT_FLAG(f, TF_LOGIC_XM_DEV);
+				PRINT_FLAG(f, TF_IOLOGIC_DELAY_DEV);
+				PRINT_FLAG(f, TF_DCM_DEV);
+				PRINT_FLAG(f, TF_PLL_DEV);
+				PRINT_FLAG(f, TF_WIRED);
 
-				if (tf) printf(" 0x%x", tf);
-				printf("\n");
+				if (tf) fprintf(f, " 0x%x", tf);
+				fprintf(f, "\n");
 			}
 		}
 	}
 	return 0;
 }
 
-int printf_devices(struct fpga_model* model)
+int printf_devices(FILE* f, struct fpga_model* model, int config_only)
 {
 	int x, y, i;
 	struct fpga_tile* tile;
@@ -65,90 +66,92 @@ int printf_devices(struct fpga_model* model)
 		for (y = 0; y < model->y_height; y++) {
 			tile = YX_TILE(model, y, x);
 			for (i = 0; i < tile->num_devices; i++) {
+				if (config_only && !(tile->devices[i].instantiated))
+					continue;
 				switch (tile->devices[i].type) {
 					case DEV_LOGIC_M:
-						printf("device y%02i x%02i SLICEM\n", y, x);
+						fprintf(f, "device y%02i x%02i SLICEM\n", y, x);
 						break;
 					case DEV_LOGIC_L:
-						printf("device y%02i x%02i SLICEL\n", y, x);
+						fprintf(f, "device y%02i x%02i SLICEL\n", y, x);
 						break;
 					case DEV_LOGIC_X:
-						printf("device y%02i x%02i SLICEX\n", y, x);
+						fprintf(f, "device y%02i x%02i SLICEX\n", y, x);
 						break;
 					case DEV_MACC:
-						printf("device y%02i x%02i DSP48A1\n", y, x);
+						fprintf(f, "device y%02i x%02i DSP48A1\n", y, x);
 						break;
 					case DEV_TIEOFF:
-						printf("device y%02i x%02i TIEOFF\n", y, x);
+						fprintf(f, "device y%02i x%02i TIEOFF\n", y, x);
 						break;
 					case DEV_IOBM:
-						printf("device y%02i x%02i IOBM\n", y, x);
+						fprintf(f, "device y%02i x%02i IOBM\n", y, x);
 						break;
 					case DEV_IOBS:
-						printf("device y%02i x%02i IOBS\n", y, x);
+						fprintf(f, "device y%02i x%02i IOBS\n", y, x);
 						break;
 					case DEV_ILOGIC:
-						printf("device y%02i x%02i ILOGIC2\n", y, x);
+						fprintf(f, "device y%02i x%02i ILOGIC2\n", y, x);
 						break;
 					case DEV_OLOGIC:
-						printf("device y%02i x%02i OLOGIC2\n", y, x);
+						fprintf(f, "device y%02i x%02i OLOGIC2\n", y, x);
 						break;
 					case DEV_IODELAY:
-						printf("device y%02i x%02i IODELAY2\n", y, x);
+						fprintf(f, "device y%02i x%02i IODELAY2\n", y, x);
 						break;
 					case DEV_BRAM16:
-						printf("device y%02i x%02i RAMB16BWER\n", y, x);
+						fprintf(f, "device y%02i x%02i RAMB16BWER\n", y, x);
 						break;
 					case DEV_BRAM8:
-						printf("device y%02i x%02i RAMB8BWER\n", y, x);
+						fprintf(f, "device y%02i x%02i RAMB8BWER\n", y, x);
 						break;
 					case DEV_BUFH:
-						printf("device y%02i x%02i BUFH\n", y, x);
+						fprintf(f, "device y%02i x%02i BUFH\n", y, x);
 						break;
 					case DEV_BUFIO:
-						printf("device y%02i x%02i BUFIO2\n", y, x);
+						fprintf(f, "device y%02i x%02i BUFIO2\n", y, x);
 						break;
 					case DEV_BUFIO_FB:
-						printf("device y%02i x%02i BUFIO2FB\n", y, x);
+						fprintf(f, "device y%02i x%02i BUFIO2FB\n", y, x);
 						break;
 					case DEV_BUFPLL:
-						printf("device y%02i x%02i BUFPLL\n", y, x);
+						fprintf(f, "device y%02i x%02i BUFPLL\n", y, x);
 						break;
 					case DEV_BUFPLL_MCB:
-						printf("device y%02i x%02i BUFPLL_MCB\n", y, x);
+						fprintf(f, "device y%02i x%02i BUFPLL_MCB\n", y, x);
 						break;
 					case DEV_BUFGMUX:
-						printf("device y%02i x%02i BUFGMUX\n", y, x);
+						fprintf(f, "device y%02i x%02i BUFGMUX\n", y, x);
 						break;
 					case DEV_BSCAN:
-						printf("device y%02i x%02i BSCAN\n", y, x);
+						fprintf(f, "device y%02i x%02i BSCAN\n", y, x);
 						break;
 					case DEV_DCM:
-						printf("device y%02i x%02i DCM\n", y, x);
+						fprintf(f, "device y%02i x%02i DCM\n", y, x);
 						break;
 					case DEV_PLL:
-						printf("device y%02i x%02i PLL\n", y, x);
+						fprintf(f, "device y%02i x%02i PLL\n", y, x);
 						break;
 					case DEV_ICAP:
-						printf("device y%02i x%02i ICAP\n", y, x);
+						fprintf(f, "device y%02i x%02i ICAP\n", y, x);
 						break;
 					case DEV_POST_CRC_INTERNAL:
-						printf("device y%02i x%02i POST_CRC_INTERNAL\n", y, x);
+						fprintf(f, "device y%02i x%02i POST_CRC_INTERNAL\n", y, x);
 						break;
 					case DEV_STARTUP:
-						printf("device y%02i x%02i STARTUP\n", y, x);
+						fprintf(f, "device y%02i x%02i STARTUP\n", y, x);
 						break;
 					case DEV_SLAVE_SPI:
-						printf("device y%02i x%02i SLAVE_SPI\n", y, x);
+						fprintf(f, "device y%02i x%02i SLAVE_SPI\n", y, x);
 						break;
 					case DEV_SUSPEND_SYNC:
-						printf("device y%02i x%02i SUSPEND_SYNC\n", y, x);
+						fprintf(f, "device y%02i x%02i SUSPEND_SYNC\n", y, x);
 						break;
 					case DEV_OCT_CALIBRATE:
-						printf("device y%02i x%02i OCT_CALIBRATE\n", y, x);
+						fprintf(f, "device y%02i x%02i OCT_CALIBRATE\n", y, x);
 						break;
 					case DEV_SPI_ACCESS:
-						printf("device y%02i x%02i SPI_ACCESS\n", y, x);
+						fprintf(f, "device y%02i x%02i SPI_ACCESS\n", y, x);
 						break;
 				}
 			}
@@ -157,7 +160,7 @@ int printf_devices(struct fpga_model* model)
 	return 0;
 }
 
-int printf_ports(struct fpga_model* model)
+int printf_ports(FILE* f, struct fpga_model* model)
 {
 	struct fpga_tile* tile;
 	const char* conn_point_name_src;
@@ -186,16 +189,17 @@ int printf_ports(struct fpga_model* model)
 				}
 				if (!first_port_printed) {
 					first_port_printed = 1;
-					printf("\n");
+					fprintf(f, "\n");
 				}
-				printf("port y%02i x%02i %s\n", y, x, conn_point_name_src);
+				fprintf(f, "port y%02i x%02i %s\n",
+					y, x, conn_point_name_src);
 			}
 		}
 	}
 	return 0;
 }
 
-int printf_conns(struct fpga_model* model)
+int printf_conns(FILE* f, struct fpga_model* model)
 {
 	struct fpga_tile* tile;
 	char tmp_line[512];
@@ -237,7 +241,7 @@ int printf_conns(struct fpga_model* model)
 
 					if (!first_conn_printed) {
 						first_conn_printed = 1;
-						printf("\n");
+						fprintf(f, "\n");
 					}
 					sprintf(tmp_line, "static_conn y%02i x%02i %s ",
 						y, x, conn_point_name_src);
@@ -246,7 +250,7 @@ int printf_conns(struct fpga_model* model)
 						tmp_line[k++] = ' ';
 					sprintf(&tmp_line[k], "y%02i x%02i %s\n",
 						other_tile_y, other_tile_x, other_tile_connpt_str);
-					printf(tmp_line);
+					fprintf(f, tmp_line);
 				}
 			}
 		}
@@ -254,11 +258,11 @@ int printf_conns(struct fpga_model* model)
 	return 0;
 }
 
-int printf_switches(struct fpga_model* model)
+int printf_switches(FILE* f, struct fpga_model* model, int enabled_only)
 {
 	struct fpga_tile* tile;
 	int x, y, i, from_connpt_o, to_connpt_o, from_str_i, to_str_i;
-	int first_switch_printed, is_bidirectional;
+	int first_switch_printed, is_bidirectional, is_on;
 	const char* from_str, *to_str;
 
 	for (x = 0; x < model->x_width; x++) {
@@ -270,6 +274,7 @@ int printf_switches(struct fpga_model* model)
 				from_connpt_o = (tile->switches[i] & 0x3FFF8000) >> 15;
 				to_connpt_o = tile->switches[i] & 0x00007FFF;
 				is_bidirectional = (tile->switches[i] & SWITCH_BIDIRECTIONAL) != 0;
+				is_on = (tile->switches[i] & SWITCH_ON) != 0;
 
 				from_str_i = tile->conn_point_names[from_connpt_o*2+1];
 				to_str_i = tile->conn_point_names[to_connpt_o*2+1];
@@ -281,12 +286,15 @@ int printf_switches(struct fpga_model* model)
 						__FILE__, __LINE__, from_str_i, to_str_i);
 					continue;
 				}
+				if (enabled_only && !is_on)
+					continue;
 				if (!first_switch_printed) {
 					first_switch_printed = 1;	
-					printf("\n");
+					fprintf(f, "\n");
 				}
-				printf("switch y%02i x%02i %s %s %s\n", y, x, from_str,
-					is_bidirectional ? "<->" : "->", to_str);
+				fprintf(f, "switch y%02i x%02i %s %s %s\n",
+					y, x, from_str, is_bidirectional
+					? "<->" : "->", to_str);
 			}
 		}
 	}

@@ -24,9 +24,9 @@
 // - lines should typically not exceed 80 characters
 //
 
-void printf_version(void);
-int printf_tiles(struct fpga_model* model);
-int printf_devices(struct fpga_model* model);
-int printf_ports(struct fpga_model* model);
-int printf_conns(struct fpga_model* model);
-int printf_switches(struct fpga_model* model);
+void printf_version(FILE* f);
+int printf_tiles(FILE* f, struct fpga_model* model);
+int printf_devices(FILE* f, struct fpga_model* model, int config_only);
+int printf_ports(FILE* f, struct fpga_model* model);
+int printf_conns(FILE* f, struct fpga_model* model);
+int printf_switches(FILE* f, struct fpga_model* model, int enabled_only);

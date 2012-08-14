@@ -17,9 +17,32 @@ time_t g_start_time;
 #define MEMUSAGE()	printf("O memusage %i\n", get_vm_mb());
 #define TIME_AND_MEM()	TIMESTAMP(); MEMUSAGE()
 
+#define AUTOTEST_TMP_DIR	"autotest.tmp"
+
+static int dump_file(const char* path)
+{
+	char line[1024];
+	FILE* f;
+
+	printf("O begin dump %s\n", path);
+	f = fopen(path, "r");
+	EXIT(!f);
+	while (fgets(line, sizeof(line), f)) {
+		if (!strncmp(line, "--- ", 4)
+		    || !strncmp(line, "+++ ", 4)
+		    || !strncmp(line, "@@ ", 3))
+			continue;
+		printf(line);
+	}
+	fclose(f);
+	printf("O end dump %s\n", path);
+	return 0;
+}
+
 int main(int argc, char** argv)
 {
 	struct fpga_model model;
+	FILE* dest_f;
 	int rc;
 
 	printf("\n");
@@ -39,12 +62,25 @@ int main(int argc, char** argv)
 	printf("O Done\n");
 	TIME_AND_MEM();
 
-	// pick 2 input IOBs, one output IOB and configure them
-	// pick 1 logic block and configure
-	// printf floorplan
-	// start routing, step by step
-	// after each step, printf floorplan diff (test_diff.sh)
-	// popen/fork/pipe
+	// todo: pick 2 input IOBs, one output IOB and configure them
+	// todo: pick 1 logic block and configure
+
+	mkdir(AUTOTEST_TMP_DIR, S_IRWXU|S_IRWXG|S_IROTH|S_IXOTH);
+	dest_f = fopen(AUTOTEST_TMP_DIR "/test_0001.fp", "w");
+	EXIT(!dest_f);
+	rc = printf_devices(dest_f, &model, /*config_only*/ 1);
+	EXIT(rc);
+	rc = printf_switches(dest_f, &model, /*enabled_only*/ 1);
+	EXIT(rc);
+	fclose(dest_f);
+	rc = system("./autotest_diff.sh autotest.tmp/test_0001.fp");
+	EXIT(rc);
+	rc = dump_file(AUTOTEST_TMP_DIR "/test_0001.diff");
+	EXIT(rc);
+
+	// todo: start routing, step by step
+	// todo: after each step, printf floorplan diff (test_diff.sh)
+	// todo: popen/fork/pipe
 
 	printf("\n");
 	printf("O Test suite completed.\n");
