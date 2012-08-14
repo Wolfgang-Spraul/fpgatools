@@ -8,9 +8,10 @@
 
 .PHONY:	all clean
 .SECONDARY:
-CFLAGS = -Wall -Wshadow -Wmissing-prototypes -Wmissing-declarations \
+CFLAGS += -Wall -Wshadow -Wmissing-prototypes -Wmissing-declarations \
 	-Wno-format-zero-length -Ofast
-LDLIBS = -lxml2
+CFLAGS += `pkg-config libxml-2.0 --cflags`
+LDLIBS += `pkg-config libxml-2.0 --libs`
 
 MODEL_OBJ = model_main.o model_tiles.o model_devices.o model_ports.o model_conns.o model_switches.o model_helper.o
 
