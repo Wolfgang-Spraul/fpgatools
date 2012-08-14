@@ -11,7 +11,6 @@
 #include <stdint.h>
 #include <assert.h>
 #include <sys/stat.h>
-#define MACRO_STR(arg)	#arg
 
 #include "helper.h"
 

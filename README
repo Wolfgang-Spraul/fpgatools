@@ -13,8 +13,7 @@ Libraries
 - libfpga-model      memory-only representation of an FPGA
 - libfpga-bits       reads and writes .bit bitstream files
 - libfpga-floorplan  reads and writes .fp floorplan files
-- libfpga-control    builds on top of libfpga-model to give
-                     programmatic access to the model
+- libfpga-control    programmatic access to libfpga-model
 - libfpga-test       test harness for libfpga-model and libfpga-control
 
 Utilities

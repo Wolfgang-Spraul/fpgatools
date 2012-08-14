@@ -17,11 +17,17 @@ LDLIBS += `pkg-config libxml-2.0 --libs`
 
 MODEL_OBJ = model_main.o model_tiles.o model_devices.o model_ports.o model_conns.o model_switches.o model_helper.o
 
-all: bit2txt draw_svg_tiles new_fp hstrrep sort_seq merge_seq
+all: autotest bit2txt draw_svg_tiles new_fp hstrrep sort_seq merge_seq
 
-new_fp: new_fp.o $(MODEL_OBJ) helper.o
+autotest: autotest.o $(MODEL_OBJ) floorplan.o control.o helper.o
 
-new_fp.o: new_fp.c model.h helper.h
+new_fp: new_fp.o $(MODEL_OBJ) floorplan.o helper.o
+
+new_fp.o: new_fp.c floorplan.h model.h helper.h
+
+floorplan.o: floorplan.c floorplan.h
+
+control.o: control.c control.h
 
 draw_svg_tiles: draw_svg_tiles.o $(MODEL_OBJ) helper.o
 
@@ -110,6 +116,7 @@ clean:
 		helper.o $(MODEL_OBJ) hstrrep hstrrep.o \
 		sort_seq sort_seq.o \
 		merge_seq merge_seq.o \
+		autotest.o control.o floorplan.o \
 		xc6slx9_empty.fp xc6slx9.svg \
 		xc6slx9_empty.tiles xc6slx9_empty.devices xc6slx9_empty.conns \
 		xc6slx9_empty.ports xc6slx9_empty.sw xc6slx9_empty.nets \

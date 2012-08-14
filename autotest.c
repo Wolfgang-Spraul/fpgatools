@@ -18,6 +18,12 @@ int main(int argc, char** argv)
 			XC6SLX9_LEFT_WIRING, XC6SLX9_RIGHT_WIRING)))
 		goto fail;
 
+	// inform about progress over stdout
+
+	// pick 2 input IOBs, one output IOB and configure them
+	// pick 1 logic block and configure
+	// printf floorplan
+
 	return EXIT_SUCCESS;
 fail:
 	return rc;

@@ -8,6 +8,11 @@
 #include "model.h"
 #include "floorplan.h"
 
+void printf_version(void)
+{
+	printf("fpga_floorplan_format 1\n");
+}
+
 #define PRINT_FLAG(f)	if (tf & f) { printf (" %s", #f); tf &= ~f; }
 
 int printf_tiles(struct fpga_model* model)
