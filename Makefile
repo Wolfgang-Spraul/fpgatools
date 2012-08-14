@@ -6,7 +6,9 @@
 # For details see the UNLICENSE file at the root of the source tree.
 #
 
-.PHONY:	all clean
+PREFIX ?= /usr/local
+
+.PHONY:	all clean install uninstall
 .SECONDARY:
 CFLAGS += -Wall -Wshadow -Wmissing-prototypes -Wmissing-declarations \
 	-Wno-format-zero-length -Ofast
@@ -94,7 +96,7 @@ compare.%: xc6slx9_empty.%
 
 %.conns: %.fp sort_seq merge_seq
 	@cat $<|awk '{if ($$1=="static_conn") printf "%s %s %s %s %s %s\n",$$2,$$3,$$5,$$6,$$4,$$7}'|sort|./sort_seq -|./merge_seq -|awk '{printf "%s %s %s %s %s %s\n",$$1,$$2,$$5,$$3,$$4,$$6}'|sort >$@
-	
+
 %.ports: %.fp
 	@cat $<|awk '{if ($$1=="port") printf "%s %s %s\n",$$2,$$3,$$4}'|sort >$@
 
@@ -119,3 +121,10 @@ clean:
 		compare_ports_matching.txt compare_ports_diff.txt compare_ports_extra.txt \
 		compare_sw_matching.txt compare_sw_diff.txt compare_sw_extra.txt \
 		compare_nets_matching.txt compare_nets_diff.txt compare_nets_extra.txt
+
+install:	all
+		mkdir -p $(DESTDIR)/$(PREFIX)/bin/
+		install -m 755 new_fp  $(DESTDIR)/$(PREFIX)/bin/
+		install -m 755 bit2txt $(DESTDIR)/$(PREFIX)/bin/
+uninstall:
+		rm -f $(DESTDIR)/$(PREFIX)/bin/{new_fp,bit2txt}
