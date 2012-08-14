@@ -760,7 +760,7 @@ static int run_io_wires(struct fpga_model* model)
 	for (x = LEFT_SIDE_WIDTH; x < model->x_width - RIGHT_SIDE_WIDTH; x++) {
 
 		y = 0;
-		if (has_device(model, y, x, DEV_IOBM)) {
+		if (has_device(model, y, x, DEV_IOB)) {
 			for (i = 0; s[i][0]; i++) {
 				struct w_net net1 = {
 					1,
@@ -784,7 +784,7 @@ static int run_io_wires(struct fpga_model* model)
 		}
 
 		y = model->y_height - BOT_OUTER_ROW;
-		if (has_device(model, y, x, DEV_IOBM)) {
+		if (has_device(model, y, x, DEV_IOB)) {
 			for (i = 0; s[i][0]; i++) {
 				struct w_net net1 = {
 					1,

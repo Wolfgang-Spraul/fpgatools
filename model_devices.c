@@ -169,8 +169,10 @@ int init_devices(struct fpga_model* model)
 			for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
 				if (is_aty(Y_LEFT_WIRED, model, y)) {
 					tile = YX_TILE(model, y, x);
-					tile->devices[tile->num_devices++].type = DEV_IOBM;
-					tile->devices[tile->num_devices++].type = DEV_IOBS;
+					tile->devices[tile->num_devices].type = DEV_IOB;
+					tile->devices[tile->num_devices++].iob.type = IOBM;
+					tile->devices[tile->num_devices].type = DEV_IOB;
+					tile->devices[tile->num_devices++].iob.type = IOBS;
 				}
 			}
 		}
@@ -178,24 +180,34 @@ int init_devices(struct fpga_model* model)
 			for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
 				if (is_aty(Y_RIGHT_WIRED, model, y)) {
 					tile = YX_TILE(model, y, x);
-					tile->devices[tile->num_devices++].type = DEV_IOBM;
-					tile->devices[tile->num_devices++].type = DEV_IOBS;
+					tile->devices[tile->num_devices].type = DEV_IOB;
+					tile->devices[tile->num_devices++].iob.type = IOBM;
+					tile->devices[tile->num_devices].type = DEV_IOB;
+					tile->devices[tile->num_devices++].iob.type = IOBS;
 				}
 			}
 		}
 		if (is_atx(X_FABRIC_LOGIC_ROUTING_COL|X_CENTER_ROUTING_COL, model, x)
 		    && !is_atx(X_ROUTING_NO_IO, model, x)) {
 			tile = YX_TILE(model, TOP_OUTER_ROW, x);
-			tile->devices[tile->num_devices++].type = DEV_IOBM;
-			tile->devices[tile->num_devices++].type = DEV_IOBM;
-			tile->devices[tile->num_devices++].type = DEV_IOBS;
-			tile->devices[tile->num_devices++].type = DEV_IOBS;
+					tile->devices[tile->num_devices].type = DEV_IOB;
+					tile->devices[tile->num_devices++].iob.type = IOBM;
+					tile->devices[tile->num_devices].type = DEV_IOB;
+					tile->devices[tile->num_devices++].iob.type = IOBS;
+					tile->devices[tile->num_devices].type = DEV_IOB;
+					tile->devices[tile->num_devices++].iob.type = IOBM;
+					tile->devices[tile->num_devices].type = DEV_IOB;
+					tile->devices[tile->num_devices++].iob.type = IOBS;
 
 			tile = YX_TILE(model, model->y_height-BOT_OUTER_ROW, x);
-			tile->devices[tile->num_devices++].type = DEV_IOBM;
-			tile->devices[tile->num_devices++].type = DEV_IOBM;
-			tile->devices[tile->num_devices++].type = DEV_IOBS;
-			tile->devices[tile->num_devices++].type = DEV_IOBS;
+					tile->devices[tile->num_devices].type = DEV_IOB;
+					tile->devices[tile->num_devices++].iob.type = IOBM;
+					tile->devices[tile->num_devices].type = DEV_IOB;
+					tile->devices[tile->num_devices++].iob.type = IOBS;
+					tile->devices[tile->num_devices].type = DEV_IOB;
+					tile->devices[tile->num_devices++].iob.type = IOBM;
+					tile->devices[tile->num_devices].type = DEV_IOB;
+					tile->devices[tile->num_devices++].iob.type = IOBS;
 		}
 	}
 

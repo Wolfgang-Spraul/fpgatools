@@ -580,24 +580,24 @@ static int init_io_switches(struct fpga_model* model)
 	int x, y, rc;
 
 	for (x = 0; x < model->x_width; x++) {
-		if (has_device(model, /*y*/ 0, x, DEV_IOBM)) {
+		if (has_device(model, /*y*/ 0, x, DEV_IOB)) {
 			rc = init_io_tile(model, 0, x);
 			if (rc) goto xout;
 		}
 		if (has_device(model, model->y_height - BOT_OUTER_ROW, x,
-			DEV_IOBM)) {
+			DEV_IOB)) {
 			rc = init_io_tile(model,
 				model->y_height-BOT_OUTER_ROW, x);
 			if (rc) goto xout;
 		}
 	}
 	for (y = 0; y < model->y_height; y++) {
-		if (has_device(model, y, /*x*/ 0, DEV_IOBM)) {
+		if (has_device(model, y, /*x*/ 0, DEV_IOB)) {
 			rc = init_io_tile(model, y, 0);
 			if (rc) goto xout;
 		}
 		if (has_device(model, y, model->x_width - RIGHT_OUTER_O,
-			DEV_IOBM)) {
+			DEV_IOB)) {
 			rc = init_io_tile(model,
 				y, model->x_width - RIGHT_OUTER_O);
 			if (rc) goto xout;

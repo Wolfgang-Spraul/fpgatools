@@ -84,11 +84,9 @@ int printf_devices(FILE* f, struct fpga_model* model, int config_only)
 					case DEV_TIEOFF:
 						fprintf(f, "device y%02i x%02i TIEOFF\n", y, x);
 						break;
-					case DEV_IOBM:
-						fprintf(f, "device y%02i x%02i IOBM\n", y, x);
-						break;
-					case DEV_IOBS:
-						fprintf(f, "device y%02i x%02i IOBS\n", y, x);
+					case DEV_IOB:
+						fprintf(f, "device y%02i x%02i %s\n", y, x,
+							tile->devices[i].iob.type == IOBM ? "IOBM" : "IOBS");
 						break;
 					case DEV_ILOGIC:
 						fprintf(f, "device y%02i x%02i ILOGIC2\n", y, x);
@@ -130,7 +128,7 @@ int printf_devices(FILE* f, struct fpga_model* model, int config_only)
 						fprintf(f, "device y%02i x%02i DCM\n", y, x);
 						break;
 					case DEV_PLL:
-						fprintf(f, "device y%02i x%02i PLL\n", y, x);
+						fprintf(f, "device y%02i x%02i PLL_ADV\n", y, x);
 						break;
 					case DEV_ICAP:
 						fprintf(f, "device y%02i x%02i ICAP\n", y, x);

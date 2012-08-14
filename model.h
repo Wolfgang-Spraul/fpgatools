@@ -276,8 +276,7 @@ enum fpgadev_type
 	DEV_LOGIC_X,
 	DEV_TIEOFF,
 	DEV_MACC,
-	DEV_IOBM,
-	DEV_IOBS,
+	DEV_IOB,
 	DEV_ILOGIC,
 	DEV_OLOGIC,
 	DEV_IODELAY,
@@ -320,6 +319,7 @@ struct fpgadev_logic_m
 	int c;
 };
 
+enum { IOBM = 1, IOBS };
 typedef char IOSTANDARD[32];
 #define IO_LVCMOS33	"LVCMOS33"
 enum { BYPASS_MUX_I = 1, BYPASS_MUX_O, BYPASS_MUX_T };
@@ -334,6 +334,7 @@ enum { OTERM_NONE = 1, OTERM_UNTUNED_25, OTERM_UNTUNED_50,
 
 struct fpgadev_iob
 {
+	int type;
 	IOSTANDARD istandard;
 	IOSTANDARD ostandard;
 	int bypass_mux;
