@@ -20,3 +20,7 @@ merge_seq
 merge_seq.o
 pair2net
 pair2net.o
+floorplan.o
+control.o
+autotest
+autotest.o
