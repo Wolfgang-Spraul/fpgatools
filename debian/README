@@ -1,0 +1,6 @@
+This Debian package is developed in a Git repository. to build from
+a git checkout:
+
+	debian/rules get-orig-source # take commit from debian/changelog
+	mv fpgatools_0.0+*.orig.tar.gz ..
+	debuild
