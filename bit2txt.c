@@ -209,7 +209,7 @@ static cfg_atom_t ramb16_atoms[] =
 int g_cmd_frames = 0;
 int g_cmd_info = 0; // whether to print #I info messages (offsets and others)
 
-void print_ramb16_cfg(ramb16_cfg_t* cfg)
+static void print_ramb16_cfg(ramb16_cfg_t* cfg)
 {
 	char bits[512];
 	uint8_t u8;
@@ -293,7 +293,7 @@ void print_ramb16_cfg(ramb16_cfg_t* cfg)
 	printf("}\n");
 }
 
-int FAR_pos(int FAR_row, int FAR_major, int FAR_minor)
+static int FAR_pos(int FAR_row, int FAR_major, int FAR_minor)
 {
 	int result, i;
 
@@ -308,7 +308,7 @@ int FAR_pos(int FAR_row, int FAR_major, int FAR_minor)
 	return result + FAR_minor*130;
 }
 
-int full_map(uint8_t* bit_file, int bf_len, int first_FAR_off,
+static int full_map(uint8_t* bit_file, int bf_len, int first_FAR_off,
 	uint8_t** bits, int* bits_len, int idcode, int FLR_len, int* outdelta)
 {
 	int src_off, packet_hdr_type, packet_hdr_opcode;
@@ -503,7 +503,7 @@ success:
 	return 0;
 }
 
-void printf_clb(uint8_t* maj_bits, int row, int major)
+static void printf_clb(uint8_t* maj_bits, int row, int major)
 {
 	int i, j, start, max_idx, frame_off;
 	const char* lut_str;
@@ -604,7 +604,7 @@ void printf_clb(uint8_t* maj_bits, int row, int major)
 	}
 }
 
-void printf_bits(uint8_t* bits, int bits_len, int idcode)
+static void printf_bits(uint8_t* bits, int bits_len, int idcode)
 {
 	int row, major, minor, i, j, off, bram_data_start;
 	int offset_in_frame, newline;

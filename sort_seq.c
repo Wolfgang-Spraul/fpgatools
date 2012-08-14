@@ -17,7 +17,8 @@ static int s_numlines;
 static char s_lines[1000][LINE_LENGTH];
 
 // returns 0 if no number found
-int find_rightmost_num(const char* s, int s_len, int* dig_start, int* dig_end)
+static int find_rightmost_num(const char* s, int s_len,
+	int* dig_start, int* dig_end)
 {
 	int i;
 
@@ -105,7 +106,7 @@ static void find_number(const char* s, int s_len, int* num_start, int* num_end)
 	}
 }
 
-int str_cmp(const char* a, int a_len, const char* b, int b_len)
+static int str_cmp(const char* a, int a_len, const char* b, int b_len)
 {
 	int i = 0;
 
@@ -203,7 +204,8 @@ static int is_known_suffix(const char* str, int str_len)
 	return 0;
 }
 
-void next_unequal_word(const char* a, int a_start, int* a_beg, int* a_end,
+static void next_unequal_word(
+	const char* a, int a_start, int* a_beg, int* a_end,
 	const char* b, int b_start, int* b_beg, int* b_end)
 {
 	*a_beg = a_start;
@@ -227,7 +229,7 @@ void next_unequal_word(const char* a, int a_start, int* a_beg, int* a_end,
 	}
 }
 
-int sort_lines(const void* a, const void* b)
+static int sort_lines(const void* a, const void* b)
 {
 	const char* _a, *_b;
 	int a_word_beg, a_word_end, b_word_beg, b_word_end;

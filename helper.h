@@ -18,7 +18,7 @@
 
 #define ABORT(expr)	if (expr) { fprintf(stderr, "Internal error in %s:%i\n", __FILE__, __LINE__); exit(1); }
 
-void printf_help();
+void printf_help(void);
 
 const char* bitstr(uint32_t value, int digits);
 void hexdump(int indent, const uint8_t* data, int len);
@@ -73,8 +73,8 @@ void printf_extrabits(uint8_t* maj_bits, int start_minor, int num_minors,
 	int start_bit, int num_bits, int row, int major);
 uint64_t read_lut64(uint8_t* two_minors, int off_in_frame);
 
-int get_vm_mb();
-int get_random();
+int get_vm_mb(void);
+int get_random(void);
 int compare_with_number(const char* a, const char* b);
 void next_word(const char* s, int start, int* beg, int* end);
 int to_i(const char* s, int len);

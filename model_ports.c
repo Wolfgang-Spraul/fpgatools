@@ -413,11 +413,11 @@ int init_ports(struct fpga_model* model)
 						pref[1] = "XX";
 					}
 					for (k = 0; k <= 1; k++) {
-						rc = add_connpt_name(model, y, x, pf("%s_CE", pref[k], i));
+						rc = add_connpt_name(model, y, x, pf("%s_CE", pref[k]));
 						if (rc) goto xout;
-						rc = add_connpt_name(model, y, x, pf("%s_SR", pref[k], i));
+						rc = add_connpt_name(model, y, x, pf("%s_SR", pref[k]));
 						if (rc) goto xout;
-						rc = add_connpt_name(model, y, x, pf("%s_CLK", pref[k], i));
+						rc = add_connpt_name(model, y, x, pf("%s_CLK", pref[k]));
 						if (rc) goto xout;
 						for (i = 'A'; i <= 'D'; i++) {
 							for (j = 1; j <= 6; j++) {

@@ -17,7 +17,7 @@
 int main(int argc, char** argv)
 {
 	char line[1024], search_str[1024], replace_str[1024];
-	char* next_word, *lasts;
+	char* next_wrd, *lasts;
 	const char* replace_ptr;
 	struct hashed_strarray search_arr, replace_arr;
 	FILE* fp = 0;
@@ -82,16 +82,16 @@ int main(int argc, char** argv)
 		goto xout;
 	}
 	while (fgets(line, sizeof(line), fp)) {
-		next_word = strtok_r(line, " \n", &lasts);
-		if (next_word) {
+		next_wrd = strtok_r(line, " \n", &lasts);
+		if (next_wrd) {
 			do {
-				rc = strarray_find(&search_arr, next_word, &search_idx);
+				rc = strarray_find(&search_arr, next_wrd, &search_idx);
 				if (rc) {
 					fprintf(stderr, "Internal error in %s:%i\n", __FILE__, __LINE__);
 					goto xout;
 				}
 				if (search_idx == STRIDX_NO_ENTRY)
-					fputs(next_word, stdout);
+					fputs(next_wrd, stdout);
 				else {
 					replace_ptr = strarray_lookup(&replace_arr, search_idx);
 					if (!replace_ptr) {
@@ -100,10 +100,10 @@ int main(int argc, char** argv)
 					}
 					fputs(replace_ptr, stdout);
 				}
-				next_word = strtok_r(0, " \n", &lasts);
-				if (next_word)
+				next_wrd = strtok_r(0, " \n", &lasts);
+				if (next_wrd)
 					putchar(' ');
-			} while ( next_word );
+			} while ( next_wrd );
 			putchar('\n');
 		}
 	}

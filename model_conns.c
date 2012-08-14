@@ -320,41 +320,41 @@ static int run_term_wires(struct fpga_model* model)
 		y = TOP_INNER_ROW; 
 
 		if (has_device(model, y+1, x, DEV_ILOGIC)) {
-			{struct w_net net = {
+			{struct w_net n = {
 				3,
 				{{ "TTERM_CLB_IOCE%i_S",  0,   y,   x },
 				 { "TIOI_IOCE%i",	  0, y+1,   x },
 				 { "TIOI_INNER_IOCE%i",	  0, y+2,   x },
 				 { "" }}};
-			if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) goto xout; }
-			{struct w_net net = {
+			if ((rc = add_conn_net(model, NOPREF_BI_F, &n))) goto xout; }
+			{struct w_net n = {
 				3,
 				{{ "TTERM_CLB_IOCLK%i_S",  0,   y,   x },
 				 { "TIOI_IOCLK%i",	   0, y+1,   x },
 				 { "TIOI_INNER_IOCLK%i",   0, y+2,   x },
 				 { "" }}};
-			if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) goto xout; }
-			{struct w_net net = {
+			if ((rc = add_conn_net(model, NOPREF_BI_F, &n))) goto xout; }
+			{struct w_net n = {
 				0,
 				{{ "TTERM_CLB_PCICE_S",    0,   y,   x },
 				 { "IOI_PCI_CE",	   0, y+1,   x },
 				 { "IOI_PCI_CE",	   0, y+2,   x },
 				 { "" }}};
-			if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) goto xout; }
-			{struct w_net net = {
+			if ((rc = add_conn_net(model, NOPREF_BI_F, &n))) goto xout; }
+			{struct w_net n = {
 				1,
 				{{ "TTERM_CLB_PLLCE%i_S",     0,   y,   x },
 				 { "TIOI_PLLCE%i",	      0, y+1,   x },
 				 { "TIOI_INNER_PLLCE%i",      0, y+2,   x },
 				 { "" }}};
-			if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) goto xout; }
-			{struct w_net net = {
+			if ((rc = add_conn_net(model, NOPREF_BI_F, &n))) goto xout; }
+			{struct w_net n = {
 				1,
 				{{ "TTERM_CLB_PLLCLK%i_S",    0,   y,   x },
 				 { "TIOI_PLLCLK%i",	      0, y+1,   x },
 				 { "TIOI_INNER_PLLCLK%i",     0, y+2,   x },
 				 { "" }}};
-			if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) goto xout; }
+			if ((rc = add_conn_net(model, NOPREF_BI_F, &n))) goto xout; }
 		}
 
 		//
@@ -367,49 +367,49 @@ static int run_term_wires(struct fpga_model* model)
 		if (has_device(model, y-1, x, DEV_ILOGIC)) {
 
 			// IOCE
-			{struct w_net net = {
+			{struct w_net n = {
 				3,
 				{{ "BTERM_CLB_CEOUT%i_N", 0,   y,   x },
 				 { "TIOI_IOCE%i",	  0, y-1,   x },
 				 { "BIOI_INNER_IOCE%i",	  0, y-2,   x },
 				 { "" }}};
-			if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) goto xout; }
+			if ((rc = add_conn_net(model, NOPREF_BI_F, &n))) goto xout; }
 
 			// IOCLK
-			{struct w_net net = {
+			{struct w_net n = {
 				3,
 				{{ "BTERM_CLB_CLKOUT%i_N", 0,   y,   x },
 				 { "TIOI_IOCLK%i",	   0, y-1,   x },
 				 { "BIOI_INNER_IOCLK%i",   0, y-2,   x },
 				 { "" }}};
-			if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) goto xout; }
+			if ((rc = add_conn_net(model, NOPREF_BI_F, &n))) goto xout; }
 
 			// PCI_CE
-			{struct w_net net = {
+			{struct w_net n = {
 				0,
 				{{ "BTERM_CLB_PCICE_N",    0,   y,   x },
 				 { "IOI_PCI_CE",	   0, y-1,   x },
 				 { "IOI_PCI_CE",	   0, y-2,   x },
 				 { "" }}};
-			if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) goto xout; }
+			if ((rc = add_conn_net(model, NOPREF_BI_F, &n))) goto xout; }
 
 			// PLLCE
-			{struct w_net net = {
+			{struct w_net n = {
 				1,
 				{{ "BTERM_CLB_PLLCEOUT%i_N",  0,   y,   x },
 				 { "TIOI_PLLCE%i",	      0, y-1,   x },
 				 { "BIOI_INNER_PLLCE%i",      0, y-2,   x },
 				 { "" }}};
-			if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) goto xout; }
+			if ((rc = add_conn_net(model, NOPREF_BI_F, &n))) goto xout; }
 
 			// PLLCLK
-			{struct w_net net = {
+			{struct w_net n = {
 				1,
 				{{ "BTERM_CLB_PLLCLKOUT%i_N", 0,   y,   x },
 				 { "TIOI_PLLCLK%i",	      0, y-1,   x },
 				 { "BIOI_INNER_PLLCLK%i",     0, y-2,   x },
 				 { "" }}};
-			if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) goto xout; }
+			if ((rc = add_conn_net(model, NOPREF_BI_F, &n))) goto xout; }
 		}
 	}
 
@@ -425,8 +425,6 @@ static int run_term_wires(struct fpga_model* model)
 	// top
 	//
 	{
-		int next_net_o;
-		struct w_net net;
 		// strings are filled in below - must match offsets
 		struct seed_data seeds[] = {
 			/* 0 */ { X_FABRIC_LOGIC_ROUTING_COL | X_CENTER_ROUTING_COL },
@@ -575,8 +573,6 @@ static int run_term_wires(struct fpga_model* model)
 	// bottom
 	//
 	{
-		int next_net_o;
-		struct w_net net;
 		// strings are filled in below - must match offsets
 		struct seed_data seeds[] = {
 			/* 0 */ { X_FABRIC_ROUTING_COL | X_FABRIC_MACC_COL
@@ -975,7 +971,6 @@ static int run_gclk_horiz_regs(struct fpga_model* model)
 {
 	int x, i, rc, left_half;
 	int gclk_sep_pos, start1, last1, start2;
-	char* gclk_sep_str;
 
 	//
 	// Run a set of wire strings horizontally through the entire
@@ -1216,6 +1211,7 @@ static int run_gclk_horiz_regs(struct fpga_model* model)
 			{ X_INNER_RIGHT,		"REGH_RTERM_CKPIN%i" },
 			{ X_OUTER_RIGHT,		"REGR_CKPIN%i" },
 			{ 0 }};
+		char* gclk_sep_str;
 	
 		left_half = 1;
 		seed_strx(model, ckpin_seeds);
@@ -1428,22 +1424,22 @@ static int run_gclk_vert_regs(struct fpga_model* model)
 	if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) goto xout;
 
 	// a few local gclk networks at the center top and bottom
-	{ struct w_net net = {
+	{ struct w_net n = {
 		1,
 		{{ "REGT_GCLK%i",	0, TOP_OUTER_ROW, model->center_x-1 },
 		 { "REGT_TTERM_GCLK%i", 0, TOP_INNER_ROW, model->center_x-1 },
 		 { "REGV_TTERM_GCLK%i", 0, TOP_INNER_ROW, model->center_x },
 		 { "BUFPLL_TOP_GCLK%i", 0, TOP_INNER_ROW, model->center_x+1 },
 		 { "" }}};
-	if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) goto xout; }
-	{ struct w_net net = {
+	if ((rc = add_conn_net(model, NOPREF_BI_F, &n))) goto xout; }
+	{ struct w_net n = {
 		1,
 		{{ "REGB_GCLK%i",	0, model->y_height-1, model->center_x-1 },
 		 { "REGB_BTERM_GCLK%i", 0, model->y_height-2, model->center_x-1 },
 		 { "REGV_BTERM_GCLK%i", 0, model->y_height-2, model->center_x },
 		 { "BUFPLL_BOT_GCLK%i", 0, model->y_height-2, model->center_x+1 },
 		 { "" }}};
-	if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) goto xout; }
+	if ((rc = add_conn_net(model, NOPREF_BI_F, &n))) goto xout; }
 
 	// wire up gclk from tterm down to top 8 rows at center_x+1
 	for (i = TOP_IO_TILES; i <= TOP_IO_TILES+HALF_ROW; i++) {
@@ -1729,7 +1725,7 @@ xout:
 
 static const char* s_4wire = "BAMCE";
 
-int wire_SS4E_N3(struct fpga_model* model, const struct w_net* net)
+static int wire_SS4E_N3(struct fpga_model* model, const struct w_net* net)
 {
 	int i, j, rc, e_y, e_x, extra_n3;
 
@@ -1744,7 +1740,7 @@ int wire_SS4E_N3(struct fpga_model* model, const struct w_net* net)
 	    && !is_atx(X_FABRIC_BRAM_ROUTING_COL, model, e_x))
 		if ((rc = add_conn_bi_pref(model, e_y, e_x, "SS4E_N3", e_y+1, e_x, "SS4E_N3"))) goto xout;
 	if ((rc = add_conn_bi_pref(model, e_y, e_x, "SS4E3", e_y-1, e_x, "SS4E_N3"))) goto xout;
-	if (row_pos(e_y-1, model) == HCLK_POS
+	if (pos_in_row(e_y-1, model) == HCLK_POS
 	    || IS_CENTER_Y(e_y-1, model)) {
 		if ((rc = add_conn_bi_pref(model, e_y, e_x, "SS4E3", e_y-2, e_x, "SS4E_N3"))) goto xout;
 		if ((rc = add_conn_bi_pref(model, e_y-1, e_x, "SS4E_N3", e_y-2, e_x, "SS4E_N3"))) goto xout;
@@ -1814,7 +1810,7 @@ static int run_direction_wires(struct fpga_model* model)
 					break;
 				}
 				if (IS_CENTER_Y(y+j, model)
-				    || row_pos(y+j, model) == HCLK_POS) {
+				    || pos_in_row(y+j, model) == HCLK_POS) {
 					ABORT(!i);
 					net.pts[j].name = pf("SS4%c%%i", s_4wire[i-1]);
 					j++;
@@ -1852,7 +1848,7 @@ static int run_direction_wires(struct fpga_model* model)
 					}
 					net.pts[j].name = pf("NN4%c%%i", s_4wire[i]);
 					if (IS_CENTER_Y(y-j, model)
-					    || row_pos(y-j, model) == HCLK_POS) {
+					    || pos_in_row(y-j, model) == HCLK_POS) {
 						ABORT(!i);
 						i--;
 					}
@@ -1886,34 +1882,34 @@ static int run_direction_wires(struct fpga_model* model)
 			// NR1
 			if (is_atyx(YX_ROUTING_TILE, model, y, x)) {
 				if (is_aty(Y_INNER_TOP, model, y-1)) {
-					{ struct w_net net = {
+					{ struct w_net n = {
 						3,
 						{{ "NR1B%i", 0,   y, x },
 						 { "NR1B%i", 0, y-1, x },
 						 { "" }}};
-					if ((rc = add_conn_net(model, PREF_BI_F, &net))) goto xout; }
+					if ((rc = add_conn_net(model, PREF_BI_F, &n))) goto xout; }
 				} else if (is_aty(Y_ROW_HORIZ_AXSYMM|Y_CHIP_HORIZ_REGS, model, y-1)) {
-					{ struct w_net net = {
+					{ struct w_net n = {
 						3,
 						{{ "NR1B%i", 0,   y, x },
 						 { "NR1E%i", 0, y-1, x },
 						 { "NR1E%i", 0, y-2, x },
 						 { "" }}};
-					if ((rc = add_conn_net(model, PREF_BI_F, &net))) goto xout; }
+					if ((rc = add_conn_net(model, PREF_BI_F, &n))) goto xout; }
 				} else {
-					{ struct w_net net = {
+					{ struct w_net n = {
 						3,
 						{{ "NR1B%i", 0,   y, x },
 						 { "NR1E%i", 0, y-1, x },
 						 { "" }}};
-					if ((rc = add_conn_net(model, PREF_BI_F, &net))) goto xout; }
+					if ((rc = add_conn_net(model, PREF_BI_F, &n))) goto xout; }
 					if (is_aty(Y_INNER_BOTTOM, model, y+1) && !is_atx(X_ROUTING_TO_BRAM_COL, model, x)) {
-						{ struct w_net net = {
+						{ struct w_net n = {
 							3,
 							{{ "NR1E%i", 0,   y, x },
 							 { "NR1E%i", 0, y+1, x },
 							 { "" }}};
-						if ((rc = add_conn_net(model, PREF_BI_F, &net))) goto xout; }
+						if ((rc = add_conn_net(model, PREF_BI_F, &n))) goto xout; }
 					}
 				}
 			}
@@ -1921,47 +1917,47 @@ static int run_direction_wires(struct fpga_model* model)
 			// NN2
 			if (is_atyx(YX_ROUTING_TILE, model, y, x)) {
 				if (is_aty(Y_INNER_TOP, model, y-1)) {
-					{ struct w_net net = {
+					{ struct w_net n = {
 						3,
 						{{ "NN2B%i", 0,   y, x },
 						 { "NN2B%i", 0, y-1, x },
 						 { "" }}};
-					if ((rc = add_conn_net(model, PREF_BI_F, &net))) goto xout; }
-					{ struct w_net net = {
+					if ((rc = add_conn_net(model, PREF_BI_F, &n))) goto xout; }
+					{ struct w_net n = {
 						0,
 						{{ "NN2E_S0", 0,   y, x },
 						 { "NN2E_S0", 0, y-1, x },
 						 { "" }}};
-					if ((rc = add_conn_net(model, PREF_BI_F, &net))) goto xout; }
+					if ((rc = add_conn_net(model, PREF_BI_F, &n))) goto xout; }
 				} else if (is_aty(Y_INNER_TOP, model, y-2)) {
-					{ struct w_net net = {
+					{ struct w_net n = {
 						3,
 						{{ "NN2B%i", 0,   y, x },
 						 { "NN2M%i", 0, y-1, x },
 						 { "NN2M%i", 0, y-2, x },
 						 { "" }}};
-					if ((rc = add_conn_net(model, PREF_BI_F, &net))) goto xout; }
+					if ((rc = add_conn_net(model, PREF_BI_F, &n))) goto xout; }
 				} else if (is_aty(Y_ROW_HORIZ_AXSYMM|Y_CHIP_HORIZ_REGS, model, y-1)) {
-					{ struct w_net net = {
+					{ struct w_net n = {
 						3,
 						{{ "NN2B%i", 0,   y, x },
 						 { "NN2M%i", 0, y-1, x },
 						 { "NN2M%i", 0, y-2, x },
 						 { "NN2E%i", 0, y-3, x },
 						 { "" }}};
-					if ((rc = add_conn_net(model, PREF_BI_F, &net))) goto xout; }
+					if ((rc = add_conn_net(model, PREF_BI_F, &n))) goto xout; }
 					if ((rc = add_conn_bi_pref(model, y-1, x, "NN2M0", y-2, x, "NN2E_S0"))) goto xout;
 					if ((rc = add_conn_bi_pref(model, y-3, x, "NN2E0", y-2, x, "NN2E_S0"))) goto xout;
 					if ((rc = add_conn_bi_pref(model,   y, x, "NN2B0", y-2, x, "NN2E_S0"))) goto xout;
 				} else if (is_aty(Y_ROW_HORIZ_AXSYMM|Y_CHIP_HORIZ_REGS, model, y-2)) {
-					{ struct w_net net = {
+					{ struct w_net n = {
 						3,
 						{{ "NN2B%i", 0,   y, x },
 						 { "NN2M%i", 0, y-1, x },
 						 { "NN2E%i", 0, y-2, x },
 						 { "NN2E%i", 0, y-3, x },
 						 { "" }}};
-					if ((rc = add_conn_net(model, PREF_BI_F, &net))) goto xout; }
+					if ((rc = add_conn_net(model, PREF_BI_F, &n))) goto xout; }
 					if ((rc = add_conn_bi_pref(model,   y, x, "NN2B0", y-1, x, "NN2E_S0"))) goto xout;
 					if ((rc = add_conn_bi_pref(model,   y, x, "NN2B0", y-2, x, "NN2E_S0"))) goto xout;
 					if ((rc = add_conn_bi_pref(model, y-2, x, "NN2E0",   y-1, x, "NN2E_S0"))) goto xout;
@@ -1970,25 +1966,25 @@ static int run_direction_wires(struct fpga_model* model)
 					if ((rc = add_conn_bi_pref(model, y-2, x, "NN2E_S0", y-3, x, "NN2E0"))) goto xout;
 					if ((rc = add_conn_bi_pref(model, y-3, x, "NN2E0", y-1, x, "NN2E_S0"))) goto xout;
 				} else {
-					{ struct w_net net = {
+					{ struct w_net n = {
 						3,
 						{{ "NN2B%i", 0,   y, x },
 						 { "NN2M%i", 0, y-1, x },
 						 { "NN2E%i", 0, y-2, x },
 						 { "" }}};
-					if ((rc = add_conn_net(model, PREF_BI_F, &net))) goto xout; }
+					if ((rc = add_conn_net(model, PREF_BI_F, &n))) goto xout; }
 					if ((rc = add_conn_bi(model,   y, x, "NN2B0", y-1, x, "NN2E_S0"))) goto xout;
 					if ((rc = add_conn_bi(model, y-2, x, "NN2E0", y-1, x, "NN2E_S0"))) goto xout;
 					if (is_aty(Y_INNER_BOTTOM, model, y+1)) {
 						if ((rc = add_conn_bi(model, y, x, "NN2E_S0", y-1, x, "NN2E0"))) goto xout;
 						if (!is_atx(X_ROUTING_TO_BRAM_COL, model, x)) {
-							{ struct w_net net = {
+							{ struct w_net n = {
 								3,
 								{{ "NN2E%i", 0, y-1, x },
 								 { "NN2M%i", 0,   y, x },
 								 { "NN2M%i", 0, y+1, x },
 								 { "" }}};
-							if ((rc = add_conn_net(model, PREF_BI_F, &net))) goto xout; }
+							if ((rc = add_conn_net(model, PREF_BI_F, &n))) goto xout; }
 							if ((rc = add_conn_range(model, PREF_BI_F, y, x, "NN2E%i", 0, 3, y+1, x, "NN2E%i", 0))) goto xout;
 							if ((rc = add_conn_bi(model, y, x, "NN2E0", y+1, x, "IOI_BTERM_NN2E_S0"))) goto xout;
 							if ((rc = add_conn_bi(model, y, x, "NN2E_S0", y+1, x, "IOI_BTERM_NN2M0"))) goto xout;
@@ -2000,14 +1996,14 @@ static int run_direction_wires(struct fpga_model* model)
 			// SS2
 			if (is_atyx(YX_ROUTING_TILE, model, y, x)) {
 				if (is_aty(Y_ROW_HORIZ_AXSYMM|Y_CHIP_HORIZ_REGS, model, y+2)) {
-					{ struct w_net net = {
+					{ struct w_net n = {
 						3,
 						{{ "SS2B%i", 0,   y, x },
 						 { "SS2M%i", 0, y+1, x },
 						 { "SS2M%i", 0, y+2, x },
 						 { "SS2E%i", 0, y+3, x },
 						 { "" }}};
-					if ((rc = add_conn_net(model, PREF_BI_F, &net))) goto xout; }
+					if ((rc = add_conn_net(model, PREF_BI_F, &n))) goto xout; }
 					if ((rc = add_conn_bi_pref(model,   y, x, "SS2B3",   y+1, x, "SS2E_N3"))) goto xout;
 					if ((rc = add_conn_bi_pref(model, y+1, x, "SS2E_N3", y+2, x, "SS2E_N3"))) goto xout;
 
@@ -2019,25 +2015,25 @@ static int run_direction_wires(struct fpga_model* model)
 					if ((rc = add_conn_bi_pref(model, y+1, x, "SS2M3",   y+2, x, "SS2E_N3"))) goto xout;
 					if ((rc = add_conn_bi_pref(model, y+2, x, "SS2B3",   y+3, x, "SS2E_N3"))) goto xout;
 				} else if (is_aty(Y_ROW_HORIZ_AXSYMM|Y_CHIP_HORIZ_REGS, model, y+1)) {
-					{ struct w_net net = {
+					{ struct w_net n = {
 						3,
 						{{ "SS2B%i", 0,   y, x },
 						 { "SS2B%i", 0, y+1, x },
 						 { "SS2M%i", 0, y+2, x },
 						 { "SS2E%i", 0, y+3, x },
 						 { "" }}};
-					if ((rc = add_conn_net(model, PREF_BI_F, &net))) goto xout; }
+					if ((rc = add_conn_net(model, PREF_BI_F, &n))) goto xout; }
 					if ((rc = add_conn_bi_pref(model,   y, x, "SS2B3",   y+2, x, "SS2E_N3"))) goto xout;
 					if ((rc = add_conn_bi_pref(model, y+2, x, "SS2E_N3", y+3, x, "SS2E3"))) goto xout;
 				} else if (is_aty(Y_INNER_BOTTOM, model, y+2)) {
 					if (!is_atx(X_ROUTING_TO_BRAM_COL, model, x)) {
-						{ struct w_net net = {
+						{ struct w_net n = {
 							3,
 							{{ "SS2B%i", 0,   y, x },
 							 { "SS2M%i", 0, y+1, x },
 							 { "SS2M%i", 0, y+2, x },
 							 { "" }}};
-						if ((rc = add_conn_net(model, PREF_BI_F, &net))) goto xout; }
+						if ((rc = add_conn_net(model, PREF_BI_F, &n))) goto xout; }
 					}
 				} else if (is_aty(Y_INNER_BOTTOM, model, y+1)) {
 					if (!is_atx(X_ROUTING_TO_BRAM_COL, model, x)) {
@@ -2046,25 +2042,25 @@ static int run_direction_wires(struct fpga_model* model)
 					}
 				} else {
 					if (is_aty(Y_INNER_TOP, model, y-1)) {
-						{ struct w_net net = {
+						{ struct w_net n = {
 							3,
 							{{ "SS2M%i", 0, y-1, x },
 							 { "SS2M%i", 0,   y, x },
 							 { "SS2E%i", 0, y+1, x },
 							 { "" }}};
-						if ((rc = add_conn_net(model, PREF_BI_F, &net))) goto xout; }
+						if ((rc = add_conn_net(model, PREF_BI_F, &n))) goto xout; }
 						if ((rc = add_conn_range(model, PREF_BI_F,   y, x, "SS2E%i", 0, 3, y-1, x, "SS2E%i", 0))) goto xout;
 						if ((rc = add_conn_bi_pref(model,   y, x, "SS2E3",   y-1, x, "SS2E_N3"))) goto xout;
 						if ((rc = add_conn_bi_pref(model,   y, x, "SS2E_N3", y-1, x, "SS2M3"))) goto xout;
 						if ((rc = add_conn_bi_pref(model,   y, x, "SS2E_N3", y+1, x, "SS2E3"))) goto xout;
 					}
-					{ struct w_net net = {
+					{ struct w_net n = {
 						3,
 						{{ "SS2B%i", 0,   y, x },
 						 { "SS2M%i", 0, y+1, x },
 						 { "SS2E%i", 0, y+2, x },
 						 { "" }}};
-					if ((rc = add_conn_net(model, PREF_BI_F, &net))) goto xout; }
+					if ((rc = add_conn_net(model, PREF_BI_F, &n))) goto xout; }
 					if ((rc = add_conn_bi_pref(model,   y, x, "SS2B3",   y+1, x, "SS2E_N3"))) goto xout;
 					if ((rc = add_conn_bi_pref(model, y+1, x, "SS2E_N3", y+2, x, "SS2E3"))) goto xout;
 				}

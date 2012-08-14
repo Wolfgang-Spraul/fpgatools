@@ -584,14 +584,14 @@ void is_in_row(const struct fpga_model* model, int y,
 	if (row_pos) *row_pos = y%(8+1+8);
 }
 
-int row_num(int y, struct fpga_model* model)
+int which_row(int y, struct fpga_model* model)
 {
 	int result;
 	is_in_row(model, y, &result, 0 /* row_pos */);
 	return result;
 }
 
-int row_pos(int y, struct fpga_model* model)
+int pos_in_row(int y, struct fpga_model* model)
 {
 	int result;
 	is_in_row(model, y, 0 /* row_num */, &result);

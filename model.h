@@ -264,9 +264,9 @@ int is_atyx(int check, struct fpga_model* model, int y, int x);
 void is_in_row(const struct fpga_model* model, int y,
 	int* row_num, int* row_pos);
 
-// row_num() and row_pos() return -1 if y is outside of a row
-int row_num(int y, struct fpga_model* model);
-int row_pos(int y, struct fpga_model* model);
+// which_row() and pos_in_row() return -1 if y is outside of a row
+int which_row(int y, struct fpga_model* model);
+int pos_in_row(int y, struct fpga_model* model);
 
 const char* logicin_s(int wire, int routing_io);
 

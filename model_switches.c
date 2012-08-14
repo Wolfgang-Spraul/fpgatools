@@ -21,7 +21,6 @@ int init_switches(struct fpga_model* model)
 
 	rc = init_logic_switches(model);
 	if (rc) goto xout;
-return 0;
 
    	rc = init_iologic_switches(model);
 	if (rc) goto xout;
@@ -728,7 +727,7 @@ enum wire_type wire_to_len(enum wire_type w, int first_len)
 	ABORT(1);
 }
 
-enum wire_type wire_to_NESW4(enum wire_type w)
+static enum wire_type wire_to_NESW4(enum wire_type w)
 {
 	// normalizes any of the 8 directions to just N/E/S/W
 	// by going back to an even number.
@@ -751,7 +750,7 @@ struct set_of_switches
 	struct one_switch s[64];
 };
 
-void add_switch_range(struct set_of_switches* dest,
+static void add_switch_range(struct set_of_switches* dest,
 	enum wire_type end_wire, int end_from, int end_to,
 	enum wire_type beg_wire, int beg_from)
 {
@@ -763,7 +762,7 @@ void add_switch_range(struct set_of_switches* dest,
 	}
 }
 
-void add_switch_E3toB0(struct set_of_switches* dest,
+static void add_switch_E3toB0(struct set_of_switches* dest,
 	enum wire_type end_wire, enum wire_type beg_wire)
 {
 	const char* end_wire_s = wire_base(end_wire);
@@ -775,7 +774,7 @@ void add_switch_E3toB0(struct set_of_switches* dest,
 	add_switch_range(dest, end_wire, 0, 2, beg_wire, 1);
 }
 
-void add_switch_E0toB3(struct set_of_switches* dest,
+static void add_switch_E0toB3(struct set_of_switches* dest,
 	enum wire_type end_wire, enum wire_type beg_wire)
 {
 	const char* end_wire_s = wire_base(end_wire);
@@ -787,7 +786,7 @@ void add_switch_E0toB3(struct set_of_switches* dest,
 	add_switch_range(dest, end_wire, 1, 3, beg_wire, 0);
 }
 
-int add_switches(struct set_of_switches* dest,
+static int add_switches(struct set_of_switches* dest,
 	enum wire_type end_wire, enum wire_type beg_wire)
 {
 	const char* end_wire_s, *beg_wire_s;
@@ -1066,7 +1065,8 @@ xout:
 	return rc;
 }
 
-int add_logicio_extra(struct fpga_model* model, int y, int x, int routing_io)
+static int add_logicio_extra(struct fpga_model* model,
+	int y, int x, int routing_io)
 {
 	// 16 groups of 4. The order inside the group does not matter,
 	// but the order of the groups must match the order in src_w.
@@ -1163,7 +1163,8 @@ xout:
 	return rc;
 }
 
-int add_logicout_switches(struct fpga_model* model, int y, int x, int routing_io)
+static int add_logicout_switches(struct fpga_model* model,
+	int y, int x, int routing_io)
 {
 	// 8 groups of 3. The order inside the group does not matter,
 	// but the order of the groups does.
@@ -1355,7 +1356,7 @@ xout:
 	return rc;
 }
 
-int add_logicin_switches(struct fpga_model* model, int y, int x)
+static int add_logicin_switches(struct fpga_model* model, int y, int x)
 {
 	int rc;
 	{ static int decrement_at_NN[] =

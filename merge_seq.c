@@ -182,8 +182,10 @@ static int merge_line(struct line_buf* first_l, struct line_buf* second_l)
 		// continuation of the '3'.
 		if (s_start != first_l->left_digit_start_o)
 			return 0;
-		if (second_num != first_l->left_digit_base + first_l->sequence_size + 1)
+		if (second_num != first_l->left_digit_base
+					+ first_l->sequence_size + 1)
 			return 0;
+		first_num = -1; // to suppress compiler warning
 	} else {
 		first_num = to_i(&first_l->buf[f_start], f_end-f_start);
 		if (second_num != first_num + 1)
@@ -305,7 +307,7 @@ int main(int argc, char** argv)
 	struct line_buf read_ahead[READ_AHEAD_SIZE];
 	int read_ahead_get, read_ahead_put, second_line, eof_reached, try_count;
 	FILE* fp = 0;
-	int last_merge_try, rc;
+	int last_merge_try, rc = -1;
 
 	if (argc < 2) {
 		fprintf(stderr,

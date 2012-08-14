@@ -7,7 +7,7 @@
 
 #include "helper.h"
 
-void printf_help()
+void printf_help(void)
 {
 	printf("\n"
 	       "bit2txt %s - convert FPGA bitstream to text\n"
@@ -150,7 +150,7 @@ int printf_header(uint8_t* d, int len, int inpos, int* outdelta)
 const int lut_base_vars[6] = {0 /* A1 */, 1, 0 /* A3 - not used */,
 				0, 0, 1 /* A6 */};
 
-int bool_nextlen(const char* expr, int len)
+static int bool_nextlen(const char* expr, int len)
 {
 	int i, depth;
 
@@ -183,7 +183,7 @@ int bool_nextlen(const char* expr, int len)
 
 // + or, * and, @ xor, ~ not
 // var must point to array of A1..A6 variables
-int bool_eval(const char* expr, int len, const int* var)
+static int bool_eval(const char* expr, int len, const int* var)
 {
 	int i, negate, result, oplen;
 
@@ -233,7 +233,7 @@ fail:
 	return -1;
 }
 
-int parse_boolexpr(const char* expr, uint64_t* lut)
+static int parse_boolexpr(const char* expr, uint64_t* lut)
 {
 	int i, j, result, vars[6];
 
@@ -640,7 +640,7 @@ uint64_t read_lut64(uint8_t* two_minors, int off_in_frame)
 	return lut64;
 }
 
-int get_vm_mb()
+int get_vm_mb(void)
 {
 	FILE* statusf = fopen("/proc/self/status", "r");
 	char line[1024];
@@ -654,7 +654,7 @@ int get_vm_mb()
 	return (vm_size+1023)/1024;
 }
 
-int get_random()
+int get_random(void)
 {
 	int random_f, random_num;
 	random_f = open("/dev/urandom", O_RDONLY);
