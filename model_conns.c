@@ -297,7 +297,7 @@ static int pcice_conn(struct fpga_model* model, int y, int x, int i)
 		src_str = to_center ?
 			"MACCSITE2_TTERM_PCICE_OUT" : "MACCSITE2_TTERM_PCICE_IN";
 	else
-		ABORT(1);
+		EXIT(1);
 	return add_conn_bi(model, y, x, src_str, y, i, "BTERM_CLB_PCICE");
 }
 
@@ -532,8 +532,8 @@ static int run_term_wires(struct fpga_model* model)
 			next_net_o = 0;
 			// The leftmost and rightmost columns of the fabric area are exempt.
 			for (x = LEFT_SIDE_WIDTH+1; x < model->x_width - RIGHT_SIDE_WIDTH; x++) {
-				ABORT(next_net_o+2 > sizeof(net.pts)/sizeof(net.pts[0]));
-				ABORT(!model->tmp_str[x]);
+				EXIT(next_net_o+2 > sizeof(net.pts)/sizeof(net.pts[0]));
+				EXIT(!model->tmp_str[x]);
 	
 				// left and right half separate only for CEOUT and CLKOUT
 				if (i < 2 && is_atx(X_CENTER_CMTPLL_COL, model, x)) {
@@ -650,8 +650,8 @@ static int run_term_wires(struct fpga_model* model)
 			next_net_o = 0;
 			// The leftmost and rightmost columns of the fabric area are exempt.
 			for (x = LEFT_SIDE_WIDTH+1; x < model->x_width - RIGHT_SIDE_WIDTH; x++) {
-				ABORT(next_net_o+2 > sizeof(net.pts)/sizeof(net.pts[0]));
-				ABORT(!model->tmp_str[x]);
+				EXIT(next_net_o+2 > sizeof(net.pts)/sizeof(net.pts[0]));
+				EXIT(!model->tmp_str[x]);
 	
 				// left and right half separate only for CEOUT and CLKOUT
 				if (i < 2 && is_atx(X_CENTER_CMTPLL_COL, model, x)) {
@@ -1804,14 +1804,14 @@ static int run_direction_wires(struct fpga_model* model)
 				net.pts[j].y = y+j;
 				net.pts[j].x = x;
 				if (y+j == BOT_TERM(model)) {
-					ABORT(!i);
+					EXIT(!i);
 					net.pts[j].name = pf("SS4%c%%i", s_4wire[i-1]);
 					j++;
 					break;
 				}
 				if (IS_CENTER_Y(y+j, model)
 				    || pos_in_row(y+j, model) == HCLK_POS) {
-					ABORT(!i);
+					EXIT(!i);
 					net.pts[j].name = pf("SS4%c%%i", s_4wire[i-1]);
 					j++;
 					net.pts[j].start_count = 0;
@@ -1841,7 +1841,7 @@ static int run_direction_wires(struct fpga_model* model)
 					net.pts[j].y = y-j;
 					net.pts[j].x = x;
 					if (y-j == TOP_INNER_ROW) {
-						ABORT(!i);
+						EXIT(!i);
 						net.pts[j].name = pf("NN4%c%%i", s_4wire[i-1]);
 						j++;
 						break;
@@ -1849,7 +1849,7 @@ static int run_direction_wires(struct fpga_model* model)
 					net.pts[j].name = pf("NN4%c%%i", s_4wire[i]);
 					if (IS_CENTER_Y(y-j, model)
 					    || pos_in_row(y-j, model) == HCLK_POS) {
-						ABORT(!i);
+						EXIT(!i);
 						i--;
 					}
 					j++;

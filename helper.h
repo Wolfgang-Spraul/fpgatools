@@ -16,7 +16,8 @@
 #define PROGRAM_REVISION "2012-06-27"
 #define MACRO_STR(arg)	#arg
 
-#define ABORT(expr)	if (expr) { fprintf(stderr, "Internal error in %s:%i\n", __FILE__, __LINE__); exit(1); }
+#define EXIT(expr)	if (expr) { fprintf(stderr, \
+	"Internal error in %s:%i\n", __FILE__, __LINE__); exit(1); }
 
 void printf_help(void);
 

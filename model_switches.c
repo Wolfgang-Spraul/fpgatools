@@ -53,7 +53,7 @@ static int init_logic_tile(struct fpga_model* model, int y, int x)
 		ml = 'L';
 		xp = "XX";
 	} else
-		ABORT(1);
+		EXIT(1);
 
 	if ((rc = add_switch(model, y, x,
 		pf("CLEX%c_CLK0", ml), pf("%s_CLK", xp), 0 /* bidir */))) goto xout;
@@ -155,10 +155,10 @@ static int init_iologic_tile(struct fpga_model* model, int y, int x)
 	const char* io_prefix;
 
 	if (x < LEFT_SIDE_WIDTH) {
-		ABORT(x != LEFT_IO_DEVS);
+		EXIT(x != LEFT_IO_DEVS);
 		io_prefix = "IOI_";
 	} else if (x >= model->x_width-RIGHT_SIDE_WIDTH) {
-		ABORT(x != model->x_width - RIGHT_IO_DEVS_O);
+		EXIT(x != model->x_width - RIGHT_IO_DEVS_O);
 		io_prefix = "RIOI_";
 	} else {
 		if (y == TOP_OUTER_IO) {
@@ -170,7 +170,7 @@ static int init_iologic_tile(struct fpga_model* model, int y, int x)
 		} else if (y == model->y_height-BOT_OUTER_IO) {
 			io_prefix = "TIOI_";
 		} else
-			ABORT(1);
+			EXIT(1);
 	}
 
 	for (i = 0; i <= 23; i++) {
@@ -534,7 +534,7 @@ static int init_io_tile(struct fpga_model* model, int y, int x)
 		prefix = "RIOB";
 		num_devs = 1;
 	} else
-		ABORT(1);
+		EXIT(1);
 
 	for (i = 0; i < num_devs*2; i++) {
 		rc = add_switch(model, y, x,
@@ -693,7 +693,7 @@ static const char* wire_base(enum wire_type w)
 		case W_WW4: return "WW4";
 		case W_NW4: return "NW4";
 	}
-	ABORT(1);
+	EXIT(1);
 }
 
 static int rotate_num(int cur, int off, int first, int last)
@@ -713,7 +713,7 @@ enum wire_type rotate_wire(enum wire_type cur, int off)
 		return rotate_num(cur, off, FIRST_LEN2, LAST_LEN2);
 	if (W_IS_LEN4(cur))
 		return rotate_num(cur, off, FIRST_LEN4, LAST_LEN4);
-	ABORT(1);
+	EXIT(1);
 }
 
 enum wire_type wire_to_len(enum wire_type w, int first_len)
@@ -724,7 +724,7 @@ enum wire_type wire_to_len(enum wire_type w, int first_len)
 		return w-FIRST_LEN2 + first_len;
 	if (W_IS_LEN4(w))
 		return w-FIRST_LEN4 + first_len;
-	ABORT(1);
+	EXIT(1);
 }
 
 static enum wire_type wire_to_NESW4(enum wire_type w)

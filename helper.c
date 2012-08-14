@@ -827,15 +827,18 @@ int s_stash_at_bin(struct hashed_strarray* array, const char* str, int idx, int 
 	if (!(array->bin_len[bin]%BIN_INCREMENT)
 	    || array->bin_len[bin]%BIN_INCREMENT + BIN_STR_HEADER+str_len+1 > BIN_INCREMENT)
 	{
-		int new_alloclen = 
- 			((array->bin_len[bin]
+		int new_alloclen;
+		void* new_ptr;
+		new_alloclen = ((array->bin_len[bin]
 				+ BIN_STR_HEADER+str_len+1)/BIN_INCREMENT + 1)
 			  * BIN_INCREMENT;
-		void* new_ptr = realloc(array->bin_strings[bin], new_alloclen);
+		new_ptr = realloc(array->bin_strings[bin], new_alloclen);
 		if (!new_ptr) {
 			fprintf(stderr, "Out of memory.\n");
 			return -1;
 		}
+		if (new_alloclen > array->bin_len[bin])
+			memset(new_ptr+array->bin_len[bin], 0, new_alloclen-array->bin_len[bin]);
 		array->bin_strings[bin] = new_ptr;
 	}
 	// append new string at end of bin
@@ -873,10 +876,10 @@ int strarray_init(struct hashed_strarray* array, int highest_index)
 	array->highest_index = highest_index;
 	array->num_bins = highest_index / 64;
 
-	array->bin_strings = malloc(array->num_bins*sizeof(*array->bin_strings));
-	array->bin_len = malloc(array->num_bins*sizeof(*array->bin_len));
-	array->bin_offsets = malloc(array->highest_index*sizeof(*array->bin_offsets));
-	array->index_to_bin = malloc(array->highest_index*sizeof(*array->index_to_bin));
+	array->bin_strings = calloc(array->num_bins,sizeof(*array->bin_strings));
+	array->bin_len = calloc(array->num_bins,sizeof(*array->bin_len));
+	array->bin_offsets = calloc(array->highest_index,sizeof(*array->bin_offsets));
+	array->index_to_bin = calloc(array->highest_index,sizeof(*array->index_to_bin));
 	
 	if (!array->bin_strings || !array->bin_len
 	    || !array->bin_offsets || !array->index_to_bin) {

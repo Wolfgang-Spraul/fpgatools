@@ -50,7 +50,7 @@ static int init_iologic_ports(struct fpga_model* model, int y, int x, enum which
 		case BOTTOM_S: prefix = "BIOI"; break;
 		case LEFT_S: prefix = "LIOI"; break;
 		case RIGHT_S: prefix = "RIOI"; break;
-		default: ABORT(1);
+		default: EXIT(1);
 	}
 	if (side == LEFT_S || side == RIGHT_S) {
 		suffix1 = "_M";
@@ -71,7 +71,7 @@ static int init_iologic_ports(struct fpga_model* model, int y, int x, enum which
 	rc = add_connpt_name(model, y, x, pf("%s_KEEP1_STUB", prefix));
 	if (rc) goto xout;
 	for (i = 0; i <= 4; i++) {
-			rc = add_connpt_2(model, y, x, pf("AUXADDR%i_IODELAY", i), suffix1, suffix2);
+		rc = add_connpt_2(model, y, x, pf("AUXADDR%i_IODELAY", i), suffix1, suffix2);
 		if (rc) goto xout;
 	}
 	rc = add_connpt_2(model, y, x, "AUXSDOIN_IODELAY", suffix1, suffix2);

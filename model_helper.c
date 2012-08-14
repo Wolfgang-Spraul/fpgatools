@@ -58,7 +58,7 @@ int has_connpt(struct fpga_model* model, int y, int x,
 	int i;
 
 	if (strarray_find(&model->str, name, &i))
-		ABORT(1);
+		EXIT(1);
 	if (i == STRIDX_NO_ENTRY)
 		return 0;
 	name_i = i;
@@ -673,7 +673,7 @@ const char* logicin_str(enum logicin_wire w)
 		case M_DI: return "DI";
 		case M_WE: return "WE";
 	}
-	ABORT(1);
+	EXIT(1);
 	return 0;
 }
 
@@ -705,6 +705,6 @@ const char* logicout_str(enum logicout_wire w)
 		case X_DQ:
 		case M_DQ:   return "DQ";
 	}
-	ABORT(1);
+	EXIT(1);
 	return 0;
 }
