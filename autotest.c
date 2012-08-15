@@ -63,17 +63,29 @@ int main(int argc, char** argv)
 	printf("O Done\n");
 	TIME_AND_MEM();
 
-	// todo: pick 2 input IOBs, one output IOB and configure them
-	// todo: pick 1 logic block and configure
+	// configure P46
 	rc = fpga_find_iob(&model, "P46", &iob_y, &iob_x, &iob_idx);
 	EXIT(rc);
-
 	dev = fpga_dev(&model, iob_y, iob_x, DEV_IOB, iob_idx);
 	EXIT(!dev);
 	dev->instantiated = 1;
 	strcpy(dev->iob.istandard, IO_LVCMOS33);
 	dev->iob.bypass_mux = BYPASS_MUX_I;
-	dev->iob.imux = IMUX_I;
+	dev->iob.I_mux = IMUX_I;
+
+	// configure P48
+	rc = fpga_find_iob(&model, "P48", &iob_y, &iob_x, &iob_idx);
+	EXIT(rc);
+	dev = fpga_dev(&model, iob_y, iob_x, DEV_IOB, iob_idx);
+	EXIT(!dev);
+	dev->instantiated = 1;
+	strcpy(dev->iob.ostandard, IO_LVCMOS33);
+	dev->iob.drive_strength = 12;
+	dev->iob.O_used = 1;
+	dev->iob.slew = SLEW_SLOW;
+	dev->iob.suspend = SUSP_3STATE;
+
+	// todo: configure logic
 
 	mkdir(AUTOTEST_TMP_DIR, S_IRWXU|S_IRWXG|S_IROTH|S_IXOTH);
 	dest_f = fopen(AUTOTEST_TMP_DIR "/test_0001.fp", "w");

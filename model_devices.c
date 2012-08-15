@@ -8,241 +8,297 @@
 #include <stdarg.h>
 #include "model.h"
 
+void free_devices(struct fpga_model* model)
+{
+	int i, j;
+	for (i = 0; i < model->x_width * model->y_height; i++) {
+		if (!model->tiles[i].num_devs)
+			continue;
+		EXIT(!model->tiles[i].devs);
+		for (j = 0; j < model->tiles[i].num_devs; j++) {
+			if (model->tiles[i].devs[j].type != DEV_LOGIC)
+				continue;
+			free(model->tiles[i].devs[i].logic.A6_lut);
+			model->tiles[i].devs[i].logic.A6_lut = 0;
+			free(model->tiles[i].devs[i].logic.B6_lut);
+			model->tiles[i].devs[i].logic.B6_lut = 0;
+			free(model->tiles[i].devs[i].logic.C6_lut);
+			model->tiles[i].devs[i].logic.C6_lut = 0;
+			free(model->tiles[i].devs[i].logic.D6_lut);
+			model->tiles[i].devs[i].logic.D6_lut = 0;
+		}
+		free(model->tiles[i].devs);
+		model->tiles[i].devs = 0;
+		model->tiles[i].num_devs = 0;
+	}
+}
+
+#define DEV_INCREMENT 8
+
+static int add_dev(struct fpga_model* model,
+	int y, int x, int type, int subtype)
+{
+	struct fpga_tile* tile = YX_TILE(model, y, x);
+	if (!(tile->num_devs % DEV_INCREMENT)) {
+		void* new_ptr = realloc(tile->devs,
+			(tile->num_devs+DEV_INCREMENT)*sizeof(*tile->devs));
+		EXIT(!new_ptr);
+		memset(new_ptr + tile->num_devs * sizeof(*tile->devs), 0, DEV_INCREMENT*sizeof(*tile->devs));
+		tile->devs = new_ptr;
+	}
+	tile->devs[tile->num_devs].type = type;
+	if (type == DEV_IOB)
+		tile->devs[tile->num_devs].iob.subtype = subtype;
+	else if (type == DEV_LOGIC)
+		tile->devs[tile->num_devs].logic.subtype = subtype;
+	tile->num_devs++;
+	return 0;
+}
+
 int init_devices(struct fpga_model* model)
 {
-	int x, y, i, j;
-	struct fpga_tile* tile;
+	int x, y, i, j, rc;
 
-	// DCM, PLL_ADV
+	// DCM, PLL
 	for (i = 0; i < model->cfg_rows; i++) {
-		y = TOP_IO_TILES + HALF_ROW + i*ROW_SIZE;
+		y = TOP_IO_TILES + HALF_ROW-1 + i*ROW_SIZE;
 		if (y > model->center_y) y++; // central regs
-		tile = YX_TILE(model, y-1, model->center_x-CENTER_CMTPLL_O);
+		x = model->center_x-CENTER_CMTPLL_O;
 		if (i%2) {
-			tile->devices[tile->num_devices++].type = DEV_DCM;
-			tile->devices[tile->num_devices++].type = DEV_DCM;
+			if ((rc = add_dev(model, y, x, DEV_DCM, 0))) goto fail;
+			if ((rc = add_dev(model, y, x, DEV_DCM, 0))) goto fail;
 		} else
-			tile->devices[tile->num_devices++].type = DEV_PLL;
+			if ((rc = add_dev(model, y, x, DEV_PLL, 0))) goto fail;
 	}
 
 	// BSCAN
-	tile = YX_TILE(model, TOP_IO_TILES, model->x_width-RIGHT_IO_DEVS_O);
-	tile->devices[tile->num_devices++].type = DEV_BSCAN;
-	tile->devices[tile->num_devices++].type = DEV_BSCAN;
+	y = TOP_IO_TILES;
+	x = model->x_width-RIGHT_IO_DEVS_O;
+	if ((rc = add_dev(model, y, x, DEV_BSCAN, 0))) goto fail;
+	if ((rc = add_dev(model, y, x, DEV_BSCAN, 0))) goto fail;
 
 	// BSCAN, OCT_CALIBRATE
-	tile = YX_TILE(model, TOP_IO_TILES+1, model->x_width-RIGHT_IO_DEVS_O);
-	tile->devices[tile->num_devices++].type = DEV_BSCAN;
-	tile->devices[tile->num_devices++].type = DEV_BSCAN;
-	tile->devices[tile->num_devices++].type = DEV_OCT_CALIBRATE;
+	y = TOP_IO_TILES+1;
+	x = model->x_width-RIGHT_IO_DEVS_O;
+	if ((rc = add_dev(model, y, x, DEV_BSCAN, 0))) goto fail;
+	if ((rc = add_dev(model, y, x, DEV_BSCAN, 0))) goto fail;
+	if ((rc = add_dev(model, y, x, DEV_OCT_CALIBRATE, 0))) goto fail;
 
 	// ICAP, SPI_ACCESS, OCT_CALIBRATE
-	tile = YX_TILE(model, model->y_height-BOT_IO_TILES-1,
-		model->x_width-RIGHT_IO_DEVS_O);
-	tile->devices[tile->num_devices++].type = DEV_ICAP;
-	tile->devices[tile->num_devices++].type = DEV_SPI_ACCESS;
-	tile->devices[tile->num_devices++].type = DEV_OCT_CALIBRATE;
+	y = model->y_height-BOT_IO_TILES-1;
+	x = model->x_width-RIGHT_IO_DEVS_O;
+	if ((rc = add_dev(model, y, x, DEV_ICAP, 0))) goto fail;
+	if ((rc = add_dev(model, y, x, DEV_SPI_ACCESS, 0))) goto fail;
+	if ((rc = add_dev(model, y, x, DEV_OCT_CALIBRATE, 0))) goto fail;
 
 	// STARTUP, POST_CRC_INTERNAL, SLAVE_SPI, SUSPEND_SYNC
-	tile = YX_TILE(model, model->y_height-BOT_IO_TILES-2,
-		model->x_width-RIGHT_IO_DEVS_O);
-	tile->devices[tile->num_devices++].type = DEV_STARTUP;
-	tile->devices[tile->num_devices++].type = DEV_POST_CRC_INTERNAL;
-	tile->devices[tile->num_devices++].type = DEV_SLAVE_SPI;
-	tile->devices[tile->num_devices++].type = DEV_SUSPEND_SYNC;
+	y = model->y_height-BOT_IO_TILES-2;
+	x = model->x_width-RIGHT_IO_DEVS_O;
+	if ((rc = add_dev(model, y, x, DEV_STARTUP, 0))) goto fail;
+	if ((rc = add_dev(model, y, x, DEV_POST_CRC_INTERNAL, 0))) goto fail;
+	if ((rc = add_dev(model, y, x, DEV_SLAVE_SPI, 0))) goto fail;
+	if ((rc = add_dev(model, y, x, DEV_SUSPEND_SYNC, 0))) goto fail;
 
 	// BUFGMUX
-	tile = YX_TILE(model, model->center_y, model->center_x);
+	y = model->center_y;
+	x = model->center_x;
 	for (i = 0; i < 16; i++)
-		tile->devices[tile->num_devices++].type = DEV_BUFGMUX;
+		if ((rc = add_dev(model, y, x, DEV_BUFGMUX, 0))) goto fail;
 
 	// BUFIO, BUFIO_FB, BUFPLL, BUFPLL_MCB
-	tile = YX_TILE(model, TOP_OUTER_ROW, model->center_x-CENTER_CMTPLL_O);
-	tile->devices[tile->num_devices++].type = DEV_BUFPLL;
-	tile->devices[tile->num_devices++].type = DEV_BUFPLL;
-	tile->devices[tile->num_devices++].type = DEV_BUFPLL_MCB;
+	y = TOP_OUTER_ROW;
+	x = model->center_x-CENTER_CMTPLL_O;
+	if ((rc = add_dev(model, y, x, DEV_BUFPLL, 0))) goto fail;
+	if ((rc = add_dev(model, y, x, DEV_BUFPLL, 0))) goto fail;
+	if ((rc = add_dev(model, y, x, DEV_BUFPLL_MCB, 0))) goto fail;
 	for (j = 0; j < 8; j++) {
-		tile->devices[tile->num_devices++].type = DEV_BUFIO;
-		tile->devices[tile->num_devices++].type = DEV_BUFIO_FB;
+		if ((rc = add_dev(model, y, x, DEV_BUFIO, 0))) goto fail;
+		if ((rc = add_dev(model, y, x, DEV_BUFIO_FB, 0))) goto fail;
 	}
-	tile = YX_TILE(model, model->center_y, LEFT_OUTER_COL);
-	tile->devices[tile->num_devices++].type = DEV_BUFPLL;
-	tile->devices[tile->num_devices++].type = DEV_BUFPLL;
-	tile->devices[tile->num_devices++].type = DEV_BUFPLL_MCB;
+	y = model->center_y;
+	x = LEFT_OUTER_COL;
+	if ((rc = add_dev(model, y, x, DEV_BUFPLL, 0))) goto fail;
+	if ((rc = add_dev(model, y, x, DEV_BUFPLL, 0))) goto fail;
+	if ((rc = add_dev(model, y, x, DEV_BUFPLL_MCB, 0))) goto fail;
 	for (j = 0; j < 8; j++) {
-		tile->devices[tile->num_devices++].type = DEV_BUFIO;
-		tile->devices[tile->num_devices++].type = DEV_BUFIO_FB;
+		if ((rc = add_dev(model, y, x, DEV_BUFIO, 0))) goto fail;
+		if ((rc = add_dev(model, y, x, DEV_BUFIO_FB, 0))) goto fail;
 	}
-	tile = YX_TILE(model, model->center_y, model->x_width - RIGHT_OUTER_O);
-	tile->devices[tile->num_devices++].type = DEV_BUFPLL;
-	tile->devices[tile->num_devices++].type = DEV_BUFPLL;
-	tile->devices[tile->num_devices++].type = DEV_BUFPLL_MCB;
+	y = model->center_y;
+	x = model->x_width - RIGHT_OUTER_O;
+	if ((rc = add_dev(model, y, x, DEV_BUFPLL, 0))) goto fail;
+	if ((rc = add_dev(model, y, x, DEV_BUFPLL, 0))) goto fail;
+	if ((rc = add_dev(model, y, x, DEV_BUFPLL_MCB, 0))) goto fail;
 	for (j = 0; j < 8; j++) {
-		tile->devices[tile->num_devices++].type = DEV_BUFIO;
-		tile->devices[tile->num_devices++].type = DEV_BUFIO_FB;
+		if ((rc = add_dev(model, y, x, DEV_BUFIO, 0))) goto fail;
+		if ((rc = add_dev(model, y, x, DEV_BUFIO_FB, 0))) goto fail;
 	}
-	tile = YX_TILE(model, model->y_height - BOT_OUTER_ROW, model->center_x-CENTER_CMTPLL_O);
-	tile->devices[tile->num_devices++].type = DEV_BUFPLL;
-	tile->devices[tile->num_devices++].type = DEV_BUFPLL;
-	tile->devices[tile->num_devices++].type = DEV_BUFPLL_MCB;
+	y = model->y_height - BOT_OUTER_ROW;
+	x = model->center_x-CENTER_CMTPLL_O;
+	if ((rc = add_dev(model, y, x, DEV_BUFPLL, 0))) goto fail;
+	if ((rc = add_dev(model, y, x, DEV_BUFPLL, 0))) goto fail;
+	if ((rc = add_dev(model, y, x, DEV_BUFPLL_MCB, 0))) goto fail;
 	for (j = 0; j < 8; j++) {
-		tile->devices[tile->num_devices++].type = DEV_BUFIO;
-		tile->devices[tile->num_devices++].type = DEV_BUFIO_FB;
+		if ((rc = add_dev(model, y, x, DEV_BUFIO, 0))) goto fail;
+		if ((rc = add_dev(model, y, x, DEV_BUFIO_FB, 0))) goto fail;
 	}
 	
 	// BUFH
 	for (i = 0; i < model->cfg_rows; i++) {
 		y = TOP_IO_TILES + HALF_ROW + i*ROW_SIZE;
 		if (y > model->center_y) y++; // central regs
-		tile = YX_TILE(model, y, model->center_x);
+		x = model->center_x;
 		for (j = 0; j < 32; j++)
-			tile->devices[tile->num_devices++].type = DEV_BUFH;
+			if ((rc = add_dev(model, y, x, DEV_BUFH, 0))) goto fail;
 	}
 
 	// BRAM
 	for (x = 0; x < model->x_width; x++) {
-		if (is_atx(X_FABRIC_BRAM_COL, model, x)) {
-			for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
-				tile = YX_TILE(model, y, x);
-				if (tile->flags & TF_BRAM_DEV) {
-					tile->devices[tile->num_devices++].type = DEV_BRAM16;
-					tile->devices[tile->num_devices++].type = DEV_BRAM8;
-					tile->devices[tile->num_devices++].type = DEV_BRAM8;
-				}
-			}
+		if (!is_atx(X_FABRIC_BRAM_COL, model, x))
+			continue;
+		for (y = TOP_IO_TILES; y < model->y_height-BOT_IO_TILES; y++) {
+			if (!(YX_TILE(model, y, x)->flags & TF_BRAM_DEV))
+				continue;
+			if ((rc = add_dev(model, y, x, DEV_BRAM16, 0)))
+				goto fail;
+			if ((rc = add_dev(model, y, x, DEV_BRAM8, 0)))
+				goto fail;
+			if ((rc = add_dev(model, y, x, DEV_BRAM8, 0)))
+				goto fail;
 		}
 	}
 
 	// MACC
 	for (x = 0; x < model->x_width; x++) {
-		if (is_atx(X_FABRIC_MACC_COL, model, x)) {
-			for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
-				tile = YX_TILE(model, y, x);
-				if (tile->flags & TF_MACC_DEV)
-					tile->devices[tile->num_devices++].type = DEV_MACC;
-			}
+		if (!is_atx(X_FABRIC_MACC_COL, model, x))
+			continue;
+		for (y = TOP_IO_TILES; y < model->y_height-BOT_IO_TILES; y++) {
+			if (!(YX_TILE(model, y, x)->flags & TF_MACC_DEV))
+				continue;
+			if ((rc = add_dev(model, y, x, DEV_MACC, 0))) goto fail;
 		}
 	}
 
 	// ILOGIC/OLOGIC/IODELAY
 	for (x = LEFT_SIDE_WIDTH; x < model->x_width - RIGHT_SIDE_WIDTH; x++) {
-		if (is_atx(X_LOGIC_COL, model, x)
-		    && !is_atx(X_ROUTING_NO_IO, model, x-1)) {
-			for (i = 0; i <= 1; i++) {
-				tile = YX_TILE(model, TOP_IO_TILES+i, x);
-				for (j = 0; j <= 1; j++) {
-					tile->devices[tile->num_devices++].type = DEV_ILOGIC;
-					tile->devices[tile->num_devices++].type = DEV_OLOGIC;
-					tile->devices[tile->num_devices++].type = DEV_IODELAY;
-				}
-				tile = YX_TILE(model, model->y_height-BOT_IO_TILES-i-1, x);
-				for (j = 0; j <= 1; j++) {
-					tile->devices[tile->num_devices++].type = DEV_ILOGIC;
-					tile->devices[tile->num_devices++].type = DEV_OLOGIC;
-					tile->devices[tile->num_devices++].type = DEV_IODELAY;
-				}
+		if (!is_atx(X_LOGIC_COL, model, x)
+		    || is_atx(X_ROUTING_NO_IO, model, x-1))
+			continue;
+		for (i = 0; i <= 1; i++) {
+			y = TOP_IO_TILES+i;
+			for (j = 0; j <= 1; j++) {
+				if ((rc = add_dev(model, y, x, DEV_ILOGIC, 0)))
+					goto fail;
+				if ((rc = add_dev(model, y, x, DEV_OLOGIC, 0)))
+					goto fail;
+				if ((rc = add_dev(model, y, x, DEV_IODELAY, 0)))
+					goto fail;
+			}
+			y = model->y_height-BOT_IO_TILES-i-1;
+			for (j = 0; j <= 1; j++) {
+				if ((rc = add_dev(model, y, x, DEV_ILOGIC, 0)))
+					goto fail;
+				if ((rc = add_dev(model, y, x, DEV_OLOGIC, 0)))
+					goto fail;
+				if ((rc = add_dev(model, y, x, DEV_IODELAY, 0)))
+					goto fail;
 			}
 		}
 	}
 	for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
 		if (is_aty(Y_LEFT_WIRED, model, y)) {
-			tile = YX_TILE(model, y, LEFT_IO_DEVS);
+			x = LEFT_IO_DEVS;
 			for (j = 0; j <= 1; j++) {
-				tile->devices[tile->num_devices++].type = DEV_ILOGIC;
-				tile->devices[tile->num_devices++].type = DEV_OLOGIC;
-				tile->devices[tile->num_devices++].type = DEV_IODELAY;
+				if ((rc = add_dev(model, y, x, DEV_ILOGIC, 0)))
+					goto fail;
+				if ((rc = add_dev(model, y, x, DEV_OLOGIC, 0)))
+					goto fail;
+				if ((rc = add_dev(model, y, x, DEV_IODELAY, 0)))
+					goto fail;
 			}
 		}
 		if (is_aty(Y_RIGHT_WIRED, model, y)) {
-			tile = YX_TILE(model, y, model->x_width-RIGHT_IO_DEVS_O);
+			x = model->x_width-RIGHT_IO_DEVS_O;
 			for (j = 0; j <= 1; j++) {
-				tile->devices[tile->num_devices++].type = DEV_ILOGIC;
-				tile->devices[tile->num_devices++].type = DEV_OLOGIC;
-				tile->devices[tile->num_devices++].type = DEV_IODELAY;
+				if ((rc = add_dev(model, y, x, DEV_ILOGIC, 0)))
+					goto fail;
+				if ((rc = add_dev(model, y, x, DEV_OLOGIC, 0)))
+					goto fail;
+				if ((rc = add_dev(model, y, x, DEV_IODELAY, 0)))
+					goto fail;
 			}
 		}
 	}
-
 	// IOB
 	for (x = 0; x < model->x_width; x++) {
+		// Note that the order of sub-types IOBM and IOBS must match
+		// the order in the control.c sitename arrays.
 		if (is_atx(X_OUTER_LEFT, model, x)) {
 			for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
-				if (is_aty(Y_LEFT_WIRED, model, y)) {
-					tile = YX_TILE(model, y, x);
-					tile->devices[tile->num_devices].type = DEV_IOB;
-					tile->devices[tile->num_devices++].iob.type = IOBM;
-					tile->devices[tile->num_devices].type = DEV_IOB;
-					tile->devices[tile->num_devices++].iob.type = IOBS;
-				}
+				if (!is_aty(Y_LEFT_WIRED, model, y))
+					continue;
+				if ((rc = add_dev(model, y, x, DEV_IOB, IOBM))) goto fail;
+				if ((rc = add_dev(model, y, x, DEV_IOB, IOBS))) goto fail;
 			}
 		}
 		if (is_atx(X_OUTER_RIGHT, model, x)) {
 			for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
-				if (is_aty(Y_RIGHT_WIRED, model, y)) {
-					tile = YX_TILE(model, y, x);
-					tile->devices[tile->num_devices].type = DEV_IOB;
-					tile->devices[tile->num_devices++].iob.type = IOBM;
-					tile->devices[tile->num_devices].type = DEV_IOB;
-					tile->devices[tile->num_devices++].iob.type = IOBS;
-				}
+				if (!is_aty(Y_RIGHT_WIRED, model, y))
+					continue;
+				if ((rc = add_dev(model, y, x, DEV_IOB, IOBM))) goto fail;
+				if ((rc = add_dev(model, y, x, DEV_IOB, IOBS))) goto fail;
 			}
 		}
 		if (is_atx(X_FABRIC_LOGIC_ROUTING_COL|X_CENTER_ROUTING_COL, model, x)
 		    && !is_atx(X_ROUTING_NO_IO, model, x)) {
-			tile = YX_TILE(model, TOP_OUTER_ROW, x);
-					tile->devices[tile->num_devices].type = DEV_IOB;
-					tile->devices[tile->num_devices++].iob.type = IOBM;
-					tile->devices[tile->num_devices].type = DEV_IOB;
-					tile->devices[tile->num_devices++].iob.type = IOBS;
-					tile->devices[tile->num_devices].type = DEV_IOB;
-					tile->devices[tile->num_devices++].iob.type = IOBM;
-					tile->devices[tile->num_devices].type = DEV_IOB;
-					tile->devices[tile->num_devices++].iob.type = IOBS;
+			y = TOP_OUTER_ROW;
+			if ((rc = add_dev(model, y, x, DEV_IOB, IOBM))) goto fail;
+			if ((rc = add_dev(model, y, x, DEV_IOB, IOBS))) goto fail;
+			if ((rc = add_dev(model, y, x, DEV_IOB, IOBM))) goto fail;
+			if ((rc = add_dev(model, y, x, DEV_IOB, IOBS))) goto fail;
 
-			tile = YX_TILE(model, model->y_height-BOT_OUTER_ROW, x);
-					tile->devices[tile->num_devices].type = DEV_IOB;
-					tile->devices[tile->num_devices++].iob.type = IOBM;
-					tile->devices[tile->num_devices].type = DEV_IOB;
-					tile->devices[tile->num_devices++].iob.type = IOBS;
-					tile->devices[tile->num_devices].type = DEV_IOB;
-					tile->devices[tile->num_devices++].iob.type = IOBM;
-					tile->devices[tile->num_devices].type = DEV_IOB;
-					tile->devices[tile->num_devices++].iob.type = IOBS;
+			y = model->y_height-BOT_OUTER_ROW;
+			if ((rc = add_dev(model, y, x, DEV_IOB, IOBM))) goto fail;
+			if ((rc = add_dev(model, y, x, DEV_IOB, IOBS))) goto fail;
+			if ((rc = add_dev(model, y, x, DEV_IOB, IOBM))) goto fail;
+			if ((rc = add_dev(model, y, x, DEV_IOB, IOBS))) goto fail;
 		}
 	}
 
 	// TIEOFF
-	tile = YX_TILE(model, model->center_y, LEFT_OUTER_COL);
-	tile->devices[tile->num_devices++].type = DEV_TIEOFF;
-	tile = YX_TILE(model, model->center_y, model->x_width-RIGHT_OUTER_O);
-	tile->devices[tile->num_devices++].type = DEV_TIEOFF;
-	tile = YX_TILE(model, TOP_OUTER_ROW, model->center_x-1);
-	tile->devices[tile->num_devices++].type = DEV_TIEOFF;
-	tile = YX_TILE(model, model->y_height-BOT_OUTER_ROW, model->center_x-CENTER_CMTPLL_O);
-	tile->devices[tile->num_devices++].type = DEV_TIEOFF;
+	y = model->center_y;
+	x = LEFT_OUTER_COL;
+	if ((rc = add_dev(model, y, x, DEV_TIEOFF, 0))) goto fail;
+	y = model->center_y;
+	x = model->x_width-RIGHT_OUTER_O;
+	if ((rc = add_dev(model, y, x, DEV_TIEOFF, 0))) goto fail;
+	y = TOP_OUTER_ROW;
+	x = model->center_x-1;
+	if ((rc = add_dev(model, y, x, DEV_TIEOFF, 0))) goto fail;
+	y = model->y_height-BOT_OUTER_ROW;
+	x = model->center_x-CENTER_CMTPLL_O;
+	if ((rc = add_dev(model, y, x, DEV_TIEOFF, 0))) goto fail;
 
 	for (x = 0; x < model->x_width; x++) {
 		if (is_atx(X_LEFT_IO_DEVS_COL, model, x)) {
 			for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
-				if (is_aty(Y_LEFT_WIRED, model, y)) {
-					tile = YX_TILE(model, y, x);
-					tile->devices[tile->num_devices++].type = DEV_TIEOFF;
-				}
+				if (!is_aty(Y_LEFT_WIRED, model, y))
+					continue;
+				if ((rc = add_dev(model, y, x, DEV_TIEOFF, 0))) goto fail;
 			}
 		}
 		if (is_atx(X_RIGHT_IO_DEVS_COL, model, x)) {
 			for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
-				if (is_aty(Y_RIGHT_WIRED, model, y)) {
-					tile = YX_TILE(model, y, x);
-					tile->devices[tile->num_devices++].type = DEV_TIEOFF;
-				}
+				if (!is_aty(Y_RIGHT_WIRED, model, y))
+					continue;
+				if ((rc = add_dev(model, y, x, DEV_TIEOFF, 0))) goto fail;
 			}
 		}
 		if (is_atx(X_CENTER_CMTPLL_COL, model, x)) {
 			for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
-				tile = YX_TILE(model, y, x);
-				if (tile->flags & TF_PLL_DEV)
-					tile->devices[tile->num_devices++].type = DEV_TIEOFF;
+				if (!(YX_TILE(model, y, x)->flags & TF_PLL_DEV))
+					continue;
+				if ((rc = add_dev(model, y, x, DEV_TIEOFF, 0))) goto fail;
 				
 			}
 		}
@@ -251,35 +307,35 @@ int init_devices(struct fpga_model* model)
 				if (is_aty(Y_ROW_HORIZ_AXSYMM|Y_CHIP_HORIZ_REGS,
 						model, y))
 					continue;
-				tile = YX_TILE(model, y, x);
-				tile->devices[tile->num_devices++].type = DEV_TIEOFF;
+				if ((rc = add_dev(model, y, x, DEV_TIEOFF, 0))) goto fail;
 			}
 		}
 		if (is_atx(X_LOGIC_COL, model, x)
 		    && !is_atx(X_ROUTING_NO_IO, model, x-1)) {
 			for (i = 0; i <= 1; i++) {
-				tile = YX_TILE(model, TOP_IO_TILES+i, x);
-				tile->devices[tile->num_devices++].type = DEV_TIEOFF;
-				tile = YX_TILE(model, model->y_height-BOT_IO_TILES-i-1, x);
-				tile->devices[tile->num_devices++].type = DEV_TIEOFF;
+				y = TOP_IO_TILES+i;
+				if ((rc = add_dev(model, y, x, DEV_TIEOFF, 0))) goto fail;
+				y = model->y_height-BOT_IO_TILES-i-1;
+				if ((rc = add_dev(model, y, x, DEV_TIEOFF, 0))) goto fail;
 			}
 		}
 	}
 	// LOGIC
 	for (x = 0; x < model->x_width; x++) {
-		if (is_atx(X_LOGIC_COL, model, x)) {
-			for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
-				tile = YX_TILE(model, y, x);
-				if (tile->flags & TF_LOGIC_XM_DEV) {
-					tile->devices[tile->num_devices++].type = DEV_LOGIC_X;
-					tile->devices[tile->num_devices++].type = DEV_LOGIC_M;
-				}
-				if (tile->flags & TF_LOGIC_XL_DEV) {
-					tile->devices[tile->num_devices++].type = DEV_LOGIC_X;
-					tile->devices[tile->num_devices++].type = DEV_LOGIC_L;
-				}
+		if (!is_atx(X_LOGIC_COL, model, x))
+			continue;
+		for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
+			if (YX_TILE(model, y, x)->flags & TF_LOGIC_XM_DEV) {
+				if ((rc = add_dev(model, y, x, DEV_LOGIC, LOGIC_X))) goto fail;
+				if ((rc = add_dev(model, y, x, DEV_LOGIC, LOGIC_M))) goto fail;
+			}
+			if (YX_TILE(model, y, x)->flags & TF_LOGIC_XL_DEV) {
+				if ((rc = add_dev(model, y, x, DEV_LOGIC, LOGIC_X))) goto fail;
+				if ((rc = add_dev(model, y, x, DEV_LOGIC, LOGIC_L))) goto fail;
 			}
 		}
 	}
 	return 0;
+fail:
+	return rc;
 }

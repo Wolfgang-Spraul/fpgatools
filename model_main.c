@@ -49,6 +49,7 @@ int fpga_build_model(struct fpga_model* model, int fpga_rows, const char* column
 void fpga_free_model(struct fpga_model* model)
 {
 	if (!model) return;
+	free_devices(model);
 	free(model->tmp_str);
 	strarray_free(&model->str);
 	free(model->tiles);

@@ -137,9 +137,32 @@ int has_device(struct fpga_model* model, int y, int x, int dev)
 	struct fpga_tile* tile = YX_TILE(model, y, x);
 	int i;
 
-	for (i = 0; i < tile->num_devices; i++) {
-		if (tile->devices[i].type == dev)
+	for (i = 0; i < tile->num_devs; i++) {
+		if (tile->devs[i].type == dev)
 			return 1;
+	}
+	return 0;
+}
+
+int has_device_type(struct fpga_model* model, int y, int x, int dev, int subtype)
+{
+	struct fpga_tile* tile = YX_TILE(model, y, x);
+	int i;
+
+	for (i = 0; i < tile->num_devs; i++) {
+		if (tile->devs[i].type == dev) {
+			switch (dev) {
+				case DEV_LOGIC:
+					if (tile->devs[i].logic.subtype == subtype)
+						return 1;
+					break;
+				case DEV_IOB:
+					if (tile->devs[i].iob.subtype == subtype)
+						return 1;
+					break;
+				default: EXIT(1);
+			}
+		}
 	}
 	return 0;
 }

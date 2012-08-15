@@ -46,14 +46,13 @@ static int init_logic_tile(struct fpga_model* model, int y, int x)
 	int rc, i, j, ml;
 	const char* xp;
 
-	if (has_device(model, y, x, DEV_LOGIC_M)) {
+	if (has_device_type(model, y, x, DEV_LOGIC, LOGIC_M)) {
 		ml = 'M';
 		xp = "X";
-	} else if (has_device(model, y, x, DEV_LOGIC_L)) {
+	} else if (has_device_type(model, y, x, DEV_LOGIC, LOGIC_L)) {
 		ml = 'L';
 		xp = "XX";
-	} else
-		EXIT(1);
+	} else EXIT(1);
 
 	if ((rc = add_switch(model, y, x,
 		pf("CLEX%c_CLK0", ml), pf("%s_CLK", xp), 0 /* bidir */))) goto xout;
@@ -137,8 +136,7 @@ static int init_logic_switches(struct fpga_model* model)
 		if (!is_atx(X_LOGIC_COL, model, x))
 			continue;
 		for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
-			if (has_device(model, y, x, DEV_LOGIC_M)
-			    || has_device(model, y, x, DEV_LOGIC_L)) {
+			if (has_device(model, y, x, DEV_LOGIC)) {
 				rc = init_logic_tile(model, y, x);
 				if (rc) goto xout;
 			}

@@ -61,9 +61,9 @@ static int connect_logic_carry(struct fpga_model* model)
 	for (x = 0; x < model->x_width; x++) {
 		if (is_atx(X_LOGIC_COL, model, x)) {
 			for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
-				if (has_device(model, y, x, DEV_LOGIC_M)) {
+				if (has_device_type(model, y, x, DEV_LOGIC, LOGIC_M)) {
 					if (is_aty(Y_CHIP_HORIZ_REGS, model, y-1)
-					    && has_device(model, y-2, x, DEV_LOGIC_M)) {
+					    && has_device_type(model, y-2, x, DEV_LOGIC, LOGIC_M)) {
 						struct w_net net = {
 							0,
 							{{ "M_CIN",		0, y-2, x },
@@ -72,7 +72,7 @@ static int connect_logic_carry(struct fpga_model* model)
 							 { "" }}};
 						if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) goto xout;
 					} else if (is_aty(Y_ROW_HORIZ_AXSYMM, model, y-1)
-					    && has_device(model, y-2, x, DEV_LOGIC_M)) {
+					    && has_device_type(model, y-2, x, DEV_LOGIC, LOGIC_M)) {
 						struct w_net net = {
 							0,
 							{{ "M_CIN",		0, y-2, x },
@@ -80,7 +80,7 @@ static int connect_logic_carry(struct fpga_model* model)
 							 { "M_COUT_N",		0,   y, x },
 							 { "" }}};
 						if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) goto xout;
-					} else if (has_device(model, y-1, x, DEV_LOGIC_M)) {
+					} else if (has_device_type(model, y-1, x, DEV_LOGIC, LOGIC_M)) {
 						if ((rc = add_conn_bi(model, y, x, "M_COUT_N", y-1, x, "M_CIN"))) goto xout;
 					}
 				}
@@ -120,13 +120,13 @@ static int connect_clk_sr(struct fpga_model* model, const char* clk_sr)
 		}
 		if (is_atx(X_FABRIC_LOGIC_ROUTING_COL|X_CENTER_ROUTING_COL, model, x)) {
 			for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
-				if (has_device(model, y, x+1, DEV_LOGIC_M)) {
+				if (has_device_type(model, y, x+1, DEV_LOGIC, LOGIC_M)) {
 					if ((rc = add_conn_range(model,
 						NOPREF_BI_F,
 						y, x, pf("%s%%i", clk_sr), 0, 1,
 						y, x+1, pf("CLEXM_%s%%i", clk_sr), 0)))
 							goto xout;
-				} else if (has_device(model, y, x+1, DEV_LOGIC_L)) {
+				} else if (has_device_type(model, y, x+1, DEV_LOGIC, LOGIC_L)) {
 					if ((rc = add_conn_range(model,
 						NOPREF_BI_F,
 						y, x, pf("%s%%i", clk_sr), 0, 1,

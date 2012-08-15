@@ -271,9 +271,7 @@ const char* logicin_s(int wire, int routing_io);
 
 enum fpgadev_type
 {
-	DEV_LOGIC_M,
-	DEV_LOGIC_L,
-	DEV_LOGIC_X,
+	DEV_LOGIC,
 	DEV_TIEOFF,
 	DEV_MACC,
 	DEV_IOB,
@@ -304,19 +302,13 @@ enum fpgadev_type
 // 0 is never a valid configured setting. That way all config
 // data can safely be initialized to 0 meaning unconfigured.
 
-struct fpgadev_logic_x
-{
-	int a;
-};
+enum { LOGIC_M = 1, LOGIC_L, LOGIC_X };
 
-struct fpgadev_logic_l
+struct fpgadev_logic
 {
-	int b;
-};
-
-struct fpgadev_logic_m
-{
-	int c;
+	int subtype; // LOGIC_M, LOGIC_L or LOGIC_X
+	int A_used, B_used, C_used, D_used;
+	char* A6_lut, *B6_lut, *C6_lut, *D6_lut;
 };
 
 enum { IOBM = 1, IOBS };
@@ -334,14 +326,14 @@ enum { OTERM_NONE = 1, OTERM_UNTUNED_25, OTERM_UNTUNED_50,
 
 struct fpgadev_iob
 {
-	int type;
+	int subtype; // IOBM or IOBS
 	IOSTANDARD istandard;
 	IOSTANDARD ostandard;
 	int bypass_mux;
-	int imux;
+	int I_mux;
 	int drive_strength; // supports 2,4,6,8,12,16 and 24
 	int slew;
-	int o_used;
+	int O_used;
 	int suspend;
 	int in_term;
 	int out_term;
@@ -352,9 +344,7 @@ struct fpga_device
 	enum fpgadev_type type;
 	int instantiated;
 	union {
-		struct fpgadev_logic_m log_m;
-		struct fpgadev_logic_l log_l;
-		struct fpgadev_logic_x log_x;
+		struct fpgadev_logic logic;
 		struct fpgadev_iob iob;
 	};
 };
@@ -368,9 +358,9 @@ struct fpga_tile
 	enum fpga_tile_type type;
 	int flags;
 
-	// we currently support a maximum of 32 devices per tile
-	int num_devices;
-	struct fpga_device devices[32];
+	// expect up to 64 devices per tile
+	int num_devs;
+	struct fpga_device* devs;
 
 	// expect up to 5k connection point names per tile
 	// 2*16 bit per entry
@@ -407,6 +397,7 @@ int init_tiles(struct fpga_model* model);
 int init_conns(struct fpga_model* model);
 int init_ports(struct fpga_model* model);
 int init_devices(struct fpga_model* model);
+void free_devices(struct fpga_model* model);
 int init_switches(struct fpga_model* model);
 
 const char* pf(const char* fmt, ...);
@@ -417,6 +408,7 @@ int has_connpt(struct fpga_model* model, int y, int x, const char* name);
 int add_connpt_name(struct fpga_model* model, int y, int x, const char* connpt_name);
 
 int has_device(struct fpga_model* model, int y, int x, int dev);
+int has_device_type(struct fpga_model* model, int y, int x, int dev, int subtype);
 int add_connpt_2(struct fpga_model* model, int y, int x,
 	const char* connpt_name, const char* suffix1, const char* suffix2);
 

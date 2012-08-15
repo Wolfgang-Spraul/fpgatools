@@ -164,10 +164,10 @@ struct fpga_device* fpga_dev(struct fpga_model* model,
 
 	tile = YX_TILE(model, y, x);
 	type_count = 0;
-	for (i = 0; i < tile->num_devices; i++) {
-		if (tile->devices[i].type == type) {
+	for (i = 0; i < tile->num_devs; i++) {
+		if (tile->devs[i].type == type) {
 			if (type_count == idx)
-				return &tile->devices[i];
+				return &tile->devs[i];
 			type_count++;
 		}
 	}

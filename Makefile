@@ -77,7 +77,7 @@ xc6slx9_empty.fp: new_fp
 xc6slx9.svg: draw_svg_tiles
 	./draw_svg_tiles | xmllint --pretty 1 - > $@
 
-compare_all: compare.tiles compare.devices compare.conns compare.ports compare.sw
+compare_all: compare.tiles compare.devs compare.conns compare.ports compare.sw
 
 compare.%: xc6slx9_empty.%
 	@comm -1 -2 $< compare_other.$* > compare_$*_matching.txt
@@ -92,11 +92,11 @@ compare.%: xc6slx9_empty.%
 %.tiles: %.fp
 	@cat $<|awk '{if ($$1=="tile" && $$4=="name") printf "%s %s %s\n",$$2,$$3,$$5}'|sort >$@
 
-%.devices: %.fp
-	@cat $<|awk '{if ($$1=="device") printf "%s %s %s\n",$$2,$$3,$$4}'|sort >$@
+%.devs: %.fp
+	@cat $<|awk '{if ($$1=="dev") {if ($$6=="type") printf "%s %s %s %s\n",$$2,$$3,$$4,$$7; else printf "%s %s %s\n",$$2,$$3,$$4; }}'|sort >$@
 
 %.nets: %.fp pair2net
-	cat $<|awk '{if ($$1=="static_conn") printf "%s-%s-%s %s-%s-%s\n",$$2,$$3,$$4,$$5,$$6,$$7}' |./pair2net -|sort >$@
+	cat $<|awk '{if ($$1=="conn") printf "%s-%s-%s %s-%s-%s\n",$$2,$$3,$$4,$$5,$$6,$$7}' |./pair2net -|sort >$@
 	@echo Number of nets:
 	@cat $@|wc -l
 	@echo Number of connection points:
@@ -105,13 +105,13 @@ compare.%: xc6slx9_empty.%
 	@cat $@|awk '{if (NF>max) max=NF} END {print max}'
 
 %.conns: %.fp sort_seq merge_seq
-	@cat $<|awk '{if ($$1=="static_conn") printf "%s %s %s %s %s %s\n",$$2,$$3,$$5,$$6,$$4,$$7}'|sort|./sort_seq -|./merge_seq -|awk '{printf "%s %s %s %s %s %s\n",$$1,$$2,$$5,$$3,$$4,$$6}'|sort >$@
+	@cat $<|awk '{if ($$1=="conn") printf "%s %s %s %s %s %s\n",$$2,$$3,$$5,$$6,$$4,$$7}'|sort|./sort_seq -|./merge_seq -|awk '{printf "%s %s %s %s %s %s\n",$$1,$$2,$$5,$$3,$$4,$$6}'|sort >$@
 
 %.ports: %.fp
 	@cat $<|awk '{if ($$1=="port") printf "%s %s %s\n",$$2,$$3,$$4}'|sort >$@
 
 %.sw: %.fp
-	@cat $<|awk '{if ($$1=="switch") printf "%s %s %s %s %s\n",$$2,$$3,$$4,$$5,$$6}'|sort >$@
+	@cat $<|awk '{if ($$1=="sw") printf "%s %s %s %s %s\n",$$2,$$3,$$4,$$5,$$6}'|sort >$@
 
 clean:
 	rm -f bit2txt bit2txt.o \
@@ -122,12 +122,12 @@ clean:
 		merge_seq merge_seq.o \
 		autotest.o control.o floorplan.o \
 		xc6slx9_empty.fp xc6slx9.svg \
-		xc6slx9_empty.tiles xc6slx9_empty.devices xc6slx9_empty.conns \
+		xc6slx9_empty.tiles xc6slx9_empty.devs xc6slx9_empty.conns \
 		xc6slx9_empty.ports xc6slx9_empty.sw xc6slx9_empty.nets \
-		compare_other.tiles compare_other.devices compare_other.conns compare_other.ports \
+		compare_other.tiles compare_other.devs compare_other.conns compare_other.ports \
 		compare_other.sw compare_other.nets \
 		compare_tiles_matching.txt compare_tiles_diff.txt compare_tiles_extra.txt \
-		compare_devices_matching.txt compare_devices_diff.txt compare_devices_extra.txt \
+		compare_devs_matching.txt compare_devs_diff.txt compare_devs_extra.txt \
 		compare_conns_matching.txt compare_conns_diff.txt compare_conns_extra.txt \
 		compare_ports_matching.txt compare_ports_diff.txt compare_ports_extra.txt \
 		compare_sw_matching.txt compare_sw_diff.txt compare_sw_extra.txt \
