@@ -6,17 +6,45 @@
 //
 
 #include "model.h"
+#include "floorplan.h"
 #include "bits.h"
 
 int main(int argc, char** argv)
 {
 	struct fpga_model model;
-	int rc;
+	FILE* fp, *fbits;
+	int rc = -1;
+
+	if (argc != 3) {
+		fprintf(stderr,
+			"\n"
+			"%s - floorplan to bitstream\n"
+			"Usage: %s <floorplan_file|- for stdin> <bits_file>\n"
+			"\n", argv[0], argv[0]);
+		goto fail;
+	}
+
+	if (!strcmp(argv[1], "-"))
+		fp = stdin;
+	else {
+		fp = fopen(argv[1], "r");
+		if (!fp) {
+			fprintf(stderr, "Error opening %s.\n", argv[1]);
+			goto fail;
+		}
+	}
+	fbits = fopen(argv[2], "w");
+	if (!fbits) {
+		fprintf(stderr, "Error opening %s.\n", argv[2]);
+		goto fail;
+	}
 
 	if ((rc = fpga_build_model(&model, XC6SLX9_ROWS, XC6SLX9_COLUMNS,
 			XC6SLX9_LEFT_WIRING, XC6SLX9_RIGHT_WIRING)))
 		goto fail;
 
+	if ((rc = read_floorplan(&model, fp))) goto fail;
+	if ((rc = write_bits(fbits, &model))) goto fail;
 	return EXIT_SUCCESS;
 fail:
 	return rc;

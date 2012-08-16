@@ -168,7 +168,7 @@ enum fpga_tile_type
 #define CENTER_LOGIC_O		2
 #define CENTER_ROUTING_O	3
 
-#define YX_TILE(model, y, x) (&(model)->tiles[(y)*model->x_width+(x)])
+#define YX_TILE(model, y, x) (&(model)->tiles[(y)*(model)->x_width+(x)])
 
 // tile flags
 
@@ -271,6 +271,8 @@ const char* logicin_s(int wire, int routing_io);
 
 enum fpgadev_type
 {
+	DEV_NONE = 0,
+
 	DEV_LOGIC,
 	DEV_TIEOFF,
 	DEV_MACC,

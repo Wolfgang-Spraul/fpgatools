@@ -156,6 +156,50 @@ int fpga_find_iob(struct fpga_model* model, const char* sitename,
 	return -1;
 }
 
+const char* fpga_iob_sitename(struct fpga_model* model, int y, int x,
+	int idx)
+{
+	int i;
+
+	if (y == TOP_OUTER_ROW) {
+		for (i = 0; i < sizeof(xc6slx9_iob_top)/sizeof(xc6slx9_iob_top[0]); i++) {
+			if (xc6slx9_iob_right[i].xy == x) {
+				if (idx < 0 || idx > 3) return 0;
+				return xc6slx9_iob_top[i].name[idx];
+			}
+		}
+		return 0;
+	}
+	if (y == model->y_height-BOT_OUTER_ROW) {
+		for (i = 0; i < sizeof(xc6slx9_iob_bottom)/sizeof(xc6slx9_iob_bottom[0]); i++) {
+			if (xc6slx9_iob_bottom[i].xy == x) {
+				if (idx < 0 || idx > 3) return 0;
+				return xc6slx9_iob_bottom[i].name[idx];
+			}
+		}
+		return 0;
+	}
+	if (x == LEFT_OUTER_COL) {
+		for (i = 0; i < sizeof(xc6slx9_iob_left)/sizeof(xc6slx9_iob_left[0]); i++) {
+			if (xc6slx9_iob_left[i].xy == y) {
+				if (idx < 0 || idx > 1) return 0;
+				return xc6slx9_iob_left[i].name[idx];
+			}
+		}
+		return 0;
+	}
+	if (x == model->x_width-RIGHT_OUTER_O) {
+		for (i = 0; i < sizeof(xc6slx9_iob_right)/sizeof(xc6slx9_iob_right[0]); i++) {
+			if (xc6slx9_iob_right[i].xy == y) {
+				if (idx < 0 || idx > 1) return 0;
+				return xc6slx9_iob_right[i].name[idx];
+			}
+		}
+		return 0;
+	}
+	return 0;
+}
+
 struct fpga_device* fpga_dev(struct fpga_model* model,
 	int y, int x, enum fpgadev_type type, int idx)
 {
@@ -171,5 +215,34 @@ struct fpga_device* fpga_dev(struct fpga_model* model,
 			type_count++;
 		}
 	}
+	return 0;
+}
+
+#define MAX_LUT_LEN	512
+
+int fpga_set_lut(struct fpga_model* model, struct fpga_device* dev,
+	int which_lut, const char* lut_str, int lut_len)
+{
+	char** ptr;
+
+	if (dev->type != DEV_LOGIC)
+		return -1;
+	switch (which_lut) {
+		case A6_LUT: ptr = &dev->logic.A6_lut; break;
+		case B6_LUT: ptr = &dev->logic.B6_lut; break;
+		case C6_LUT: ptr = &dev->logic.C6_lut; break;
+		case D6_LUT: ptr = &dev->logic.D6_lut; break;
+		default: return -1;
+	}
+	if (!(*ptr)) {
+		*ptr = malloc(MAX_LUT_LEN);
+		if (!(*ptr)) {
+			OUT_OF_MEM();
+			return -1;
+		}
+	}
+	if (lut_len == ZTERM) lut_len = strlen(lut_str);
+	memcpy(*ptr, lut_str, lut_len);
+	(*ptr)[lut_len] = 0;
 	return 0;
 }

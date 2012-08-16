@@ -24,6 +24,8 @@
 // - lines should typically not exceed 80 characters
 //
 
+int read_floorplan(struct fpga_model* model, FILE* f);
+
 void printf_version(FILE* f);
 int printf_tiles(FILE* f, struct fpga_model* model);
 int printf_devices(FILE* f, struct fpga_model* model, int config_only);

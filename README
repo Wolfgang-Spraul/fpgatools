@@ -4,7 +4,7 @@ Design Principles
 - plain C, no C++
 - simple Makefiles
 - text-based file formats
-- no documentation - read the sources
+- no documentation - please read the sources
 - automatic test suite
 
 Libraries

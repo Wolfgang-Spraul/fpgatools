@@ -21,13 +21,17 @@ all: autotest bit2txt draw_svg_tiles new_fp fp2bit hstrrep sort_seq merge_seq
 
 autotest: autotest.o $(MODEL_OBJ) floorplan.o control.o helper.o model.h
 
+autotest.c: model.h floorplan.h control.h
+
 new_fp: new_fp.o $(MODEL_OBJ) floorplan.o helper.o
 
 new_fp.o: new_fp.c floorplan.h model.h helper.h
 
-fp2bit: fp2bit.c $(MODEL_OBJ) bits.o helper.o
+fp2bit: fp2bit.o $(MODEL_OBJ) floorplan.o control.o bits.o helper.o
 
-floorplan.o: floorplan.c floorplan.h model.h
+fp2bit.o: fp2bit.c model.h floorplan.h bits.h helper.h
+
+floorplan.o: floorplan.c floorplan.h model.h control.h
 
 bits.o: bits.c bits.h model.h
 

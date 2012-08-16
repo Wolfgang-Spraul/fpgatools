@@ -85,7 +85,13 @@ int main(int argc, char** argv)
 	dev->iob.slew = SLEW_SLOW;
 	dev->iob.suspend = SUSP_3STATE;
 
-	// todo: configure logic
+	// configure logic
+	dev = fpga_dev(&model, /*y*/ 68, /*x*/ 13, DEV_LOGIC, /*LOGIC_X*/ 1);
+	EXIT(!dev);
+	dev->instantiated = 1;
+	dev->logic.D_used = 1;
+	rc = fpga_set_lut(&model, dev, D6_LUT, "A3", ZTERM);
+	EXIT(rc);
 
 	mkdir(AUTOTEST_TMP_DIR, S_IRWXU|S_IRWXG|S_IROTH|S_IXOTH);
 	dest_f = fopen(AUTOTEST_TMP_DIR "/test_0001.fp", "w");

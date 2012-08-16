@@ -106,27 +106,6 @@ static void find_number(const char* s, int s_len, int* num_start, int* num_end)
 	}
 }
 
-static int str_cmp(const char* a, int a_len, const char* b, int b_len)
-{
-	int i = 0;
-
-	while (1) {
-		if (i >= a_len) {
-			if (i >= b_len)
-				return 0;
-			return -1;
-		}
-		if (i >= b_len) {
-			if (i >= a_len)
-				return 0;
-			return 1;
-		}
-		if (a[i] != b[i])
-			return a[i] - b[i];
-		i++;
-	}
-}
-
 static int is_known_suffix(const char* str, int str_len)
 {
 	int i;

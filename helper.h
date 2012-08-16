@@ -16,6 +16,8 @@
 #define PROGRAM_REVISION "2012-06-27"
 #define MACRO_STR(arg)	#arg
 
+#define OUT_OF_MEM()	{ fprintf(stderr, \
+	"Out of memory in %s:%i\n", __FILE__, __LINE__); }
 #define EXIT(expr)	if (expr) { fprintf(stderr, \
 	"Internal error in %s:%i\n", __FILE__, __LINE__); exit(1); }
 
@@ -77,7 +79,13 @@ uint64_t read_lut64(uint8_t* two_minors, int off_in_frame);
 int get_vm_mb(void);
 int get_random(void);
 int compare_with_number(const char* a, const char* b);
+// If no next word is found, *end == *beg
 void next_word(const char* s, int start, int* beg, int* end);
+// if a_len or b_len are -1, the length is until 0-termination
+#define ZTERM -1
+int str_cmp(const char* a, int a_len, const char* b, int b_len);
+// all_digits() returns 0 if len == 0
+int all_digits(const char* a, int len);
 int to_i(const char* s, int len);
 
 uint32_t hash_djb2(const unsigned char* str);
