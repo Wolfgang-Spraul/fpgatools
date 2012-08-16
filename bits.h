@@ -5,4 +5,5 @@
 // For details see the UNLICENSE file at the root of the source tree.
 //
 
+int read_bits(struct fpga_model* model, FILE* f);
 int write_bits(FILE* f, struct fpga_model* model);

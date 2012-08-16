@@ -17,19 +17,24 @@ LDLIBS += `pkg-config libxml-2.0 --libs`
 
 MODEL_OBJ = model_main.o model_tiles.o model_devices.o model_ports.o model_conns.o model_switches.o model_helper.o
 
-all: autotest bit2txt draw_svg_tiles new_fp fp2bit hstrrep sort_seq merge_seq
+all: new_fp fp2bit bit2fp draw_svg_tiles \
+	autotest bit2txt hstrrep sort_seq merge_seq pair2net
 
 autotest: autotest.o $(MODEL_OBJ) floorplan.o control.o helper.o model.h
 
 autotest.c: model.h floorplan.h control.h
 
-new_fp: new_fp.o $(MODEL_OBJ) floorplan.o helper.o
+new_fp: new_fp.o $(MODEL_OBJ) floorplan.o helper.o control.o
 
-new_fp.o: new_fp.c floorplan.h model.h helper.h
+new_fp.o: new_fp.c floorplan.h model.h helper.h control.h
 
 fp2bit: fp2bit.o $(MODEL_OBJ) floorplan.o control.o bits.o helper.o
 
 fp2bit.o: fp2bit.c model.h floorplan.h bits.h helper.h
+
+bit2fp: bit2fp.o $(MODEL_OBJ) floorplan.o control.o bits.o helper.o
+
+bit2fp.o: bit2fp.c model.h floorplan.h bits.h helper.h
 
 floorplan.o: floorplan.c floorplan.h model.h control.h
 
@@ -124,7 +129,10 @@ clean:
 		helper.o $(MODEL_OBJ) hstrrep hstrrep.o \
 		sort_seq sort_seq.o \
 		merge_seq merge_seq.o \
-		autotest.o control.o floorplan.o \
+		autotest autotest.o control.o floorplan.o \
+		fp2bit fp2bit.o \
+		bit2fp bit2fp.o \
+		pair2net pair2net.o \
 		xc6slx9_empty.fp xc6slx9.svg \
 		xc6slx9_empty.tiles xc6slx9_empty.devs xc6slx9_empty.conns \
 		xc6slx9_empty.ports xc6slx9_empty.sw xc6slx9_empty.nets \

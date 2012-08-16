@@ -25,6 +25,7 @@
 //
 
 int read_floorplan(struct fpga_model* model, FILE* f);
+int write_floorplan(FILE* f, struct fpga_model* model);
 
 void printf_version(FILE* f);
 int printf_tiles(FILE* f, struct fpga_model* model);

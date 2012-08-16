@@ -16,7 +16,7 @@
 
 #define ALLOC_INCREMENT 16
 
-int add_entry(uint32_t** net, uint32_t new_idx)
+static int add_entry(uint32_t** net, uint32_t new_idx)
 {
 	if (!*net) {
 		*net = malloc(ALLOC_INCREMENT*sizeof(**net));
@@ -44,7 +44,7 @@ int add_entry(uint32_t** net, uint32_t new_idx)
 	return 0;
 }
 
-int print_nets(uint32_t** nets, struct hashed_strarray* connpt_names)
+static int print_nets(uint32_t** nets, struct hashed_strarray* connpt_names)
 {
 	int i, j, num_connpoints, num_nets, largest_net, total_net_connpoints;
 	const char* str;
@@ -82,7 +82,7 @@ int print_nets(uint32_t** nets, struct hashed_strarray* connpt_names)
 
 struct hashed_strarray* g_sort_connpt_names;
 
-int sort_net(const void* a, const void* b)
+static int sort_net(const void* a, const void* b)
 {
 	const uint32_t* _a, *_b;
 	const char* a_str, *b_str;
@@ -99,7 +99,7 @@ int sort_net(const void* a, const void* b)
 	return strcmp(a_str, b_str);
 }
 
-int sort_nets(uint32_t** nets, struct hashed_strarray* connpt_names)
+static int sort_nets(uint32_t** nets, struct hashed_strarray* connpt_names)
 {
 	int i;
 

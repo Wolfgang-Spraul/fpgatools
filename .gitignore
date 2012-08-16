@@ -27,4 +27,6 @@ autotest.o
 bits.o
 fp2bit
 fp2bit.o
+bit2fp
+bit2fp.o
 autotest.tmp/

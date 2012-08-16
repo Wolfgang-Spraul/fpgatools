@@ -757,3 +757,8 @@ next_line: ;
 	}
 	return 0;
 }
+
+int write_floorplan(FILE* f, struct fpga_model* model)
+{
+	return 0;
+}
