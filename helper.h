@@ -21,6 +21,8 @@
 #define EXIT(expr)	if (expr) { fprintf(stderr, \
 	"Internal error in %s:%i\n", __FILE__, __LINE__); exit(1); }
 
+#define HERE() fprintf(stderr, "%s:%i\n", __FILE__, __LINE__)
+
 void printf_help(void);
 
 const char* bitstr(uint32_t value, int digits);
@@ -52,7 +54,7 @@ typedef struct _cfg_atom
 int atom_found(char* bits, const cfg_atom_t* atom);
 void atom_remove(char* bits, const cfg_atom_t* atom);
 
-int printf_header(uint8_t* d, int len, int inpos, int* outdelta);
+int printf_header(uint8_t* d, int len, int inpos, int* outdelta, int dry_run);
 
 void printf_lut6(const char* cfg);
 // bits is tested only for 32 and 64

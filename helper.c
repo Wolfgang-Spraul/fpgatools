@@ -103,7 +103,7 @@ void atom_remove(char* bits, const cfg_atom_t* atom)
 	}
 }
 
-int printf_header(uint8_t* d, int len, int inpos, int* outdelta)
+int printf_header(uint8_t* d, int len, int inpos, int* outdelta, int dry_run)
 {
 	int i, str_len;
 
@@ -113,10 +113,12 @@ int printf_header(uint8_t* d, int len, int inpos, int* outdelta)
 			len);
 		return -1;
 	}
-	printf("hex");
-	for (i = 0; i < 13; i++)
-		printf(" %.02x", d[inpos+*outdelta+i]);
-	printf("\n");
+	if (!dry_run) {
+		printf("hex");
+		for (i = 0; i < 13; i++)
+			printf(" %.02x", d[inpos+*outdelta+i]);
+		printf("\n");
+	}
 	*outdelta += 13;
 
 	// 4 strings 'a' - 'd', 16-bit length
@@ -140,7 +142,8 @@ int printf_header(uint8_t* d, int len, int inpos, int* outdelta)
 				".\n", d[inpos + *outdelta + 3 + str_len - 1]);
 			return -1;
 		}
-		printf("header_str_%c %s\n", i, &d[inpos + *outdelta + 3]);
+		if (!dry_run)
+			printf("header_str_%c %s\n", i, &d[inpos + *outdelta + 3]);
 		*outdelta += 3 + str_len;
 	}
 	return 0;

@@ -208,6 +208,7 @@ static cfg_atom_t ramb16_atoms[] =
 
 int g_cmd_frames = 0;
 int g_cmd_info = 0; // whether to print #I info messages (offsets and others)
+int g_bits_only = 0;
 
 static void print_ramb16_cfg(ramb16_cfg_t* cfg)
 {
@@ -319,8 +320,8 @@ static int full_map(uint8_t* bit_file, int bf_len, int first_FAR_off,
 	uint32_t u32;
 
 	*bits = 0;
-	if (idcode != XC6SLX4) goto fail;
-	if (FLR_len != 896) goto fail;
+	if (idcode != XC6SLX4 && idcode != XC6SLX9) { HERE(); goto fail; }
+	if (FLR_len != 896) { HERE(); goto fail; }
 
 	*bits_len = (4*505 + 4*144) * 130 + 896*2;
 	*bits = calloc(*bits_len, 1 /* elsize */);
@@ -611,7 +612,8 @@ static void printf_bits(uint8_t* bits, int bits_len, int idcode)
 
 	// type0
 	off = 0;
-	printf("\n");
+	if (!g_bits_only)
+		printf("\n");
 	for (row = 0; row < 4; row++) {
 		for (major = 0; major < 18; major++) {
 			if (majors[major].type == MAJ_DSP) {
@@ -735,9 +737,10 @@ static void printf_bits(uint8_t* bits, int bits_len, int idcode)
 	}
 
 	// iob
-	printf("\n");
-	if (printf_iob(bits, bits_len, bram_data_start + 4*144*130, 896*2/8))
-		printf("\n");
+	if (!g_bits_only) printf("\n");
+	if (printf_iob(bits, bits_len, bram_data_start + 4*144*130, 896*2/8)) {
+		if (!g_bits_only) printf("\n");
+	}
 }
 
 int main(int argc, char** argv)
@@ -777,6 +780,8 @@ int main(int argc, char** argv)
 			g_cmd_info = 1;
 		else if (!strcmp(argv[i], "--frames"))
 			g_cmd_frames = 1;
+		else if (!strcmp(argv[i], "--bits-only"))
+			g_bits_only = 1;
 		else {
 			bit_path = argv[i];
 			if (argc > i+1) { // only 1 path supported
@@ -824,9 +829,10 @@ int main(int argc, char** argv)
 	// header
 	//
 
-	printf("bit2txt_format 1\n");
+	if (!g_bits_only)
+		printf("bit2txt_format 1\n");
 
-	if (printf_header(bit_data, bit_eof, 0 /* inpos */, &bit_cur))
+	if (printf_header(bit_data, bit_eof, 0 /* inpos */, &bit_cur, g_bits_only))
 		goto fail;
 
 	//
@@ -850,12 +856,12 @@ int main(int argc, char** argv)
 	// hex-dump everything until 0xAA (sync word: 0xAA995566)
 	if (bit_cur >= bit_eof) goto fail_eof;
 	if (bit_data[bit_cur] != 0xAA) {
-		printf("hex");
+		if (!g_bits_only) printf("hex");
 		while (bit_cur < bit_eof && bit_data[bit_cur] != 0xAA) {
-			printf(" %.02x", bit_data[bit_cur]);
+			if (!g_bits_only) printf(" %.02x", bit_data[bit_cur]);
 			bit_cur++; if (bit_cur >= bit_eof) goto fail_eof;
 		}
-		printf("\n");
+		if (!g_bits_only) printf("\n");
 	}
 	if (bit_cur + 4 > bit_eof) goto fail_eof;
 	if (g_cmd_info) printf("#I sync word at offset 0x%x.\n", bit_cur);
@@ -865,7 +871,8 @@ int main(int argc, char** argv)
 		fprintf(stderr, "#E Unexpected sync word 0x%x.\n", u32);
 		goto fail;
 	}
-	printf("sync_word\n");
+	if (!g_bits_only)
+		printf("sync_word\n");
 
 	try_full_map = !g_cmd_frames;
 	first_FAR_off = -1;
@@ -917,6 +924,7 @@ int main(int argc, char** argv)
 				if (times > 1)
 					bit_cur += (times-1)*2;
 			}
+			if (g_bits_only) continue;
    			if (times > 1)
 				printf("noop times %i\n", times);
 			else
@@ -941,7 +949,8 @@ int main(int argc, char** argv)
 				u32 = __be32_to_cpu(*(uint32_t*)&bit_data[u16_off+2]);
 				for (i = 0; i < sizeof(idcodes)/sizeof(idcodes[0]); i++) {
 					if ((u32 & 0x0FFFFFFF) == idcodes[i].code) {
-						printf("T1 IDCODE %s\n", idcodes[i].name);
+						if (!g_bits_only)
+							printf("T1 IDCODE %s\n", idcodes[i].name);
 						m_idcode = i;
 						break;
 					}
@@ -950,7 +959,8 @@ int main(int argc, char** argv)
 					printf("#W Unknown IDCODE 0x%x.\n", u32);
 				else if (u32 & 0xF0000000)
 					printf("#W Unexpected revision bits in IDCODE 0x%x.\n", u32);
-				if (idcodes[m_idcode].code == XC6SLX4
+				if ((idcodes[m_idcode].code == XC6SLX4
+				     || idcodes[m_idcode].code == XC6SLX9)
 				    && m_FLR_value != 896)
 					printf("#W Unexpected FLR value %i on "
 					  "idcode %s.\n", m_FLR_value,
@@ -965,13 +975,14 @@ int main(int argc, char** argv)
 					goto fail;
 				}
 				u16 = __be16_to_cpu(*(uint16_t*)&bit_data[u16_off+2]);
-				u16_off+=2;
 				if (u16 >= sizeof(cmds) / sizeof(cmds[0])
 				    || cmds[u16][0] == 0)
 					printf("#W 0x%x=0x%x Unknown CMD.\n",
-						u16_off, u16);
-				else
-					printf("T1 CMD %s\n", cmds[u16]);
+						u16_off+2, u16);
+				else {
+					if (!g_bits_only)
+						printf("T1 CMD %s\n", cmds[u16]);
+				}
 				continue;
 			}
 			if (packet_hdr_register == FLR) {
@@ -982,8 +993,8 @@ int main(int argc, char** argv)
 					goto fail;
 				}
 				u16 = __be16_to_cpu(*(uint16_t*)&bit_data[u16_off+2]);
-				u16_off+=2;
-				printf("T1 FLR %u\n", u16);
+				if (!g_bits_only)
+					printf("T1 FLR %u\n", u16);
 				m_FLR_value = u16;
 				if ((m_FLR_value*2) % 8)
 					printf("#W FLR*2 should be multiple of "
@@ -1005,7 +1016,7 @@ int main(int argc, char** argv)
 					goto fail;
 				}
 				u16 = __be16_to_cpu(*(uint16_t*)&bit_data[u16_off+2]);
-				u16_off+=2;
+				if (g_bits_only) continue;
 				printf("T1 COR1");
 				if (u16 & 0x8000) {
 					printf(" DRIVE_AWAKE");
@@ -1055,8 +1066,8 @@ int main(int argc, char** argv)
 					u16, packet_hdr_wordcount);
 					goto fail;
 				}
+				if (g_bits_only) continue;
 				u16 = __be16_to_cpu(*(uint16_t*)&bit_data[u16_off+2]);
-				u16_off+=2;
 				printf("T1 COR2");
 				if (u16 & 0x8000) {
 					printf(" RESET_ON_ERROR");
@@ -1108,6 +1119,7 @@ int main(int argc, char** argv)
 
 				if (first_FAR_off == -1)
 					first_FAR_off = u16_off;
+				if (g_bits_only) continue;
 
 				maj = __be16_to_cpu(*(uint16_t*)&bit_data[u16_off+2]);
 				min = __be16_to_cpu(*(uint16_t*)&bit_data[u16_off+4]);
@@ -1159,7 +1171,8 @@ int main(int argc, char** argv)
 						u16, first_dword, second_dword);
 					goto fail;
 				}
-				printf("T1 MFWR\n");
+				if (!g_bits_only)
+					printf("T1 MFWR\n");
 				continue;
 			}
 			if (packet_hdr_register == CTL) {
@@ -1169,8 +1182,8 @@ int main(int argc, char** argv)
 					u16, packet_hdr_wordcount);
 					goto fail;
 				}
+				if (g_bits_only) continue;
 				u16 = __be16_to_cpu(*(uint16_t*)&bit_data[u16_off+2]);
-				u16_off+=2;
 				printf("T1 CTL");
 				if (u16 & 0x0040) {
 					printf(" DECRYPT");
@@ -1214,8 +1227,8 @@ int main(int argc, char** argv)
 					u16, packet_hdr_wordcount);
 					goto fail;
 				}
+				if (g_bits_only) continue;
 				u16 = __be16_to_cpu(*(uint16_t*)&bit_data[u16_off+2]);
-				u16_off+=2;
 				printf("T1 MASK");
 				if (u16 & 0x0040) {
 					printf(" DECRYPT");
@@ -1252,8 +1265,8 @@ int main(int argc, char** argv)
 					u16, packet_hdr_wordcount);
 					goto fail;
 				}
+				if (g_bits_only) continue;
 				u16 = __be16_to_cpu(*(uint16_t*)&bit_data[u16_off+2]);
-				u16_off+=2;
 				printf("T1 PWRDN_REG");
 				if (u16 & 0x4000) {
 					printf(" EN_EYES");
@@ -1291,8 +1304,8 @@ int main(int argc, char** argv)
 					u16, packet_hdr_wordcount);
 					goto fail;
 				}
+				if (g_bits_only) continue;
 				u16 = __be16_to_cpu(*(uint16_t*)&bit_data[u16_off+2]);
-				u16_off+=2;
 				printf("T1 HC_OPT_REG");
 				if (u16 & 0x0040) {
 					printf(" INIT_SKIP");
@@ -1314,8 +1327,8 @@ int main(int argc, char** argv)
 					u16, packet_hdr_wordcount);
 					goto fail;
 				}
+				if (g_bits_only) continue;
 				u16 = __be16_to_cpu(*(uint16_t*)&bit_data[u16_off+2]);
-				u16_off+=2;
 				printf("T1 PU_GWE 0x%03X\n", u16);
 				continue;
 			}
@@ -1326,8 +1339,8 @@ int main(int argc, char** argv)
 					u16, packet_hdr_wordcount);
 					goto fail;
 				}
+				if (g_bits_only) continue;
 				u16 = __be16_to_cpu(*(uint16_t*)&bit_data[u16_off+2]);
-				u16_off+=2;
 				printf("T1 PU_GTS 0x%03X\n", u16);
 				continue;
 			}
@@ -1338,8 +1351,8 @@ int main(int argc, char** argv)
 					u16, packet_hdr_wordcount);
 					goto fail;
 				}
+				if (g_bits_only) continue;
 				u16 = __be16_to_cpu(*(uint16_t*)&bit_data[u16_off+2]);
-				u16_off+=2;
 				printf("T1 CWDT 0x%X\n", u16);
 				if (u16 < 0x0201)
 					printf("#W Watchdog timer clock below"
@@ -1355,8 +1368,8 @@ int main(int argc, char** argv)
 					u16, packet_hdr_wordcount);
 					goto fail;
 				}
+				if (g_bits_only) continue;
 				u16 = __be16_to_cpu(*(uint16_t*)&bit_data[u16_off+2]);
-				u16_off+=2;
 				printf("T1 MODE_REG");
 				if (u16 & (1<<13)) {
 					printf(" NEW_MODE=BITSTREAM");
@@ -1399,8 +1412,8 @@ int main(int argc, char** argv)
 					u16, packet_hdr_wordcount);
 					goto fail;
 				}
+				if (g_bits_only) continue;
 				u16 = __be16_to_cpu(*(uint16_t*)&bit_data[u16_off+2]);
-				u16_off+=2;
 				printf("T1 CCLK_FREQ");
 				if (u16 & (1<<14)) {
 					printf(" EXT_MCLK");
@@ -1422,8 +1435,8 @@ int main(int argc, char** argv)
 					u16, packet_hdr_wordcount);
 					goto fail;
 				}
+				if (g_bits_only) continue;
 				u16 = __be16_to_cpu(*(uint16_t*)&bit_data[u16_off+2]);
-				u16_off+=2;
 				printf("T1 EYE_MASK 0x%X\n", u16);
 				continue;
 			}
@@ -1434,8 +1447,8 @@ int main(int argc, char** argv)
 					u16, packet_hdr_wordcount);
 					goto fail;
 				}
+				if (g_bits_only) continue;
 				u16 = __be16_to_cpu(*(uint16_t*)&bit_data[u16_off+2]);
-				u16_off+=2;
 				printf("T1 GENERAL1 0x%X\n", u16);
 				continue;
 			}
@@ -1446,8 +1459,8 @@ int main(int argc, char** argv)
 					u16, packet_hdr_wordcount);
 					goto fail;
 				}
+				if (g_bits_only) continue;
 				u16 = __be16_to_cpu(*(uint16_t*)&bit_data[u16_off+2]);
-				u16_off+=2;
 				printf("T1 GENERAL2 0x%X\n", u16);
 				continue;
 			}
@@ -1458,8 +1471,8 @@ int main(int argc, char** argv)
 					u16, packet_hdr_wordcount);
 					goto fail;
 				}
+				if (g_bits_only) continue;
 				u16 = __be16_to_cpu(*(uint16_t*)&bit_data[u16_off+2]);
-				u16_off+=2;
 				printf("T1 GENERAL3 0x%X\n", u16);
 				continue;
 			}
@@ -1470,8 +1483,8 @@ int main(int argc, char** argv)
 					u16, packet_hdr_wordcount);
 					goto fail;
 				}
+				if (g_bits_only) continue;
 				u16 = __be16_to_cpu(*(uint16_t*)&bit_data[u16_off+2]);
-				u16_off+=2;
 				printf("T1 GENERAL4 0x%X\n", u16);
 				continue;
 			}
@@ -1482,8 +1495,8 @@ int main(int argc, char** argv)
 					u16, packet_hdr_wordcount);
 					goto fail;
 				}
+				if (g_bits_only) continue;
 				u16 = __be16_to_cpu(*(uint16_t*)&bit_data[u16_off+2]);
-				u16_off+=2;
 				printf("T1 GENERAL5 0x%X\n", u16);
 				continue;
 			}
@@ -1494,8 +1507,8 @@ int main(int argc, char** argv)
 					u16, packet_hdr_wordcount);
 					goto fail;
 				}
+				if (g_bits_only) continue;
 				u32 = __be32_to_cpu(*(uint32_t*)&bit_data[u16_off+2]);
-				u16_off+=4;
 				printf("T1 EXP_SIGN 0x%X\n", u32);
 				continue;
 			}
@@ -1508,8 +1521,8 @@ int main(int argc, char** argv)
 					u16, packet_hdr_wordcount);
 					goto fail;
 				}
+				if (g_bits_only) continue;
 				u16 = __be16_to_cpu(*(uint16_t*)&bit_data[u16_off+2]);
-				u16_off+=2;
 				seu_freq = (u16 & 0x3FF0) >> 4;
 				printf("T1 SEU_OPT SEU_FREQ=0x%X", seu_freq);
 				u16 &= ~(0x3FF0);
@@ -1534,8 +1547,9 @@ int main(int argc, char** argv)
 			}
 			if (packet_hdr_register == CRC) {
 				// Don't print CRC value for cleaner diff.
-				printf("#W T1 CRC (%u words)\n",
-					packet_hdr_wordcount);
+				if (!g_bits_only)
+					printf("#W T1 CRC (%u words)\n",
+						packet_hdr_wordcount);
 				continue;
 			}
 			printf("#W 0x%x=0x%x T1 %i (%u words)", u16_off, u16,
@@ -1566,7 +1580,8 @@ int main(int argc, char** argv)
 			goto fail;
 		}
 
-		printf("T2 FDRI words=%i\n", u32);
+		if (!g_bits_only)
+			printf("T2 FDRI words=%i\n", u32);
 		bit_cur += 4;
 		if (try_full_map) {
 			try_full_map = 0;
