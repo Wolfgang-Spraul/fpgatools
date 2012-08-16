@@ -15,7 +15,7 @@ Libraries
 - libfpga-floorplan  reads and writes .fp floorplan files
 - libfpga-control    programmatic access to libfpga-model
 - libfpga-design     larger design elements on top of libfpga-control
-- libfpga-test       test harness for libfpga-model and libfpga-control
+- libfpga-test       test harness for model, control and design
 
 Design Utilities
 
