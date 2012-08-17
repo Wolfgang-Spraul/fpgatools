@@ -42,7 +42,7 @@ bits.o: bits.c bits.h model.h
 
 control.o: control.c control.h model.h
 
-draw_svg_tiles: draw_svg_tiles.o $(MODEL_OBJ) helper.o
+draw_svg_tiles: draw_svg_tiles.o $(MODEL_OBJ) helper.o control.o
 
 draw_svg_tiles.o: draw_svg_tiles.c model.h helper.h
 

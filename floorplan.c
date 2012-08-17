@@ -758,7 +758,9 @@ next_line: ;
 	return 0;
 }
 
-int write_floorplan(FILE* f, struct fpga_model* model)
+int write_floorplan(FILE* f, struct fpga_model* model, int flags)
 {
+	if (!(flags & FP_BITS_ONLY))
+		printf_version(f);
 	return 0;
 }

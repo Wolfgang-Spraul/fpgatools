@@ -15,6 +15,7 @@ int main(int argc, char** argv)
 	FILE* fp, *fbits;
 	int rc = -1;
 
+	fbits = 0;
 	if (argc != 3) {
 		fprintf(stderr,
 			"\n"
@@ -45,7 +46,9 @@ int main(int argc, char** argv)
 
 	if ((rc = read_floorplan(&model, fp))) goto fail;
 	if ((rc = write_bits(fbits, &model))) goto fail;
+	fclose(fbits);
 	return EXIT_SUCCESS;
 fail:
+	if (fbits) fclose(fbits);
 	return rc;
 }

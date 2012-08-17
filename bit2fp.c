@@ -12,21 +12,28 @@
 int main(int argc, char** argv)
 {
 	struct fpga_model model;
-	FILE* fbits;
-	int rc = -1;
+	FILE* fbits = 0;
+	int bits_only, file_arg, rc = -1;
 
-	if (argc != 3) {
+	if (argc < 2) {
 		fprintf(stderr,
 			"\n"
 			"%s - bitstream to floorplan\n"
-			"Usage: %s <bitstream_file>\n"
+			"Usage: %s [--bits-only] <bitstream_file>\n"
 			"\n", argv[0], argv[0]);
 		goto fail;
 	}
 
-	fbits = fopen(argv[1], "r");
+	bits_only = 0;
+	file_arg = 1;
+	if (!strcmp(argv[1], "--bits-only")) {
+		bits_only = 1;
+		file_arg = 2;
+	} 
+
+	fbits = fopen(argv[file_arg], "r");
 	if (!fbits) {
-		fprintf(stderr, "Error opening %s.\n", argv[1]);
+		fprintf(stderr, "Error opening %s.\n", argv[file_arg]);
 		goto fail;
 	}
 
@@ -35,8 +42,11 @@ int main(int argc, char** argv)
 		goto fail;
 
 	if ((rc = read_bits(&model, fbits))) goto fail;
-	if ((rc = write_floorplan(stdout, &model))) goto fail;
+	if ((rc = write_floorplan(stdout, &model,
+		bits_only ? FP_BITS_ONLY : FP_BITS_DEFAULT))) goto fail;
+	fclose(fbits);
 	return EXIT_SUCCESS;
 fail:
+	if (fbits) fclose(fbits);
 	return rc;
 }
