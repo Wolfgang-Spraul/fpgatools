@@ -365,9 +365,14 @@ struct fpga_device
 	};
 };
 
-#define SWITCH_ON			0x80000000
-#define SWITCH_BIDIRECTIONAL		0x40000000
-#define SWITCH_MAX_CONNPT_O		0x7FFF // 15 bits
+#define SWITCH_ON		0x80000000
+#define SWITCH_BIDIRECTIONAL	0x40000000
+#define SWITCH_MAX_CONNPT_O	0x7FFF // 15 bits
+#define SWITCH_FROM(u32)	(((u32) >> 15) & SWITCH_MAX_CONNPT_O)
+#define SWITCH_TO(u32)		((u32) & SWITCH_MAX_CONNPT_O)
+
+#define NO_SWITCH	-1
+#define NO_CONN		-1
 
 struct fpga_tile
 {
@@ -382,6 +387,7 @@ struct fpga_tile
 	// 2*16 bit per entry
 	//   - index into conn_point_dests (not multiplied by 3) (16bit)
 	//   - hashed string array index (16 bit)
+	// each conn point name exists only once in the array
 	int num_conn_point_names; // conn_point_names is 2*num_conn_point_names 16-bit words
 	uint16_t* conn_point_names; // num_conn_point_names*2 16-bit-words: 16(conn)-16(str)
 
@@ -396,8 +402,8 @@ struct fpga_tile
 	// expect up to 4k switches per tile
 	// 32bit: 31    off: no connection   on: connected
 	//        30    off: unidirectional  on: bidirectional
-	//        29:15 from, index into conn_point_names
-	//        14:0  to, index into conn_point_names
+	//        29:15 from, index into conn_point_names (not yet *2)
+	//        14:0  to, index into conn_point_names (not yet *2)
 	int num_switches;
 	uint32_t* switches;
 };

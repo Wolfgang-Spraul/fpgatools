@@ -16,32 +16,32 @@ struct iob_site
 
 static const struct iob_site xc6slx9_iob_top[] =
 {
-	{ 5, {"P144",   "P143",   "P141",  "P142"}},
-	{ 7, {"P140",   "P139",   "P137",  "P138"}},
-	{12, {"UNB9",   "UNB10",  "UNB12", "UNB11"}},
-	{14, {"UNB13",  "UNB14",  "UNB16", "UNB15"}},
-	{19, {"UNB17",  "UNB18",  "UNB20", "UNB19"}},
-	{21, {"P134",   "P133",   "P131",  "P132"}},
-	{25, {"P127",   "P126",   "P123",  "P124"}},
-	{29, {"UNB29",  "UNB30",  "UNB32", "UNB31"}},
-	{31, {"UNB33",  "UNB34",  "P120",  "P121"}},
-	{36, {"P119",   "P118",   "P116",  "P117"}},
-	{38, {"P115",   "P114",   "P111",  "P112"}},
+	{ 5, {"P144",  "P143",   "P142",   "P141"}},
+	{ 7, {"P140",  "P139",   "P138",   "P137"}},
+	{12, {"UNB9",  "UNB10",  "UNB11",  "UNB12"}},
+	{14, {"UNB13", "UNB14",  "UNB15",  "UNB16"}},
+	{19, {"UNB17", "UNB18",  "UNB19",  "UNB20"}},
+	{21, {"P134",  "P133",   "P132",   "P131"}},
+	{25, {"P127",  "P126",   "P124",   "P123"}},
+	{29, {"UNB29", "UNB30",  "UNB31",  "UNB32"}},
+	{31, {"UNB33", "UNB34",  "P121",   "P120"}},
+	{36, {"P119",  "P118",   "P117",   "P116"}},
+	{38, {"P115",  "P114",   "P112",   "P111"}},
 };
 
 static const struct iob_site xc6slx9_iob_bottom[] =
 {
-	{ 5, {"P38",    "P39",    "P41",    "P40"}},
-	{ 7, {"UNB140", "UNB139", "P44",    "P43"}},
-	{12, {"P45",    "P46",    "P48",    "P47"}},
-	{14, {"UNB132", "UNB131", "UNB129", "UNB130"}},
-	{19, {"UNB128", "UNB127", "UNB125", "UNB126"}},
-	{21, {"UNB124", "UNB123", "P51",    "P50"}},
-	{25, {"P55",    "P56",    "UNB117", "UNB118"}},
-	{29, {"UNB116", "UNB115", "UNB113", "UNB114"}},
-	{31, {"P57",    "P58",    "P60",    "P59"}},
-	{36, {"P61",    "P62",    "P65",    "P64"}},
-	{38, {"P66",    "P67",    "P70",    "P69"}},
+	{ 5, {"P39",    "P38",    "P40",    "P41"}},
+	{ 7, {"UNB139", "UNB140", "P43",    "P44"}},
+	{12, {"P46",    "P45",    "P47",    "P48"}},
+	{14, {"UNB131", "UNB132", "UNB130", "UNB129"}},
+	{19, {"UNB127", "UNB128", "UNB126", "UNB125"}},
+	{21, {"UNB123", "UNB124", "P50",    "P51"}},
+	{25, {"P56",    "P55",    "UNB118", "UNB117"}},
+	{29, {"UNB115", "UNB116", "UNB114", "UNB113"}},
+	{31, {"P58",    "P57",    "P59",    "P60"}},
+	{36, {"P62",    "P61",    "P64",    "P65"}},
+	{38, {"P67",    "P66",    "P69",    "P70"}},
 };
 
 static const struct iob_site xc6slx9_iob_left[] =
@@ -260,4 +260,128 @@ int fpga_set_lut(struct fpga_model* model, struct fpga_device* dev,
 	memcpy(*ptr, lut_str, lut_len);
 	(*ptr)[lut_len] = 0;
 	return 0;
+}
+
+int fpga_conn_dest(struct fpga_model* model, int y, int x,
+	const char* name, int dest_idx)
+{
+	struct fpga_tile* tile;
+	int i, rc, connpt_i, num_dests, conn_point_dests_o;
+
+	rc = strarray_find(&model->str, name, &connpt_i);
+	if (rc) FAIL();
+	tile = YX_TILE(model, y, x);
+	for (i = 0; i < tile->num_conn_point_names; i++) {
+		if (tile->conn_point_names[i*2+1] == connpt_i)
+			break;
+	}
+	if (i >= tile->num_conn_point_names) 
+		FAIL();
+
+	conn_point_dests_o = tile->conn_point_names[i*2];
+	if (i < tile->num_conn_point_names-1)
+		num_dests = tile->conn_point_names[(i+1)*2] - conn_point_dests_o;
+	else
+		num_dests = tile->num_conn_point_dests - conn_point_dests_o;
+	if (dest_idx >= num_dests)
+		return NO_CONN;
+	return conn_point_dests_o + dest_idx;
+fail:
+	return NO_CONN;
+}
+
+#define NUM_CONN_DEST_BUFS	16
+#define CONN_DEST_BUF_SIZE	128
+
+const char* fpga_conn_to(struct fpga_model* model, int y, int x,
+	int connpt_dest_idx, int* dest_y, int* dest_x)
+{
+	static char conn_dest_buf[NUM_CONN_DEST_BUFS][CONN_DEST_BUF_SIZE];
+	static int last_buf = 0;
+
+	struct fpga_tile* tile;
+	const char* hash_str;
+
+	tile = YX_TILE(model, y, x);
+	if (connpt_dest_idx < 0
+	    || connpt_dest_idx >= tile->num_conn_point_dests) {
+		HERE();
+		return 0;
+	}
+	*dest_x = tile->conn_point_dests[connpt_dest_idx*3];
+	*dest_y = tile->conn_point_dests[connpt_dest_idx*3+1];
+
+	hash_str = strarray_lookup(&model->str,
+		tile->conn_point_dests[connpt_dest_idx*3+2]);
+	if (!hash_str || (strlen(hash_str) >= CONN_DEST_BUF_SIZE)) {
+		HERE();
+		return 0;
+	}
+	last_buf = (last_buf+1)%NUM_CONN_DEST_BUFS;
+	strcpy(conn_dest_buf[last_buf], hash_str);
+
+	return conn_dest_buf[last_buf];
+}
+
+int fpga_switch_dest(struct fpga_model* model, int y, int x,
+	const char* name, int dest_idx)
+{
+	struct fpga_tile* tile;
+	int rc, i, connpt_o, from_name_i, dest_idx_counter;
+
+	rc = strarray_find(&model->str, name, &from_name_i);
+	if (rc) FAIL();
+
+	// counts how many switches from the same source (name)
+	// we have already encountered - to find the dest_idx'th
+	// entry in that series
+	dest_idx_counter = 0;
+	tile = YX_TILE(model, y, x);
+	for (i = 0; i < tile->num_switches; i++) {
+		connpt_o = SWITCH_FROM(tile->switches[i]);
+		if (tile->conn_point_names[connpt_o*2+1] == from_name_i) {
+			if (dest_idx_counter >= dest_idx)
+				break;
+			dest_idx_counter++;
+		}
+	}
+	if (i >= tile->num_switches)
+		return NO_SWITCH;
+	if (dest_idx_counter > dest_idx) FAIL();
+	return i;
+fail:
+	return NO_SWITCH;
+}
+
+#define NUM_SWITCH_TO_BUFS	16
+#define SWITCH_TO_BUF_SIZE	128
+
+const char* fpga_switch_to(struct fpga_model* model, int y, int x,
+	int swidx, int* is_bidir)
+{
+	// We have a little local ringbuffer to make passing
+	// around pointers with unknown lifetime and possible
+	// overlap with writing functions more stable.
+	static char switch_to_buf[NUM_SWITCH_TO_BUFS][SWITCH_TO_BUF_SIZE];
+	static int last_buf = 0;
+
+	struct fpga_tile* tile;
+	const char* hash_str;
+	int connpt_o, str_i;
+
+	tile = YX_TILE(model, y, x);
+	if (is_bidir)
+		*is_bidir = (tile->switches[swidx] & SWITCH_BIDIRECTIONAL) != 0;
+
+	connpt_o = SWITCH_TO(tile->switches[swidx]);
+	str_i = tile->conn_point_names[connpt_o*2+1];
+	hash_str = strarray_lookup(&model->str, str_i);
+	if (!hash_str || (strlen(hash_str) >= SWITCH_TO_BUF_SIZE)) {
+		HERE();
+		return 0;
+	}
+	last_buf = (last_buf+1)%NUM_SWITCH_TO_BUFS;
+	strcpy(switch_to_buf[last_buf], hash_str);
+
+	return switch_to_buf[last_buf];
 }

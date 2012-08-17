@@ -30,3 +30,15 @@ enum { A6_LUT, B6_LUT, C6_LUT, D6_LUT };
 // lut_len can be -1 (ZTERM)
 int fpga_set_lut(struct fpga_model* model, struct fpga_device* dev,
 	int which_lut, const char* lut_str, int lut_len);
+
+// returns a connpt dest index, or -1 (NO_CONN) if no connection was found
+int fpga_conn_dest(struct fpga_model* model, int y, int x,
+	const char* name, int dest_idx);
+const char* fpga_conn_to(struct fpga_model* model, int y, int x,
+	int connpt_dest_idx, int* dest_y, int* dest_x);
+
+// returns a switch index, or -1 (NO_SWITCH) if no switch was found
+int fpga_switch_dest(struct fpga_model* model, int y, int x,
+	const char* name, int dest_idx);
+const char* fpga_switch_to(struct fpga_model* model, int y, int x,
+	int swidx, int* is_bidir);

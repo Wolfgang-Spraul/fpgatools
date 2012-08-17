@@ -104,9 +104,12 @@ fail:
 int main(int argc, char** argv)
 {
 	struct fpga_model model;
-	struct fpga_device* dev;
-	int iob_y, iob_x, iob_idx, rc;
+	struct fpga_device* P46_dev, *P48_dev, *logic_dev;
+	int P46_y, P46_x, P46_idx, P48_y, P48_x, P48_idx, i, j, sw_idx, rc;
+	const char* str;
 	struct test_state tstate;
+	const char* conn_to_str;
+	int conn_idx, conn_to_y, conn_to_x;
 
 	printf("\n");
 	printf("O fpgatools automatic test suite. Be welcome and be "
@@ -132,44 +135,58 @@ int main(int argc, char** argv)
 	if (rc) FAIL();
 	
 	// configure P46
-	rc = fpga_find_iob(&model, "P46", &iob_y, &iob_x, &iob_idx);
+	rc = fpga_find_iob(&model, "P46", &P46_y, &P46_x, &P46_idx);
 	if (rc) FAIL();
-	dev = fpga_dev(&model, iob_y, iob_x, DEV_IOB, iob_idx);
-	if (!dev) { rc = -1; FAIL(); }
-	dev->instantiated = 1;
-	strcpy(dev->iob.istandard, IO_LVCMOS33);
-	dev->iob.bypass_mux = BYPASS_MUX_I;
-	dev->iob.I_mux = IMUX_I;
+	P46_dev = fpga_dev(&model, P46_y, P46_x, DEV_IOB, P46_idx);
+	if (!P46_dev) { rc = -1; FAIL(); }
+	P46_dev->instantiated = 1;
+	strcpy(P46_dev->iob.istandard, IO_LVCMOS33);
+	P46_dev->iob.bypass_mux = BYPASS_MUX_I;
+	P46_dev->iob.I_mux = IMUX_I;
 
 	// configure P48
-	rc = fpga_find_iob(&model, "P48", &iob_y, &iob_x, &iob_idx);
+	rc = fpga_find_iob(&model, "P48", &P48_y, &P48_x, &P48_idx);
 	if (rc) FAIL();
-	dev = fpga_dev(&model, iob_y, iob_x, DEV_IOB, iob_idx);
-	if (!dev) { rc = -1; FAIL(); }
-	dev->instantiated = 1;
-	strcpy(dev->iob.ostandard, IO_LVCMOS33);
-	dev->iob.drive_strength = 12;
-	dev->iob.O_used = 1;
-	dev->iob.slew = SLEW_SLOW;
-	dev->iob.suspend = SUSP_3STATE;
-
-	rc = diff_printf(&tstate);
-	if (rc) goto fail;
+	P48_dev = fpga_dev(&model, P48_y, P48_x, DEV_IOB, P48_idx);
+	if (!P48_dev) { rc = -1; FAIL(); }
+	P48_dev->instantiated = 1;
+	strcpy(P48_dev->iob.ostandard, IO_LVCMOS33);
+	P48_dev->iob.drive_strength = 12;
+	P48_dev->iob.O_used = 1;
+	P48_dev->iob.slew = SLEW_SLOW;
+	P48_dev->iob.suspend = SUSP_3STATE;
 
 	// configure logic
-	dev = fpga_dev(&model, /*y*/ 68, /*x*/ 13, DEV_LOGIC, /*LOGIC_X*/ 1);
-	if (!dev) { rc = -1; FAIL(); }
-	dev->instantiated = 1;
-	dev->logic.D_used = 1;
-	rc = fpga_set_lut(&model, dev, D6_LUT, "A3", ZTERM);
+	logic_dev = fpga_dev(&model, /*y*/ 68, /*x*/ 13, DEV_LOGIC, /*LOGIC_X*/ 1);
+	if (!logic_dev) { rc = -1; FAIL(); }
+	logic_dev->instantiated = 1;
+	logic_dev->logic.D_used = 1;
+	rc = fpga_set_lut(&model, logic_dev, D6_LUT, "A3", ZTERM);
 	if (rc) FAIL();
 
+#if 0
 	rc = diff_printf(&tstate);
 	if (rc) goto fail;
+#endif
 
-	// todo: start routing, step by step
-	// todo: after each step, printf floorplan diff (test_diff.sh)
-	// todo: popen/fork/pipe
+	printf("P46 I pinw %s\n", P46_dev->iob.pinw_out_I);
+	for (i = 0;; i++) {
+		sw_idx = fpga_switch_dest(&model, P46_y, P46_x, P46_dev->iob.pinw_out_I, i);
+		if (sw_idx == NO_SWITCH)
+			break;
+		str = fpga_switch_to(&model, P46_y, P46_x, sw_idx, /*bidir*/ 0);
+		printf(" from %s to %s\n", P46_dev->iob.pinw_out_I, str);
+		for (j = 0;; j++) {
+			conn_idx = fpga_conn_dest(&model, P46_y, P46_x, str, j);
+			if (conn_idx == NO_CONN)
+				break;
+			conn_to_str = fpga_conn_to(&model, P46_y, P46_x,
+				conn_idx, &conn_to_y, &conn_to_x);
+			printf("  %s goes to y%02i x%02i %s\n",
+				str, conn_to_y, conn_to_x, conn_to_str);
+		}
+	}
+	printf("P48 O pinw %s\n", P48_dev->iob.pinw_in_O);
 
 	printf("\n");
 	printf("O Test suite completed.\n");

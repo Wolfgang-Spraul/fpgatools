@@ -34,8 +34,10 @@ int init_switches(struct fpga_model* model)
 	rc = init_io_switches(model);
 	if (rc) goto xout;
 
+#if 0
 	rc = init_routing_switches(model);
 	if (rc) goto xout;
+#endif
 	return 0;
 xout:
 	return rc;

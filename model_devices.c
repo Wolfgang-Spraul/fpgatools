@@ -63,12 +63,12 @@ static int init_iob(struct fpga_model* model, int y, int x,
 	if (rc) FAIL();
 	snprintf(tile->devs[idx].iob.pinw_in_T,
 		sizeof(tile->devs[idx].iob.pinw_in_T),
-		"%s_IBUF%i_PINW", prefix, type_idx);
+		"%s_T%i_PINW", prefix, type_idx);
 	rc = add_connpt_name(model, y, x, tile->devs[idx].iob.pinw_in_T);
 	if (rc) FAIL();
 	snprintf(tile->devs[idx].iob.pinw_out_I,
 		sizeof(tile->devs[idx].iob.pinw_out_I),
-		"%s_T%i_PINW", prefix, type_idx);
+		"%s_IBUF%i_PINW", prefix, type_idx);
 	rc = add_connpt_name(model, y, x, tile->devs[idx].iob.pinw_out_I);
 	if (rc) FAIL();
 	snprintf(tile->devs[idx].iob.pinw_out_PADOUT,
@@ -344,8 +344,8 @@ int init_devices(struct fpga_model* model)
 			y = TOP_OUTER_ROW;
 			if ((rc = add_dev(model, y, x, DEV_IOB, IOBM))) goto fail;
 			if ((rc = add_dev(model, y, x, DEV_IOB, IOBS))) goto fail;
-			if ((rc = add_dev(model, y, x, DEV_IOB, IOBS))) goto fail;
 			if ((rc = add_dev(model, y, x, DEV_IOB, IOBM))) goto fail;
+			if ((rc = add_dev(model, y, x, DEV_IOB, IOBS))) goto fail;
 
 			y = model->y_height-BOT_OUTER_ROW;
 			if ((rc = add_dev(model, y, x, DEV_IOB, IOBM))) goto fail;
