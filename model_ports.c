@@ -8,33 +8,6 @@
 #include <stdarg.h>
 #include "model.h"
 
-static int add_io_connpts(struct fpga_model* model, int y, int x, const char* prefix, int num_devs)
-{
-	int i, rc;
-
-	for (i = 0; i < num_devs; i++) {
-		rc = add_connpt_name(model, y, x, pf("%s_O%i_PINW", prefix, i));
-		if (rc) goto xout;
-		rc = add_connpt_name(model, y, x, pf("%s_IBUF%i_PINW", prefix, i));
-		if (rc) goto xout;
-		rc = add_connpt_name(model, y, x, pf("%s_T%i_PINW", prefix, i));
-		if (rc) goto xout;
-		rc = add_connpt_name(model, y, x, pf("%s_PADOUT%i", prefix, i));
-		if (rc) goto xout;
-		rc = add_connpt_name(model, y, x, pf("%s_DIFFI_IN%i", prefix, i));
-		if (rc) goto xout;
-		rc = add_connpt_name(model, y, x, pf("%s_DIFFO_IN%i", prefix, i));
-		if (rc) goto xout;
-		rc = add_connpt_name(model, y, x, pf("%s_DIFFO_OUT%i", prefix, i));
-		if (rc) goto xout;
-		rc = add_connpt_name(model, y, x, pf("%s_PCI_RDY%i", prefix, i));
-		if (rc) goto xout;
-	}
-	return 0;
-xout:
-	return rc;
-}
-
 enum which_side
 {
 	TOP_S, BOTTOM_S, RIGHT_S, LEFT_S
@@ -217,32 +190,6 @@ int init_ports(struct fpga_model* model)
 		}
 		if (has_device(model, y, model->x_width - RIGHT_IO_DEVS_O, DEV_ILOGIC)) {
 			rc = init_iologic_ports(model, y, model->x_width - RIGHT_IO_DEVS_O, RIGHT_S);
-			if (rc) goto xout;
-		}
-	}
-
-	// IO tiles
-	for (x = LEFT_SIDE_WIDTH; x < model->x_width - RIGHT_SIDE_WIDTH; x++) {
-		if (YX_TILE(model, 0, x)->type == IO_T) {
-			rc = add_io_connpts(model, 0 /* y */, x, "TIOB",
-				4 /* num_devs */);
-			if (rc) goto xout;
-		}
-		if (YX_TILE(model, model->y_height - BOT_OUTER_ROW, x)->type == IO_B) {
-			rc = add_io_connpts(model, model->y_height
-				- BOT_OUTER_ROW, x, "BIOB", 4 /* num_devs */);
-			if (rc) goto xout;
-		}
-	}
-	for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
-		if (YX_TILE(model, y, 0)->type == IO_L) {
-			rc = add_io_connpts(model, y, 0 /* x */, "LIOB",
-				2 /* num_devs */);
-			if (rc) goto xout;
-		}
-		if (YX_TILE(model, y, model->x_width - RIGHT_OUTER_O)->type == IO_R) {
-			rc = add_io_connpts(model, y, model->x_width
-				- RIGHT_OUTER_O, "RIOB", 2 /* num_devs */);
 			if (rc) goto xout;
 		}
 	}

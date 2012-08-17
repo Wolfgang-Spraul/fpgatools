@@ -22,6 +22,8 @@
 	"Internal error in %s:%i\n", __FILE__, __LINE__); exit(1); }
 
 #define HERE() fprintf(stderr, "%s:%i\n", __FILE__, __LINE__)
+#define FAIL() do { HERE(); goto fail; } while (0)
+#define XOUT() do { HERE(); goto xout; } while (0)
 
 void printf_help(void);
 

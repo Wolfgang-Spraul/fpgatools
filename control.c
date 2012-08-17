@@ -16,32 +16,32 @@ struct iob_site
 
 static const struct iob_site xc6slx9_iob_top[] =
 {
-	{ 5, {"P144",   "P143",   "P142",   "P141"}},
-	{ 7, {"P140",   "P139",   "P138",   "P137"}},
-	{12, {"UNB9",   "UNB10",  "UNB11",  "UNB12"}},
-	{14, {"UNB13",  "UNB14",  "UNB15",  "UNB16"}},
-	{19, {"UNB17",  "UNB18",  "UNB19",  "UNB20"}},
-	{21, {"P134",   "P133",   "P132",   "P131"}},
-	{25, {"P127",   "P126",   "P124",   "P123"}},
-	{29, {"UNB29",  "UNB30",  "UNB31",  "UNB32"}},
-	{31, {"UNB33",  "UNB34",  "P121",   "P120"}},
-	{36, {"P119",   "P118",   "P117",   "P116"}},
-	{38, {"P115",   "P114",   "P112",   "P111"}},
+	{ 5, {"P144",   "P143",   "P141",  "P142"}},
+	{ 7, {"P140",   "P139",   "P137",  "P138"}},
+	{12, {"UNB9",   "UNB10",  "UNB12", "UNB11"}},
+	{14, {"UNB13",  "UNB14",  "UNB16", "UNB15"}},
+	{19, {"UNB17",  "UNB18",  "UNB20", "UNB19"}},
+	{21, {"P134",   "P133",   "P131",  "P132"}},
+	{25, {"P127",   "P126",   "P123",  "P124"}},
+	{29, {"UNB29",  "UNB30",  "UNB32", "UNB31"}},
+	{31, {"UNB33",  "UNB34",  "P120",  "P121"}},
+	{36, {"P119",   "P118",   "P116",  "P117"}},
+	{38, {"P115",   "P114",   "P111",  "P112"}},
 };
 
 static const struct iob_site xc6slx9_iob_bottom[] =
 {
-	{ 5, {"P38",    "P39",    "P40",    "P41"}},
-	{ 7, {"UNB140", "UNB139", "P43",    "P44"}},
-	{12, {"P45",    "P46",    "P47",    "P48"}},
-	{14, {"UNB132", "UNB131", "UNB130", "UNB129"}},
-	{19, {"UNB128", "UNB127", "UNB126", "UNB125"}},
-	{21, {"UNB124", "UNB123", "P50",    "P51"}},
-	{25, {"P55",    "P56",    "UNB118", "UNB117"}},
-	{29, {"UNB116", "UNB115", "UNB114", "UNB113"}},
-	{31, {"P57",    "P58",    "P59",    "P60"}},
-	{36, {"P61",    "P62",    "P64",    "P65"}},
-	{38, {"P66",    "P67",    "P69",    "P70"}},
+	{ 5, {"P38",    "P39",    "P41",    "P40"}},
+	{ 7, {"UNB140", "UNB139", "P44",    "P43"}},
+	{12, {"P45",    "P46",    "P48",    "P47"}},
+	{14, {"UNB132", "UNB131", "UNB129", "UNB130"}},
+	{19, {"UNB128", "UNB127", "UNB125", "UNB126"}},
+	{21, {"UNB124", "UNB123", "P51",    "P50"}},
+	{25, {"P55",    "P56",    "UNB117", "UNB118"}},
+	{29, {"UNB116", "UNB115", "UNB113", "UNB114"}},
+	{31, {"P57",    "P58",    "P60",    "P59"}},
+	{36, {"P61",    "P62",    "P65",    "P64"}},
+	{38, {"P66",    "P67",    "P70",    "P69"}},
 };
 
 static const struct iob_site xc6slx9_iob_left[] =
@@ -201,7 +201,7 @@ const char* fpga_iob_sitename(struct fpga_model* model, int y, int x,
 }
 
 struct fpga_device* fpga_dev(struct fpga_model* model,
-	int y, int x, enum fpgadev_type type, int idx)
+	int y, int x, enum fpgadev_type type, int type_idx)
 {
 	struct fpga_tile* tile;
 	int type_count, i;
@@ -210,12 +210,27 @@ struct fpga_device* fpga_dev(struct fpga_model* model,
 	type_count = 0;
 	for (i = 0; i < tile->num_devs; i++) {
 		if (tile->devs[i].type == type) {
-			if (type_count == idx)
+			if (type_count == type_idx)
 				return &tile->devs[i];
 			type_count++;
 		}
 	}
 	return 0;
+}
+
+int fpga_dev_typecount(struct fpga_model* model, int y, int x,
+	enum fpgadev_type type, int dev_idx)
+{
+	struct fpga_tile* tile;
+	int type_count, i;
+
+	tile = YX_TILE(model, y, x);
+	type_count = 0;
+	for (i = 0; i < dev_idx; i++) {
+		if (tile->devs[i].type == type)
+			type_count++;
+	}
+	return type_count;
 }
 
 #define MAX_LUT_LEN	512

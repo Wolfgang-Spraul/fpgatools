@@ -151,6 +151,9 @@ enum fpga_tile_type
 #define LAST_POS_IN_ROW		16 // including hclk at 8
 #define ROW_SIZE		(HALF_ROW+1+HALF_ROW)
 
+#define CENTER_TOP_IOB_O	3 // deduct from center_x
+#define CENTER_BOT_IOB_O	1 // add to center_x
+
 // Some offsets that are being deducted from their origin
 #define BOT_IO_TILES		2
 // todo: rename BOT_OUTER_ROW to BOT_OUTER_TERM and BOT_INNER_ROW
@@ -326,8 +329,19 @@ enum { ITERM_NONE = 1, ITERM_UNTUNED_25, ITERM_UNTUNED_50,
 enum { OTERM_NONE = 1, OTERM_UNTUNED_25, OTERM_UNTUNED_50,
 	OTERM_UNTUNED_75 };
 
+typedef char PINW_NAME[32];
+
 struct fpgadev_iob
 {
+	PINW_NAME pinw_in_O;
+	PINW_NAME pinw_in_T;
+	PINW_NAME pinw_out_I;
+	PINW_NAME pinw_out_PADOUT;
+	PINW_NAME pinw_out_PCI_RDY;
+	PINW_NAME pinw_in_DIFFI_IN;
+	PINW_NAME pinw_in_DIFFO_IN;
+	PINW_NAME pinw_out_DIFFO_OUT;
+
 	int subtype; // IOBM or IOBS
 	IOSTANDARD istandard;
 	IOSTANDARD ostandard;

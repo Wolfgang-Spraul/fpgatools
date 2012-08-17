@@ -7,6 +7,7 @@
 
 #include <stdarg.h>
 #include "model.h"
+#include "control.h"
 
 void free_devices(struct fpga_model* model)
 {
@@ -33,26 +34,115 @@ void free_devices(struct fpga_model* model)
 	}
 }
 
+static int init_iob(struct fpga_model* model, int y, int x,
+	int idx, int subtype)
+{
+	struct fpga_tile* tile;
+	const char* prefix;
+	int type_idx, rc;
+
+	tile = YX_TILE(model, y, x);
+	tile->devs[idx].iob.subtype = subtype;
+	type_idx = fpga_dev_typecount(model, y, x, DEV_IOB, idx);
+	if (!y)
+		prefix = "TIOB";
+	else if (y == model->y_height - BOT_OUTER_ROW)
+		prefix = "BIOB";
+	else if (x == 0)
+		prefix = "LIOB";
+	else if (x == model->x_width - RIGHT_OUTER_O)
+		prefix = "RIOB";
+	else {
+		rc = -1;
+		FAIL();
+	}
+	snprintf(tile->devs[idx].iob.pinw_in_O,
+		sizeof(tile->devs[idx].iob.pinw_in_O),
+		"%s_O%i_PINW", prefix, type_idx);
+	rc = add_connpt_name(model, y, x, tile->devs[idx].iob.pinw_in_O);
+	if (rc) FAIL();
+	snprintf(tile->devs[idx].iob.pinw_in_T,
+		sizeof(tile->devs[idx].iob.pinw_in_T),
+		"%s_IBUF%i_PINW", prefix, type_idx);
+	rc = add_connpt_name(model, y, x, tile->devs[idx].iob.pinw_in_T);
+	if (rc) FAIL();
+	snprintf(tile->devs[idx].iob.pinw_out_I,
+		sizeof(tile->devs[idx].iob.pinw_out_I),
+		"%s_T%i_PINW", prefix, type_idx);
+	rc = add_connpt_name(model, y, x, tile->devs[idx].iob.pinw_out_I);
+	if (rc) FAIL();
+	snprintf(tile->devs[idx].iob.pinw_out_PADOUT,
+		sizeof(tile->devs[idx].iob.pinw_out_PADOUT),
+		"%s_PADOUT%i", prefix, type_idx);
+	rc = add_connpt_name(model, y, x, tile->devs[idx].iob.pinw_out_PADOUT);
+	if (rc) FAIL();
+	snprintf(tile->devs[idx].iob.pinw_in_DIFFI_IN,
+		sizeof(tile->devs[idx].iob.pinw_in_DIFFI_IN),
+		"%s_DIFFI_IN%i", prefix, type_idx);
+	rc = add_connpt_name(model, y, x, tile->devs[idx].iob.pinw_in_DIFFI_IN);
+	if (rc) FAIL();
+	snprintf(tile->devs[idx].iob.pinw_in_DIFFO_IN,
+		sizeof(tile->devs[idx].iob.pinw_in_DIFFO_IN),
+		"%s_DIFFO_IN%i", prefix, type_idx);
+	rc = add_connpt_name(model, y, x, tile->devs[idx].iob.pinw_in_DIFFO_IN);
+	if (rc) FAIL();
+	snprintf(tile->devs[idx].iob.pinw_out_DIFFO_OUT,
+		sizeof(tile->devs[idx].iob.pinw_out_DIFFO_OUT),
+		"%s_DIFFO_OUT%i", prefix, type_idx);
+	rc = add_connpt_name(model, y, x, tile->devs[idx].iob.pinw_out_DIFFO_OUT);
+	if (rc) FAIL();
+
+	if (!x && y == model->center_y - CENTER_TOP_IOB_O && type_idx == 1)
+		strcpy(tile->devs[idx].iob.pinw_out_PCI_RDY, "LIOB_TOP_PCI_RDY0");
+	else if (!x && y == model->center_y + CENTER_BOT_IOB_O && type_idx == 0)
+		strcpy(tile->devs[idx].iob.pinw_out_PCI_RDY, "LIOB_BOT_PCI_RDY0");
+	else if (x == model->x_width-RIGHT_OUTER_O && y == model->center_y - CENTER_TOP_IOB_O && type_idx == 0)
+		strcpy(tile->devs[idx].iob.pinw_out_PCI_RDY, "RIOB_BOT_PCI_RDY0");
+	else if (x == model->x_width-RIGHT_OUTER_O && y == model->center_y + CENTER_BOT_IOB_O && type_idx == 1)
+		strcpy(tile->devs[idx].iob.pinw_out_PCI_RDY, "RIOB_TOP_PCI_RDY1");
+	else {
+		snprintf(tile->devs[idx].iob.pinw_out_PCI_RDY,
+			sizeof(tile->devs[idx].iob.pinw_out_PCI_RDY),
+			"%s_PCI_RDY%i", prefix, type_idx);
+	}
+	rc = add_connpt_name(model, y, x, tile->devs[idx].iob.pinw_out_PCI_RDY);
+	if (rc) FAIL();
+	return 0;
+fail:
+	return rc;
+}
+
 #define DEV_INCREMENT 8
 
 static int add_dev(struct fpga_model* model,
 	int y, int x, int type, int subtype)
 {
-	struct fpga_tile* tile = YX_TILE(model, y, x);
+	struct fpga_tile* tile;
+	int new_dev_i;
+	int rc;
+
+	tile = YX_TILE(model, y, x);
 	if (!(tile->num_devs % DEV_INCREMENT)) {
 		void* new_ptr = realloc(tile->devs,
 			(tile->num_devs+DEV_INCREMENT)*sizeof(*tile->devs));
 		EXIT(!new_ptr);
-		memset(new_ptr + tile->num_devs * sizeof(*tile->devs), 0, DEV_INCREMENT*sizeof(*tile->devs));
+		memset(new_ptr + tile->num_devs * sizeof(*tile->devs),
+			0, DEV_INCREMENT*sizeof(*tile->devs));
 		tile->devs = new_ptr;
 	}
-	tile->devs[tile->num_devs].type = type;
-	if (type == DEV_IOB)
-		tile->devs[tile->num_devs].iob.subtype = subtype;
-	else if (type == DEV_LOGIC)
-		tile->devs[tile->num_devs].logic.subtype = subtype;
+	new_dev_i = tile->num_devs;
 	tile->num_devs++;
+
+	// init new device
+	tile->devs[new_dev_i].type = type;
+	if (type == DEV_IOB) {
+		rc = init_iob(model, y, x, new_dev_i, subtype);
+		if (rc) FAIL();
+	} else if (type == DEV_LOGIC)
+		tile->devs[new_dev_i].logic.subtype = subtype;
 	return 0;
+fail:
+	return rc;
 }
 
 int init_devices(struct fpga_model* model)
@@ -254,14 +344,14 @@ int init_devices(struct fpga_model* model)
 			y = TOP_OUTER_ROW;
 			if ((rc = add_dev(model, y, x, DEV_IOB, IOBM))) goto fail;
 			if ((rc = add_dev(model, y, x, DEV_IOB, IOBS))) goto fail;
-			if ((rc = add_dev(model, y, x, DEV_IOB, IOBM))) goto fail;
 			if ((rc = add_dev(model, y, x, DEV_IOB, IOBS))) goto fail;
+			if ((rc = add_dev(model, y, x, DEV_IOB, IOBM))) goto fail;
 
 			y = model->y_height-BOT_OUTER_ROW;
 			if ((rc = add_dev(model, y, x, DEV_IOB, IOBM))) goto fail;
 			if ((rc = add_dev(model, y, x, DEV_IOB, IOBS))) goto fail;
-			if ((rc = add_dev(model, y, x, DEV_IOB, IOBM))) goto fail;
 			if ((rc = add_dev(model, y, x, DEV_IOB, IOBS))) goto fail;
+			if ((rc = add_dev(model, y, x, DEV_IOB, IOBM))) goto fail;
 		}
 	}
 
