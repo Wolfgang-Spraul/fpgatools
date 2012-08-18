@@ -12,9 +12,10 @@
 int main(int argc, char** argv)
 {
 	struct fpga_model model;
-	FILE* fbits = 0;
 	int bits_only, file_arg, rc = -1;
+	struct fpga_config config;
 
+	// parameters
 	if (argc < 2) {
 		fprintf(stderr,
 			"\n"
@@ -23,7 +24,6 @@ int main(int argc, char** argv)
 			"\n", argv[0], argv[0]);
 		goto fail;
 	}
-
 	bits_only = 0;
 	file_arg = 1;
 	if (!strcmp(argv[1], "--bits-only")) {
@@ -31,22 +31,30 @@ int main(int argc, char** argv)
 		file_arg = 2;
 	} 
 
-	fbits = fopen(argv[file_arg], "r");
-	if (!fbits) {
-		fprintf(stderr, "Error opening %s.\n", argv[file_arg]);
-		goto fail;
+	// read bitstream file
+	{
+		FILE* fbits = fopen(argv[file_arg], "r");
+		if (!fbits) {
+			fprintf(stderr, "Error opening %s.\n", argv[file_arg]);
+			goto fail;
+		}
+		rc = read_bitfile(&config, fbits);
+		fclose(fbits);
+		if (rc) FAIL(rc);
 	}
 
+	// build model and fill from bitstream
 	if ((rc = fpga_build_model(&model, XC6SLX9_ROWS, XC6SLX9_COLUMNS,
-			XC6SLX9_LEFT_WIRING, XC6SLX9_RIGHT_WIRING)))
-		goto fail;
+			XC6SLX9_LEFT_WIRING, XC6SLX9_RIGHT_WIRING))) FAIL(rc);
+	if ((rc = extract_model(&config, &model))) FAIL(rc);
 
-	if ((rc = read_bits(&model, fbits))) goto fail;
+	// dump model
 	if ((rc = write_floorplan(stdout, &model,
-		bits_only ? FP_BITS_ONLY : FP_BITS_DEFAULT))) goto fail;
-	fclose(fbits);
+		bits_only ? FP_BITS_ONLY : FP_BITS_DEFAULT))) FAIL(rc);
+
+	// dump what doesn't fit into the model
+	if ((rc = dump_config(&config, DUMP_BITS))) FAIL(rc);
 	return EXIT_SUCCESS;
 fail:
-	if (fbits) fclose(fbits);
 	return rc;
 }

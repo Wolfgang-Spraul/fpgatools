@@ -18,7 +18,7 @@ LDLIBS += `pkg-config libxml-2.0 --libs`
 MODEL_OBJ = model_main.o model_tiles.o model_devices.o model_ports.o model_conns.o model_switches.o model_helper.o
 
 all: new_fp fp2bit bit2fp draw_svg_tiles \
-	autotest bit2txt hstrrep sort_seq merge_seq pair2net
+	autotest hstrrep sort_seq merge_seq pair2net
 
 autotest: autotest.o $(MODEL_OBJ) floorplan.o control.o helper.o model.h
 
@@ -45,10 +45,6 @@ control.o: control.c control.h model.h
 draw_svg_tiles: draw_svg_tiles.o $(MODEL_OBJ) helper.o control.o
 
 draw_svg_tiles.o: draw_svg_tiles.c model.h helper.h
-
-bit2txt: bit2txt.o helper.o
-
-bit2txt.o: bit2txt.c helper.h
 
 pair2net: pair2net.o helper.o
 
@@ -123,8 +119,7 @@ compare.%: xc6slx9_empty.%
 	@cat $<|awk '{if ($$1=="sw") printf "%s %s %s %s %s\n",$$2,$$3,$$4,$$5,$$6}'|sort >$@
 
 clean:
-	rm -f bit2txt bit2txt.o \
-		draw_svg_tiles draw_svg_tiles.o \
+	rm -f draw_svg_tiles draw_svg_tiles.o \
 		new_fp new_fp.o \
 		helper.o $(MODEL_OBJ) hstrrep hstrrep.o \
 		sort_seq sort_seq.o \
@@ -148,6 +143,6 @@ clean:
 install:	all
 		mkdir -p $(DESTDIR)/$(PREFIX)/bin/
 		install -m 755 new_fp  $(DESTDIR)/$(PREFIX)/bin/
-		install -m 755 bit2txt $(DESTDIR)/$(PREFIX)/bin/
+		install -m 755 bit2fp $(DESTDIR)/$(PREFIX)/bin/
 uninstall:
-		rm -f $(DESTDIR)/$(PREFIX)/bin/{new_fp,bit2txt}
+		rm -f $(DESTDIR)/$(PREFIX)/bin/{new_fp,bit2fp}

@@ -7,21 +7,6 @@
 
 #include "helper.h"
 
-void printf_help(void)
-{
-	printf("\n"
-	       "bit2txt %s - convert FPGA bitstream to text\n"
-	       "Public domain work by Wolfgang Spraul\n"
-	       "\n"
-	       "bit2txt [options] <path to .bit file>\n"
-	       "  --help                 print help message\n"
-	       "  --version              print version number\n"
-	       "  --info                 add extra info to output (marked #I)\n"
-	       "  <path to .bit file>    bitstream to print on stdout\n"
-	       "                         (proposing extension .b2t)\n"
-	       "\n", PROGRAM_REVISION);
-}
-
 const char* bitstr(uint32_t value, int digits)
 {
         static char str[2 /* "0b" */ + 32 + 1 /* '\0' */];
@@ -101,52 +86,6 @@ void atom_remove(char* bits, const cfg_atom_t* atom)
 		if (bits[atom->must_1[i]])
 			bits[atom->must_1[i]] = 0;
 	}
-}
-
-int printf_header(uint8_t* d, int len, int inpos, int* outdelta, int dry_run)
-{
-	int i, str_len;
-
-	*outdelta = 0;
-	if (inpos + 13 > len) {
-		fprintf(stderr, "#E File size %i below minimum of 13 bytes.\n",
-			len);
-		return -1;
-	}
-	if (!dry_run) {
-		printf("hex");
-		for (i = 0; i < 13; i++)
-			printf(" %.02x", d[inpos+*outdelta+i]);
-		printf("\n");
-	}
-	*outdelta += 13;
-
-	// 4 strings 'a' - 'd', 16-bit length
-	for (i = 'a'; i <= 'd'; i++) {
-		if (inpos + *outdelta + 3 > len) {
-			fprintf(stderr, "#E Unexpected EOF at %i.\n", len);
-			return -1;
-		}
-		if (d[inpos + *outdelta] != i) {
-			fprintf(stderr, "#E Expected string code '%c', got "
-				"'%c'.\n", i, d[inpos + *outdelta]);
-			return -1;
-		}
-		str_len = __be16_to_cpu(*(uint16_t*)&d[inpos + *outdelta + 1]);
-		if (inpos + *outdelta + 3 + str_len > len) {
-			fprintf(stderr, "#E Unexpected EOF at %i.\n", len);
-			return -1;
-		}
-		if (d[inpos + *outdelta + 3 + str_len - 1]) {
-			fprintf(stderr, "#E z-terminated string ends with %0xh"
-				".\n", d[inpos + *outdelta + 3 + str_len - 1]);
-			return -1;
-		}
-		if (!dry_run)
-			printf("header_str_%c %s\n", i, &d[inpos + *outdelta + 3]);
-		*outdelta += 3 + str_len;
-	}
-	return 0;
 }
 
 // for an equivalent schematic, see lut.svg

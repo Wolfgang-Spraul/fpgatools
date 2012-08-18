@@ -269,14 +269,14 @@ int fpga_conn_dest(struct fpga_model* model, int y, int x,
 	int i, rc, connpt_i, num_dests, conn_point_dests_o;
 
 	rc = strarray_find(&model->str, name, &connpt_i);
-	if (rc) FAIL();
+	if (rc) FAIL(rc);
 	tile = YX_TILE(model, y, x);
 	for (i = 0; i < tile->num_conn_point_names; i++) {
 		if (tile->conn_point_names[i*2+1] == connpt_i)
 			break;
 	}
-	if (i >= tile->num_conn_point_names) 
-		FAIL();
+	if (i >= tile->num_conn_point_names)
+		FAIL(EINVAL);
 
 	conn_point_dests_o = tile->conn_point_names[i*2];
 	if (i < tile->num_conn_point_names-1)
@@ -330,7 +330,7 @@ int fpga_switch_dest(struct fpga_model* model, int y, int x,
 	int rc, i, connpt_o, from_name_i, dest_idx_counter;
 
 	rc = strarray_find(&model->str, name, &from_name_i);
-	if (rc) FAIL();
+	if (rc) FAIL(rc);
 
 	// counts how many switches from the same source (name)
 	// we have already encountered - to find the dest_idx'th
@@ -347,7 +347,7 @@ int fpga_switch_dest(struct fpga_model* model, int y, int x,
 	}
 	if (i >= tile->num_switches)
 		return NO_SWITCH;
-	if (dest_idx_counter > dest_idx) FAIL();
+	if (dest_idx_counter > dest_idx) FAIL(EINVAL);
 	return i;
 fail:
 	return NO_SWITCH;

@@ -22,10 +22,8 @@
 	"Internal error in %s:%i\n", __FILE__, __LINE__); exit(1); }
 
 #define HERE() fprintf(stderr, "%s:%i\n", __FILE__, __LINE__)
-#define FAIL() do { HERE(); goto fail; } while (0)
+#define FAIL(code) do { HERE(); rc = (code); goto fail; } while (0)
 #define XOUT() do { HERE(); goto xout; } while (0)
-
-void printf_help(void);
 
 const char* bitstr(uint32_t value, int digits);
 void hexdump(int indent, const uint8_t* data, int len);
@@ -55,8 +53,6 @@ typedef struct _cfg_atom
 
 int atom_found(char* bits, const cfg_atom_t* atom);
 void atom_remove(char* bits, const cfg_atom_t* atom);
-
-int printf_header(uint8_t* d, int len, int inpos, int* outdelta, int dry_run);
 
 void printf_lut6(const char* cfg);
 // bits is tested only for 32 and 64

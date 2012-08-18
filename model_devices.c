@@ -52,45 +52,43 @@ static int init_iob(struct fpga_model* model, int y, int x,
 		prefix = "LIOB";
 	else if (x == model->x_width - RIGHT_OUTER_O)
 		prefix = "RIOB";
-	else {
-		rc = -1;
-		FAIL();
-	}
+	else
+		FAIL(EINVAL);
 	snprintf(tile->devs[idx].iob.pinw_in_O,
 		sizeof(tile->devs[idx].iob.pinw_in_O),
 		"%s_O%i_PINW", prefix, type_idx);
 	rc = add_connpt_name(model, y, x, tile->devs[idx].iob.pinw_in_O);
-	if (rc) FAIL();
+	if (rc) FAIL(rc);
 	snprintf(tile->devs[idx].iob.pinw_in_T,
 		sizeof(tile->devs[idx].iob.pinw_in_T),
 		"%s_T%i_PINW", prefix, type_idx);
 	rc = add_connpt_name(model, y, x, tile->devs[idx].iob.pinw_in_T);
-	if (rc) FAIL();
+	if (rc) FAIL(rc);
 	snprintf(tile->devs[idx].iob.pinw_out_I,
 		sizeof(tile->devs[idx].iob.pinw_out_I),
 		"%s_IBUF%i_PINW", prefix, type_idx);
 	rc = add_connpt_name(model, y, x, tile->devs[idx].iob.pinw_out_I);
-	if (rc) FAIL();
+	if (rc) FAIL(rc);
 	snprintf(tile->devs[idx].iob.pinw_out_PADOUT,
 		sizeof(tile->devs[idx].iob.pinw_out_PADOUT),
 		"%s_PADOUT%i", prefix, type_idx);
 	rc = add_connpt_name(model, y, x, tile->devs[idx].iob.pinw_out_PADOUT);
-	if (rc) FAIL();
+	if (rc) FAIL(rc);
 	snprintf(tile->devs[idx].iob.pinw_in_DIFFI_IN,
 		sizeof(tile->devs[idx].iob.pinw_in_DIFFI_IN),
 		"%s_DIFFI_IN%i", prefix, type_idx);
 	rc = add_connpt_name(model, y, x, tile->devs[idx].iob.pinw_in_DIFFI_IN);
-	if (rc) FAIL();
+	if (rc) FAIL(rc);
 	snprintf(tile->devs[idx].iob.pinw_in_DIFFO_IN,
 		sizeof(tile->devs[idx].iob.pinw_in_DIFFO_IN),
 		"%s_DIFFO_IN%i", prefix, type_idx);
 	rc = add_connpt_name(model, y, x, tile->devs[idx].iob.pinw_in_DIFFO_IN);
-	if (rc) FAIL();
+	if (rc) FAIL(rc);
 	snprintf(tile->devs[idx].iob.pinw_out_DIFFO_OUT,
 		sizeof(tile->devs[idx].iob.pinw_out_DIFFO_OUT),
 		"%s_DIFFO_OUT%i", prefix, type_idx);
 	rc = add_connpt_name(model, y, x, tile->devs[idx].iob.pinw_out_DIFFO_OUT);
-	if (rc) FAIL();
+	if (rc) FAIL(rc);
 
 	if (!x && y == model->center_y - CENTER_TOP_IOB_O && type_idx == 1)
 		strcpy(tile->devs[idx].iob.pinw_out_PCI_RDY, "LIOB_TOP_PCI_RDY0");
@@ -106,7 +104,7 @@ static int init_iob(struct fpga_model* model, int y, int x,
 			"%s_PCI_RDY%i", prefix, type_idx);
 	}
 	rc = add_connpt_name(model, y, x, tile->devs[idx].iob.pinw_out_PCI_RDY);
-	if (rc) FAIL();
+	if (rc) FAIL(rc);
 	return 0;
 fail:
 	return rc;
@@ -137,7 +135,7 @@ static int add_dev(struct fpga_model* model,
 	tile->devs[new_dev_i].type = type;
 	if (type == DEV_IOB) {
 		rc = init_iob(model, y, x, new_dev_i, subtype);
-		if (rc) FAIL();
+		if (rc) FAIL(rc);
 	} else if (type == DEV_LOGIC)
 		tile->devs[new_dev_i].logic.subtype = subtype;
 	return 0;

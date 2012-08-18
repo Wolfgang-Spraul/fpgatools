@@ -1,5 +1,3 @@
-bit2txt
-bit2txt.o
 draw_svg_tiles
 draw_svg_tiles.o
 helper.o

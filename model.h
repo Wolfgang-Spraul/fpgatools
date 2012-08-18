@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <assert.h>
+#include <errno.h>
 #include <sys/stat.h>
 
 #include "helper.h"

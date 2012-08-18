@@ -75,12 +75,12 @@ static int diff_printf(struct test_state* tstate)
 
 	strcpy(&path[path_base], ".fp");
 	dest_f = fopen(path, "w");
-	if (!dest_f) { rc = -1; FAIL(); }
+	if (!dest_f) FAIL(errno);
 
 	rc = printf_devices(dest_f, tstate->model, /*config_only*/ 1);
-	if (rc) FAIL();
+	if (rc) FAIL(rc);
 	rc = printf_switches(dest_f, tstate->model, /*enabled_only*/ 1);
-	if (rc) FAIL();
+	if (rc) FAIL(rc);
 
 	fclose(dest_f);
 	dest_f = 0;
@@ -88,11 +88,11 @@ static int diff_printf(struct test_state* tstate)
 	snprintf(tmp, sizeof(tmp), "./autotest_diff.sh %s %s.fp >%s.log 2>&1",
 		prior_fp, path, path);
 	rc = system(tmp);
-	if (rc) FAIL();
+	if (rc) FAIL(rc);
 
 	strcpy(&path[path_base], ".diff");
 	rc = dump_file(path);
-	if (rc) FAIL();
+	if (rc) FAIL(rc);
 
 	tstate->next_diff_counter++;
 	return 0;
@@ -132,13 +132,13 @@ int main(int argc, char** argv)
 	strcpy(tstate.tmp_dir, AUTOTEST_TMP_DIR);
 	mkdir(tstate.tmp_dir, S_IRWXU|S_IRWXG|S_IROTH|S_IXOTH);
 	rc = diff_start(&tstate, "and");
-	if (rc) FAIL();
+	if (rc) FAIL(rc);
 	
 	// configure P46
 	rc = fpga_find_iob(&model, "P46", &P46_y, &P46_x, &P46_idx);
-	if (rc) FAIL();
+	if (rc) FAIL(rc);
 	P46_dev = fpga_dev(&model, P46_y, P46_x, DEV_IOB, P46_idx);
-	if (!P46_dev) { rc = -1; FAIL(); }
+	if (!P46_dev) FAIL(EINVAL);
 	P46_dev->instantiated = 1;
 	strcpy(P46_dev->iob.istandard, IO_LVCMOS33);
 	P46_dev->iob.bypass_mux = BYPASS_MUX_I;
@@ -146,9 +146,9 @@ int main(int argc, char** argv)
 
 	// configure P48
 	rc = fpga_find_iob(&model, "P48", &P48_y, &P48_x, &P48_idx);
-	if (rc) FAIL();
+	if (rc) FAIL(rc);
 	P48_dev = fpga_dev(&model, P48_y, P48_x, DEV_IOB, P48_idx);
-	if (!P48_dev) { rc = -1; FAIL(); }
+	if (!P48_dev) FAIL(EINVAL);
 	P48_dev->instantiated = 1;
 	strcpy(P48_dev->iob.ostandard, IO_LVCMOS33);
 	P48_dev->iob.drive_strength = 12;
@@ -158,13 +158,13 @@ int main(int argc, char** argv)
 
 	// configure logic
 	logic_dev = fpga_dev(&model, /*y*/ 68, /*x*/ 13, DEV_LOGIC, /*LOGIC_X*/ 1);
-	if (!logic_dev) { rc = -1; FAIL(); }
+	if (!logic_dev) FAIL(EINVAL);
 	logic_dev->instantiated = 1;
 	logic_dev->logic.D_used = 1;
 	rc = fpga_set_lut(&model, logic_dev, D6_LUT, "A3", ZTERM);
-	if (rc) FAIL();
+	if (rc) FAIL(rc);
 
-#if 0
+#if 1
 	rc = diff_printf(&tstate);
 	if (rc) goto fail;
 #endif
