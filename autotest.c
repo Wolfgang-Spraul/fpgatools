@@ -164,8 +164,10 @@ int main(int argc, char** argv)
 	rc = fpga_set_lut(&model, logic_dev, D6_LUT, "A3", ZTERM);
 	if (rc) FAIL();
 
+#if 0
 	rc = diff_printf(&tstate);
 	if (rc) goto fail;
+#endif
 
 	printf("P46 I pinw %s\n", P46_dev->iob.pinw_out_I);
 	for (i = 0;; i++) {
@@ -188,6 +190,7 @@ int main(int argc, char** argv)
 
 	printf("\n");
 	printf("O Test suite completed.\n");
+	TIME_AND_MEM();
 	printf("\n");
 	return EXIT_SUCCESS;
 fail:

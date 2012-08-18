@@ -152,23 +152,35 @@ xout:
 static int init_iologic_tile(struct fpga_model* model, int y, int x)
 {
 	int i, j, rc;
-	const char* io_prefix;
+	const char* io_prefix, *prefix, *prefix2;
 
 	if (x < LEFT_SIDE_WIDTH) {
 		EXIT(x != LEFT_IO_DEVS);
 		io_prefix = "IOI_";
+		prefix = "LIOI_";
+		prefix2 = "LIOI_IOB_";
 	} else if (x >= model->x_width-RIGHT_SIDE_WIDTH) {
 		EXIT(x != model->x_width - RIGHT_IO_DEVS_O);
 		io_prefix = "RIOI_";
+		prefix = "RIOI_";
+		prefix2 = "RIOI_IOB_";
 	} else {
 		if (y == TOP_OUTER_IO) {
 			io_prefix = "TIOI_";
+			prefix = "TIOI_";
+			prefix2 = "TIOI_OUTER_";
 		} else if (y == TOP_INNER_IO) {
 			io_prefix = "TIOI_INNER_";
+			prefix = "TIOI_";
+			prefix2 = "TIOI_INNER_";
 		} else if (y == model->y_height-BOT_INNER_IO) {
 			io_prefix = "BIOI_INNER_";
+			prefix = "BIOI_";
+			prefix2 = "BIOI_INNER_";
 		} else if (y == model->y_height-BOT_OUTER_IO) {
 			io_prefix = "TIOI_";
+			prefix = "BIOI_";
+			prefix2 = "BIOI_OUTER_";
 		} else
 			EXIT(1);
 	}
@@ -254,6 +266,258 @@ static int init_iologic_tile(struct fpga_model* model, int y, int x)
 			pf("IOI_CLK%iINTER%s", i%3, i<3?"_M":"_S"),
 			pf("IOI_CLKDIST_CLK0_OLOGIC%s", i<3?"_M":"_S"),
 			0 /* bidir */))) goto xout;
+	}
+	// logicin wires
+	{
+		static const char* iologic_logicin[] =
+		{
+			[X_A3] = "CAL_IODELAY_SITE",
+			[X_A4] = "CAL_IODELAY_SITE_S",
+			[X_A6] = "CE_IODELAY_SITE_S",
+			[X_B1] = "INC_IODELAY_SITE_S",
+			[X_B2] = "TRAIN_OLOGIC_SITE",
+			[X_B3] = "TCE_OLOGIC_SITE_S",
+			[X_B6] = "T3_OLOGIC_SITE_S",
+			[X_C1] = "REV_OLOGIC_SITE_S",
+			[X_C2] = "D1_OLOGIC_SITE_S",
+			[X_C3] = "D2_OLOGIC_SITE_S",
+			[X_C4] = "D3_OLOGIC_SITE_S",
+			[X_C6] = "BITSLIP_ILOGIC_SITE_S",
+			[X_CE] = "SR_ILOGIC_SITE_S",
+			[X_D2] = "TCE_OLOGIC_SITE",
+			[X_D3] = "T1_OLOGIC_SITE",
+			[X_D4] = "T2_OLOGIC_SITE",
+			[X_D5] = "T3_OLOGIC_SITE",
+			[X_D6] = "T4_OLOGIC_SITE",
+			[X_DX] = "TRAIN_OLOGIC_SITE_S",
+		
+			[M_A1] = "REV_OLOGIC_SITE",
+			[M_A2] = "OCE_OLOGIC_SITE",
+			[M_A3] = "D1_OLOGIC_SITE",
+			[M_A4] = "D2_OLOGIC_SITE",
+			[M_A6] = "D4_OLOGIC_SITE",
+			[M_AI] = "SR_ILOGIC_SITE",
+			[M_B1] = "REV_ILOGIC_SITE",
+			[M_B2] = "CE0_ILOGIC_SITE",
+			[M_B3] = "OCE_OLOGIC_SITE_S",
+			[M_B5] = "RST_IODELAY_SITE_S",
+			[M_B6] = "T2_OLOGIC_SITE_S",
+			[M_BI] = "D3_OLOGIC_SITE",
+			[M_C1] = "T1_OLOGIC_SITE_S",
+			[M_C3] = "CE_IODELAY_SITE",
+			[M_C4] = "D4_OLOGIC_SITE_S",
+			[M_D1] = "T4_OLOGIC_SITE_S",
+			[M_D2] = "RST_IODELAY_SITE",
+			[M_D4] = "BITSLIP_ILOGIC_SITE",
+			[M_D5] = "INC_IODELAY_SITE",
+			[M_D6] = "REV_ILOGIC_SITE_S",
+			[M_WE] = "CE0_ILOGIC_SITE_S",
+		};
+		for (i = 0; i < sizeof(iologic_logicin)/sizeof(*iologic_logicin); i++) {
+			if (!iologic_logicin[i]) continue;
+			if ((rc = add_switch(model, y, x,
+				pf("IOI_LOGICINB%i", i),
+				iologic_logicin[i], /*bidir*/ 0))) goto xout;
+		}
+	}
+	// GND
+	{
+		static const char* s[] = { "REV_OLOGIC_SITE",
+			"SR_OLOGIC_SITE", "TRAIN_OLOGIC_SITE" };
+		for (i = 0; i < 6; i++) {
+			if ((rc = add_switch(model, y, x,
+				pf("%sGND_TIEOFF", prefix),
+				pf("%s%s", s[i/2], i%2 ? "" : "_S"),
+				/*bidir*/ 0))) goto xout;
+		}
+	}
+	// VCC
+	{
+		static const char* s[] = { "IOCE_ILOGIC_SITE",
+			"IOCE_OLOGIC_SITE" };
+		for (i = 0; i < 4; i++) {
+			if ((rc = add_switch(model, y, x,
+				pf("%sVCC_TIEOFF", prefix),
+				pf("%s%s", s[i/2], i%2 ? "" : "_S"),
+				/*bidir*/ 0))) goto xout;
+		}
+	}
+	// CLK
+	{
+		static const char* s[] = { "CLKDIV_ILOGIC_SITE",
+			"CLKDIV_OLOGIC_SITE", "CLK_IODELAY_SITE" };
+		for (i = 0; i < 6; i++) {
+			if ((rc = add_switch(model, y, x,
+				pf("IOI_CLK%i", !(i%2)),
+				pf("%s%s", s[i/2], i%2 ? "" : "_S"),
+				/*bidir*/ 0))) goto xout;
+		}
+		for (i = 0; i < 4; i++) {
+			if ((rc = add_switch(model, y, x,
+				pf("CLK%i_ILOGIC_SITE%s", i/2, i%2 ? "_S" : ""),
+				pf("CFB%i_ILOGIC_SITE%s", i/2, i%2 ? "_S" : ""),
+				/*bidir*/ 0))) goto xout;
+		}
+	}
+	// SR
+	{
+		static const char* s[] = { "SR_ILOGIC_SITE",
+			"SR_OLOGIC_SITE" };
+		for (i = 0; i < 4; i++) {
+			if ((rc = add_switch(model, y, x,
+				pf("IOI_SR%i", !(i%2)),
+				pf("%s%s", s[i/2], i%2 ? "" : "_S"),
+				/*bidir*/ 0))) goto xout;
+		}
+	}
+	// IOCLK
+	{
+		for (i = 0; i < 4; i++) {
+			if ((rc = add_switch(model, y, x,
+				pf("%sIOCLK%i", io_prefix, i),
+				pf("IOI_CLK%iINTER%s", i%2, (i/2)?"_M":"_S"),
+				/*bidir*/ 0))) goto xout;
+		}
+	}
+	{
+		const char* pairs[] = {
+			"D1_OLOGIC_SITE",		"OQ_OLOGIC_SITE",
+			"DATAOUT_IODELAY_SITE",		"DDLY_ILOGIC_SITE",
+			"DDLY2_ILOGIC_SITE",		"FABRICOUT_ILOGIC_SITE",
+			"DDLY_ILOGIC_SITE",		"DFB_ILOGIC_SITE",
+			"D_ILOGIC_IDATAIN_IODELAY",	"D_ILOGIC_SITE",
+			"D_ILOGIC_IDATAIN_IODELAY",	"IDATAIN_IODELAY_SITE",
+			"D_ILOGIC_SITE",		"DFB_ILOGIC_SITE",
+			"D_ILOGIC_SITE",		"FABRICOUT_ILOGIC_SITE",
+			"T1_OLOGIC_SITE",		"TQ_OLOGIC_SITE",
+			"TQ_OLOGIC_SITE",		"TFB_ILOGIC_SITE",
+			"TQ_OLOGIC_SITE",		"T_IODELAY_SITE",
+			"OQ_OLOGIC_SITE",		"ODATAIN_IODELAY_SITE",
+			"OQ_OLOGIC_SITE",		"OFB_ILOGIC_SITE" };
+		for (i = 0; i < sizeof(pairs)/sizeof(*pairs)/2; i++) {
+			if ((rc = add_switch(model, y, x,
+				pairs[i*2],
+				pairs[i*2+1],
+				/*bidir*/ 0))) goto xout;
+			if ((rc = add_switch(model, y, x,
+				pf("%s%s", pairs[i*2], "_S"),
+				pf("%s%s", pairs[i*2+1], "_S"),
+				/*bidir*/ 0))) goto xout;
+		}
+		if ((rc = add_switch(model, y, x,
+			"DATAOUT2_IODELAY_SITE", "DDLY2_ILOGIC_SITE",
+			/*bidir*/ 0))) goto xout;
+		if ((rc = add_switch(model, y, x,
+			"DATAOUT2_IODELAY2_SITE_S", "DDLY2_ILOGIC_SITE_S",
+			/*bidir*/ 0))) goto xout;
+	}
+	for (i = 0; i < 2; i++) {
+		if ((rc = add_switch(model, y, x, "IOI_PCI_CE",
+			pf("OCE_OLOGIC_SITE%s", i?"_S":""),
+			/*bidir*/ 0))) goto xout;
+	}
+	for (i = 0; i < 3; i++) {
+		// 3 because IBUF1 cannot be switched to non-_S
+		if ((rc = add_switch(model, y, x,
+			pf("%sIBUF%i", prefix2, i/2),
+			pf("D_ILOGIC_IDATAIN_IODELAY%s", !(i%2)?"_S":""),
+			/*bidir*/ 0))) goto xout;
+	}
+	{
+		const char* pairs[] = {
+			"DOUT_IODELAY_SITE%s",	"%sO%i",
+			"OQ_OLOGIC_SITE%s",	"%sO%i",
+			"TOUT_IODELAY_SITE%s",	"%sT%i",
+			"TQ_OLOGIC_SITE%s",	"%sT%i" };
+		for (i = 0; i < 8; i++) {
+			if ((rc = add_switch(model, y, x,
+				pf(pairs[(i/2)*2], i%2?"_S":""),
+				pf(pairs[(i/2)*2+1], prefix2, i%2),
+				/*bidir*/ 0))) goto xout;
+		}
+	}
+	{
+		const char* pairs[] = {
+			"SHIFTOUT1_OLOGIC_SITE",   "SHIFTIN1_OLOGIC_SITE_S",
+			"SHIFTOUT2_OLOGIC_SITE",   "SHIFTIN2_OLOGIC_SITE_S",
+			"SHIFTOUT3_OLOGIC_SITE_S", "SHIFTIN3_OLOGIC_SITE",
+			"SHIFTOUT4_OLOGIC_SITE_S", "SHIFTIN4_OLOGIC_SITE",
+			"SHIFTOUT_ILOGIC_SITE",    "SHIFTIN_ILOGIC_SITE_S",
+			"SHIFTOUT_ILOGIC_SITE_S",  "SHIFTIN_ILOGIC_SITE" };
+		for (i = 0; i < sizeof(pairs)/sizeof(*pairs)/2; i++) {
+			if ((rc = add_switch(model, y, x,
+				pairs[i*2], pairs[i*2+1],
+				/*bidir*/ 0))) goto xout;
+		}
+	}
+	{
+		const char* pairs[] = {
+			"IOI_CLKDIST_CLK0_ILOGIC%s",	"CLK0_ILOGIC_SITE%s",
+			"IOI_CLKDIST_CLK0_ILOGIC%s",	"IOCLK_IODELAY_SITE%s",
+			"IOI_CLKDIST_CLK0_OLOGIC%s",	"CLK0_OLOGIC_SITE%s",
+			"IOI_CLKDIST_CLK0_OLOGIC%s",	"IOCLK_IODELAY_SITE%s",
+			"IOI_CLKDIST_CLK1%s",		"CLK1_ILOGIC_SITE%s",
+			"IOI_CLKDIST_CLK1%s",		"CLK1_OLOGIC_SITE%s",
+			"IOI_CLKDIST_CLK1%s",		"IOCLK1_IODELAY_SITE%s",
+			"IOI_CLKDIST_IOCE0%s",		"IOCE_ILOGIC_SITE%s",
+			"IOI_CLKDIST_IOCE1%s",		"IOCE_OLOGIC_SITE%s" };
+		for (i = 0; i < sizeof(pairs)/sizeof(*pairs); i++) {
+			if ((rc = add_switch(model, y, x,
+				pf(pairs[(i/2)*2], i%2?"_S":"_M"),
+				pf(pairs[(i/2)*2+1], i%2?"_S":""),
+				/*bidir*/ 0))) goto xout;
+		}
+	}
+	{
+		const char* pairs[] = {
+			"IOI_MCB_DRPADD",       "CAL_IODELAY_SITE%s",
+			"IOI_MCB_DRPBROADCAST", "RST_IODELAY_SITE%s",
+			"IOI_MCB_DRPCLK",       "CLK_IODELAY_SITE%s",
+			"IOI_MCB_DRPCS",        "INC_IODELAY_SITE%s",
+			"IOI_MCB_DRPSDO",       "CE_IODELAY_SITE%s",
+			"IOI_MCB_DRPTRAIN",     "TRAIN_OLOGIC_SITE%s" };
+		for (i = 0; i < sizeof(pairs)/sizeof(*pairs); i++) {
+			if ((rc = add_switch(model, y, x,
+				pairs[(i/2)*2],
+				pf(pairs[(i/2)*2+1], i%2?"_S":""),
+				/*bidir*/ 0))) goto xout;
+		}
+	}
+	{
+		const char* pairs[] = {
+			"IOI_MCB_OUTN_M",          "D2_OLOGIC_SITE",
+			"IOI_MCB_OUTN_S",          "D2_OLOGIC_SITE_S",
+			"IOI_MCB_OUTP_M",          "D1_OLOGIC_SITE",
+			"IOI_MCB_OUTP_S",          "D1_OLOGIC_SITE_S",
+			"IOI_MCB_DQIEN_M",         "T2_OLOGIC_SITE",
+			"IOI_MCB_DQIEN_M",         "T2_OLOGIC_SITE_S",
+			"IOI_MCB_DQIEN_S",         "T1_OLOGIC_SITE",
+			"IOI_MCB_DQIEN_S",         "T1_OLOGIC_SITE_S",
+			"FABRICOUT_ILOGIC_SITE",   "IOI_MCB_INBYP_M",
+			"FABRICOUT_ILOGIC_SITE_S", "IOI_MCB_INBYP_S",
+			"OUTP_IODELAY_SITE",       "IOI_MCB_IN_M",
+			"STUB_OUTP_IODELAY_S",     "IOI_MCB_IN_S" };
+		for (i = 0; i < sizeof(pairs)/sizeof(*pairs)/2; i++) {
+			if ((rc = add_switch(model, y, x,
+				pairs[i*2], pairs[i*2+1],
+				/*bidir*/ 0))) goto xout;
+		}
+	}
+	if (x < LEFT_SIDE_WIDTH
+	    || x >= model->x_width-RIGHT_SIDE_WIDTH) {
+		if ((rc = add_switch(model, y, x,
+			"AUXSDOIN_IODELAY_M", "AUXSDO_IODELAY_M",
+			/*bidir*/ 0))) goto xout;
+		if ((rc = add_switch(model, y, x,
+			"AUXSDOIN_IODELAY_S", "AUXSDO_IODELAY_S",
+			/*bidir*/ 0))) goto xout;
+	} else {
+		if ((rc = add_switch(model, y, x,
+			"AUXSDOIN_IODELAY_S_STUB", "AUXSDO_IODELAY_S_STUB",
+			/*bidir*/ 0))) goto xout;
+		if ((rc = add_switch(model, y, x,
+			"AUXSDOIN_IODELAY_STUB", "AUXSDO_IODELAY_STUB",
+			/*bidir*/ 0))) goto xout;
 	}
 	return 0;
 xout:
