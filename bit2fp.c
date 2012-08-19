@@ -53,7 +53,8 @@ int main(int argc, char** argv)
 		bits_only ? FP_BITS_ONLY : FP_BITS_DEFAULT))) FAIL(rc);
 
 	// dump what doesn't fit into the model
-	if ((rc = dump_config(&config, DUMP_BITS))) FAIL(rc);
+	if ((rc = dump_config(&config, bits_only ? DUMP_BITS
+		: DUMP_BITS|DUMP_HEADER_STR|DUMP_REGS))) FAIL(rc);
 	return EXIT_SUCCESS;
 fail:
 	return rc;

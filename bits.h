@@ -34,6 +34,29 @@ enum fpga_config_reg {
 
 #define REG_NOOP -1 // pseudo register for noops
 
+#define COR1_DEF		0x3D00
+#define COR2_DEF		0x09EE
+
+#define MASK_DEF		0xCF
+#define MASK_SECURITY		0x0030
+
+#define CTL_DEF			0x81
+#define CCLK_FREQ_DEF		0x3CC8
+#define PWRDN_REG_DEF		0x0881
+#define EYE_MASK_DEF		0x0000
+#define HC_OPT_REG_DEF		0x1F
+#define CWDT_DEF		0xFFFF
+#define PU_GWE_DEF		0x005
+#define PU_GTS_DEF		0x004
+#define MODE_REG_DEF		0x100
+#define GENERAL1_DEF		0x0000
+#define GENERAL2_DEF		0x0000
+#define GENERAL3_DEF		0x0000
+#define GENERAL4_DEF		0x0000
+#define GENERAL5_DEF		0x0000
+#define SEU_OPT_DEF		0x1BE2
+#define EXP_SIGN_DEF		0
+
 #define FAR_MAJ_O 0
 #define FAR_MIN_O 1
 

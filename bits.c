@@ -35,6 +35,17 @@ static const int minors_per_major[] =
 	/* 17 */	30, // right
 };
 
+#define SYNC_WORD	0xAA995566
+
+#define PACKET_HDR_TYPE_S	13
+#define PACKET_HDR_OPCODE_S	11
+#define PACKET_HDR_REG_S	 5
+
+#define PACKET_HDR_OPCODE_NOOP   0
+#define PACKET_HDR_OPCODE_READ   1
+#define PACKET_HDR_OPCODE_WRITE  2
+#define PACKET_HDR_OPCODE_RSRV   3
+
 #define BITSTREAM_READ_PAGESIZE		4096
 
 int read_bitfile(struct fpga_config* cfg, FILE* f)
@@ -157,6 +168,10 @@ static int dump_regs(struct fpga_config* cfg, int start, int end)
 				printf("#W Unknown CMD 0x%X.\n", cfg->reg[i].int_v);
 			else
 				printf("T1 CMD %s\n", cmds[cfg->reg[i].int_v]);
+			continue;
+		}
+		if (cfg->reg[i].reg == FDRI) {
+			printf("T2 FDRI %i\n", cfg->reg[i].int_v);
 			continue;
 		}
 		if (cfg->reg[i].reg == FLR) {
@@ -346,9 +361,9 @@ static int dump_regs(struct fpga_config* cfg, int start, int end)
 				printf(" DECRYPT");
 				u16 &= ~0x0040;
 			}
-			if ((u16 & 0x0030) == 0x0030) {
+			if ((u16 & MASK_SECURITY) == MASK_SECURITY) {
 				printf(" SECURITY");
-				u16 &= ~0x0030;
+				u16 &= ~MASK_SECURITY;
 			}
 			if (u16 & 0x0008) {
 				printf(" PERSIST");
@@ -993,18 +1008,18 @@ void free_config(struct fpga_config* cfg)
 	memset(cfg, 0, sizeof(*cfg));
 }
 
-int write_bits(FILE* f, struct fpga_model* model)
-{
-	return 0;
-}
+static const uint8_t s_bit_bof[] = {
+	0x00, 0x09, 0x0F, 0xF0, 0x0F, 0xF0, 0x0F, 0xF0,
+	0x0F, 0xF0, 0x00, 0x00, 0x01 };
+
+static const uint8_t s_0xFF_words[] = {
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
 
 static int parse_header(struct fpga_config* cfg, uint8_t* d, int len,
 	int inpos, int* outdelta)
 {
 	int i, str_len;
-	static const uint8_t expected_bof[] = {
-		0x00, 0x09, 0x0F, 0xF0, 0x0F, 0xF0, 0x0F, 0xF0,
-		0x0F, 0xF0, 0x00, 0x00, 0x01 };
 
 	*outdelta = 0;
 	if (inpos + 13 > len) {
@@ -1013,10 +1028,10 @@ static int parse_header(struct fpga_config* cfg, uint8_t* d, int len,
 		return -1;
 	}
 	for (i = 0; i < 13; i++) {
-		if (d[inpos+*outdelta+i] == expected_bof[i])
+		if (d[inpos+*outdelta+i] == s_bit_bof[i])
 			continue;
 		fprintf(stderr, "#E Expected 0x%x, got 0x%x at off %i\n",
-			expected_bof[i], d[inpos+*outdelta+i],
+			s_bit_bof[i], d[inpos+*outdelta+i],
 			inpos+*outdelta+i);
 	}
 	*outdelta += 13;
@@ -1067,10 +1082,11 @@ static int read_bits(struct fpga_config* cfg, uint8_t* d, int len, int inpos, in
 	int src_off, packet_hdr_type, packet_hdr_opcode;
 	int packet_hdr_register, packet_hdr_wordcount;
 	int FAR_block, FAR_row, FAR_major, FAR_minor, i, j, rc, MFW_src_off;
-	int offset_in_bits, block0_words, padding_frames;
+	int offset_in_bits, block0_words, padding_frames, last_FDRI_pos;
 	uint16_t u16;
 	uint32_t u32;
 
+	last_FDRI_pos = -1;
 	*outdelta = 0;
 	if (cfg->idcode_reg == -1 || cfg->FLR_reg == -1
 	    || (cfg->reg[cfg->idcode_reg].int_v != XC6SLX4
@@ -1122,7 +1138,8 @@ static int read_bits(struct fpga_config* cfg, uint8_t* d, int len, int inpos, in
 				u16 = __be16_to_cpu(
 					*(uint16_t*)&d[src_off]);
 				if (u16 == CMD_GRESTORE || u16 == CMD_LFRM) {
-					src_off -= 2;
+					if (last_FDRI_pos == -1) FAIL(EINVAL);
+					src_off = last_FDRI_pos;
 					goto success;
 				}
 				if (u16 != CMD_MFW && u16 != CMD_WCFG)
@@ -1183,6 +1200,8 @@ static int read_bits(struct fpga_config* cfg, uint8_t* d, int len, int inpos, in
 		src_off += 4;
 		if (src_off+2*u32 > len) FAIL(EINVAL);
 		if (2*u32 < 130) FAIL(EINVAL);
+
+		last_FDRI_pos = src_off+u32*2+/*auto-crc*/4;
 
 		// fdri words u32
 		if (FAR_block == -1 || FAR_block > 1 || FAR_row == -1
@@ -1293,7 +1312,7 @@ static int parse_commands(struct fpga_config* cfg, uint8_t* d,
 	if (curpos + 4 > len) FAIL(EINVAL);
 	u32 = __be32_to_cpu(*(uint32_t*)&d[curpos]);
 	curpos += 4;
-	if (u32 != 0xAA995566) {
+	if (u32 != SYNC_WORD) {
 		fprintf(stderr, "#E Unexpected sync word 0x%x.\n", u32);
 		FAIL(EINVAL);
 	}
@@ -1330,15 +1349,21 @@ static int parse_commands(struct fpga_config* cfg, uint8_t* d,
 					"wordcount.\n", u16_off, u16);
 			}
 			if (packet_hdr_register != FDRI) FAIL(EINVAL);
+
+			// first FAR must be before FDRI, and we should only
+			// execute the FDRI code here once.
+			if (first_FAR_off == -1) FAIL(EINVAL);
+			if (cfg->num_regs_before_bits != -1) FAIL(EINVAL);
+
 			if (curpos + 4 > len) FAIL(EINVAL);
 			u32 = __be32_to_cpu(*(uint32_t*)&d[curpos]);
-			if (curpos+4+2*u32 > len) FAIL(EINVAL);
-			if (2*u32 < 130) FAIL(EINVAL);
-	
 			curpos += 4;
-			if (first_FAR_off == -1) FAIL(EINVAL);
+			if (curpos+2*u32 > len) FAIL(EINVAL);
+			if (2*u32 < 130) FAIL(EINVAL);
 
-			if (cfg->num_regs_before_bits != -1) FAIL(EINVAL);
+			cfg->reg[cfg->num_regs].reg = FDRI;
+			cfg->reg[cfg->num_regs].int_v = u32;
+			cfg->num_regs++;
 			cfg->num_regs_before_bits = cfg->num_regs;
 
 			rc = read_bits(cfg, d, len, first_FAR_off, &outdelta);
@@ -1460,6 +1485,234 @@ static int parse_commands(struct fpga_config* cfg, uint8_t* d,
 			printf(" 0x%x", __be16_to_cpu(*(uint16_t*)
 				&d[u16_off+2+i*2]));
 		printf("\n");
+	}
+	return 0;
+fail:
+	return rc;
+}
+
+static int write_header_str(FILE* f, int code, const char* s)
+{
+	uint16_t be16_len;
+	int s_len, nwritten, rc;
+
+	// format:  8-bit code 'a' - 'd'
+	//         16-bit string len, including '\0'
+	//         z-terminated string
+	if (fputc(code, f) == EOF) FAIL(errno);
+	s_len = strlen(s)+1;
+	be16_len = __cpu_to_be16(s_len);
+	nwritten = fwrite(&be16_len, /*size*/ 1, sizeof(be16_len), f);
+	if (nwritten != sizeof(be16_len)) FAIL(errno);
+	nwritten = fwrite(s, /*size*/ 1, s_len, f);
+	if (nwritten != s_len) FAIL(errno);
+	return 0;
+fail:
+	return rc;
+}
+
+static int write_header(FILE* f, const char* str_a, const char* str_b, const char* str_c, const char* str_d)
+{
+	int nwritten, rc;
+
+	nwritten = fwrite(s_bit_bof, /*size*/ 1, sizeof(s_bit_bof), f);
+	if (nwritten != sizeof(s_bit_bof)) FAIL(errno);
+
+	rc = write_header_str(f, 'a', str_a);
+	if (rc) FAIL(rc);
+	rc = write_header_str(f, 'b', str_b);
+	if (rc) FAIL(rc);
+	rc = write_header_str(f, 'c', str_c);
+	if (rc) FAIL(rc);
+	rc = write_header_str(f, 'd', str_d);
+	if (rc) FAIL(rc);
+	return 0;
+fail:
+	return rc;
+}
+
+static struct fpga_config_reg_rw s_defregs_before_bits[] =
+	{{ CMD,		.int_v = CMD_RCRC },
+	 { REG_NOOP },
+	 { FLR,		.int_v = 896 }, 
+	 { COR1,	.int_v = COR1_DEF }, 
+	 { COR2,	.int_v = COR2_DEF }, 
+	 { IDCODE,	.int_v = XC6SLX9 }, 
+	 { MASK,	.int_v = MASK_DEF }, 
+	 { CTL,		.int_v = CTL_DEF }, 
+	 { REG_NOOP }, { REG_NOOP }, { REG_NOOP }, { REG_NOOP },
+	 { REG_NOOP }, { REG_NOOP }, { REG_NOOP }, { REG_NOOP },
+	 { REG_NOOP }, { REG_NOOP }, { REG_NOOP }, { REG_NOOP },
+	 { REG_NOOP }, { REG_NOOP }, { REG_NOOP }, { REG_NOOP },
+	 { REG_NOOP },
+	 { CCLK_FREQ,	.int_v = CCLK_FREQ_DEF },
+	 { PWRDN_REG,	.int_v = PWRDN_REG_DEF },
+	 { EYE_MASK,	.int_v = EYE_MASK_DEF },
+	 { HC_OPT_REG,	.int_v = HC_OPT_REG_DEF },
+	 { CWDT,	.int_v = CWDT_DEF },
+	 { PU_GWE,	.int_v = PU_GWE_DEF },
+	 { PU_GTS,	.int_v = PU_GTS_DEF },
+	 { MODE_REG,	.int_v = MODE_REG_DEF },
+	 { GENERAL1,	.int_v = GENERAL1_DEF },
+	 { GENERAL2,	.int_v = GENERAL2_DEF },
+	 { GENERAL3,	.int_v = GENERAL3_DEF },
+	 { GENERAL4,	.int_v = GENERAL4_DEF },
+	 { GENERAL5,	.int_v = GENERAL5_DEF },
+	 { SEU_OPT,	.int_v = SEU_OPT_DEF	},
+	 { EXP_SIGN,	.int_v = EXP_SIGN_DEF },
+	 { REG_NOOP }, { REG_NOOP },
+	 { FAR_MAJ,	.far = { 0, 0 }},
+	 { CMD, 	.int_v = CMD_WCFG }};
+
+static struct fpga_config_reg_rw s_defregs_after_bits[] =
+	{{ REG_NOOP }, { REG_NOOP }, { REG_NOOP }, { REG_NOOP },
+	 { REG_NOOP }, { REG_NOOP }, { REG_NOOP }, { REG_NOOP },
+	 { REG_NOOP }, { REG_NOOP }, { REG_NOOP }, { REG_NOOP },
+	 { REG_NOOP }, { REG_NOOP }, { REG_NOOP }, { REG_NOOP },
+	 { REG_NOOP }, { REG_NOOP }, { REG_NOOP }, { REG_NOOP },
+	 { REG_NOOP }, { REG_NOOP }, { REG_NOOP }, { REG_NOOP },
+	 { CMD,		.int_v = CMD_GRESTORE },
+	 { CMD,		.int_v = CMD_LFRM },
+	 { REG_NOOP }, { REG_NOOP }, { REG_NOOP }, { REG_NOOP },
+	 { CMD,		.int_v = CMD_GRESTORE },
+	 { CMD,		.int_v = CMD_START },
+	 { MASK,	.int_v = MASK_DEF | MASK_SECURITY }, 
+	 { CTL,		.int_v = CTL_DEF }, 
+	 { CRC },
+	 { CMD,		.int_v = CMD_DESYNC },
+	 { REG_NOOP }, { REG_NOOP }, { REG_NOOP }, { REG_NOOP },
+	 { REG_NOOP }, { REG_NOOP }, { REG_NOOP }, { REG_NOOP },
+	 { REG_NOOP }, { REG_NOOP }, { REG_NOOP }, { REG_NOOP },
+	 { REG_NOOP }, { REG_NOOP }};
+
+static int write_reg_action(FILE* f, const struct fpga_config_reg_rw* reg)
+{
+	uint16_t u16;
+	int nwritten, i, rc;
+
+	if (reg->reg == REG_NOOP) {
+		u16 = __cpu_to_be16(1 << PACKET_HDR_TYPE_S);
+		nwritten = fwrite(&u16, /*size*/ 1, sizeof(u16), f);
+		if (nwritten != sizeof(u16)) FAIL(errno);
+		return 0;
+	}
+	if (reg->reg == MFWR) {
+		u16 = 1 << PACKET_HDR_TYPE_S;
+		u16 |= PACKET_HDR_OPCODE_WRITE << PACKET_HDR_OPCODE_S;
+		u16 |= reg->reg << PACKET_HDR_REG_S;
+		u16 |= 4; // four 16-bit words
+
+		u16 = __cpu_to_be16(u16);
+		nwritten = fwrite(&u16, /*size*/ 1, sizeof(u16), f);
+		if (nwritten != sizeof(u16)) FAIL(errno);
+
+		u16 = 0;
+		for (i = 0; i < 4; i++) {
+			nwritten = fwrite(&u16, /*size*/ 1, sizeof(u16), f);
+			if (nwritten != sizeof(u16)) FAIL(errno);
+		}
+		return 0;
+	}
+	if (reg->reg == FAR_MAJ) {
+		u16 = 1 << PACKET_HDR_TYPE_S;
+		u16 |= PACKET_HDR_OPCODE_WRITE << PACKET_HDR_OPCODE_S;
+		u16 |= reg->reg << PACKET_HDR_REG_S;
+		u16 |= 2; // two 16-bit words
+
+		u16 = __cpu_to_be16(u16);
+		nwritten = fwrite(&u16, /*size*/ 1, sizeof(u16), f);
+		if (nwritten != sizeof(u16)) FAIL(errno);
+
+		if (reg->far[FAR_MAJ_O] > 0xFFFF
+		    || reg->far[FAR_MIN_O] > 0xFFF) FAIL(EINVAL);
+
+		u16 = __cpu_to_be16(reg->far[FAR_MAJ_O]);
+		nwritten = fwrite(&u16, /*size*/ 1, sizeof(u16), f);
+		if (nwritten != sizeof(u16)) FAIL(errno);
+
+		u16 = __cpu_to_be16(reg->far[FAR_MIN_O]);
+		nwritten = fwrite(&u16, /*size*/ 1, sizeof(u16), f);
+		if (nwritten != sizeof(u16)) FAIL(errno);
+		return 0;
+	}
+	if (reg->reg == CRC || reg->reg == IDCODE || reg->reg == EXP_SIGN) {
+		uint32_t u32;
+
+		u16 = 1 << PACKET_HDR_TYPE_S;
+		u16 |= PACKET_HDR_OPCODE_WRITE << PACKET_HDR_OPCODE_S;
+		u16 |= reg->reg << PACKET_HDR_REG_S;
+		u16 |= 2; // two 16-bit words
+
+		u16 = __cpu_to_be16(u16);
+		nwritten = fwrite(&u16, /*size*/ 1, sizeof(u16), f);
+		if (nwritten != sizeof(u16)) FAIL(errno);
+
+		u32 = __cpu_to_be32(reg->int_v);
+		nwritten = fwrite(&u32, /*size*/ 1, sizeof(u32), f);
+		if (nwritten != sizeof(u32)) FAIL(errno);
+		return 0;
+	}
+	static const int t1_oneword_regs[] =
+		{ CMD, COR1, COR2, CTL, FLR, MASK, PWRDN_REG, HC_OPT_REG,
+		  PU_GWE, PU_GTS, CWDT, MODE_REG, CCLK_FREQ, EYE_MASK,
+		  GENERAL1, GENERAL2, GENERAL3, GENERAL4, GENERAL5,
+		  SEU_OPT };
+	for (i = 0; i < sizeof(t1_oneword_regs)/sizeof(t1_oneword_regs[0]); i++) {
+		if (reg->reg == t1_oneword_regs[i])
+			break;
+	}
+	if (i >= sizeof(t1_oneword_regs)/sizeof(t1_oneword_regs[0]))
+		FAIL(EINVAL);
+	
+	u16 = 1 << PACKET_HDR_TYPE_S;
+	u16 |= PACKET_HDR_OPCODE_WRITE << PACKET_HDR_OPCODE_S;
+	u16 |= reg->reg << PACKET_HDR_REG_S;
+	u16 |= 1; // one word
+
+	u16 = __cpu_to_be16(u16);
+	nwritten = fwrite(&u16, /*size*/ 1, sizeof(u16), f);
+	if (nwritten != sizeof(u16)) FAIL(errno);
+
+	if (reg->int_v > 0xFFFF) FAIL(EINVAL);
+	u16 = __cpu_to_be16(reg->int_v);
+	nwritten = fwrite(&u16, /*size*/ 1, sizeof(u16), f);
+	if (nwritten != sizeof(u16)) FAIL(errno);
+
+	return 0;
+fail:
+	return rc;
+}
+
+int write_bits(FILE* f, struct fpga_model* model)
+{
+	uint32_t u32;
+	int len_to_eof_pos, nwritten, i, rc;
+
+	rc = write_header(f, "fpgatools.fp;UserID=0xFFFFFFFF",
+		"6slx9tqg144", "2010/05/26", "08:00:00");
+	if (rc) FAIL(rc);
+	if (fputc('e', f) == EOF) FAIL(errno);
+	if ((len_to_eof_pos = ftell(f)) == -1)
+		FAIL(errno);
+	u32 = 0;
+	nwritten = fwrite(&u32, /*size*/ 1, sizeof(u32), f);
+	if (nwritten != sizeof(u32)) FAIL(errno);
+
+	nwritten = fwrite(s_0xFF_words, /*size*/ 1, sizeof(s_0xFF_words), f);
+	if (nwritten != sizeof(s_0xFF_words)) FAIL(errno);
+
+	u32 = __cpu_to_be32(SYNC_WORD);
+	nwritten = fwrite(&u32, /*size*/ 1, sizeof(u32), f);
+	if (nwritten != sizeof(u32)) FAIL(errno);
+
+	for (i = 0; i < sizeof(s_defregs_before_bits)/sizeof(s_defregs_before_bits[0]); i++) {
+		rc = write_reg_action(f, &s_defregs_before_bits[i]);
+		if (rc) FAIL(rc);
+	}
+	// write FDRI here?
+	for (i = 0; i < sizeof(s_defregs_after_bits)/sizeof(s_defregs_after_bits[0]); i++) {
+		rc = write_reg_action(f, &s_defregs_after_bits[i]);
+		if (rc) FAIL(rc);
 	}
 	return 0;
 fail:
