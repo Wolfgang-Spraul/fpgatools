@@ -108,7 +108,6 @@ struct fpga_config
 };
 
 int read_bitfile(struct fpga_config* cfg, FILE* f);
-int extract_model(struct fpga_model* model, uint8_t* bits, int bits_len);
 
 #define DUMP_HEADER_STR		0x0001
 #define DUMP_REGS		0x0002
@@ -118,3 +117,6 @@ int dump_config(struct fpga_config* cfg, int flags);
 void free_config(struct fpga_config* cfg);
 
 int write_bitfile(FILE* f, struct fpga_model* model);
+
+int extract_model(struct fpga_model* model, uint8_t* bits, int bits_len);
+int write_model(uint8_t* bits, int bits_len, struct fpga_model* model);

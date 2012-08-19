@@ -28,17 +28,19 @@ new_fp: new_fp.o $(MODEL_OBJ) floorplan.o helper.o control.o
 
 new_fp.o: new_fp.c floorplan.h model.h helper.h control.h
 
-fp2bit: fp2bit.o $(MODEL_OBJ) floorplan.o control.o bits.o helper.o
+fp2bit: fp2bit.o $(MODEL_OBJ) floorplan.o control.o bit_regs.o bit_frames.o helper.o
 
-fp2bit.o: fp2bit.c model.h floorplan.h bits.h helper.h
+fp2bit.o: fp2bit.c model.h floorplan.h bit.h helper.h
 
-bit2fp: bit2fp.o $(MODEL_OBJ) floorplan.o control.o bits.o helper.o
+bit2fp: bit2fp.o $(MODEL_OBJ) floorplan.o control.o bit_regs.o bit_frames.o helper.o
 
-bit2fp.o: bit2fp.c model.h floorplan.h bits.h helper.h
+bit2fp.o: bit2fp.c model.h floorplan.h bit.h helper.h
 
 floorplan.o: floorplan.c floorplan.h model.h control.h
 
-bits.o: bits.c bits.h model.h
+bit_regs.o: bit_regs.c bit.h model.h
+
+bit_frames.o: bit_frames.c bit.h model.h
 
 control.o: control.c control.h model.h
 
@@ -127,6 +129,7 @@ clean:
 		autotest autotest.o control.o floorplan.o \
 		fp2bit fp2bit.o \
 		bit2fp bit2fp.o \
+		bit_regs.o bit_frames.o \
 		pair2net pair2net.o \
 		xc6slx9_empty.fp xc6slx9.svg \
 		xc6slx9_empty.tiles xc6slx9_empty.devs xc6slx9_empty.conns \

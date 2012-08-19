@@ -22,7 +22,8 @@ floorplan.o
 control.o
 autotest
 autotest.o
-bits.o
+bit_regs.o
+bit_frames.o
 fp2bit
 fp2bit.o
 bit2fp

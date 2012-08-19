@@ -7,7 +7,7 @@
 
 #include "model.h"
 #include "floorplan.h"
-#include "bits.h"
+#include "bit.h"
 
 int main(int argc, char** argv)
 {

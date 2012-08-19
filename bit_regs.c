@@ -6,7 +6,7 @@
 //
 
 #include "model.h"
-#include "bits.h"
+#include "bit.h"
 
 static int parse_header(struct fpga_config* config, uint8_t* d,
 	int len, int inpos, int* outdelta);
@@ -95,11 +95,6 @@ int read_bitfile(struct fpga_config* cfg, FILE* f)
 fail:
 	free(bit_data);
 	return rc;
-}
-
-int extract_model(struct fpga_model* model, uint8_t* bits, int bits_len)
-{
-	return 0;
 }
 
 static void dump_header(struct fpga_config* cfg)
@@ -1679,11 +1674,6 @@ static int write_reg_action(FILE* f, const struct fpga_config_reg_rw* reg)
 	return 0;
 fail:
 	return rc;
-}
-
-static int write_model(uint8_t* bits, int bits_len, struct fpga_model* model)
-{
-	return 0;
 }
 
 static int write_bits(FILE* f, struct fpga_model* model)
