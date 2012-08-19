@@ -41,6 +41,9 @@ static const int minors_per_major[] =
 #define PACKET_HDR_OPCODE_S	11
 #define PACKET_HDR_REG_S	 5
 
+#define PACKET_TYPE_1		 1
+#define PACKET_TYPE_2		 2
+
 #define PACKET_HDR_OPCODE_NOOP   0
 #define PACKET_HDR_OPCODE_READ   1
 #define PACKET_HDR_OPCODE_WRITE  2
@@ -94,7 +97,7 @@ fail:
 	return rc;
 }
 
-int extract_model(struct fpga_config* cfg, struct fpga_model* model)
+int extract_model(struct fpga_model* model, uint8_t* bits, int bits_len)
 {
 	return 0;
 }
@@ -1000,7 +1003,6 @@ fail:
 	return rc;
 }
 
-
 void free_config(struct fpga_config* cfg)
 {
 	free(cfg->bits);
@@ -1097,8 +1099,6 @@ static int read_bits(struct fpga_config* cfg, uint8_t* d, int len, int inpos, in
 	cfg->bits_len = (4*505 + 4*144) * 130 + 896*2;
 	cfg->bits = calloc(cfg->bits_len, 1 /* elsize */);
 	if (!cfg->bits) FAIL(ENOMEM);
-	cfg->bram_off = -1;
-	cfg->IOB_off = -1;
 
 	FAR_block = -1;
 	FAR_row = -1;
@@ -1254,9 +1254,7 @@ static int read_bits(struct fpga_config* cfg, uint8_t* d, int len, int inpos, in
 		if (u32 - block0_words > 0) {
 			int bram_data_words = 4*144*65 + 896;
 			if (u32 - block0_words != bram_data_words + 1) FAIL(EINVAL);
-			offset_in_bits = 4*505*130;
-			cfg->bram_off = offset_in_bits;
-			cfg->IOB_off = offset_in_bits + 4*144*65;
+			offset_in_bits = BRAM_DATA_START;
 			memcpy(&cfg->bits[offset_in_bits],
 				&d[src_off+block0_words*2],
 				bram_data_words*2);
@@ -1597,7 +1595,7 @@ static int write_reg_action(FILE* f, const struct fpga_config_reg_rw* reg)
 		return 0;
 	}
 	if (reg->reg == MFWR) {
-		u16 = 1 << PACKET_HDR_TYPE_S;
+		u16 = PACKET_TYPE_1 << PACKET_HDR_TYPE_S;
 		u16 |= PACKET_HDR_OPCODE_WRITE << PACKET_HDR_OPCODE_S;
 		u16 |= reg->reg << PACKET_HDR_REG_S;
 		u16 |= 4; // four 16-bit words
@@ -1614,7 +1612,7 @@ static int write_reg_action(FILE* f, const struct fpga_config_reg_rw* reg)
 		return 0;
 	}
 	if (reg->reg == FAR_MAJ) {
-		u16 = 1 << PACKET_HDR_TYPE_S;
+		u16 = PACKET_TYPE_1 << PACKET_HDR_TYPE_S;
 		u16 |= PACKET_HDR_OPCODE_WRITE << PACKET_HDR_OPCODE_S;
 		u16 |= reg->reg << PACKET_HDR_REG_S;
 		u16 |= 2; // two 16-bit words
@@ -1638,7 +1636,7 @@ static int write_reg_action(FILE* f, const struct fpga_config_reg_rw* reg)
 	if (reg->reg == CRC || reg->reg == IDCODE || reg->reg == EXP_SIGN) {
 		uint32_t u32;
 
-		u16 = 1 << PACKET_HDR_TYPE_S;
+		u16 = PACKET_TYPE_1 << PACKET_HDR_TYPE_S;
 		u16 |= PACKET_HDR_OPCODE_WRITE << PACKET_HDR_OPCODE_S;
 		u16 |= reg->reg << PACKET_HDR_REG_S;
 		u16 |= 2; // two 16-bit words
@@ -1664,7 +1662,7 @@ static int write_reg_action(FILE* f, const struct fpga_config_reg_rw* reg)
 	if (i >= sizeof(t1_oneword_regs)/sizeof(t1_oneword_regs[0]))
 		FAIL(EINVAL);
 	
-	u16 = 1 << PACKET_HDR_TYPE_S;
+	u16 = PACKET_TYPE_1 << PACKET_HDR_TYPE_S;
 	u16 |= PACKET_HDR_OPCODE_WRITE << PACKET_HDR_OPCODE_S;
 	u16 |= reg->reg << PACKET_HDR_REG_S;
 	u16 |= 1; // one word
@@ -1683,7 +1681,86 @@ fail:
 	return rc;
 }
 
-int write_bits(FILE* f, struct fpga_model* model)
+static int write_model(uint8_t* bits, int bits_len, struct fpga_model* model)
+{
+	return 0;
+}
+
+static int write_bits(FILE* f, struct fpga_model* model)
+{
+	uint8_t* bits;
+	uint16_t u16;
+	uint32_t u32;
+	int bits_len, nwritten, i, j, rc;
+	char padding_frame[FRAME_SIZE];
+
+	bits_len = IOB_DATA_START + IOB_DATA_LEN;
+	bits = calloc(bits_len, /*elsize*/ 1);
+	if (!bits) FAIL(ENOMEM);
+
+	rc = write_model(bits, bits_len, model);
+	if (rc) FAIL(rc);
+
+	u16 = PACKET_TYPE_2 << PACKET_HDR_TYPE_S;
+	u16 |= PACKET_HDR_OPCODE_WRITE << PACKET_HDR_OPCODE_S;
+	u16 |= FDRI << PACKET_HDR_REG_S;
+	u16 |= 0; // zero 16-bit words
+
+	u16 = __cpu_to_be16(u16);
+	nwritten = fwrite(&u16, /*size*/ 1, sizeof(u16), f);
+	if (nwritten != sizeof(u16)) FAIL(errno);
+
+	u32 = (FRAMES_DATA_LEN + NUM_ROWS*PADDING_FRAMES_PER_ROW*FRAME_SIZE
+		+ BRAM_DATA_LEN + IOB_DATA_LEN)/2;
+	u32++; // there is one extra 16-bit 0x0000 padding at the end
+	u32 = __cpu_to_be32(u32);
+	nwritten = fwrite(&u32, /*size*/ 1, sizeof(u32), f);
+	if (nwritten != sizeof(u32)) FAIL(errno);
+
+	// initialize padding frame to 0xFF
+	for (i = 0; i < FRAME_SIZE; i++)
+		padding_frame[i] = 0xFF;
+
+	// write rows with padding frames
+	for (i = 0; i < NUM_ROWS; i++) {
+		nwritten = fwrite(&bits[i*FRAMES_PER_ROW*FRAME_SIZE],
+			/*size*/ 1, FRAMES_PER_ROW*FRAME_SIZE, f);
+		if (nwritten != FRAMES_PER_ROW*FRAME_SIZE) FAIL(errno);
+		for (j = 0; j < PADDING_FRAMES_PER_ROW; j++) {
+			nwritten = fwrite(padding_frame,
+				/*size*/ 1, FRAME_SIZE, f);
+			if (nwritten != FRAME_SIZE) FAIL(errno);
+		}
+	}
+
+	// write bram data
+	nwritten = fwrite(&bits[BRAM_DATA_START],
+		/*size*/ 1, BRAM_DATA_LEN, f);
+	if (nwritten != BRAM_DATA_LEN) FAIL(errno);
+
+	// write IOB data
+	nwritten = fwrite(&bits[IOB_DATA_START],
+		/*size*/ 1, IOB_DATA_LEN, f);
+	if (nwritten != IOB_DATA_LEN) FAIL(errno);
+
+	// write extra 0x0000 padding at end of FDRI block
+	u16 = 0;
+	nwritten = fwrite(&u16, /*size*/ 1, sizeof(u16), f);
+	if (nwritten != sizeof(u16)) FAIL(errno);
+
+	u32 = 0; // todo: 32-bit auto-crc value
+	u32 = __cpu_to_be32(u32);
+	nwritten = fwrite(&u32, /*size*/ 1, sizeof(u32), f);
+	if (nwritten != sizeof(u32)) FAIL(errno);
+
+	free(bits);
+	return 0;
+fail:
+	free(bits);
+	return rc;
+}
+
+int write_bitfile(FILE* f, struct fpga_model* model)
 {
 	uint32_t u32;
 	int len_to_eof_pos, nwritten, i, rc;
@@ -1709,7 +1786,8 @@ int write_bits(FILE* f, struct fpga_model* model)
 		rc = write_reg_action(f, &s_defregs_before_bits[i]);
 		if (rc) FAIL(rc);
 	}
-	// write FDRI here?
+	rc = write_bits(f, model);
+	if (rc) FAIL(rc);
 	for (i = 0; i < sizeof(s_defregs_after_bits)/sizeof(s_defregs_after_bits[0]); i++) {
 		rc = write_reg_action(f, &s_defregs_after_bits[i]);
 		if (rc) FAIL(rc);

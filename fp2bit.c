@@ -45,7 +45,7 @@ int main(int argc, char** argv)
 		goto fail;
 
 	if ((rc = read_floorplan(&model, fp))) goto fail;
-	if ((rc = write_bits(fbits, &model))) goto fail;
+	if ((rc = write_bitfile(fbits, &model))) goto fail;
 	fclose(fbits);
 	return EXIT_SUCCESS;
 fail:

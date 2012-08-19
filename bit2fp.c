@@ -46,7 +46,7 @@ int main(int argc, char** argv)
 	// build model and fill from bitstream
 	if ((rc = fpga_build_model(&model, XC6SLX9_ROWS, XC6SLX9_COLUMNS,
 			XC6SLX9_LEFT_WIRING, XC6SLX9_RIGHT_WIRING))) FAIL(rc);
-	if ((rc = extract_model(&config, &model))) FAIL(rc);
+	if ((rc = extract_model(&model, config.bits, config.bits_len))) FAIL(rc);
 
 	// dump model
 	if ((rc = write_floorplan(stdout, &model,

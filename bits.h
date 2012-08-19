@@ -75,11 +75,22 @@ enum {
 	CMD_DESYNC = 13, CMD_IPROG
 };
 
+#define FRAME_SIZE		130
+#define FRAMES_PER_ROW		505 // for slx4 and slx9
+#define PADDING_FRAMES_PER_ROW	2
+#define NUM_ROWS		4 // for slx9 and slx9
+
+#define FRAMES_DATA_START	0
+#define FRAMES_DATA_LEN		(NUM_ROWS*FRAMES_PER_ROW*FRAME_SIZE)
+#define BRAM_DATA_START		FRAMES_DATA_LEN
+#define BRAM_DATA_LEN		(4*144*FRAME_SIZE)
+#define IOB_DATA_START		(BRAM_DATA_START + BRAM_DATA_LEN)
+#define IOB_WORDS		896 // 16-bit words, for slx4 and slx9
+#define IOB_DATA_LEN		(IOB_WORDS*2)
+#define BITS_LEN		(IOB_DATA_START+IOB_DATA_LEN)
+
 #define MAX_HEADER_STR_LEN	128
 #define MAX_REG_ACTIONS		256
-
-#define BRAM_DATA_START		(4*505*130)
-#define BRAM_DATA_LEN		(4*144*130)
 
 struct fpga_config
 {
@@ -94,12 +105,10 @@ struct fpga_config
 
 	int bits_len;
 	uint8_t* bits;
-	int bram_off;
-	int IOB_off;
 };
 
 int read_bitfile(struct fpga_config* cfg, FILE* f);
-int extract_model(struct fpga_config* cfg, struct fpga_model* model);
+int extract_model(struct fpga_model* model, uint8_t* bits, int bits_len);
 
 #define DUMP_HEADER_STR		0x0001
 #define DUMP_REGS		0x0002
@@ -108,4 +117,4 @@ int dump_config(struct fpga_config* cfg, int flags);
 
 void free_config(struct fpga_config* cfg);
 
-int write_bits(FILE* f, struct fpga_model* model);
+int write_bitfile(FILE* f, struct fpga_model* model);
