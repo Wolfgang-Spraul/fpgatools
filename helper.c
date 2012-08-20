@@ -480,9 +480,22 @@ int count_bits(uint8_t* d, int l)
 	return bits;
 }
 
-int bit_set(uint8_t* frame_d, int bit)
+int get_framebit(uint8_t* frame_d, int bit)
 {
-	return (frame_d[(bit/16)*2 + !((bit/8)%2)] & 1<<(7-(bit%8))) != 0;
+	uint8_t v = 1<<(7-(bit%8));
+	return (frame_d[(bit/16)*2 + !((bit/8)%2)] & v) != 0;
+}
+
+void clear_framebit(uint8_t* frame_d, int bit)
+{
+	uint8_t v = 1<<(7-(bit%8));
+	frame_d[(bit/16)*2 + !((bit/8)%2)] &= ~v;
+}
+
+void set_framebit(uint8_t* frame_d, int bit)
+{
+	uint8_t v = 1<<(7-(bit%8));
+	frame_d[(bit/16)*2 + !((bit/8)%2)] |= v;
 }
 
 int printf_frames(uint8_t* bits, int max_frames,
@@ -512,7 +525,7 @@ int printf_frames(uint8_t* bits, int max_frames,
 	if (count_bits(bits, 130) <= 32) {
 		printf_clock(bits, row, major, minor);
 		for (i = 0; i < 1024; i++) {
-			if (bit_set(bits, (i >= 512) ? i + 16 : i))
+			if (get_framebit(bits, (i >= 512) ? i + 16 : i))
 				printf("%sbit %i\n", prefix, i);
 		}
 		return 1;
@@ -528,7 +541,7 @@ void printf_clock(uint8_t* frame, int row, int major, int minor)
 {
 	int i;
 	for (i = 0; i < 16; i++) {
-		if (bit_set(frame, 512 + i))
+		if (get_framebit(frame, 512 + i))
 			printf("r%i ma%i mi%i clock %i\n",
 				row, major, minor, i);
 	}
@@ -557,7 +570,7 @@ void printf_extrabits(uint8_t* maj_bits, int start_minor, int num_minors,
 
 	for (minor = start_minor; minor < start_minor + num_minors; minor++) {
 		for (bit = start_bit; bit < start_bit + num_bits; bit++) {
-			if (bit_set(&maj_bits[minor*130], bit))
+			if (get_framebit(&maj_bits[minor*130], bit))
 				printf("r%i ma%i extra mi%i bit %i\n",
 					row, major, minor, bit);
 		}
@@ -570,13 +583,13 @@ uint64_t read_lut64(uint8_t* two_minors, int off_in_frame)
 	int j;
 
 	for (j = 0; j < 16; j++) {
-		if (bit_set(two_minors, off_in_frame+j*2))
+		if (get_framebit(two_minors, off_in_frame+j*2))
 			lut64 |= 1LL << (j*4);
-		if (bit_set(two_minors, off_in_frame+(j*2)+1))
+		if (get_framebit(two_minors, off_in_frame+(j*2)+1))
 			lut64 |= 1LL << (j*4+1);
-		if (bit_set(&two_minors[130], off_in_frame+j*2))
+		if (get_framebit(&two_minors[130], off_in_frame+j*2))
 			lut64 |= 1LL << (j*4+2);
-		if (bit_set(&two_minors[130], off_in_frame+(j*2)+1))
+		if (get_framebit(&two_minors[130], off_in_frame+(j*2)+1))
 			lut64 |= 1LL << (j*4+3);
 	}
 	return lut64;

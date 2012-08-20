@@ -28,4 +28,5 @@ fp2bit
 fp2bit.o
 bit2fp
 bit2fp.o
+parts.o
 autotest.tmp/

@@ -5,24 +5,6 @@
 // For details see the UNLICENSE file at the root of the source tree.
 //
 
-// The highest 4 bits are the binary revision and not
-// used when performing IDCODE verification.
-// ug380, Configuration Sequence, page 78
-#define IDCODE_MASK	0x0FFFFFFF
-
-#define XC6SLX4		0x04000093
-#define XC6SLX9		0x04001093
-#define XC6SLX16	0x04002093
-#define XC6SLX25	0x04004093
-#define XC6SLX25T	0x04024093
-#define XC6SLX45	0x04008093
-#define XC6SLX45T	0x04028093
-#define XC6SLX75	0x0400E093
-#define XC6SLX75T	0x0402E093
-#define XC6SLX100	0x04011093
-#define XC6SLX100T	0x04031093
-#define XC6SLX150	0x0401D093
-
 // xc6 configuration registers, documentation in ug380, page90
 enum fpga_config_reg {
 	CRC = 0, FAR_MAJ, FAR_MIN, FDRI, FDRO, CMD, CTL, MASK, STAT, LOUT, COR1,
@@ -92,6 +74,12 @@ enum {
 #define MAX_HEADER_STR_LEN	128
 #define MAX_REG_ACTIONS		256
 
+struct fpga_bits
+{
+	uint8_t* d;
+	int len;
+};
+
 struct fpga_config
 {
 	char header_str[4][MAX_HEADER_STR_LEN];
@@ -103,8 +91,7 @@ struct fpga_config
 	int idcode_reg;
 	int FLR_reg;
 
-	int bits_len;
-	uint8_t* bits;
+	struct fpga_bits bits;
 };
 
 int read_bitfile(struct fpga_config* cfg, FILE* f);
@@ -118,5 +105,5 @@ void free_config(struct fpga_config* cfg);
 
 int write_bitfile(FILE* f, struct fpga_model* model);
 
-int extract_model(struct fpga_model* model, uint8_t* bits, int bits_len);
-int write_model(uint8_t* bits, int bits_len, struct fpga_model* model);
+int extract_model(struct fpga_model* model, struct fpga_bits* bits);
+int write_model(struct fpga_bits* bits, struct fpga_model* model);

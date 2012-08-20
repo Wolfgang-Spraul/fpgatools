@@ -7,33 +7,12 @@
 
 #include "model.h"
 #include "bit.h"
+#include "parts.h"
 
 static int parse_header(struct fpga_config* config, uint8_t* d,
 	int len, int inpos, int* outdelta);
 static int parse_commands(struct fpga_config* config, uint8_t* d,
 	int len, int inpos);
-
-static const int minors_per_major[] =
-{
-	/*  0 */	 4, // 505 bytes = middle 8-bit for each minor?
-	/*  1 */ 	30, // left
-	/*  2 */ 	31, // logic M
-	/*  3 */ 	30, // logic L
-	/*  4 */ 	25, // bram
-	/*  5 */ 	31, // logic M
-	/*  6 */ 	30, // logic L
-	/*  7 */ 	24, // macc
-	/*  8 */ 	31, // logic M
-	/*  9 */ 	31, // center
-	/* 10 */ 	31, // logic M
-	/* 11 */ 	30, // logic L
-	/* 12 */ 	31, // logic M
-	/* 13 */ 	30, // logic L
-	/* 14 */ 	25, // bram
-	/* 15 */ 	31, // logic M
-	/* 16 */ 	30, // logic L
-	/* 17 */	30, // right
-};
 
 #define SYNC_WORD	0xAA995566
 
@@ -818,17 +797,17 @@ static void printf_clb(uint8_t* maj_bits, int row, int major)
 
 		// bits
 		for (j = 0; j < 64; j++) {
-			if (bit_set(&maj_bits[20*130], frame_off + j))
+			if (get_framebit(&maj_bits[20*130], frame_off + j))
 				printf("r%i ma%i clb i%i mi20 bit %i\n",
 					row, major, i-start, j); 
 		}
 		for (j = 0; j < 64; j++) {
-			if (bit_set(&maj_bits[23*130], frame_off + j))
+			if (get_framebit(&maj_bits[23*130], frame_off + j))
 				printf("r%i ma%i clb i%i mi23 bit %i\n",
 					row, major, i-start, j); 
 		}
 		for (j = 0; j < 64; j++) {
-			if (bit_set(&maj_bits[26*130], frame_off + j))
+			if (get_framebit(&maj_bits[26*130], frame_off + j))
 				printf("r%i ma%i clb i%i mi26 bit %i\n",
 					row, major, i-start, j); 
 		}
@@ -852,21 +831,21 @@ static int dump_bits(struct fpga_config* cfg)
 					last_extra_minor = 21;
 				minor = 0;
 				while (minor <= last_extra_minor) {
-					minor += printf_frames(&cfg->bits[off
+					minor += printf_frames(&cfg->bits.d[off
 					  +minor*130], 31 - minor, row,
 					  major, minor, /*print_empty*/ 0);
 				}
 
 				// clock
 				for (; minor < 24; minor++)
-					printf_clock(&cfg->bits[off+minor*130],
+					printf_clock(&cfg->bits.d[off+minor*130],
 						row, major, minor);
 
 				for (i = 0; i < 4; i++) {
 					for (minor = last_extra_minor+1; minor < 24;
 					     minor++) {
 						for (j = 0; j < 256; j++) {
-							if (bit_set(&cfg->bits[off+minor*130], i*256 + ((i>=2)?16:0) + j))
+							if (get_framebit(&cfg->bits.d[off+minor*130], i*256 + ((i>=2)?16:0) + j))
 							printf("r%i ma%i dsp i%i mi%i bit %i\n", row, major, i, minor, i*256+j);
 						}
 					}
@@ -876,46 +855,46 @@ static int dump_bits(struct fpga_config* cfg)
 			   	   || major == 13 || major == 15 || major == 16) { // logic
 				minor = 0;
 				while (minor < 20) {
-					minor += printf_frames(&cfg->bits[off
+					minor += printf_frames(&cfg->bits.d[off
 					  +minor*130], 31 - minor, row,
 					  major, minor, /*print_empty*/ 0);
 				}
 
 				// clock
 				for (minor = 20; minor < 31; minor++)
-					printf_clock(&cfg->bits[off+minor*130],
+					printf_clock(&cfg->bits.d[off+minor*130],
 						row, major, minor);
 				// extra bits at bottom of row0 and top of row3
 				if (row == 3)
-					printf_extrabits(&cfg->bits[off], 20, 11,
+					printf_extrabits(&cfg->bits.d[off], 20, 11,
 						0, 128, row, major);
 				else if (!row)
-					printf_extrabits(&cfg->bits[off], 20, 11,
+					printf_extrabits(&cfg->bits.d[off], 20, 11,
 						14*64 + 16, 128, row, major);
 
 				// clbs
-				printf_clb(&cfg->bits[off], row, major);
+				printf_clb(&cfg->bits.d[off], row, major);
 			} else if (major == 4 || major == 14) { // bram
 				ramb16_cfg_t ramb16_cfg[4];
 
 				// minors 0..22
 				minor = 0;
 				while (minor < 23) {
-					minor += printf_frames(&cfg->bits[off
+					minor += printf_frames(&cfg->bits.d[off
 					  +minor*130], 23 - minor, row,
 					  major, minor, /*print_empty*/ 0);
 				}
 
 				// minors 23&24
-				printf_clock(&cfg->bits[off+23*130], row, major, 23);
-				printf_clock(&cfg->bits[off+24*130], row, major, 24);
+				printf_clock(&cfg->bits.d[off+23*130], row, major, 23);
+				printf_clock(&cfg->bits.d[off+24*130], row, major, 24);
 				for (i = 0; i < 4; i++) {
 					offset_in_frame = i*32;
 					if (offset_in_frame >= 64)
 						offset_in_frame += 2;
 					for (j = 0; j < 32; j++) {
-						ramb16_cfg[i].byte[j] = cfg->bits[off+23*130+offset_in_frame+j];
-						ramb16_cfg[i].byte[j+32] = cfg->bits[off+24*130+offset_in_frame+j];
+						ramb16_cfg[i].byte[j] = cfg->bits.d[off+23*130+offset_in_frame+j];
+						ramb16_cfg[i].byte[j+32] = cfg->bits.d[off+24*130+offset_in_frame+j];
 					}
 				}
 				for (i = 0; i < 4; i++) {
@@ -930,14 +909,16 @@ static int dump_bits(struct fpga_config* cfg)
 					print_ramb16_cfg(&ramb16_cfg[i]);
 				}
 			} else {
+				int major_minors =
+					get_major_minors(XC6SLX9, major);
 				minor = 0;
-				while (minor < minors_per_major[major]) {
-					minor += printf_frames(&cfg->bits[off
-					  +minor*130], minors_per_major[major]
-					  - minor, row, major, minor, /*print_empty*/ 0);
+				while (minor < major_minors) {
+					minor += printf_frames(&cfg->bits.d[off
+					  +minor*130], major_minors - minor,
+					  row, major, minor, /*print_empty*/ 0);
 				}
 			}
-			off += minors_per_major[major] * 130;
+			off += get_major_minors(XC6SLX9, major) * 130;
 		}
 	}
 	return 0;
@@ -951,7 +932,7 @@ static int dump_bram(struct fpga_config* cfg)
 	for (row = 0; row < 4; row++) {
 		for (i = 0; i < 8; i++) {
 			for (j = 0; j < 18*130; j++) {
-				if (cfg->bits[BRAM_DATA_START + row*144*130
+				if (cfg->bits.d[BRAM_DATA_START + row*144*130
 					  + i*18*130 + j])
 					break;
 			}
@@ -964,7 +945,7 @@ static int dump_bram(struct fpga_config* cfg)
 			printf("br%i ramb16 i%i\n", row, i);
 			printf("{\n");
 			off = BRAM_DATA_START + row*144*130 + i*18*130;
-			printf_ramb16_data(cfg->bits, off);
+			printf_ramb16_data(cfg->bits.d, off);
 			printf("}\n");
 		}
 	}
@@ -986,7 +967,7 @@ int dump_config(struct fpga_config* cfg, int flags)
 		if (rc) FAIL(rc);
 		rc = dump_bram(cfg);
 		if (rc) FAIL(rc);
-		printf_iob(cfg->bits, cfg->bits_len,
+		printf_iob(cfg->bits.d, cfg->bits.len,
 			BRAM_DATA_START + BRAM_DATA_LEN, 896*2/8);
 	}
 	if (flags & DUMP_REGS) {
@@ -1000,8 +981,8 @@ fail:
 
 void free_config(struct fpga_config* cfg)
 {
-	free(cfg->bits);
-	cfg->bits = 0;
+	free(cfg->bits.d);
+	cfg->bits.d = 0;
 	memset(cfg, 0, sizeof(*cfg));
 }
 
@@ -1066,11 +1047,11 @@ static int FAR_pos(int FAR_row, int FAR_major, int FAR_minor)
 	if (FAR_row < 0 || FAR_major < 0 || FAR_minor < 0)
 		return -1;
 	if (FAR_row > 3 || FAR_major > 17
-	    || FAR_minor >= minors_per_major[FAR_major])
+	    || FAR_minor >= get_major_minors(XC6SLX9, FAR_major))
 		return -1;
 	result = FAR_row * 505*130;
 	for (i = 0; i < FAR_major; i++)
-		result += minors_per_major[i]*130;
+		result += get_major_minors(XC6SLX9, i)*130;
 	return result + FAR_minor*130;
 }
 
@@ -1091,9 +1072,9 @@ static int read_bits(struct fpga_config* cfg, uint8_t* d, int len, int inpos, in
 	    || cfg->reg[cfg->FLR_reg].int_v != 896)
 		FAIL(EINVAL);
 
-	cfg->bits_len = (4*505 + 4*144) * 130 + 896*2;
-	cfg->bits = calloc(cfg->bits_len, 1 /* elsize */);
-	if (!cfg->bits) FAIL(ENOMEM);
+	cfg->bits.len = (4*505 + 4*144) * 130 + 896*2;
+	cfg->bits.d = calloc(cfg->bits.len, 1 /* elsize */);
+	if (!cfg->bits.d) FAIL(ENOMEM);
 
 	FAR_block = -1;
 	FAR_row = -1;
@@ -1178,7 +1159,7 @@ static int read_bits(struct fpga_config* cfg, uint8_t* d, int len, int inpos, in
 				if (FAR_block != 0) FAIL(EINVAL);
 				offset_in_bits = FAR_pos(FAR_row, FAR_major, FAR_minor);
 				if (offset_in_bits == -1) FAIL(EINVAL);
-				memmove(&cfg->bits[offset_in_bits], &cfg->bits[MFW_src_off], 130);
+				memmove(&cfg->bits.d[offset_in_bits], &cfg->bits.d[MFW_src_off], 130);
 				   
 				src_off += 8;
 				continue;
@@ -1241,7 +1222,7 @@ static int read_bits(struct fpga_config* cfg, uint8_t* d, int len, int inpos, in
 					padding_frames += 2;
 					continue;
 				}
-				memcpy(&cfg->bits[offset_in_bits
+				memcpy(&cfg->bits.d[offset_in_bits
 					+ (i-padding_frames)*130],
 					&d[src_off + i*130], 130);
 			}
@@ -1250,7 +1231,7 @@ static int read_bits(struct fpga_config* cfg, uint8_t* d, int len, int inpos, in
 			int bram_data_words = 4*144*65 + 896;
 			if (u32 - block0_words != bram_data_words + 1) FAIL(EINVAL);
 			offset_in_bits = BRAM_DATA_START;
-			memcpy(&cfg->bits[offset_in_bits],
+			memcpy(&cfg->bits.d[offset_in_bits],
 				&d[src_off+block0_words*2],
 				bram_data_words*2);
 			u16 = __be16_to_cpu(*(uint16_t*)&d[
@@ -1264,8 +1245,8 @@ static int read_bits(struct fpga_config* cfg, uint8_t* d, int len, int inpos, in
 	}
 	rc = EINVAL;
 fail:
-	free(cfg->bits);
-	cfg->bits = 0;
+	free(cfg->bits.d);
+	cfg->bits.d = 0;
 	return rc;
 success:
 	*outdelta = src_off - inpos;
@@ -1289,7 +1270,7 @@ static int parse_commands(struct fpga_config* cfg, uint8_t* d,
 	if (curpos + cmd_len > len) FAIL(EINVAL);
 	if (curpos + cmd_len < len) {
 		printf("#W Unexpected continuation after offset "
-			"%i.\n", curpos + 5 + cmd_len);
+			"%i (len %i).\n", curpos + cmd_len, len);
 	}
 
 	if (curpos >= len) FAIL(EINVAL);
@@ -1678,17 +1659,17 @@ fail:
 
 static int write_bits(FILE* f, struct fpga_model* model)
 {
-	uint8_t* bits;
+	struct fpga_bits bits;
 	uint16_t u16;
 	uint32_t u32;
-	int bits_len, nwritten, i, j, rc;
+	int nwritten, i, j, rc;
 	char padding_frame[FRAME_SIZE];
 
-	bits_len = IOB_DATA_START + IOB_DATA_LEN;
-	bits = calloc(bits_len, /*elsize*/ 1);
-	if (!bits) FAIL(ENOMEM);
+	bits.len = IOB_DATA_START + IOB_DATA_LEN;
+	bits.d = calloc(bits.len, /*elsize*/ 1);
+	if (!bits.d) FAIL(ENOMEM);
 
-	rc = write_model(bits, bits_len, model);
+	rc = write_model(&bits, model);
 	if (rc) FAIL(rc);
 
 	u16 = PACKET_TYPE_2 << PACKET_HDR_TYPE_S;
@@ -1713,7 +1694,7 @@ static int write_bits(FILE* f, struct fpga_model* model)
 
 	// write rows with padding frames
 	for (i = 0; i < NUM_ROWS; i++) {
-		nwritten = fwrite(&bits[i*FRAMES_PER_ROW*FRAME_SIZE],
+		nwritten = fwrite(&bits.d[i*FRAMES_PER_ROW*FRAME_SIZE],
 			/*size*/ 1, FRAMES_PER_ROW*FRAME_SIZE, f);
 		if (nwritten != FRAMES_PER_ROW*FRAME_SIZE) FAIL(errno);
 		for (j = 0; j < PADDING_FRAMES_PER_ROW; j++) {
@@ -1724,12 +1705,12 @@ static int write_bits(FILE* f, struct fpga_model* model)
 	}
 
 	// write bram data
-	nwritten = fwrite(&bits[BRAM_DATA_START],
+	nwritten = fwrite(&bits.d[BRAM_DATA_START],
 		/*size*/ 1, BRAM_DATA_LEN, f);
 	if (nwritten != BRAM_DATA_LEN) FAIL(errno);
 
 	// write IOB data
-	nwritten = fwrite(&bits[IOB_DATA_START],
+	nwritten = fwrite(&bits.d[IOB_DATA_START],
 		/*size*/ 1, IOB_DATA_LEN, f);
 	if (nwritten != IOB_DATA_LEN) FAIL(errno);
 
@@ -1743,17 +1724,17 @@ static int write_bits(FILE* f, struct fpga_model* model)
 	nwritten = fwrite(&u32, /*size*/ 1, sizeof(u32), f);
 	if (nwritten != sizeof(u32)) FAIL(errno);
 
-	free(bits);
+	free(bits.d);
 	return 0;
 fail:
-	free(bits);
+	free(bits.d);
 	return rc;
 }
 
 int write_bitfile(FILE* f, struct fpga_model* model)
 {
 	uint32_t u32;
-	int len_to_eof_pos, nwritten, i, rc;
+	int len_to_eof_pos, eof_pos, nwritten, i, rc;
 
 	rc = write_header(f, "fpgatools.fp;UserID=0xFFFFFFFF",
 		"6slx9tqg144", "2010/05/26", "08:00:00");
@@ -1782,6 +1763,17 @@ int write_bitfile(FILE* f, struct fpga_model* model)
 		rc = write_reg_action(f, &s_defregs_after_bits[i]);
 		if (rc) FAIL(rc);
 	}
+
+	// write len to eof at offset len_to_eof_pos
+	if ((eof_pos = ftell(f)) == -1)
+		FAIL(errno);
+	if (fseek(f, len_to_eof_pos, SEEK_SET) == -1)
+		FAIL(errno);
+	u32 = __cpu_to_be32(eof_pos - len_to_eof_pos - sizeof(u32));
+	nwritten = fwrite(&u32, /*size*/ 1, sizeof(u32), f);
+	if (nwritten != sizeof(u32)) FAIL(errno);
+	if (fseek(f, eof_pos, SEEK_SET) == -1)
+		FAIL(errno);
 	return 0;
 fail:
 	return rc;

@@ -25,8 +25,8 @@
 //
 
 int read_floorplan(struct fpga_model* model, FILE* f);
-#define FP_BITS_DEFAULT	0x0000
-#define FP_BITS_ONLY	0x0001
+#define FP_DEFAULT	0x0000
+#define FP_NO_HEADER	0x0001
 int write_floorplan(FILE* f, struct fpga_model* model, int flags);
 
 void printf_version(FILE* f);

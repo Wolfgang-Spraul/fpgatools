@@ -11,7 +11,7 @@ Libraries
 
 (most is to-be-done)
 - libfpga-model      memory-only representation of an FPGA
-- libfpga-bits       reads and writes .bit bitstream files
+- libfpga-bit        reads and writes .bit bitstream files
 - libfpga-floorplan  reads and writes .fp floorplan files
 - libfpga-control    programmatic access to libfpga-model
 - libfpga-design     larger design elements on top of libfpga-control
@@ -27,7 +27,7 @@ Design Utilities
 fpgatools Development Utilities
 
 - autotest           executes test suite
-- hstrrep            high-speed hashed array based search and replace util
 - sort_seq           sorts line-based text file by sequence numbers in strings
 - merge_seq          merges a pre-sorted text file into wire sequences
 - pair2net           reads the first two words per line and builds nets
+- hstrrep            high-speed hashed array based search and replace util

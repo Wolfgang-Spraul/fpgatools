@@ -760,7 +760,18 @@ next_line: ;
 
 int write_floorplan(FILE* f, struct fpga_model* model, int flags)
 {
-	if (!(flags & FP_BITS_ONLY))
+	int rc;
+
+	if (!(flags & FP_NO_HEADER))
 		printf_version(f);
+
+	rc = printf_devices(f, model, /*config_only*/ 1);
+	if (rc) FAIL(rc);
+
+	rc = printf_switches(f, model, /*enabled_only*/ 1);
+	if (rc) FAIL(rc);
+
 	return 0;
+fail:
+	return rc;
 }

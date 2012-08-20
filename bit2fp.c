@@ -12,7 +12,7 @@
 int main(int argc, char** argv)
 {
 	struct fpga_model model;
-	int bits_only, file_arg, rc = -1;
+	int bit_header, bit_regs, fp_header, file_arg, flags, rc = -1;
 	struct fpga_config config;
 
 	// parameters
@@ -20,16 +20,24 @@ int main(int argc, char** argv)
 		fprintf(stderr,
 			"\n"
 			"%s - bitstream to floorplan\n"
-			"Usage: %s [--bits-only] <bitstream_file>\n"
+			"Usage: %s [--bit-header] [--bit-regs] [--no-fp-header] <bitstream_file>\n"
 			"\n", argv[0], argv[0]);
 		goto fail;
 	}
-	bits_only = 0;
+   	bit_header = 0;
+	bit_regs = 0;
+	fp_header = 1;
 	file_arg = 1;
-	if (!strcmp(argv[1], "--bits-only")) {
-		bits_only = 1;
-		file_arg = 2;
-	} 
+	while (!strncmp(argv[file_arg], "--", 2)) {
+		if (!strcmp(argv[file_arg], "--bit-header"))
+			bit_header = 1;
+		else if (!strcmp(argv[file_arg], "--bit-regs"))
+			bit_regs = 1;
+		else if (!strcmp(argv[file_arg], "--no-fp-header"))
+			fp_header = 0;
+		else break;
+		file_arg++;
+	}
 
 	// read bitstream file
 	{
@@ -46,15 +54,18 @@ int main(int argc, char** argv)
 	// build model and fill from bitstream
 	if ((rc = fpga_build_model(&model, XC6SLX9_ROWS, XC6SLX9_COLUMNS,
 			XC6SLX9_LEFT_WIRING, XC6SLX9_RIGHT_WIRING))) FAIL(rc);
-	if ((rc = extract_model(&model, config.bits, config.bits_len))) FAIL(rc);
+	if ((rc = extract_model(&model, &config.bits))) FAIL(rc);
 
 	// dump model
-	if ((rc = write_floorplan(stdout, &model,
-		bits_only ? FP_BITS_ONLY : FP_BITS_DEFAULT))) FAIL(rc);
+	flags = FP_DEFAULT;
+	if (!fp_header) flags |= FP_NO_HEADER;
+	if ((rc = write_floorplan(stdout, &model, flags))) FAIL(rc);
 
 	// dump what doesn't fit into the model
-	if ((rc = dump_config(&config, bits_only ? DUMP_BITS
-		: DUMP_BITS|DUMP_HEADER_STR|DUMP_REGS))) FAIL(rc);
+   	flags = DUMP_BITS;
+	if (bit_header) flags |= DUMP_HEADER_STR;
+	if (bit_regs) flags |= DUMP_REGS;
+	if ((rc = dump_config(&config, flags))) FAIL(rc);
 	return EXIT_SUCCESS;
 fail:
 	return rc;
