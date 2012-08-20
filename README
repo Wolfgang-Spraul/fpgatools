@@ -9,7 +9,6 @@ Design Principles
 
 Libraries
 
-(most is to-be-done)
 - libfpga-test       test harness for model, control and design
 - libfpga-model      memory-only representation of an FPGA
 - libfpga-control    programmatic access to libfpga-model
@@ -39,7 +38,8 @@ TODO (as of 2012-08, expected time to delivery: months to years)
 * many more test cases for autotester
 * smarter autotester that can remember and verify groups of tests,
   automatically oversee test execution, etc.
-* Debian packages libfpga, libfpga-doc, fpgatools
+* 3 Debian packages: libfpga, libfpga-doc, fpgatools
+* correct auto-crc calcuation in .bit file
 * many more cases in logic block configuration
 * configuration of bram and macc blocks, bram initialization data
 * routing switches
