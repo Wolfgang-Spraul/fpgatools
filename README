@@ -31,7 +31,8 @@ fpgatools Development Utilities
 - pair2net           reads the first two words per line and builds nets
 - hstrrep            high-speed hashed array based search and replace util
 
-TODO (as of 2012-08, expected time to delivery: months to years)
+TODO (as of 2012-08, expected time to delivery: months to years
+      completion status overall: 1%)
 
 * support chips other than xc6slx9, like slx45, slx150
 * support xc7a100
@@ -39,7 +40,7 @@ TODO (as of 2012-08, expected time to delivery: months to years)
 * smarter autotester that can remember and verify groups of tests,
   automatically oversee test execution, etc.
 * 3 Debian packages: libfpga, libfpga-doc, fpgatools
-* correct auto-crc calcuation in .bit file
+* correct auto-crc calculation in .bit file
 * many more cases in logic block configuration
 * configuration of bram and macc blocks, bram initialization data
 * routing switches
@@ -52,7 +53,7 @@ ChangeLog
 
 2012-08-20
 * Beginning of full fidelity circle with model, floorplan, conversion from
-  and to bitstream format.
+  and to bitstream and floorplan formats.
 
 2012-06-03
 * Project started.
