@@ -8,7 +8,7 @@
 #include "helper.h"
 #include "parts.h"
 
-const char* iob_xc6slx4_sitenames[896*2/8] =
+const char* iob_xc6slx9_sitenames[IOB_WORDS*2/8] =
 {
 	[0x0000/8]
 		"P70", "P69", "P67", "P66", "P65", "P64", "P62", "P61",
@@ -53,6 +53,22 @@ const char* iob_xc6slx4_sitenames[896*2/8] =
 		0, 0, 0, 0, 0, 0, 0, 0,
 		0, 0, 0, 0, 0, 0, "P75", "P74"
 };
+
+int get_num_iobs(int idcode)
+{
+	if ((idcode & IDCODE_MASK) != XC6SLX9)
+		EXIT(1);
+	return sizeof(iob_xc6slx9_sitenames)/sizeof(iob_xc6slx9_sitenames[0]);
+}
+
+const char* get_iob_sitename(int idcode, int idx)
+{
+	if ((idcode & IDCODE_MASK) != XC6SLX9)
+		EXIT(1);
+	if (idx < 0 || idx > sizeof(iob_xc6slx9_sitenames)/sizeof(iob_xc6slx9_sitenames[0]))
+		EXIT(1);
+	return iob_xc6slx9_sitenames[idx];
+}
 
 static const int minors_per_major[] = // for slx4 and slx9
 {

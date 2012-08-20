@@ -64,9 +64,15 @@ void printf_ramb16_data(uint8_t* bits, int inpos);
 
 int is_empty(uint8_t* d, int l);
 int count_bits(uint8_t* d, int l);
-int get_framebit(uint8_t* frame_d, int bit);
-void clear_framebit(uint8_t* frame_d, int bit);
-void set_framebit(uint8_t* frame_d, int bit);
+
+int frame_get_bit(uint8_t* frame_d, int bit);
+void frame_clear_bit(uint8_t* frame_d, int bit);
+void frame_set_bit(uint8_t* frame_d, int bit);
+
+uint8_t frame_get_u8(uint8_t* frame_d);
+uint16_t frame_get_u16(uint8_t* frame_d);
+uint32_t frame_get_u32(uint8_t* frame_d);
+uint64_t frame_get_u64(uint8_t* frame_d);
 
 // if row is negative, it's an absolute frame number and major and
 // minor are ignored

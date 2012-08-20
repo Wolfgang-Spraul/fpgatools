@@ -797,17 +797,17 @@ static void printf_clb(uint8_t* maj_bits, int row, int major)
 
 		// bits
 		for (j = 0; j < 64; j++) {
-			if (get_framebit(&maj_bits[20*130], frame_off + j))
+			if (frame_get_bit(&maj_bits[20*130], frame_off + j))
 				printf("r%i ma%i clb i%i mi20 bit %i\n",
 					row, major, i-start, j); 
 		}
 		for (j = 0; j < 64; j++) {
-			if (get_framebit(&maj_bits[23*130], frame_off + j))
+			if (frame_get_bit(&maj_bits[23*130], frame_off + j))
 				printf("r%i ma%i clb i%i mi23 bit %i\n",
 					row, major, i-start, j); 
 		}
 		for (j = 0; j < 64; j++) {
-			if (get_framebit(&maj_bits[26*130], frame_off + j))
+			if (frame_get_bit(&maj_bits[26*130], frame_off + j))
 				printf("r%i ma%i clb i%i mi26 bit %i\n",
 					row, major, i-start, j); 
 		}
@@ -822,7 +822,8 @@ static int dump_bits(struct fpga_config* cfg)
 	off = 0;
 	for (row = 0; row < 4; row++) {
 		for (major = 0; major < 18; major++) {
-			if (major == 7) { // MACC
+			// todo: the macc/bram/logic special cases can be removed
+			if (0 && major == 7) { // MACC
 				int last_extra_minor;
 
 				if (!row || row == 3)
@@ -845,14 +846,13 @@ static int dump_bits(struct fpga_config* cfg)
 					for (minor = last_extra_minor+1; minor < 24;
 					     minor++) {
 						for (j = 0; j < 256; j++) {
-							if (get_framebit(&cfg->bits.d[off+minor*130], i*256 + ((i>=2)?16:0) + j))
+							if (frame_get_bit(&cfg->bits.d[off+minor*130], i*256 + ((i>=2)?16:0) + j))
 							printf("r%i ma%i dsp i%i mi%i bit %i\n", row, major, i, minor, i*256+j);
 						}
 					}
 				}
-			} else if (major == 2 || major == 3 || major == 5 || major == 6
-				   || major == 8 || major == 10 || major == 11 || major == 12
-			   	   || major == 13 || major == 15 || major == 16) { // logic
+			} else if (0 && (major == 2 || major == 5 || major == 8 || major == 10
+				   || major == 12 || major == 15)) { // logic_m
 				minor = 0;
 				while (minor < 20) {
 					minor += printf_frames(&cfg->bits.d[off
@@ -874,7 +874,7 @@ static int dump_bits(struct fpga_config* cfg)
 
 				// clbs
 				printf_clb(&cfg->bits.d[off], row, major);
-			} else if (major == 4 || major == 14) { // bram
+			} else if (0 && (major == 4 || major == 14)) { // bram
 				ramb16_cfg_t ramb16_cfg[4];
 
 				// minors 0..22
@@ -918,7 +918,7 @@ static int dump_bits(struct fpga_config* cfg)
 					  row, major, minor, /*print_empty*/ 0);
 				}
 			}
-			off += get_major_minors(XC6SLX9, major) * 130;
+			off += get_major_minors(XC6SLX9, major) * FRAME_SIZE;
 		}
 	}
 	return 0;

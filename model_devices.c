@@ -346,8 +346,8 @@ int init_devices(struct fpga_model* model)
 			if ((rc = add_dev(model, y, x, DEV_IOB, IOBS))) goto fail;
 
 			y = model->y_height-BOT_OUTER_ROW;
-			if ((rc = add_dev(model, y, x, DEV_IOB, IOBM))) goto fail;
 			if ((rc = add_dev(model, y, x, DEV_IOB, IOBS))) goto fail;
+			if ((rc = add_dev(model, y, x, DEV_IOB, IOBM))) goto fail;
 			if ((rc = add_dev(model, y, x, DEV_IOB, IOBS))) goto fail;
 			if ((rc = add_dev(model, y, x, DEV_IOB, IOBM))) goto fail;
 		}
@@ -413,7 +413,7 @@ int init_devices(struct fpga_model* model)
 		if (!is_atx(X_LOGIC_COL, model, x))
 			continue;
 		for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
-			// M and L are at index 0, X is at index 1.
+			// M and L are at index 0 (DEV_LOGM and DEV_LOGL), X is at index 1 (DEV_LOGX).
 			if (YX_TILE(model, y, x)->flags & TF_LOGIC_XM_DEV) {
 				if ((rc = add_dev(model, y, x, DEV_LOGIC, LOGIC_M))) goto fail;
 				if ((rc = add_dev(model, y, x, DEV_LOGIC, LOGIC_X))) goto fail;

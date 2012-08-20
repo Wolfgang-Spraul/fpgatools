@@ -11,7 +11,7 @@
 int init_tiles(struct fpga_model* model)
 {
 	int tile_rows, tile_columns, i, j, k, l, row_top_y, left_side;
-	int start, end, no_io;
+	int start, end, no_io, cur_major;
 	char cur_cfgcol, last_col;
 	struct fpga_tile* tile_i0;
 
@@ -50,7 +50,10 @@ int init_tiles(struct fpga_model* model)
 	//
 
 	left_side = 1; // turn off (=right side) when reaching the 'R' middle column
-	i = 5; // skip left IO columns
+	for (i = 0; i < LEFT_SIDE_WIDTH; i++)
+		model->x_major[i] = LEFT_SIDE_MAJOR;
+	cur_major = LEFT_SIDE_MAJOR+1;
+	// i is now LEFT_SIDE_WIDTH (5)
 	for (j = 0; model->cfg_columns[j]; j++) {
 		cur_cfgcol = model->cfg_columns[j];
 		switch (cur_cfgcol) {
@@ -139,8 +142,12 @@ int init_tiles(struct fpga_model* model)
 					model->tiles[model->center_y*tile_columns + i].type = REGH_ROUTING_XM;
 					model->tiles[model->center_y*tile_columns + i + 1].type = REGH_LOGIC_XM;
 				}
-				i += 2;
+
+				for (k = 0; k < 2; k++)
+					model->x_major[i++] = cur_major;
+				cur_major++;
 				break;
+
 			case 'B':
 				if (next_non_whitespace(&model->cfg_columns[j+1]) == 'g') {
 					if (left_side)
@@ -182,8 +189,12 @@ int init_tiles(struct fpga_model* model)
 				model->tiles[model->center_y*tile_columns + i].type = REGH_BRAM_ROUTING;
 				model->tiles[model->center_y*tile_columns + i + 1].type = REGH_BRAM_ROUTING_VIA;
 				model->tiles[model->center_y*tile_columns + i + 2].type = left_side ? REGH_BRAM_L : REGH_BRAM_R;
-				i += 3;
+
+				for (k = 0; k < 3; k++)
+					model->x_major[i++] = cur_major;
+				cur_major++;
 				break;
+
 			case 'D':
 				model->tiles[i].flags |= TF_FABRIC_ROUTING_COL;
 				model->tiles[i].flags |= TF_ROUTING_NO_IO; // no_io always on for MACC
@@ -219,8 +230,12 @@ int init_tiles(struct fpga_model* model)
 				model->tiles[model->center_y*tile_columns + i].type = REGH_MACC_ROUTING;
 				model->tiles[model->center_y*tile_columns + i + 1].type = REGH_MACC_ROUTING_VIA;
 				model->tiles[model->center_y*tile_columns + i + 2].type = REGH_MACC_L;
-				i += 3;
+
+				for (k = 0; k < 3; k++)
+					model->x_major[i++] = cur_major;
+				cur_major++;
 				break;
+
 			case 'R':
 				if (next_non_whitespace(&model->cfg_columns[j+1]) != 'M') {
 					// We expect a LOGIC_XM column to follow the center for
@@ -320,17 +335,22 @@ int init_tiles(struct fpga_model* model)
 				model->tiles[model->center_y*tile_columns + i + 2].type = REGC_CMT;
 				model->tiles[model->center_y*tile_columns + i + 3].type = CENTER;
 
-				i += 4;
+				for (k = 0; k < 4; k++)
+					model->x_major[i++] = cur_major;
+				cur_major++;
 				break;
 			case ' ': // space used to make string more readable only
 			case 'g': // global clock separator
 			case 'n': // noio for logic blocks
 				break;
 			default:
-				fprintf(stderr, "Ignoring unexpected column identifier '%c'\n", cur_cfgcol);
+				fprintf(stderr, "Ignoring unexpected column "
+					"identifier '%c'\n", cur_cfgcol);
 				break;
 		}
 	}
+	for (k = 0; k < RIGHT_SIDE_WIDTH; k++)
+		model->x_major[i++] = cur_major;
 
 	//
 	// left IO

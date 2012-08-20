@@ -6,6 +6,7 @@
 //
 
 #include "helper.h"
+#include "parts.h"
 
 const char* bitstr(uint32_t value, int digits)
 {
@@ -480,34 +481,67 @@ int count_bits(uint8_t* d, int l)
 	return bits;
 }
 
-int get_framebit(uint8_t* frame_d, int bit)
+int frame_get_bit(uint8_t* frame_d, int bit)
 {
 	uint8_t v = 1<<(7-(bit%8));
 	return (frame_d[(bit/16)*2 + !((bit/8)%2)] & v) != 0;
 }
 
-void clear_framebit(uint8_t* frame_d, int bit)
+void frame_clear_bit(uint8_t* frame_d, int bit)
 {
 	uint8_t v = 1<<(7-(bit%8));
 	frame_d[(bit/16)*2 + !((bit/8)%2)] &= ~v;
 }
 
-void set_framebit(uint8_t* frame_d, int bit)
+void frame_set_bit(uint8_t* frame_d, int bit)
 {
 	uint8_t v = 1<<(7-(bit%8));
 	frame_d[(bit/16)*2 + !((bit/8)%2)] |= v;
 }
 
+uint8_t frame_get_u8(uint8_t* frame_d)
+{
+	uint8_t v = 0;
+	int i;
+	for (i = 0; i < 8; i++)
+		if (*frame_d & (1<<i)) v |= 1 << (7-i);
+	return v;
+}
+
+uint16_t frame_get_u16(uint8_t* frame_d)
+{
+	uint16_t high_b, low_b;
+	high_b = frame_get_u8(frame_d);
+	low_b = frame_get_u8(frame_d+1);
+	return (high_b << 8) | low_b;
+}
+
+uint32_t frame_get_u32(uint8_t* frame_d)
+{
+	uint32_t high_w, low_w;
+	low_w = frame_get_u16(frame_d);
+	high_w = frame_get_u16(frame_d+2);
+	return (high_w << 16) | low_w;
+}
+
+uint64_t frame_get_u64(uint8_t* frame_d)
+{
+	uint64_t high_w, low_w;
+	low_w = frame_get_u32(frame_d);
+	high_w = frame_get_u32(frame_d+4);
+	return (high_w << 32) | low_w;
+}
+
 int printf_frames(uint8_t* bits, int max_frames,
 	int row, int major, int minor, int print_empty)
 {
-	int i;
-	char prefix[32];
+	int i, i_without_clk;
+	char prefix[128], suffix[128];
 
 	if (row < 0)
 		sprintf(prefix, "f%i ", abs(row));
 	else
-		sprintf(prefix, "r%i ma%i extra mi%i ", row, major, minor);
+		sprintf(prefix, "r%i ma%i mi%i ", row, major, minor);
 
 	if (is_empty(bits, 130)) {
 		for (i = 1; i < max_frames; i++) {
@@ -523,10 +557,19 @@ int printf_frames(uint8_t* bits, int max_frames,
 		return i;
 	}
 	if (count_bits(bits, 130) <= 32) {
-		printf_clock(bits, row, major, minor);
-		for (i = 0; i < 1024; i++) {
-			if (get_framebit(bits, (i >= 512) ? i + 16 : i))
+		for (i = 0; i < FRAME_SIZE*8; i++) {
+			if (!frame_get_bit(bits, i)) continue;
+			if (i >= 512 && i < 528) { // hclk
 				printf("%sbit %i\n", prefix, i);
+				continue;
+			}
+			i_without_clk = i;
+			if (i_without_clk >= 528)
+				i_without_clk -= 16;
+			snprintf(suffix, sizeof(suffix), "64*%i+%i 256*%i+%i", 
+				i_without_clk/64, i_without_clk%64,
+				i_without_clk/256, i_without_clk%256);
+			printf("%sbit %i %s\n", prefix, i, suffix);
 		}
 		return 1;
 	}
@@ -541,7 +584,7 @@ void printf_clock(uint8_t* frame, int row, int major, int minor)
 {
 	int i;
 	for (i = 0; i < 16; i++) {
-		if (get_framebit(frame, 512 + i))
+		if (frame_get_bit(frame, 512 + i))
 			printf("r%i ma%i mi%i clock %i\n",
 				row, major, minor, i);
 	}
@@ -570,7 +613,7 @@ void printf_extrabits(uint8_t* maj_bits, int start_minor, int num_minors,
 
 	for (minor = start_minor; minor < start_minor + num_minors; minor++) {
 		for (bit = start_bit; bit < start_bit + num_bits; bit++) {
-			if (get_framebit(&maj_bits[minor*130], bit))
+			if (frame_get_bit(&maj_bits[minor*130], bit))
 				printf("r%i ma%i extra mi%i bit %i\n",
 					row, major, minor, bit);
 		}
@@ -583,13 +626,13 @@ uint64_t read_lut64(uint8_t* two_minors, int off_in_frame)
 	int j;
 
 	for (j = 0; j < 16; j++) {
-		if (get_framebit(two_minors, off_in_frame+j*2))
+		if (frame_get_bit(two_minors, off_in_frame+j*2))
 			lut64 |= 1LL << (j*4);
-		if (get_framebit(two_minors, off_in_frame+(j*2)+1))
+		if (frame_get_bit(two_minors, off_in_frame+(j*2)+1))
 			lut64 |= 1LL << (j*4+1);
-		if (get_framebit(&two_minors[130], off_in_frame+j*2))
+		if (frame_get_bit(&two_minors[130], off_in_frame+j*2))
 			lut64 |= 1LL << (j*4+2);
-		if (get_framebit(&two_minors[130], off_in_frame+(j*2)+1))
+		if (frame_get_bit(&two_minors[130], off_in_frame+(j*2)+1))
 			lut64 |= 1LL << (j*4+3);
 	}
 	return lut64;

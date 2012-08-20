@@ -50,6 +50,8 @@
 	/* row 1 */ "WWWUUWUU" "WUUWUUWU" \
 	/* row 0 */ "UWUUWUUW" "UUWWWWUU"
 
+#define LEFT_SIDE_MAJOR 1
+
 struct fpga_model
 {
 	int cfg_rows;
@@ -63,6 +65,12 @@ struct fpga_model
 	// the device column (+1 or +2) of the logic or dsp/macc
 	// column as indicated in the chip's cfg_columns with a 'g'.
 	int left_gclk_sep_x, right_gclk_sep_x;
+
+	// x_major is an array of column indices for each x coordinate,
+	// starting with column 1 for the left side, and incrementing
+	// through the configuration columns. This corresponds to the
+	// 'majors' in the bitstream.
+	int x_major[512];
 
 	struct fpga_tile* tiles;
 	struct hashed_strarray str;
@@ -303,6 +311,12 @@ enum fpgadev_type
 	DEV_OCT_CALIBRATE,
 	DEV_SPI_ACCESS
 };
+
+// M and L device is always at type index 0, X device
+// is always at type index 1.
+#define DEV_LOGM 0
+#define DEV_LOGL 0
+#define DEV_LOGX 1
 
 // All device configuration is structured so that the value
 // 0 is never a valid configured setting. That way all config

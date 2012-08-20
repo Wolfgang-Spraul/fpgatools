@@ -23,4 +23,21 @@
 #define XC6SLX100T	0x04031093
 #define XC6SLX150	0x0401D093
 
+#define FRAME_SIZE		130
+#define FRAMES_PER_ROW		505 // for slx4 and slx9
+#define PADDING_FRAMES_PER_ROW	2
+#define NUM_ROWS		4 // for slx9 and slx9
+
+#define FRAMES_DATA_START	0
+#define FRAMES_DATA_LEN		(NUM_ROWS*FRAMES_PER_ROW*FRAME_SIZE)
+#define BRAM_DATA_START		FRAMES_DATA_LEN
+#define BRAM_DATA_LEN		(4*144*FRAME_SIZE)
+#define IOB_DATA_START		(BRAM_DATA_START + BRAM_DATA_LEN)
+#define IOB_WORDS		896 // 16-bit words, for slx4 and slx9
+#define IOB_DATA_LEN		(IOB_WORDS*2)
+#define IOB_ENTRY_LEN		8
+#define BITS_LEN		(IOB_DATA_START+IOB_DATA_LEN)
+
 int get_major_minors(int idcode, int major);
+int get_num_iobs(int idcode);
+const char* get_iob_sitename(int idcode, int idx);

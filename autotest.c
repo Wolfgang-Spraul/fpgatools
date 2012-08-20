@@ -33,6 +33,7 @@ static int dump_file(const char* path)
 	char line[1024];
 	FILE* f;
 
+	printf("\n");
 	printf("O begin dump %s\n", path);
 	f = fopen(path, "r");
 	EXIT(!f);
@@ -45,6 +46,7 @@ static int dump_file(const char* path)
 	}
 	fclose(f);
 	printf("O end dump %s\n", path);
+	printf("\n");
 	return 0;
 }
 
@@ -157,17 +159,15 @@ int main(int argc, char** argv)
 	P48_dev->iob.suspend = SUSP_3STATE;
 
 	// configure logic
-	logic_dev = fpga_dev(&model, /*y*/ 68, /*x*/ 13, DEV_LOGIC, /*LOGIC_X*/ 1);
+	logic_dev = fpga_dev(&model, /*y*/ 68, /*x*/ 13, DEV_LOGIC, DEV_LOGX);
 	if (!logic_dev) FAIL(EINVAL);
 	logic_dev->instantiated = 1;
 	logic_dev->logic.D_used = 1;
 	rc = fpga_set_lut(&model, logic_dev, D6_LUT, "A3", ZTERM);
 	if (rc) FAIL(rc);
 
-#if 1
 	rc = diff_printf(&tstate);
 	if (rc) goto fail;
-#endif
 
 	printf("P46 I pinw %s\n", P46_dev->iob.pinw_out_I);
 	for (i = 0;; i++) {
