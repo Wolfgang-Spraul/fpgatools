@@ -31,3 +31,28 @@ fpgatools Development Utilities
 - merge_seq          merges a pre-sorted text file into wire sequences
 - pair2net           reads the first two words per line and builds nets
 - hstrrep            high-speed hashed array based search and replace util
+
+TODO (as of 2012-08, expected time to delivery: months to years)
+
+* support chips other than xc6slx9, like slx45, slx150
+* support xc7a100
+* many more test cases for autotester
+* smarter autotester that can remember and verify groups of tests,
+  automatically oversee test execution, etc.
+* Debian packages libfpga, libfpga-doc, fpgatools
+* many more cases in logic block configuration
+* configuration of bram and macc blocks, bram initialization data
+* routing switches
+* many more cases in model of switches and inter-tile connections
+* write standard design elements for libfpga-design library
+* support lm32 or openrisc core, either via libfpga or iverilog backend
+* iverilog fpga backend
+
+ChangeLog
+
+2012-08-20
+* Beginning of full fidelity circle with model, floorplan, conversion from
+  and to bitstream format.
+
+2012-06-03
+* Project started.

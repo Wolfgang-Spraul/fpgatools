@@ -154,10 +154,14 @@ int extract_model(struct fpga_model* model, struct fpga_bits* bits)
 				if (!(u64 & (1ULL<<1) && u64 & (1ULL<<2)
 				      && u64 & (1ULL<<7) && u64 & (1ULL<<21)
 				      && u64 & (1ULL<<22) && u64 & (1ULL<<36)
-				      && u64 & (1ULL<<37) && u64 & (1ULL<<39)))
+				      && u64 & (1ULL<<37) && u64 & (1ULL<<39))) {
+					HERE();
 					continue;
-				if (u64 & ~(0x000000B000600086ULL))
+				}
+				if (u64 & ~(0x000000B000600086ULL)) {
+					HERE();
 					continue;
+				}
 
 				// any logic block will enable r0ma17mi22b980
 				if (!get_bit(bits, /*row*/ 0, /*major*/ 17,
