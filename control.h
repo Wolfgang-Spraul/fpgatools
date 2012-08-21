@@ -37,8 +37,30 @@ int fpga_conn_dest(struct fpga_model* model, int y, int x,
 const char* fpga_conn_to(struct fpga_model* model, int y, int x,
 	int connpt_dest_idx, int* dest_y, int* dest_x);
 
+typedef int swidx_t;
+
+// SW_FROM and SW_TO values are chosen such that ! inverts them.
+#define SW_FROM	0
+#define SW_TO	1
+
 // returns a switch index, or -1 (NO_SWITCH) if no switch was found
-int fpga_switch_dest(struct fpga_model* model, int y, int x,
-	const char* name, int dest_idx);
-const char* fpga_switch_to(struct fpga_model* model, int y, int x,
-	int swidx, int* is_bidir);
+swidx_t fpga_switch_first(struct fpga_model* model, int y, int x,
+	const char* name, int from_to);
+swidx_t fpga_switch_next(struct fpga_model* model, int y, int x,
+	swidx_t last, int from_to);
+
+#define SW_TREE_NEXT	0 // use for name
+// returns -1 (NO_SWITCH) when there are no more switches in the tree
+swidx_t fpga_switch_tree(struct fpga_model* model, int y, int x,
+	const char* name, int from_to, swidx_t** parents, int* num_parents);
+
+const char* fpga_switch_str(struct fpga_model* model, int y, int x,
+	swidx_t swidx, int from_to);
+int fpga_switch_is_bidir(struct fpga_model* model, int y, int x,
+	swidx_t swidx);
+int fpga_switch_is_enabled(struct fpga_model* model, int y, int x,
+	swidx_t swidx);
+void fpga_switch_enable(struct fpga_model* model, int y, int x,
+	swidx_t swidx);
+void fpga_switch_disable(struct fpga_model* model, int y, int x,
+	swidx_t swidx);

@@ -346,8 +346,8 @@ int init_devices(struct fpga_model* model)
 			if ((rc = add_dev(model, y, x, DEV_IOB, IOBS))) goto fail;
 
 			y = model->y_height-BOT_OUTER_ROW;
-			if ((rc = add_dev(model, y, x, DEV_IOB, IOBS))) goto fail;
 			if ((rc = add_dev(model, y, x, DEV_IOB, IOBM))) goto fail;
+			if ((rc = add_dev(model, y, x, DEV_IOB, IOBS))) goto fail;
 			if ((rc = add_dev(model, y, x, DEV_IOB, IOBS))) goto fail;
 			if ((rc = add_dev(model, y, x, DEV_IOB, IOBM))) goto fail;
 		}

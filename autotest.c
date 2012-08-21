@@ -103,12 +103,61 @@ fail:
 	return rc;
 }
 
+static const char* s_spaces = "                                              ";
+
+static int printf_switchtree(struct fpga_model* model, int y, int x,
+	const char* start, int indent)
+{
+	int i, idx, conn_to_y, conn_to_x, rc;
+	const char* to_str;
+
+	printf("%.*sy%02i x%02i %s\n", indent, s_spaces, y, x, start);
+	for (i = 0;; i++) {
+		idx = fpga_conn_dest(model, y, x, start, i);
+		if (idx == NO_CONN)
+			break;
+		if (!i)
+			printf("%.*s| connects to:\n", indent, s_spaces);
+		to_str = fpga_conn_to(model, y, x,
+			idx, &conn_to_y, &conn_to_x);
+		printf("%.*s  y%02i x%02i %s\n", indent, s_spaces,
+			conn_to_y, conn_to_x, to_str);
+	}
+
+	idx = fpga_switch_first(model, y, x, start, SW_TO);
+	if (idx != NO_SWITCH)
+		printf("%.*s| can be switched from:\n", indent, s_spaces);
+	while (idx != NO_SWITCH) {
+		to_str = fpga_switch_str(model, y, x, idx, SW_FROM);
+		printf("%.*s  %s %s\n", indent, s_spaces,
+			fpga_switch_is_bidir(model, y, x, idx) ? "<->" : "<-",
+			to_str);
+		idx = fpga_switch_next(model, y, x, idx, SW_TO);
+	}
+
+	idx = fpga_switch_first(model, y, x, start, SW_FROM);
+	if (idx != NO_SWITCH)
+		printf("%.*s| switches to:\n", indent, s_spaces);
+	while (idx != NO_SWITCH) {
+		to_str = fpga_switch_str(model, y, x, idx, SW_TO);
+		printf("%.*s  %s %s\n", indent, s_spaces,
+			fpga_switch_is_bidir(model, y, x, idx) ? "<->" : "->",
+			to_str);
+		rc = printf_switchtree(model, y, x, to_str, indent+2);
+		if (rc) FAIL(rc);
+		idx = fpga_switch_next(model, y, x, idx, SW_FROM);
+	}
+	return 0;
+fail:
+	return rc;
+}
 int main(int argc, char** argv)
 {
 	struct fpga_model model;
 	struct fpga_device* P46_dev, *P48_dev, *logic_dev;
-	int P46_y, P46_x, P46_idx, P48_y, P48_x, P48_idx, i, j, sw_idx, rc;
+	int P46_y, P46_x, P46_idx, P48_y, P48_x, P48_idx, i, sw_idx, rc;
 	const char* str;
+	char tmp_str[128];
 	struct test_state tstate;
 	const char* conn_to_str;
 	int conn_idx, conn_to_y, conn_to_x;
@@ -170,21 +219,45 @@ int main(int argc, char** argv)
 	if (rc) goto fail;
 
 	printf("P46 I pinw %s\n", P46_dev->iob.pinw_out_I);
-	for (i = 0;; i++) {
-		sw_idx = fpga_switch_dest(&model, P46_y, P46_x, P46_dev->iob.pinw_out_I, i);
-		if (sw_idx == NO_SWITCH)
-			break;
-		str = fpga_switch_to(&model, P46_y, P46_x, sw_idx, /*bidir*/ 0);
-		printf(" from %s to %s\n", P46_dev->iob.pinw_out_I, str);
-		for (j = 0;; j++) {
-			conn_idx = fpga_conn_dest(&model, P46_y, P46_x, str, j);
+	sw_idx = fpga_switch_first(&model, P46_y, P46_x,
+		P46_dev->iob.pinw_out_I, SW_FROM);
+	while (sw_idx != NO_SWITCH) {
+		str = fpga_switch_str(&model, P46_y, P46_x, sw_idx, SW_TO);
+		if (!str) FAIL(EINVAL);
+		strcpy(tmp_str, str); // ringbuffer too small for long use
+		printf(" from %s to %s\n", P46_dev->iob.pinw_out_I, tmp_str);
+		for (i = 0;; i++) {
+			conn_idx = fpga_conn_dest(&model, P46_y, P46_x, tmp_str, i);
 			if (conn_idx == NO_CONN)
 				break;
 			conn_to_str = fpga_conn_to(&model, P46_y, P46_x,
 				conn_idx, &conn_to_y, &conn_to_x);
 			printf("  %s goes to y%02i x%02i %s\n",
-				str, conn_to_y, conn_to_x, conn_to_str);
+				tmp_str, conn_to_y, conn_to_x, conn_to_str);
+			if (is_aty(Y_TOP_INNER_IO|Y_BOT_INNER_IO, &model, conn_to_y)) {
+				rc = printf_switchtree(&model, conn_to_y,
+					conn_to_x, conn_to_str, /*indent*/ 3);
+				if (rc) FAIL(rc);
+
+// go through whole tree of what is reachable from that
+// switch, look for outside connections that reach to a routing tile
+				{ swidx_t idx;
+				swidx_t* parents; int num_parents;
+
+				idx = fpga_switch_tree(&model, conn_to_y, conn_to_x,
+					conn_to_str, SW_FROM, &parents, &num_parents);
+				while (idx != NO_SWITCH) {
+					printf("idx %i num_parents %i from %s to %s\n",
+						idx, num_parents,
+						fpga_switch_str(&model, conn_to_y, conn_to_x, idx, SW_FROM),
+						fpga_switch_str(&model, conn_to_y, conn_to_x, idx, SW_TO));
+					idx = fpga_switch_tree(&model, conn_to_y, conn_to_x,
+						SW_TREE_NEXT, SW_FROM, &parents, &num_parents);
+				}
+				}
+			}
 		}
+		sw_idx = fpga_switch_next(&model, P46_y, P46_x, sw_idx, SW_FROM);
 	}
 	printf("P48 O pinw %s\n", P48_dev->iob.pinw_in_O);
 

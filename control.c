@@ -31,17 +31,17 @@ static const struct iob_site xc6slx9_iob_top[] =
 
 static const struct iob_site xc6slx9_iob_bottom[] =
 {
-	{ 5, {"P38",    "P39",    "P40",    "P41"}},
-	{ 7, {"UNB140", "UNB139", "P43",    "P44"}},
-	{12, {"P45",    "P46",    "P47",    "P48"}},
-	{14, {"UNB132", "UNB131", "UNB130", "UNB129"}},
-	{19, {"UNB128", "UNB127", "UNB126", "UNB125"}},
-	{21, {"UNB124", "UNB123", "P50",    "P51"}},
-	{25, {"P55",    "P56",    "UNB118", "UNB117"}},
-	{29, {"UNB116", "UNB115", "UNB114", "UNB113"}},
-	{31, {"P57",    "P58",    "P59",    "P60"}},
-	{36, {"P61",    "P62",    "P64",    "P65"}},
-	{38, {"P66",    "P67",    "P69",    "P70"}},
+	{ 5, {"P39",    "P38",    "P40",    "P41"}},
+	{ 7, {"UNB139", "UNB140", "P43",    "P44"}},
+	{12, {"P46",    "P45",    "P47",    "P48"}},
+	{14, {"UNB131", "UNB132", "UNB130", "UNB129"}},
+	{19, {"UNB127", "UNB128", "UNB126", "UNB125"}},
+	{21, {"UNB123", "UNB124", "P50",    "P51"}},
+	{25, {"P56",    "P55",    "UNB118", "UNB117"}},
+	{29, {"UNB115", "UNB116", "UNB114", "UNB113"}},
+	{31, {"P58",    "P57",    "P59",    "P60"}},
+	{36, {"P62",    "P61",    "P64",    "P65"}},
+	{38, {"P67",    "P66",    "P69",    "P70"}},
 };
 
 static const struct iob_site xc6slx9_iob_left[] =
@@ -323,65 +323,156 @@ const char* fpga_conn_to(struct fpga_model* model, int y, int x,
 	return conn_dest_buf[last_buf];
 }
 
-int fpga_switch_dest(struct fpga_model* model, int y, int x,
-	const char* name, int dest_idx)
+swidx_t fpga_switch_first(struct fpga_model* model, int y, int x,
+	const char* name, int from_to)
 {
 	struct fpga_tile* tile;
-	int rc, i, connpt_o, from_name_i, dest_idx_counter;
+	int rc, i, connpt_o, name_i;
 
-	rc = strarray_find(&model->str, name, &from_name_i);
+	rc = strarray_find(&model->str, name, &name_i);
 	if (rc) FAIL(rc);
 
-	// counts how many switches from the same source (name)
-	// we have already encountered - to find the dest_idx'th
-	// entry in that series
-	dest_idx_counter = 0;
+	// Finds the first switch either from or to the name given.
 	tile = YX_TILE(model, y, x);
 	for (i = 0; i < tile->num_switches; i++) {
-		connpt_o = SWITCH_FROM(tile->switches[i]);
-		if (tile->conn_point_names[connpt_o*2+1] == from_name_i) {
-			if (dest_idx_counter >= dest_idx)
-				break;
-			dest_idx_counter++;
-		}
+		connpt_o = (from_to == SW_FROM)
+			? SWITCH_FROM(tile->switches[i])
+			: SWITCH_TO(tile->switches[i]);
+		if (tile->conn_point_names[connpt_o*2+1] == name_i)
+			break;
 	}
-	if (i >= tile->num_switches)
-		return NO_SWITCH;
-	if (dest_idx_counter > dest_idx) FAIL(EINVAL);
-	return i;
+	return (i >= tile->num_switches) ? NO_SWITCH : i;
 fail:
 	return NO_SWITCH;
 }
 
-#define NUM_SWITCH_TO_BUFS	16
-#define SWITCH_TO_BUF_SIZE	128
+swidx_t fpga_switch_next(struct fpga_model* model, int y, int x, swidx_t last, int from_to)
+{
+	struct fpga_tile* tile;
+	int connpt_o, name_i, i;
+	
+	tile = YX_TILE(model, y, x);
+	connpt_o = (from_to == SW_FROM)
+		? SWITCH_FROM(tile->switches[last])
+		: SWITCH_TO(tile->switches[last]);
+	name_i = tile->conn_point_names[connpt_o*2+1];
 
-const char* fpga_switch_to(struct fpga_model* model, int y, int x,
-	int swidx, int* is_bidir)
+	for (i = last+1; i < tile->num_switches; i++) {
+		connpt_o = (from_to == SW_FROM)
+			? SWITCH_FROM(tile->switches[i])
+			: SWITCH_TO(tile->switches[i]);
+		if (tile->conn_point_names[connpt_o*2+1] == name_i)
+			break;
+	}
+	return (i >= tile->num_switches) ? NO_SWITCH : i;
+}
+
+#define MAX_SW_PARENTS 32
+
+swidx_t fpga_switch_tree(struct fpga_model* model, int y, int x,
+	const char* name, int from_to, swidx_t** parents, int* num_parents)
+{
+	// the static 'parents' always contain the current
+	// (last) member as their last element, which is
+	// not reported back as a parent.
+	static swidx_t s_parents[MAX_SW_PARENTS];
+	static int s_num_parents = 0;
+
+	swidx_t idx;
+
+	*parents = s_parents;
+	if (name != SW_TREE_NEXT) {
+		idx = fpga_switch_first(model, y, x, name, from_to);
+		if (idx == NO_SWITCH) return NO_SWITCH;
+		s_parents[0] = idx;
+		s_num_parents = 1;
+		*num_parents = 0;
+		return idx;
+	}
+	if (!s_num_parents) {
+		HERE();
+		return NO_SWITCH;
+	}
+	// first check whether there are children
+	idx = fpga_switch_first(model, y, x,
+		fpga_switch_str(model, y, x, s_parents[s_num_parents-1], !from_to),
+		from_to);
+	if (idx != NO_SWITCH) {
+		if (s_num_parents >= MAX_SW_PARENTS) {
+			HERE();
+			return NO_SWITCH;
+		}
+		s_parents[s_num_parents] = idx;
+		s_num_parents++;
+		*num_parents = s_num_parents - 1;
+		return idx;
+	}
+	do {
+		// then check whether there are more members at the same level
+		idx = fpga_switch_next(model, y, x, s_parents[s_num_parents-1],
+			from_to);
+		if (idx != NO_SWITCH) {
+			s_parents[s_num_parents-1] = idx;
+			*num_parents = s_num_parents - 1;
+			return idx;
+		}
+		// and finally go one level up
+	} while (s_num_parents--); // post-decrement
+	return NO_SWITCH;
+}
+
+#define NUM_CONNPT_BUFS	16
+#define CONNPT_BUF_SIZE	128
+
+static const char* connpt_str(struct fpga_model* model, int y, int x, int connpt_o)
 {
 	// We have a little local ringbuffer to make passing
 	// around pointers with unknown lifetime and possible
 	// overlap with writing functions more stable.
-	static char switch_to_buf[NUM_SWITCH_TO_BUFS][SWITCH_TO_BUF_SIZE];
+	static char switch_get_buf[NUM_CONNPT_BUFS][CONNPT_BUF_SIZE];
 	static int last_buf = 0;
 
-	struct fpga_tile* tile;
 	const char* hash_str;
-	int connpt_o, str_i;
+	int str_i;
 
-	tile = YX_TILE(model, y, x);
-	if (is_bidir)
-		*is_bidir = (tile->switches[swidx] & SWITCH_BIDIRECTIONAL) != 0;
-
-	connpt_o = SWITCH_TO(tile->switches[swidx]);
-	str_i = tile->conn_point_names[connpt_o*2+1];
+	str_i = YX_TILE(model, y, x)->conn_point_names[connpt_o*2+1];
 	hash_str = strarray_lookup(&model->str, str_i);
-	if (!hash_str || (strlen(hash_str) >= SWITCH_TO_BUF_SIZE)) {
+	if (!hash_str || (strlen(hash_str) >= CONNPT_BUF_SIZE)) {
 		HERE();
 		return 0;
 	}
-	last_buf = (last_buf+1)%NUM_SWITCH_TO_BUFS;
-	strcpy(switch_to_buf[last_buf], hash_str);
+	last_buf = (last_buf+1)%NUM_CONNPT_BUFS;
+	return strcpy(switch_get_buf[last_buf], hash_str);
+}
 
-	return switch_to_buf[last_buf];
+const char* fpga_switch_str(struct fpga_model* model, int y, int x,
+	swidx_t swidx, int from_to)
+{
+	uint32_t sw = YX_TILE(model, y, x)->switches[swidx];
+	return connpt_str(model, y, x,
+		(from_to == SW_FROM) ? SWITCH_FROM(sw) : SWITCH_TO(sw));
+}
+
+int fpga_switch_is_bidir(struct fpga_model* model, int y, int x,
+	swidx_t swidx)
+{
+	return (YX_TILE(model, y, x)->switches[swidx] & SWITCH_BIDIRECTIONAL) != 0;
+}
+
+int fpga_switch_is_enabled(struct fpga_model* model, int y, int x,
+	swidx_t swidx)
+{
+	return (YX_TILE(model, y, x)->switches[swidx] & SWITCH_ON) != 0;
+}
+
+void fpga_switch_enable(struct fpga_model* model, int y, int x,
+	swidx_t swidx)
+{
+	YX_TILE(model, y, x)->switches[swidx] |= SWITCH_ON;
+}
+
+void fpga_switch_disable(struct fpga_model* model, int y, int x,
+	swidx_t swidx)
+{
+	YX_TILE(model, y, x)->switches[swidx] &= ~SWITCH_ON;
 }

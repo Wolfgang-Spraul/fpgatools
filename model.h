@@ -215,6 +215,10 @@ enum fpga_tile_type
 // Y_TOPBOT_IO_RANGE checks if y points to the top or bottom outer or
 // inner rows.
 #define Y_TOPBOT_IO_RANGE	0x0080
+#define Y_TOP_OUTER_IO		0x0100
+#define Y_TOP_INNER_IO		0x0200
+#define Y_BOT_INNER_IO		0x0400
+#define Y_BOT_OUTER_IO		0x0800
 
 // multiple checks are combined with OR logic
 int is_aty(int check, struct fpga_model* model, int y);

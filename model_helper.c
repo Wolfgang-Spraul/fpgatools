@@ -502,6 +502,10 @@ int is_aty(int check, struct fpga_model* model, int y)
 	if (check & Y_TOPBOT_IO_RANGE
 	    && ((y > TOP_INNER_ROW && y <= TOP_INNER_ROW + TOP_IO_TILES)
 	        || (y >= model->y_height - BOT_INNER_ROW - BOT_IO_TILES && y < model->y_height - BOT_INNER_ROW))) return 1;
+	if (check & Y_TOP_OUTER_IO && y == TOP_OUTER_IO) return 1;
+	if (check & Y_TOP_INNER_IO && y == TOP_INNER_IO) return 1;
+	if (check & Y_BOT_INNER_IO && y == model->y_height-BOT_INNER_IO) return 1;
+	if (check & Y_BOT_OUTER_IO && y == model->y_height-BOT_OUTER_IO) return 1;
 	return 0;
 }
 
