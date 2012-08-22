@@ -22,7 +22,7 @@ all: new_fp fp2bit bit2fp draw_svg_tiles \
 
 autotest: autotest.o $(MODEL_OBJ) floorplan.o control.o helper.o model.h
 
-autotest.c: model.h floorplan.h control.h
+autotest.o: model.h floorplan.h control.h
 
 new_fp: new_fp.o $(MODEL_OBJ) floorplan.o helper.o control.o
 

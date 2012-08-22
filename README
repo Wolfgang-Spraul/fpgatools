@@ -4,15 +4,22 @@ Design Principles
 - plain C, no C++
 - simple Makefiles
 - text-based file formats
-- no documentation - please read the sources
 - automatic test suite
+- public domain software
+
+Introduction
+ todo
+
+FAQ
+ todo
 
 Libraries
 
-- libfpga-test       test harness for model, control and design
-- libfpga-model      memory-only representation of an FPGA
-- libfpga-control    programmatic access to libfpga-model
+- libfpga-test       autotest suite
+- libfpga-cores      reusable cores
 - libfpga-design     larger design elements on top of libfpga-control
+- libfpga-control    programmatic access to libfpga-model
+- libfpga-model      memory-only representation of an FPGA
 - libfpga-floorplan  reads and writes .fp floorplan files
 - libfpga-bit        reads and writes .bit bitstream files
 
@@ -40,13 +47,14 @@ TODO (as of 2012-08, expected time to delivery: months to years
 * smarter autotester that can remember and verify groups of tests,
   automatically oversee test execution, etc.
 * 3 Debian packages: libfpga, libfpga-doc, fpgatools
-* correct auto-crc calculation in .bit file
+* auto-crc calculation in .bit file
 * many more cases in logic block configuration
 * configuration of bram and macc blocks, bram initialization data
 * routing switches
 * many more cases in model of switches and inter-tile connections
 * write standard design elements for libfpga-design library
 * support lm32 or openrisc core, either via libfpga or iverilog backend
+* ipv6 or vnc in hardware?
 * iverilog fpga backend
 
 ChangeLog

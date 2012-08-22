@@ -108,18 +108,16 @@ static const char* s_spaces = "                                              ";
 static int printf_switchtree(struct fpga_model* model, int y, int x,
 	const char* start, int indent)
 {
-	int i, idx, conn_to_y, conn_to_x, rc;
+	int i, idx, conn_to_y, conn_to_x, num_dests, connpt_dests_o, rc;
 	const char* to_str;
 
 	printf("%.*sy%02i x%02i %s\n", indent, s_spaces, y, x, start);
-	for (i = 0;; i++) {
-		idx = fpga_conn_dest(model, y, x, start, i);
-		if (idx == NO_CONN)
-			break;
+	num_dests = fpga_connpt_lookup(model, y, x, start, &connpt_dests_o);
+	for (i = 0; i < num_dests; i++) {
 		if (!i)
 			printf("%.*s| connects to:\n", indent, s_spaces);
-		to_str = fpga_conn_to(model, y, x,
-			idx, &conn_to_y, &conn_to_x);
+		to_str = fpga_conn_dest(model, y, x,
+			connpt_dests_o + i, &conn_to_y, &conn_to_x);
 		printf("%.*s  y%02i x%02i %s\n", indent, s_spaces,
 			conn_to_y, conn_to_x, to_str);
 	}
@@ -151,16 +149,16 @@ static int printf_switchtree(struct fpga_model* model, int y, int x,
 fail:
 	return rc;
 }
+
 int main(int argc, char** argv)
 {
 	struct fpga_model model;
 	struct fpga_device* P46_dev, *P48_dev, *logic_dev;
-	int P46_y, P46_x, P46_idx, P48_y, P48_x, P48_idx, i, sw_idx, rc;
-	const char* str;
-	char tmp_str[128];
+	int P46_y, P46_x, P46_idx, P48_y, P48_x, P48_idx, rc;
 	struct test_state tstate;
-	const char* conn_to_str;
-	int conn_idx, conn_to_y, conn_to_x;
+	struct sw_chain chain;
+	struct swchain_conns conns;
+	char tmp_str[128];
 
 	printf("\n");
 	printf("O fpgatools automatic test suite. Be welcome and be "
@@ -219,46 +217,74 @@ int main(int argc, char** argv)
 	if (rc) goto fail;
 
 	printf("P46 I pinw %s\n", P46_dev->iob.pinw_out_I);
-	sw_idx = fpga_switch_first(&model, P46_y, P46_x,
-		P46_dev->iob.pinw_out_I, SW_FROM);
-	while (sw_idx != NO_SWITCH) {
-		str = fpga_switch_str(&model, P46_y, P46_x, sw_idx, SW_TO);
-		if (!str) FAIL(EINVAL);
-		strcpy(tmp_str, str); // ringbuffer too small for long use
-		printf(" from %s to %s\n", P46_dev->iob.pinw_out_I, tmp_str);
-		for (i = 0;; i++) {
-			conn_idx = fpga_conn_dest(&model, P46_y, P46_x, tmp_str, i);
-			if (conn_idx == NO_CONN)
-				break;
-			conn_to_str = fpga_conn_to(&model, P46_y, P46_x,
-				conn_idx, &conn_to_y, &conn_to_x);
-			printf("  %s goes to y%02i x%02i %s\n",
-				tmp_str, conn_to_y, conn_to_x, conn_to_str);
-			if (is_aty(Y_TOP_INNER_IO|Y_BOT_INNER_IO, &model, conn_to_y)) {
-				rc = printf_switchtree(&model, conn_to_y,
-					conn_to_x, conn_to_str, /*indent*/ 3);
-				if (rc) FAIL(rc);
+	conns.model = &model;
+	conns.y = P46_y;
+	conns.x = P46_x;
+	conns.start_switch = P46_dev->iob.pinw_out_I;
+	while (fpga_switch_conns_enum(&conns) != NO_CONN) {
+
+		if (is_aty(Y_TOP_INNER_IO|Y_BOT_INNER_IO, &model, conns.dest_y)) {
+			struct swchain_conns conns2;
+
+			printf("conn chain_size %i connpt_o %i num_dests %i i %i y %i x %i str %s\n",
+				conns.chain.chain_size, conns.connpt_dest_start,
+				conns.num_dests, conns.dest_i, conns.dest_y, conns.dest_x, conns.dest_str);
+
+			strcpy(tmp_str, conns.dest_str);
+			conns2.model = &model;
+			conns2.y = conns.dest_y;
+			conns2.x = conns.dest_x;
+			conns2.start_switch = tmp_str;
+			while (fpga_switch_conns_enum(&conns2) != NO_CONN) {
+				if (is_atyx(YX_ROUTING_TILE, &model, conns2.dest_y, conns2.dest_x)) {
+					struct swchain_conns conns3;
+
+					printf("conn2 chain_size %i connpt_o %i num_dests %i i %i y %i x %i str %s\n",
+						conns2.chain.chain_size, conns2.connpt_dest_start,
+						conns2.num_dests, conns2.dest_i, conns2.dest_y, conns2.dest_x, conns2.dest_str);
+
+#if 0
+					rc = printf_switchtree(&model, conns2.dest_y,
+						conns2.dest_x, conns2.dest_str, /*indent*/ 3);
+					if (rc) FAIL(rc);
+#endif
+
+					strcpy(tmp_str, conns2.dest_str);
+					conns3.model = &model;
+					conns3.y = conns2.dest_y;
+					conns3.x = conns2.dest_x;
+					conns3.start_switch = tmp_str;
+					while (fpga_switch_conns_enum(&conns3) != NO_CONN) {
+						printf("conn3 chain_size %i connpt_o %i num_dests %i i %i y %i x %i str %s\n",
+							conns3.chain.chain_size, conns3.connpt_dest_start,
+							conns3.num_dests, conns3.dest_i, conns3.dest_y, conns3.dest_x, conns3.dest_str);
+					}
+					break;
+				}
+			}
+			break;
+#if 0
+			rc = printf_switchtree(&model, conns.dest_y,
+				conns.dest_x, conns.dest_str, /*indent*/ 3);
+			if (rc) FAIL(rc);
 
 // go through whole tree of what is reachable from that
 // switch, look for outside connections that reach to a routing tile
-				{ swidx_t idx;
-				swidx_t* parents; int num_parents;
-
-				idx = fpga_switch_tree(&model, conn_to_y, conn_to_x,
-					conn_to_str, SW_FROM, &parents, &num_parents);
-				while (idx != NO_SWITCH) {
-					printf("idx %i num_parents %i from %s to %s\n",
-						idx, num_parents,
-						fpga_switch_str(&model, conn_to_y, conn_to_x, idx, SW_FROM),
-						fpga_switch_str(&model, conn_to_y, conn_to_x, idx, SW_TO));
-					idx = fpga_switch_tree(&model, conn_to_y, conn_to_x,
-						SW_TREE_NEXT, SW_FROM, &parents, &num_parents);
-				}
-				}
+			chain.model = &model;
+			chain.y = conns.dest_y;
+			chain.x = conns.dest_x;
+			chain.start_switch = conns.dest_str;
+			chain.from_to = SW_FROM;
+			while (fpga_switch_chain_enum(&chain) != NO_SWITCH) {
+				printf("idx %i chain_size %i from %s to %s\n",
+					chain.chain[chain.chain_size-1], chain.chain_size-1,
+					fpga_switch_str(&model, chain.y, chain.x, chain.chain[chain.chain_size-1], SW_FROM),
+					fpga_switch_str(&model, chain.y, chain.x, chain.chain[chain.chain_size-1], SW_TO));
 			}
+#endif
 		}
-		sw_idx = fpga_switch_next(&model, P46_y, P46_x, sw_idx, SW_FROM);
 	}
+
 	printf("P48 O pinw %s\n", P48_dev->iob.pinw_in_O);
 
 	printf("\n");

@@ -262,11 +262,11 @@ int fpga_set_lut(struct fpga_model* model, struct fpga_device* dev,
 	return 0;
 }
 
-int fpga_conn_dest(struct fpga_model* model, int y, int x,
-	const char* name, int dest_idx)
+int fpga_connpt_lookup(struct fpga_model* model, int y, int x,
+	const char* name, int* connpt_dests_o)
 {
 	struct fpga_tile* tile;
-	int i, rc, connpt_i, num_dests, conn_point_dests_o;
+	int i, rc, connpt_i, num_dests;
 
 	rc = strarray_find(&model->str, name, &connpt_i);
 	if (rc) FAIL(rc);
@@ -278,22 +278,20 @@ int fpga_conn_dest(struct fpga_model* model, int y, int x,
 	if (i >= tile->num_conn_point_names)
 		FAIL(EINVAL);
 
-	conn_point_dests_o = tile->conn_point_names[i*2];
+	*connpt_dests_o = tile->conn_point_names[i*2];
 	if (i < tile->num_conn_point_names-1)
-		num_dests = tile->conn_point_names[(i+1)*2] - conn_point_dests_o;
+		num_dests = tile->conn_point_names[(i+1)*2] - *connpt_dests_o;
 	else
-		num_dests = tile->num_conn_point_dests - conn_point_dests_o;
-	if (dest_idx >= num_dests)
-		return NO_CONN;
-	return conn_point_dests_o + dest_idx;
+		num_dests = tile->num_conn_point_dests - *connpt_dests_o;
+	return num_dests;
 fail:
-	return NO_CONN;
+	return 0;
 }
 
 #define NUM_CONN_DEST_BUFS	16
 #define CONN_DEST_BUF_SIZE	128
 
-const char* fpga_conn_to(struct fpga_model* model, int y, int x,
+const char* fpga_conn_dest(struct fpga_model* model, int y, int x,
 	int connpt_dest_idx, int* dest_y, int* dest_x)
 {
 	static char conn_dest_buf[NUM_CONN_DEST_BUFS][CONN_DEST_BUF_SIZE];
@@ -346,7 +344,8 @@ fail:
 	return NO_SWITCH;
 }
 
-swidx_t fpga_switch_next(struct fpga_model* model, int y, int x, swidx_t last, int from_to)
+static swidx_t fpga_switch_search(struct fpga_model* model, int y, int x,
+	swidx_t last, swidx_t search_beg, int from_to)
 {
 	struct fpga_tile* tile;
 	int connpt_o, name_i, i;
@@ -357,7 +356,7 @@ swidx_t fpga_switch_next(struct fpga_model* model, int y, int x, swidx_t last, i
 		: SWITCH_TO(tile->switches[last]);
 	name_i = tile->conn_point_names[connpt_o*2+1];
 
-	for (i = last+1; i < tile->num_switches; i++) {
+	for (i = search_beg; i < tile->num_switches; i++) {
 		connpt_o = (from_to == SW_FROM)
 			? SWITCH_FROM(tile->switches[i])
 			: SWITCH_TO(tile->switches[i]);
@@ -367,58 +366,16 @@ swidx_t fpga_switch_next(struct fpga_model* model, int y, int x, swidx_t last, i
 	return (i >= tile->num_switches) ? NO_SWITCH : i;
 }
 
-#define MAX_SW_PARENTS 32
-
-swidx_t fpga_switch_tree(struct fpga_model* model, int y, int x,
-	const char* name, int from_to, swidx_t** parents, int* num_parents)
+swidx_t fpga_switch_next(struct fpga_model* model, int y, int x,
+	swidx_t last, int from_to)
 {
-	// the static 'parents' always contain the current
-	// (last) member as their last element, which is
-	// not reported back as a parent.
-	static swidx_t s_parents[MAX_SW_PARENTS];
-	static int s_num_parents = 0;
+	return fpga_switch_search(model, y, x, last, last+1, from_to);
+}
 
-	swidx_t idx;
-
-	*parents = s_parents;
-	if (name != SW_TREE_NEXT) {
-		idx = fpga_switch_first(model, y, x, name, from_to);
-		if (idx == NO_SWITCH) return NO_SWITCH;
-		s_parents[0] = idx;
-		s_num_parents = 1;
-		*num_parents = 0;
-		return idx;
-	}
-	if (!s_num_parents) {
-		HERE();
-		return NO_SWITCH;
-	}
-	// first check whether there are children
-	idx = fpga_switch_first(model, y, x,
-		fpga_switch_str(model, y, x, s_parents[s_num_parents-1], !from_to),
-		from_to);
-	if (idx != NO_SWITCH) {
-		if (s_num_parents >= MAX_SW_PARENTS) {
-			HERE();
-			return NO_SWITCH;
-		}
-		s_parents[s_num_parents] = idx;
-		s_num_parents++;
-		*num_parents = s_num_parents - 1;
-		return idx;
-	}
-	do {
-		// then check whether there are more members at the same level
-		idx = fpga_switch_next(model, y, x, s_parents[s_num_parents-1],
-			from_to);
-		if (idx != NO_SWITCH) {
-			s_parents[s_num_parents-1] = idx;
-			*num_parents = s_num_parents - 1;
-			return idx;
-		}
-		// and finally go one level up
-	} while (s_num_parents--); // post-decrement
-	return NO_SWITCH;
+swidx_t fpga_switch_backtofirst(struct fpga_model* model, int y, int x,
+	swidx_t last, int from_to)
+{
+	return fpga_switch_search(model, y, x, last, /*search_beg*/ 0, from_to);
 }
 
 #define NUM_CONNPT_BUFS	16
@@ -475,4 +432,123 @@ void fpga_switch_disable(struct fpga_model* model, int y, int x,
 	swidx_t swidx)
 {
 	YX_TILE(model, y, x)->switches[swidx] &= ~SWITCH_ON;
+}
+
+int fpga_switch_chain_enum(struct sw_chain* chain)
+{
+	swidx_t idx;
+
+	if (chain->start_switch != SW_CHAIN_NEXT) {
+		idx = fpga_switch_first(chain->model, chain->y, chain->x,
+			chain->start_switch, chain->from_to);
+		chain->start_switch = SW_CHAIN_NEXT;
+		if (idx == NO_SWITCH) {
+			chain->chain_size = 0;
+			return NO_SWITCH;
+		}
+		chain->chain[0] = idx;
+		chain->chain_size = 1;
+
+		// at every level, the first round returns all members
+		// at that level, then the second round tries to go
+		// one level down for each member. This sorts the
+		// returned switches in a nice way.
+		chain->first_round = 1;
+		return 0;
+	}
+	if (!chain->chain_size) {
+		HERE(); goto internal_error;
+	}
+	if (chain->first_round) {
+		// first go through all members are present level
+		idx = fpga_switch_next(chain->model, chain->y, chain->x,
+			chain->chain[chain->chain_size-1], chain->from_to);
+		if (idx != NO_SWITCH) {
+			chain->chain[chain->chain_size-1] = idx;
+			return 0;
+		}
+		// if there are no more, initiate the second round
+		// looking for children
+		chain->first_round = 0;
+		idx = fpga_switch_backtofirst(chain->model, chain->y, chain->x,
+			chain->chain[chain->chain_size-1], chain->from_to);
+		if (idx == NO_SWITCH) {
+			HERE(); goto internal_error;
+		}
+		chain->chain[chain->chain_size-1] = idx;
+	}
+	// look for children
+	while (1) {
+		idx = fpga_switch_first(chain->model, chain->y, chain->x,
+			fpga_switch_str(chain->model, chain->y, chain->x,
+			chain->chain[chain->chain_size-1], !chain->from_to),
+			chain->from_to);
+		chain->chain[chain->chain_size-1] = fpga_switch_next(
+			chain->model, chain->y, chain->x,
+			chain->chain[chain->chain_size-1], chain->from_to);
+		if (idx != NO_SWITCH) {
+			if (chain->chain_size >= MAX_SW_CHAIN_SIZE) {
+				HERE(); goto internal_error;
+			}
+			chain->first_round = 1; // back to first round at new level
+			chain->chain[chain->chain_size] = idx;
+			chain->chain_size++;
+			return 0;
+		}
+		while (chain->chain[chain->chain_size-1] == NO_SWITCH) {
+			if (chain->chain_size <= 1) {
+				chain->chain_size = 0;
+				return NO_SWITCH;
+			}
+			chain->chain_size--;
+		}
+	}
+internal_error:
+	chain->chain_size = 0;
+	return NO_SWITCH;
+}
+
+int fpga_switch_conns_enum(struct swchain_conns* conns)
+{
+	const char* end_of_chain_str;
+
+	if (conns->start_switch != SW_CHAIN_NEXT) {
+		conns->chain.model = conns->model;
+		conns->chain.y = conns->y;
+		conns->chain.x = conns->x;
+		conns->chain.start_switch = conns->start_switch;
+		conns->chain.from_to = SW_FROM;
+
+		conns->start_switch = SW_CHAIN_NEXT;
+		conns->num_dests = 0;
+		conns->dest_i = 0;
+	}
+	else if (!conns->chain.chain_size) { HERE(); goto internal_error; }
+
+	while (conns->dest_i >= conns->num_dests) {
+		fpga_switch_chain_enum(&conns->chain);
+		if (conns->chain.chain_size == 0)
+			return NO_CONN;
+		end_of_chain_str = fpga_switch_str(conns->model,
+			conns->y, conns->x,
+			conns->chain.chain[conns->chain.chain_size-1],
+			SW_TO);
+		if (!end_of_chain_str) { HERE(); goto internal_error; }
+		conns->dest_i = 0;
+		conns->num_dests = fpga_connpt_lookup(conns->model,
+			conns->y, conns->x, end_of_chain_str,
+			&conns->connpt_dest_start);
+		if (conns->num_dests)
+			break;
+	}
+	conns->dest_str = fpga_conn_dest(conns->model, conns->y, conns->x,
+		conns->connpt_dest_start + conns->dest_i,
+		&conns->dest_y, &conns->dest_x);
+	if (!conns->dest_str) { HERE(); goto internal_error; }
+	conns->dest_i++;
+	return 0;
+		
+internal_error:
+	conns->chain.chain_size = 0;
+	return NO_CONN;
 }
