@@ -41,6 +41,7 @@ void fpga_conn_dest(struct fpga_model* model, int y, int x,
 	int connpt_dest_idx, int* dest_y, int* dest_x, str16_t* str_i);
 
 typedef int swidx_t; // swidx_t is an index into the uint32_t switches array
+#define MAX_SW_CHAIN_SIZE 32 // largest seen so far was 10
 
 // returns a switch index, or -1 (NO_SWITCH) if no switch was found
 swidx_t fpga_switch_first(struct fpga_model* model, int y, int x,
@@ -67,8 +68,6 @@ const char* fmt_sw(struct fpga_model* model, int y, int x,
 	swidx_t sw, int from_to);
 const char* fmt_swchain(struct fpga_model* model, int y, int x,
 	swidx_t* sw, int sw_size);
-
-#define MAX_SW_CHAIN_SIZE 32 // largest seen so far was 10
 
 struct sw_chain
 {
@@ -118,10 +117,14 @@ int fpga_switch_conns(struct sw_conns* conns);
 
 void printf_swconns(struct fpga_model* model, int y, int x, str16_t sw);
 
+#define SWTO_YX_DEF		0
+#define SWTO_YX_CLOSEST		0x0001
+
 struct switch_to_yx
 {
 	// input:
 	int yx_req; // YX_-value
+	int flags; // SWTO_YX-value
 	struct fpga_model* model;
 	int y;
 	int x;

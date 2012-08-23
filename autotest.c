@@ -103,25 +103,6 @@ fail:
 	return rc;
 }
 
-int fpga_switch_to_yx(struct switch_to_yx* p)
-{
-	struct sw_conns conns = { .model = p->model, .y = p->y, .x = p->x,
-		.start_switch = p->start_switch };
-	while (fpga_switch_conns(&conns) != NO_CONN) {
-		if (is_atyx(p->yx_req, p->model, conns.dest_y, conns.dest_x)) {
-			memcpy(p->chain, conns.chain.chain,
-				conns.chain.chain_size*sizeof(*p->chain));
-			p->chain_size = conns.chain.chain_size;
-			p->dest_y = conns.dest_y;
-			p->dest_x = conns.dest_x;
-			p->dest_connpt = conns.dest_str_i;
-			return 0;
-		}
-	}
-	p->chain_size = 0;
-	return 0;
-}
-
 int main(int argc, char** argv)
 {
 	struct fpga_model model;
@@ -189,6 +170,7 @@ int main(int argc, char** argv)
 	printf("P46 I pinw %s\n", strarray_lookup(&model.str, P46_dev->iob.pinw_out_I));
 
 	switch_to.yx_req = YX_DEV_ILOGIC;
+	switch_to.flags = SWTO_YX_DEF;
 	switch_to.model = &model;
 	switch_to.y = P46_y;
 	switch_to.x = P46_x;
@@ -198,6 +180,7 @@ int main(int argc, char** argv)
 	printf("%s\n", fmt_swchain(&model, switch_to.y, switch_to.x, switch_to.chain, switch_to.chain_size));
 
 	switch_to.yx_req = YX_ROUTING_TILE;
+	switch_to.flags = SWTO_YX_DEF;
 	switch_to.y = switch_to.dest_y;
 	switch_to.x = switch_to.dest_x;
 	switch_to.start_switch = switch_to.dest_connpt;
@@ -206,6 +189,7 @@ int main(int argc, char** argv)
 	printf("%s\n", fmt_swchain(&model, switch_to.y, switch_to.x, switch_to.chain, switch_to.chain_size));
 
 	switch_to.yx_req = YX_ROUTING_TO_FABLOGIC;
+	switch_to.flags = SWTO_YX_CLOSEST;
 	switch_to.y = switch_to.dest_y;
 	switch_to.x = switch_to.dest_x;
 	switch_to.start_switch = switch_to.dest_connpt;
@@ -213,8 +197,7 @@ int main(int argc, char** argv)
 	if (rc) FAIL(rc);
 	printf("%s\n", fmt_swchain(&model, switch_to.y, switch_to.x, switch_to.chain, switch_to.chain_size));
 
-	// todo: result is NN2 but NR1 would be closer
-	// printf_swconns(&model, P46_y, P46_x, P46_dev->iob.pinw_out_I);
+	// next: YX_DEV_LOGIC
 
 	printf("P48 O pinw %s\n", strarray_lookup(&model.str, P48_dev->iob.pinw_in_O));
 

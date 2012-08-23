@@ -619,3 +619,51 @@ void printf_swconns(struct fpga_model* model, int y, int x, str16_t sw)
 			strarray_lookup(&model->str, conns.dest_str_i));
 	}
 }
+
+int fpga_switch_to_yx(struct switch_to_yx* p)
+{
+	struct sw_conns conns = { .model = p->model, .y = p->y, .x = p->x,
+		.start_switch = p->start_switch };
+
+	int best_y, best_x, best_chain_size, best_distance, distance;
+	int best_num_dests;
+	str16_t best_connpt;
+	swidx_t best_chain[MAX_SW_CHAIN_SIZE];
+
+	best_y = -1;
+	while (fpga_switch_conns(&conns) != NO_CONN) {
+		if (is_atyx(p->yx_req, p->model, conns.dest_y, conns.dest_x)) {
+			if (best_y != -1) {
+				distance = abs(conns.dest_y-p->y)
+					+abs(conns.dest_x-p->x);
+				if (distance > best_distance)
+					continue;
+				else if (conns.num_dests > best_num_dests)
+					continue;
+				else if (conns.chain.chain_size > best_chain_size)
+					continue;
+			}
+			memcpy(best_chain, conns.chain.chain,
+				conns.chain.chain_size*sizeof(*best_chain));
+			best_chain_size = conns.chain.chain_size;
+			best_y = conns.dest_y;
+			best_x = conns.dest_x;
+			best_num_dests = conns.num_dests;
+			best_connpt = conns.dest_str_i;
+			best_distance = abs(conns.dest_y-p->y)
+				+abs(conns.dest_x-p->x);
+			if (!p->flags & SWTO_YX_CLOSEST)
+				break;
+		}
+	}
+	if (best_y == -1)
+		p->chain_size = 0;
+	else {
+		memcpy(p->chain, best_chain, best_chain_size*sizeof(*p->chain));
+		p->chain_size = best_chain_size;
+		p->dest_y = best_y;
+		p->dest_x = best_x;
+		p->dest_connpt = best_connpt;
+	}
+	return 0;
+}
