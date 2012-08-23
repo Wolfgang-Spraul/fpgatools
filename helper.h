@@ -17,11 +17,12 @@
 #define MACRO_STR(arg)	#arg
 
 #define OUT_OF_MEM()	{ fprintf(stderr, \
-	"Out of memory in %s:%i\n", __FILE__, __LINE__); }
+	"#E Out of memory in %s:%i\n", __FILE__, __LINE__); }
 #define EXIT(expr)	if (expr) { fprintf(stderr, \
-	"Internal error in %s:%i\n", __FILE__, __LINE__); exit(1); }
+	"#E Internal error in %s:%i\n", __FILE__, __LINE__); exit(1); }
 
-#define HERE() fprintf(stderr, "%s:%i\n", __FILE__, __LINE__)
+#define HERE() fprintf(stderr, "#E Internal error in %s:%i\n", \
+		__FILE__, __LINE__)
 #define FAIL(code) do { HERE(); rc = (code); goto fail; } while (0)
 #define XOUT() do { HERE(); goto xout; } while (0)
 

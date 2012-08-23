@@ -71,17 +71,6 @@ int has_connpt(struct fpga_model* model, int y, int x,
 	return 0;
 }
 
-static int _add_connpt_name(struct fpga_model* model, int y, int x,
-	const char* connpt_name, int warn_if_duplicate, uint16_t* name_i,
-	int* conn_point_o);
-
-int add_connpt_name(struct fpga_model* model, int y, int x,
-	const char* connpt_name, int dup_warn)
-{
-	return _add_connpt_name(model, y, x, connpt_name, dup_warn,
-		0 /* name_i */, 0 /* conn_point_o */);
-}
-
 #define CONN_NAMES_INCREMENT	128
 
 // add_switch() assumes that the new element is appended
@@ -99,7 +88,7 @@ static void connpt_names_array_append(struct fpga_tile* tile, int name_i)
 	tile->num_conn_point_names++;
 }
 
-static int _add_connpt_name(struct fpga_model* model, int y, int x,
+int add_connpt_name(struct fpga_model* model, int y, int x,
 	const char* connpt_name, int warn_if_duplicate, uint16_t* name_i,
 	int* conn_point_o)
 {
@@ -178,10 +167,12 @@ int add_connpt_2(struct fpga_model* model, int y, int x,
 	int rc;
 
 	snprintf(name_buf, sizeof(name_buf), "%s%s", connpt_name, suffix1);
-	rc = add_connpt_name(model, y, x, name_buf, dup_warn);
+	rc = add_connpt_name(model, y, x, name_buf, dup_warn,
+		/*name_i*/ 0, /*connpt_o*/ 0);
 	if (rc) goto xout;
 	snprintf(name_buf, sizeof(name_buf), "%s%s", connpt_name, suffix2);
-	rc = add_connpt_name(model, y, x, name_buf, dup_warn);
+	rc = add_connpt_name(model, y, x, name_buf, dup_warn,
+		/*name_i*/ 0, /*connpt_o*/ 0);
 	if (rc) goto xout;
 	return 0;
 xout:
@@ -198,7 +189,7 @@ int add_conn_uni(struct fpga_model* model, int y1, int x1, const char* name1, in
 	uint16_t* new_ptr;
 	int conn_start, num_conn_point_dests_for_this_wire, rc, j, conn_point_o;
 
-	rc = _add_connpt_name(model, y1, x1, name1, 0 /* warn_if_duplicate */,
+	rc = add_connpt_name(model, y1, x1, name1, 0 /* warn_if_duplicate */,
 		&name1_i, &conn_point_o);
 	if (rc) goto xout;
 

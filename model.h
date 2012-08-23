@@ -352,18 +352,16 @@ enum { ITERM_NONE = 1, ITERM_UNTUNED_25, ITERM_UNTUNED_50,
 enum { OTERM_NONE = 1, OTERM_UNTUNED_25, OTERM_UNTUNED_50,
 	OTERM_UNTUNED_75 };
 
-typedef char PINW_NAME[32];
-
 struct fpgadev_iob
 {
-	PINW_NAME pinw_in_O;
-	PINW_NAME pinw_in_T;
-	PINW_NAME pinw_out_I;
-	PINW_NAME pinw_out_PADOUT;
-	PINW_NAME pinw_out_PCI_RDY;
-	PINW_NAME pinw_in_DIFFI_IN;
-	PINW_NAME pinw_in_DIFFO_IN;
-	PINW_NAME pinw_out_DIFFO_OUT;
+	str16_t pinw_in_O;
+	str16_t pinw_in_T;
+	str16_t pinw_out_I;
+	str16_t pinw_out_PADOUT;
+	str16_t pinw_out_PCI_RDY;
+	str16_t pinw_in_DIFFI_IN;
+	str16_t pinw_in_DIFFO_IN;
+	str16_t pinw_out_DIFFO_OUT;
 
 	int subtype; // IOBM or IOBS
 	IOSTANDARD istandard;
@@ -461,8 +459,10 @@ const char* wpref(struct fpga_model* model, int y, int x, const char* wire_name)
 char next_non_whitespace(const char* s);
 char last_major(const char* str, int cur_o);
 int has_connpt(struct fpga_model* model, int y, int x, const char* name);
+// add_connpt_name(): name_i and conn_point_o can be 0
 int add_connpt_name(struct fpga_model* model, int y, int x,
-	const char* connpt_name, int dup_warn);
+	const char* connpt_name, int warn_if_duplicate, uint16_t* name_i,
+	int* conn_point_o);
 
 int has_device(struct fpga_model* model, int y, int x, int dev);
 int has_device_type(struct fpga_model* model, int y, int x, int dev, int subtype);

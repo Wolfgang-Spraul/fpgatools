@@ -35,53 +35,73 @@ static int init_iologic_ports(struct fpga_model* model, int y, int x,
 	}
 
 	for (i = X_A /* 0 */; i <= M_DQ /* 23 */; i++) {
-		rc = add_connpt_name(model, y, x, pf("IOI_INTER_LOGICOUT%i", i), dup_warn);
+		rc = add_connpt_name(model, y, x, pf("IOI_INTER_LOGICOUT%i", i),
+			dup_warn, /*name_i*/ 0, /*connpt_o*/ 0);
 		if (rc) goto xout;
 	}
-	rc = add_connpt_name(model, y, x, pf("%s_GND_TIEOFF", prefix), dup_warn);
+	rc = add_connpt_name(model, y, x, pf("%s_GND_TIEOFF", prefix),
+		dup_warn, 0, 0);
 	if (rc) goto xout;
-	rc = add_connpt_name(model, y, x, pf("%s_VCC_TIEOFF", prefix), dup_warn);
+	rc = add_connpt_name(model, y, x, pf("%s_VCC_TIEOFF", prefix),
+		dup_warn, 0, 0);
 	if (rc) goto xout;
-	rc = add_connpt_name(model, y, x, pf("%s_KEEP1_STUB", prefix), dup_warn);
+	rc = add_connpt_name(model, y, x, pf("%s_KEEP1_STUB", prefix),
+		dup_warn, 0, 0);
 	if (rc) goto xout;
 	for (i = 0; i <= 4; i++) {
-		rc = add_connpt_2(model, y, x, pf("AUXADDR%i_IODELAY", i), suffix1, suffix2, dup_warn);
+		rc = add_connpt_2(model, y, x, pf("AUXADDR%i_IODELAY", i),
+			suffix1, suffix2, dup_warn);
 		if (rc) goto xout;
 	}
-	rc = add_connpt_2(model, y, x, "AUXSDOIN_IODELAY", suffix1, suffix2, dup_warn);
+	rc = add_connpt_2(model, y, x, "AUXSDOIN_IODELAY", suffix1, suffix2,
+		dup_warn);
 	if (rc) goto xout;
-	rc = add_connpt_2(model, y, x, "AUXSDO_IODELAY", suffix1, suffix2, dup_warn);
+	rc = add_connpt_2(model, y, x, "AUXSDO_IODELAY", suffix1, suffix2,
+		dup_warn);
 	if (rc) goto xout;
-	rc = add_connpt_2(model, y, x, "MEMUPDATE_IODELAY", suffix1, suffix2, dup_warn);
+	rc = add_connpt_2(model, y, x, "MEMUPDATE_IODELAY", suffix1, suffix2,
+		dup_warn);
 	if (rc) goto xout;
 
-	rc = add_connpt_name(model, y, x, "OUTN_IODELAY_SITE", dup_warn);
+	rc = add_connpt_name(model, y, x, "OUTN_IODELAY_SITE",
+		dup_warn, 0, 0);
 	if (rc) goto xout;
-	rc = add_connpt_name(model, y, x, "STUB_OUTN_IODELAY_S", dup_warn);
+	rc = add_connpt_name(model, y, x, "STUB_OUTN_IODELAY_S",
+		dup_warn, 0, 0);
 	if (rc) goto xout;
-	rc = add_connpt_name(model, y, x, "OUTP_IODELAY_SITE", dup_warn);
+	rc = add_connpt_name(model, y, x, "OUTP_IODELAY_SITE",
+		dup_warn, 0, 0);
 	if (rc) goto xout;
-	rc = add_connpt_name(model, y, x, "STUB_OUTP_IODELAY_S", dup_warn);
+	rc = add_connpt_name(model, y, x, "STUB_OUTP_IODELAY_S",
+		dup_warn, 0, 0);
 	if (rc) goto xout;
 
 	for (i = 1; i <= 4; i++) {
-		rc = add_connpt_2(model, y, x, pf("Q%i_ILOGIC_SITE", i), "", "_S", dup_warn);
+		rc = add_connpt_2(model, y, x, pf("Q%i_ILOGIC_SITE", i), "", "_S",
+			dup_warn);
 		if (rc) goto xout;
-		rc = add_connpt_2(model, y, x, pf("D%i_OLOGIC_SITE", i), "", "_S", dup_warn);
+		rc = add_connpt_2(model, y, x, pf("D%i_OLOGIC_SITE", i), "", "_S",
+			dup_warn);
 		if (rc) goto xout;
-		rc = add_connpt_2(model, y, x, pf("T%i_OLOGIC_SITE", i), "", "_S", dup_warn);
+		rc = add_connpt_2(model, y, x, pf("T%i_OLOGIC_SITE", i), "", "_S",
+			dup_warn);
 		if (rc) goto xout;
-		rc = add_connpt_2(model, y, x, pf("SHIFTIN%i_OLOGIC_SITE", i), "", "_S", dup_warn);
+		rc = add_connpt_2(model, y, x, pf("SHIFTIN%i_OLOGIC_SITE", i), "", "_S",
+			dup_warn);
 		if (rc) goto xout;
-		rc = add_connpt_2(model, y, x, pf("SHIFTOUT%i_OLOGIC_SITE", i), "", "_S", dup_warn);
+		rc = add_connpt_2(model, y, x, pf("SHIFTOUT%i_OLOGIC_SITE", i), "", "_S",
+			dup_warn);
 		if (rc) goto xout;
 	}
 	for (i = 0; i <= 1; i++) {
-		rc = add_connpt_2(model, y, x, pf("CFB%i_ILOGIC_SITE", i), "", "_S", dup_warn);
+		rc = add_connpt_2(model, y, x, pf("CFB%i_ILOGIC_SITE", i), "", "_S",
+			dup_warn);
 		if (rc) goto xout;
-		rc = add_connpt_2(model, y, x, pf("CLK%i_ILOGIC_SITE", i), "", "_S", dup_warn);
+		rc = add_connpt_2(model, y, x, pf("CLK%i_ILOGIC_SITE", i), "", "_S",
+			dup_warn);
 		if (rc) goto xout;
-		rc = add_connpt_2(model, y, x, pf("CLK%i_OLOGIC_SITE", i), "", "_S", dup_warn);
+		rc = add_connpt_2(model, y, x, pf("CLK%i_OLOGIC_SITE", i), "", "_S",
+			dup_warn);
 		if (rc) goto xout;
 	}
 	{
@@ -111,12 +131,15 @@ static int init_iologic_ports(struct fpga_model* model, int y, int x,
 			"VALID_ILOGIC_SITE", "" };
 
 		for (i = 0; mcb_2[i][0]; i++) {
-			rc = add_connpt_2(model, y, x, mcb_2[i], "", "_S", dup_warn);
+			rc = add_connpt_2(model, y, x, mcb_2[i], "", "_S",
+				dup_warn);
 		}
 	}
-	rc = add_connpt_name(model, y, x, "DATAOUT2_IODELAY_SITE", dup_warn);
+	rc = add_connpt_name(model, y, x, "DATAOUT2_IODELAY_SITE",
+		dup_warn, 0, 0);
 	if (rc) goto xout;
-	rc = add_connpt_name(model, y, x, "DATAOUT2_IODELAY2_SITE_S", dup_warn);
+	rc = add_connpt_name(model, y, x, "DATAOUT2_IODELAY2_SITE_S",
+		dup_warn, 0, 0);
 	if (rc) goto xout;
 
 	for (i = 0; i <= 2; i++) {
@@ -129,11 +152,14 @@ static int init_iologic_ports(struct fpga_model* model, int y, int x,
 			"_M", "_S", dup_warn);
 		if (rc) goto xout;
 	}
-	rc = add_connpt_2(model, y, x, "IOI_CLKDIST_CLK0_ILOGIC", "_M", "_S", dup_warn);
+	rc = add_connpt_2(model, y, x, "IOI_CLKDIST_CLK0_ILOGIC", "_M", "_S",
+		dup_warn);
 	if (rc) goto xout;
-	rc = add_connpt_2(model, y, x, "IOI_CLKDIST_CLK0_OLOGIC", "_M", "_S", dup_warn);
+	rc = add_connpt_2(model, y, x, "IOI_CLKDIST_CLK0_OLOGIC", "_M", "_S",
+		dup_warn);
 	if (rc) goto xout;
-	rc = add_connpt_2(model, y, x, "IOI_CLKDIST_CLK1", "_M", "_S", dup_warn);
+	rc = add_connpt_2(model, y, x, "IOI_CLKDIST_CLK1", "_M", "_S",
+		dup_warn);
 	if (rc) goto xout;
 
 	if (side == TOP_S || side == BOTTOM_S) {
@@ -148,11 +174,13 @@ static int init_iologic_ports(struct fpga_model* model, int y, int x,
 			"IOI_MCB_DRPTRAIN", "" };
 
 		for (i = 0; mcb_2[i][0]; i++) {
-			rc = add_connpt_2(model, y, x, mcb_2[i], "_M", "_S", dup_warn);
+			rc = add_connpt_2(model, y, x, mcb_2[i], "_M", "_S",
+				dup_warn);
 			if (rc) goto xout;
 		}
 		for (i = 0; mcb_1[i][0]; i++) {
-			rc = add_connpt_name(model, y, x, mcb_1[i], dup_warn);
+			rc = add_connpt_name(model, y, x, mcb_1[i],
+				dup_warn, 0, 0);
 			if (rc) goto xout;
 		}
 	}
@@ -201,20 +229,26 @@ int init_ports(struct fpga_model* model, int dup_warn)
 				if (is_aty(Y_ROW_HORIZ_AXSYMM|Y_CHIP_HORIZ_REGS,
 						model, y))
 					continue;
-				rc = add_connpt_name(model, y, x, "VCC_WIRE", dup_warn);
+				rc = add_connpt_name(model, y, x, "VCC_WIRE",
+					dup_warn, 0, 0);
 				if (rc) goto xout;
-				rc = add_connpt_name(model, y, x, "GND_WIRE", dup_warn);
+				rc = add_connpt_name(model, y, x, "GND_WIRE",
+					dup_warn, 0, 0);
 				if (rc) goto xout;
-				rc = add_connpt_name(model, y, x, "KEEP1_WIRE", dup_warn);
+				rc = add_connpt_name(model, y, x, "KEEP1_WIRE",
+					dup_warn, 0, 0);
 				if (rc) goto xout;
-				rc = add_connpt_name(model, y, x, "FAN", dup_warn);
+				rc = add_connpt_name(model, y, x, "FAN",
+					dup_warn, 0, 0);
 				if (rc) goto xout;
-				rc = add_connpt_name(model, y, x, "FAN_B", dup_warn);
+				rc = add_connpt_name(model, y, x, "FAN_B",
+					dup_warn, 0, 0);
 				if (rc) goto xout;
 
 				if (!is_atyx(YX_IO_ROUTING, model, y, x)) {
 					for (i = 0; i <= 1; i++) {
-						rc = add_connpt_name(model, y, x, pf("GFAN%i", i), dup_warn);
+						rc = add_connpt_name(model, y, x, pf("GFAN%i", i),
+							dup_warn, 0, 0);
 						if (rc) goto xout;
 					}
 				} else {
@@ -224,10 +258,12 @@ int init_ports(struct fpga_model* model, int dup_warn)
 						// to the PLL, but elsewhere? Not clear what they
 						// connect to...
 						rc = add_connpt_name(model, y, x,
-							logicin_s(X_A5, 1 /* routing_io */), dup_warn);
+							logicin_s(X_A5, 1 /* routing_io */),
+							dup_warn, 0, 0);
 						if (rc) goto xout;
 						rc = add_connpt_name(model, y, x,
-							logicin_s(X_B4, 1 /* routing_io */), dup_warn);
+							logicin_s(X_B4, 1 /* routing_io */),
+							dup_warn, 0, 0);
 						if (rc) goto xout;
 					}
 				}
@@ -241,30 +277,40 @@ int init_ports(struct fpga_model* model, int dup_warn)
 					// pass 0 is ramb16, pass 1 and 2 are for ramb8
 					for (i = 0; i <= 2; i++) {
 						for (j = 'A'; j <= 'B'; j++) {
-							rc = add_connpt_name(model, y, x, pf("%s_CLK%c", pass_str[i], j), dup_warn);
+							rc = add_connpt_name(model, y, x, pf("%s_CLK%c", pass_str[i], j),
+								dup_warn, 0, 0);
 							if (rc) goto xout;
-							rc = add_connpt_name(model, y, x, pf("%s_EN%c", pass_str[i], j), dup_warn);
+							rc = add_connpt_name(model, y, x, pf("%s_EN%c", pass_str[i], j),
+								dup_warn, 0, 0);
 							if (rc) goto xout;
-							rc = add_connpt_name(model, y, x, pf("%s_REGCE%c", pass_str[i], j), dup_warn);
+							rc = add_connpt_name(model, y, x, pf("%s_REGCE%c", pass_str[i], j),
+								dup_warn, 0, 0);
 							if (rc) goto xout;
-							rc = add_connpt_name(model, y, x, pf("%s_RST%c", pass_str[i], j), dup_warn);
+							rc = add_connpt_name(model, y, x, pf("%s_RST%c", pass_str[i], j),
+								dup_warn, 0, 0);
 							if (rc) goto xout;
 							for (k = 0; k <= (!i ? 3 : 1); k++) {
-								rc = add_connpt_name(model, y, x, pf("%s_DIP%c%i", pass_str[i], j, k), dup_warn);
+								rc = add_connpt_name(model, y, x, pf("%s_DIP%c%i", pass_str[i], j, k),
+									dup_warn, 0, 0);
 								if (rc) goto xout;
-								rc = add_connpt_name(model, y, x, pf("%s_DOP%c%i", pass_str[i], j, k), dup_warn);
+								rc = add_connpt_name(model, y, x, pf("%s_DOP%c%i", pass_str[i], j, k),
+									dup_warn, 0, 0);
 								if (rc) goto xout;
-								rc = add_connpt_name(model, y, x, pf("%s_WE%c%i", pass_str[i], j, k), dup_warn);
+								rc = add_connpt_name(model, y, x, pf("%s_WE%c%i", pass_str[i], j, k),
+									dup_warn, 0, 0);
 								if (rc) goto xout;
 							}
 							for (k = 0; k <= (!i ? 13 : 12); k++) {
-								rc = add_connpt_name(model, y, x, pf("%s_ADDR%c%i", pass_str[i], j, k), dup_warn);
+								rc = add_connpt_name(model, y, x, pf("%s_ADDR%c%i", pass_str[i], j, k),
+									dup_warn, 0, 0);
 								if (rc) goto xout;
 							}
 							for (k = 0; k <= (!i ? 31 : 15); k++) {
-								rc = add_connpt_name(model, y, x, pf("%s_DI%c%i", pass_str[i], j, k), dup_warn);
+								rc = add_connpt_name(model, y, x, pf("%s_DI%c%i", pass_str[i], j, k),
+									dup_warn, 0, 0);
 								if (rc) goto xout;
-								rc = add_connpt_name(model, y, x, pf("%s_DO%c%i", pass_str[i], j, k), dup_warn);
+								rc = add_connpt_name(model, y, x, pf("%s_DO%c%i", pass_str[i], j, k),
+									dup_warn, 0, 0);
 								if (rc) goto xout;
 							}
 						}
@@ -280,54 +326,70 @@ int init_ports(struct fpga_model* model, int dup_warn)
 
 					is_in_row(model, y, &row_num, &row_pos);
 					if (!row_num && row_pos == LAST_POS_IN_ROW) {
-						rc = add_connpt_name(model, y, x, "CARRYIN_DSP48A1_SITE", dup_warn);
+						rc = add_connpt_name(model, y, x, "CARRYIN_DSP48A1_SITE",
+							dup_warn, 0, 0);
 						if (rc) goto xout;
 						for (i = 0; i <= 47; i++) {
-							rc = add_connpt_name(model, y, x, pf("PCIN%i_DSP48A1_SITE", i), dup_warn);
+							rc = add_connpt_name(model, y, x, pf("PCIN%i_DSP48A1_SITE", i),
+								dup_warn, 0, 0);
 							if (rc) goto xout;
 						}
 					}
 
-					rc = add_connpt_name(model, y, x, "CLK_DSP48A1_SITE", dup_warn);
+					rc = add_connpt_name(model, y, x, "CLK_DSP48A1_SITE",
+						dup_warn, 0, 0);
 					if (rc) goto xout;
-					rc = add_connpt_name(model, y, x, "CARRYOUT_DSP48A1_SITE", dup_warn);
+					rc = add_connpt_name(model, y, x, "CARRYOUT_DSP48A1_SITE",
+						dup_warn, 0, 0);
 					if (rc) goto xout;
-					rc = add_connpt_name(model, y, x, "CARRYOUTF_DSP48A1_SITE", dup_warn);
+					rc = add_connpt_name(model, y, x, "CARRYOUTF_DSP48A1_SITE",
+						dup_warn, 0, 0);
 					if (rc) goto xout;
 
 					for (i = 0; pref[i][0]; i++) {
-						rc = add_connpt_name(model, y, x, pf("%sCARRYIN_DSP48A1_SITE", pref[i]), dup_warn);
+						rc = add_connpt_name(model, y, x, pf("%sCARRYIN_DSP48A1_SITE", pref[i]),
+							dup_warn, 0, 0);
 						if (rc) goto xout;
 						for (j = 0; seq[j][0]; j++) {
-							rc = add_connpt_name(model, y, x, pf("%s%s_DSP48A1_SITE", pref[i], seq[j]), dup_warn);
+							rc = add_connpt_name(model, y, x, pf("%s%s_DSP48A1_SITE", pref[i], seq[j]),
+								dup_warn, 0, 0);
 							if (rc) goto xout;
 						}
 					}
 						
 					for (i = 0; i <= 17; i++) {
-						rc = add_connpt_name(model, y, x, pf("A%i_DSP48A1_SITE", i), dup_warn);
+						rc = add_connpt_name(model, y, x, pf("A%i_DSP48A1_SITE", i),
+							dup_warn, 0, 0);
 						if (rc) goto xout;
-						rc = add_connpt_name(model, y, x, pf("B%i_DSP48A1_SITE", i), dup_warn);
+						rc = add_connpt_name(model, y, x, pf("B%i_DSP48A1_SITE", i),
+							dup_warn, 0, 0);
 						if (rc) goto xout;
-						rc = add_connpt_name(model, y, x, pf("D%i_DSP48A1_SITE", i), dup_warn);
+						rc = add_connpt_name(model, y, x, pf("D%i_DSP48A1_SITE", i),
+							dup_warn, 0, 0);
 						if (rc) goto xout;
-						rc = add_connpt_name(model, y, x, pf("BCOUT%i_DSP48A1_SITE", i), dup_warn);
+						rc = add_connpt_name(model, y, x, pf("BCOUT%i_DSP48A1_SITE", i),
+							dup_warn, 0, 0);
 						if (rc) goto xout;
 					}
 					for (i = 0; i <= 47; i++) {
-						rc = add_connpt_name(model, y, x, pf("C%i_DSP48A1_SITE", i), dup_warn);
+						rc = add_connpt_name(model, y, x, pf("C%i_DSP48A1_SITE", i),
+							dup_warn, 0, 0);
 						if (rc) goto xout;
-						rc = add_connpt_name(model, y, x, pf("P%i_DSP48A1_SITE", i), dup_warn);
+						rc = add_connpt_name(model, y, x, pf("P%i_DSP48A1_SITE", i),
+							dup_warn, 0, 0);
 						if (rc) goto xout;
-						rc = add_connpt_name(model, y, x, pf("PCOUT%i_DSP48A1_SITE", i), dup_warn);
+						rc = add_connpt_name(model, y, x, pf("PCOUT%i_DSP48A1_SITE", i),
+							dup_warn, 0, 0);
 						if (rc) goto xout;
 					}
 					for (i = 0; i <= 35; i++) {
-						rc = add_connpt_name(model, y, x, pf("M%i_DSP48A1_SITE", i), dup_warn);
+						rc = add_connpt_name(model, y, x, pf("M%i_DSP48A1_SITE", i),
+							dup_warn, 0, 0);
 						if (rc) goto xout;
 					}
 					for (i = 0; i <= 7; i++) {
-						rc = add_connpt_name(model, y, x, pf("OPMODE%i_DSP48A1_SITE", i), dup_warn);
+						rc = add_connpt_name(model, y, x, pf("OPMODE%i_DSP48A1_SITE", i),
+							dup_warn, 0, 0);
 						if (rc) goto xout;
 					}
 				}
@@ -341,44 +403,57 @@ int init_ports(struct fpga_model* model, int dup_warn)
 					if (YX_TILE(model, y, x)->flags & TF_LOGIC_XM_DEV) {
 						// The first SLICEM on the bottom has a given C_IN port.
 						if (is_aty(Y_INNER_BOTTOM, model, y+3)) {
-							rc = add_connpt_name(model, y, x, "M_CIN", dup_warn);
+							rc = add_connpt_name(model, y, x, "M_CIN",
+								dup_warn, 0, 0);
 							if (rc) goto xout;
 						}
-						rc = add_connpt_name(model, y, x, "M_COUT", dup_warn);
+						rc = add_connpt_name(model, y, x, "M_COUT",
+							dup_warn, 0, 0);
 						if (rc) goto xout;
-						rc = add_connpt_name(model, y, x, "M_WE", dup_warn);
+						rc = add_connpt_name(model, y, x, "M_WE",
+							dup_warn, 0, 0);
 						if (rc) goto xout;
 						for (i = 'A'; i <= 'D'; i++) {
-							rc = add_connpt_name(model, y, x, pf("M_%cI", i), dup_warn);
+							rc = add_connpt_name(model, y, x, pf("M_%cI", i),
+								dup_warn, 0, 0);
 							if (rc) goto xout;
 						}
 						pref[0] = "M";
 						pref[1] = "X";
 					} else { // LOGIC_XL
-						rc = add_connpt_name(model, y, x, "XL_COUT", dup_warn);
+						rc = add_connpt_name(model, y, x, "XL_COUT",
+							dup_warn, 0, 0);
 						if (rc) goto xout;
 						pref[0] = "L";
 						pref[1] = "XX";
 					}
 					for (k = 0; k <= 1; k++) {
-						rc = add_connpt_name(model, y, x, pf("%s_CE", pref[k]), dup_warn);
+						rc = add_connpt_name(model, y, x, pf("%s_CE", pref[k]),
+							dup_warn, 0, 0);
 						if (rc) goto xout;
-						rc = add_connpt_name(model, y, x, pf("%s_SR", pref[k]), dup_warn);
+						rc = add_connpt_name(model, y, x, pf("%s_SR", pref[k]),
+							dup_warn, 0, 0);
 						if (rc) goto xout;
-						rc = add_connpt_name(model, y, x, pf("%s_CLK", pref[k]), dup_warn);
+						rc = add_connpt_name(model, y, x, pf("%s_CLK", pref[k]),
+							dup_warn, 0, 0);
 						if (rc) goto xout;
 						for (i = 'A'; i <= 'D'; i++) {
 							for (j = 1; j <= 6; j++) {
-								rc = add_connpt_name(model, y, x, pf("%s_%c%i", pref[k], i, j), dup_warn);
+								rc = add_connpt_name(model, y, x, pf("%s_%c%i", pref[k], i, j),
+									dup_warn, 0, 0);
 								if (rc) goto xout;
 							}
-							rc = add_connpt_name(model, y, x, pf("%s_%c", pref[k], i), dup_warn);
+							rc = add_connpt_name(model, y, x, pf("%s_%c", pref[k], i),
+								dup_warn, 0, 0);
 							if (rc) goto xout;
-							rc = add_connpt_name(model, y, x, pf("%s_%cMUX", pref[k], i), dup_warn);
+							rc = add_connpt_name(model, y, x, pf("%s_%cMUX", pref[k], i),
+								dup_warn, 0, 0);
 							if (rc) goto xout;
-							rc = add_connpt_name(model, y, x, pf("%s_%cQ", pref[k], i), dup_warn);
+							rc = add_connpt_name(model, y, x, pf("%s_%cQ", pref[k], i),
+								dup_warn, 0, 0);
 							if (rc) goto xout;
-							rc = add_connpt_name(model, y, x, pf("%s_%cX", pref[k], i), dup_warn);
+							rc = add_connpt_name(model, y, x, pf("%s_%cX", pref[k], i),
+								dup_warn, 0, 0);
 							if (rc) goto xout;
 						}
 					}

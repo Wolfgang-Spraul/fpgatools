@@ -262,21 +262,19 @@ int fpga_set_lut(struct fpga_model* model, struct fpga_device* dev,
 	return 0;
 }
 
-int fpga_connpt_lookup(struct fpga_model* model, int y, int x,
-	const char* name, int* connpt_dests_o)
+int fpga_connpt_find(struct fpga_model* model, int y, int x,
+	str16_t name_i, int* connpt_dests_o)
 {
 	struct fpga_tile* tile;
-	int i, rc, connpt_i, num_dests;
+	int i, num_dests;
 
-	rc = strarray_find(&model->str, name, &connpt_i);
-	if (rc) FAIL(rc);
 	tile = YX_TILE(model, y, x);
 	for (i = 0; i < tile->num_conn_point_names; i++) {
-		if (tile->conn_point_names[i*2+1] == connpt_i)
+		if (tile->conn_point_names[i*2+1] == name_i)
 			break;
 	}
 	if (i >= tile->num_conn_point_names)
-		FAIL(EINVAL);
+		{ HERE(); goto fail; }
 
 	*connpt_dests_o = tile->conn_point_names[i*2];
 	if (i < tile->num_conn_point_names-1)
@@ -288,47 +286,27 @@ fail:
 	return 0;
 }
 
-#define NUM_CONN_DEST_BUFS	16
-#define CONN_DEST_BUF_SIZE	128
-
-const char* fpga_conn_dest(struct fpga_model* model, int y, int x,
-	int connpt_dest_idx, int* dest_y, int* dest_x)
+void fpga_conn_dest(struct fpga_model* model, int y, int x,
+	int connpt_dest_idx, int* dest_y, int* dest_x, str16_t* str_i)
 {
-	static char conn_dest_buf[NUM_CONN_DEST_BUFS][CONN_DEST_BUF_SIZE];
-	static int last_buf = 0;
-
 	struct fpga_tile* tile;
-	const char* hash_str;
 
 	tile = YX_TILE(model, y, x);
 	if (connpt_dest_idx < 0
 	    || connpt_dest_idx >= tile->num_conn_point_dests) {
 		HERE();
-		return 0;
+		return;
 	}
 	*dest_x = tile->conn_point_dests[connpt_dest_idx*3];
 	*dest_y = tile->conn_point_dests[connpt_dest_idx*3+1];
-
-	hash_str = strarray_lookup(&model->str,
-		tile->conn_point_dests[connpt_dest_idx*3+2]);
-	if (!hash_str || (strlen(hash_str) >= CONN_DEST_BUF_SIZE)) {
-		HERE();
-		return 0;
-	}
-	last_buf = (last_buf+1)%NUM_CONN_DEST_BUFS;
-	strcpy(conn_dest_buf[last_buf], hash_str);
-
-	return conn_dest_buf[last_buf];
+	*str_i = tile->conn_point_dests[connpt_dest_idx*3+2];
 }
 
 swidx_t fpga_switch_first(struct fpga_model* model, int y, int x,
-	const char* name, int from_to)
+	str16_t name_i, int from_to)
 {
 	struct fpga_tile* tile;
-	int rc, i, connpt_o, name_i;
-
-	rc = strarray_find(&model->str, name, &name_i);
-	if (rc) FAIL(rc);
+	int i, connpt_o;
 
 	// Finds the first switch either from or to the name given.
 	tile = YX_TILE(model, y, x);
@@ -338,8 +316,6 @@ swidx_t fpga_switch_first(struct fpga_model* model, int y, int x,
 			break;
 	}
 	return (i >= tile->num_switches) ? NO_SWITCH : i;
-fail:
-	return NO_SWITCH;
 }
 
 static swidx_t fpga_switch_search(struct fpga_model* model, int y, int x,
@@ -401,6 +377,19 @@ const char* fpga_switch_str(struct fpga_model* model, int y, int x,
 {
 	uint32_t sw = YX_TILE(model, y, x)->switches[swidx];
 	return connpt_str(model, y, x, SW_I(sw, from_to));
+}
+
+str16_t fpga_switch_str_i(struct fpga_model* model, int y, int x,
+	swidx_t swidx, int from_to)
+{
+	struct fpga_tile* tile;
+	uint32_t sw;
+	int connpt_o;
+
+	tile = YX_TILE(model, y, x);
+	sw = tile->switches[swidx];
+	connpt_o = SW_I(sw, from_to);
+	return tile->conn_point_names[connpt_o*2+1];
 }
 
 int fpga_switch_is_bidir(struct fpga_model* model, int y, int x,
@@ -480,17 +469,18 @@ const char* fmt_swchain(struct fpga_model* model, int y, int x,
 	return buf[last_buf];
 }
 
-int fpga_switch_chain_enum(struct sw_chain* chain)
+int fpga_switch_chain(struct sw_chain* chain)
 {
 	swidx_t idx;
 	struct fpga_tile* tile;
 	int child_from_to, i;
 
-	if (chain->start_switch != SW_CHAIN_NEXT) {
+	if (chain->start_switch != STRIDX_NO_ENTRY) {
 		idx = fpga_switch_first(chain->model, chain->y, chain->x,
 			chain->start_switch, chain->from_to);
-		chain->start_switch = SW_CHAIN_NEXT;
+		chain->start_switch = STRIDX_NO_ENTRY;
 		if (idx == NO_SWITCH) {
+			HERE(); // unusual and is probably some internal error
 			chain->chain_size = 0;
 			return NO_SWITCH;
 		}
@@ -529,7 +519,7 @@ int fpga_switch_chain_enum(struct sw_chain* chain)
 	tile = YX_TILE(chain->model, chain->y, chain->x);
 	while (1) {
 		idx = fpga_switch_first(chain->model, chain->y, chain->x,
-			fpga_switch_str(chain->model, chain->y, chain->x,
+			fpga_switch_str_i(chain->model, chain->y, chain->x,
 			chain->chain[chain->chain_size-1], !chain->from_to),
 			chain->from_to);
 		child_from_to = SW_I(tile->switches[chain->chain[chain->chain_size-1]],
@@ -571,47 +561,61 @@ internal_error:
 	return NO_SWITCH;
 }
 
-int fpga_switch_conns_enum(struct swchain_conns* conns)
+int fpga_switch_conns(struct sw_conns* conns)
 {
-	const char* end_of_chain_str;
+	str16_t end_of_chain_str;
 
-	if (conns->start_switch != SW_CHAIN_NEXT) {
+	if (conns->start_switch != STRIDX_NO_ENTRY) {
 		conns->chain.model = conns->model;
 		conns->chain.y = conns->y;
 		conns->chain.x = conns->x;
 		conns->chain.start_switch = conns->start_switch;
 		conns->chain.from_to = SW_FROM;
 
-		conns->start_switch = SW_CHAIN_NEXT;
+		conns->start_switch = STRIDX_NO_ENTRY;
 		conns->num_dests = 0;
 		conns->dest_i = 0;
 	}
 	else if (!conns->chain.chain_size) { HERE(); goto internal_error; }
 
 	while (conns->dest_i >= conns->num_dests) {
-		fpga_switch_chain_enum(&conns->chain);
+		fpga_switch_chain(&conns->chain);
 		if (conns->chain.chain_size == 0)
 			return NO_CONN;
-		end_of_chain_str = fpga_switch_str(conns->model,
+		end_of_chain_str = fpga_switch_str_i(conns->model,
 			conns->y, conns->x,
 			conns->chain.chain[conns->chain.chain_size-1],
 			SW_TO);
-		if (!end_of_chain_str) { HERE(); goto internal_error; }
+		if (end_of_chain_str == STRIDX_NO_ENTRY)
+			{ HERE(); goto internal_error; }
 		conns->dest_i = 0;
-		conns->num_dests = fpga_connpt_lookup(conns->model,
+		conns->num_dests = fpga_connpt_find(conns->model,
 			conns->y, conns->x, end_of_chain_str,
 			&conns->connpt_dest_start);
 		if (conns->num_dests)
 			break;
 	}
-	conns->dest_str = fpga_conn_dest(conns->model, conns->y, conns->x,
+	fpga_conn_dest(conns->model, conns->y, conns->x,
 		conns->connpt_dest_start + conns->dest_i,
-		&conns->dest_y, &conns->dest_x);
-	if (!conns->dest_str) { HERE(); goto internal_error; }
+		&conns->dest_y, &conns->dest_x, &conns->dest_str_i);
+	if (conns->dest_str_i == STRIDX_NO_ENTRY)
+		{ HERE(); goto internal_error; }
 	conns->dest_i++;
 	return 0;
 		
 internal_error:
 	conns->chain.chain_size = 0;
 	return NO_CONN;
+}
+
+void printf_swconns(struct fpga_model* model, int y, int x, str16_t sw)
+{
+	struct sw_conns conns =
+		{ .model = model, .y = y, .x = x, .start_switch = sw };
+	while (fpga_switch_conns(&conns) != NO_CONN) {
+		printf("sw %s conn y%02i x%02i %s\n", fmt_swchain(model, y, x,
+			conns.chain.chain, conns.chain.chain_size),
+			conns.dest_y, conns.dest_x,
+			strarray_lookup(&model->str, conns.dest_str_i));
+	}
 }

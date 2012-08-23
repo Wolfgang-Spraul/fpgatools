@@ -34,23 +34,25 @@ int fpga_set_lut(struct fpga_model* model, struct fpga_device* dev,
 // returns the number of outgoing connections for the
 // connection point given with 'name', and the connection
 // point's first dest offset in connpt_dests_o.
-int fpga_connpt_lookup(struct fpga_model* model, int y, int x,
-	const char* name, int* connpt_dests_o);
+int fpga_connpt_find(struct fpga_model* model, int y, int x,
+	str16_t name_i, int* connpt_dests_o);
 
-const char* fpga_conn_dest(struct fpga_model* model, int y, int x,
-	int connpt_dest_idx, int* dest_y, int* dest_x);
+void fpga_conn_dest(struct fpga_model* model, int y, int x,
+	int connpt_dest_idx, int* dest_y, int* dest_x, str16_t* str_i);
 
 typedef int swidx_t; // swidx_t is an index into the uint32_t switches array
 
 // returns a switch index, or -1 (NO_SWITCH) if no switch was found
 swidx_t fpga_switch_first(struct fpga_model* model, int y, int x,
-	const char* name, int from_to);
+	str16_t name_i, int from_to);
 swidx_t fpga_switch_next(struct fpga_model* model, int y, int x,
 	swidx_t last, int from_to);
 swidx_t fpga_switch_backtofirst(struct fpga_model* model, int y, int x,
 	swidx_t last, int from_to);
 
 const char* fpga_switch_str(struct fpga_model* model, int y, int x,
+	swidx_t swidx, int from_to);
+str16_t fpga_switch_str_i(struct fpga_model* model, int y, int x,
 	swidx_t swidx, int from_to);
 int fpga_switch_is_bidir(struct fpga_model* model, int y, int x,
 	swidx_t swidx);
@@ -66,8 +68,7 @@ const char* fmt_sw(struct fpga_model* model, int y, int x,
 const char* fmt_swchain(struct fpga_model* model, int y, int x,
 	swidx_t* sw, int sw_size);
 
-#define SW_CHAIN_NEXT		0 // use for name
-#define MAX_SW_CHAIN_SIZE	32 // largest seen so far was 10
+#define MAX_SW_CHAIN_SIZE 32 // largest seen so far was 10
 
 struct sw_chain
 {
@@ -75,8 +76,8 @@ struct sw_chain
 	struct fpga_model* model;
 	int y;
 	int x;
-	// start_switch will be set to SW_CHAIN_NEXT (0) after the first call
-	const char* start_switch;
+	// start_switch will be set to STRIDX_NO_ENTRY (0) after the first call
+	str16_t start_switch;
 	int from_to;
 
 	// return values:
@@ -90,16 +91,16 @@ struct sw_chain
 // Returns 0 if another switch is returned in chain, or
 // NO_SWITCH (-1) if there is no other switch.
 // chain_size set to 0 when there are no more switches in the tree
-int fpga_switch_chain_enum(struct sw_chain* chain);
+int fpga_switch_chain(struct sw_chain* chain);
 
-struct swchain_conns
+struct sw_conns
 {
 	// start and recurring values:
    	struct fpga_model* model;
 	int y;
 	int x;
-	// start_switch will be set to SW_CHAIN_NEXT (0) after first call
-	const char* start_switch;
+	// start_switch will be set to STRIDX_NO_ENTRY (0) after first call
+	str16_t start_switch;
 
 	// return values:
 	struct sw_chain chain;
@@ -108,9 +109,30 @@ struct swchain_conns
 	int dest_i;
 	int dest_y;
 	int dest_x;
-	const char* dest_str;
+	str16_t dest_str_i;
 };
 
 // Returns 0 if another connection is returned in conns, or
 // NO_CONN (-1) if there is no other connection.
-int fpga_switch_conns_enum(struct swchain_conns* conns);
+int fpga_switch_conns(struct sw_conns* conns);
+
+void printf_swconns(struct fpga_model* model, int y, int x, str16_t sw);
+
+struct switch_to_yx
+{
+	// input:
+	int yx_req; // YX_-value
+	struct fpga_model* model;
+	int y;
+	int x;
+	str16_t start_switch;
+
+	// output:
+	swidx_t chain[MAX_SW_CHAIN_SIZE];
+	int chain_size;
+	int dest_y;
+	int dest_x;
+	str16_t dest_connpt;
+};
+
+int fpga_switch_to_yx(struct switch_to_yx* p);
