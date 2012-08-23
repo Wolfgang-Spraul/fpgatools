@@ -66,7 +66,10 @@ int init_tiles(struct fpga_model* model)
 
 				model->tiles[i].flags |= TF_FABRIC_ROUTING_COL;
 				if (no_io) model->tiles[i].flags |= TF_ROUTING_NO_IO;
-				model->tiles[i+1].flags |= TF_FABRIC_LOGIC_COL;
+				model->tiles[i+1].flags |= 
+					(cur_cfgcol == 'L' || cur_cfgcol == 'l')
+						? TF_FABRIC_LOGIC_XL_COL
+						: TF_FABRIC_LOGIC_XM_COL;
 				for (k = model->cfg_rows-1; k >= 0; k--) {
 					row_top_y = 2 /* top IO tiles */ + (model->cfg_rows-1-k)*(8+1/*middle of row clock*/+8);
 					if (k<(model->cfg_rows/2)) row_top_y++; // middle system tiles (center row)

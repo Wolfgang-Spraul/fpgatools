@@ -395,7 +395,7 @@ int init_ports(struct fpga_model* model, int dup_warn)
 				}
 			}
 		}
-		if (is_atx(X_LOGIC_COL, model, x)) {
+		if (is_atx(X_FABRIC_LOGIC_COL|X_CENTER_LOGIC_COL, model, x)) {
 			for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
 				if (YX_TILE(model, y, x)->flags & (TF_LOGIC_XM_DEV|TF_LOGIC_XL_DEV)) {
 					const char* pref[2];

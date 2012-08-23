@@ -103,6 +103,16 @@ fail:
 	return rc;
 }
 
+void printf_swchain(struct fpga_model* model, int y, int x, str16_t sw)
+{
+	struct sw_chain chain =
+		{ .model = model, .y = y, .x = x, .start_switch = sw, .from_to = SW_FROM };
+	while (fpga_switch_chain(&chain) != NO_CONN) {
+		printf("sw %s\n", fmt_swchain(model, y, x,
+			chain.chain, chain.chain_size));
+	}
+}
+
 int main(int argc, char** argv)
 {
 	struct fpga_model model;
@@ -197,7 +207,26 @@ int main(int argc, char** argv)
 	if (rc) FAIL(rc);
 	printf("%s\n", fmt_swchain(&model, switch_to.y, switch_to.x, switch_to.chain, switch_to.chain_size));
 
-	// next: YX_DEV_LOGIC
+#if 0
+// todo: max_depth param for _chain _conns
+printf("y %i x %i %s\n",  switch_to.dest_y, switch_to.dest_x, strarray_lookup(&model.str, switch_to.dest_connpt));
+	printf_swconns(&model, switch_to.dest_y, switch_to.dest_x, switch_to.dest_connpt);
+#endif
+
+	switch_to.yx_req = YX_DEV_LOGIC;
+	switch_to.flags = SWTO_YX_DEF;
+	switch_to.y = switch_to.dest_y;
+	switch_to.x = switch_to.dest_x;
+	switch_to.start_switch = switch_to.dest_connpt;
+	rc = fpga_switch_to_yx(&switch_to);
+	if (rc) FAIL(rc);
+	printf("%s\n", fmt_swchain(&model, switch_to.y, switch_to.x, switch_to.chain, switch_to.chain_size));
+
+printf("1\n");
+printf("y %i x %i %s\n",  switch_to.dest_y, switch_to.dest_x, strarray_lookup(&model.str, switch_to.dest_connpt));
+printf("2\n");
+	printf_swchain(&model, switch_to.dest_y, switch_to.dest_x, switch_to.dest_connpt);
+printf("3\n");
 
 	printf("P48 O pinw %s\n", strarray_lookup(&model.str, P48_dev->iob.pinw_in_O));
 

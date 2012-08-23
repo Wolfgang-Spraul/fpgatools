@@ -59,7 +59,7 @@ static int connect_logic_carry(struct fpga_model* model)
 	int x, y, rc;
 
 	for (x = 0; x < model->x_width; x++) {
-		if (is_atx(X_LOGIC_COL, model, x)) {
+		if (is_atx(X_FABRIC_LOGIC_COL|X_CENTER_LOGIC_COL, model, x)) {
 			for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
 				if (has_device_type(model, y, x, DEV_LOGIC, LOGIC_M)) {
 					if (is_aty(Y_CHIP_HORIZ_REGS, model, y-1)
@@ -235,7 +235,7 @@ static int run_gfan(struct fpga_model* model)
 	// top and bottom IO devs
 	for (x = LEFT_SIDE_WIDTH; x < model->x_width - RIGHT_SIDE_WIDTH; x++) {
 		if (is_atx(X_FABRIC_LOGIC_ROUTING_COL|X_CENTER_ROUTING_COL, model, x)
-		    && is_atx(X_ROUTING_HAS_IO, model, x)) {
+		    && !is_atx(X_ROUTING_NO_IO, model, x)) {
 			for (i = 0; i < TOPBOT_IO_ROWS; i++) {
 				if ((rc = add_conn_range(model, NOPREF_BI_F,
 					TOP_OUTER_IO+i, x,
@@ -871,7 +871,7 @@ static int run_gclk(struct fpga_model* model)
 				gclk_net.pts[next_net_o++].name = "HCLK_GCLK%i_INT";
 			} else if (is_atx(X_LEFT_MCB, model, x)) {
 				gclk_net.pts[next_net_o++].name = "HCLK_GCLK%i_MCB";
-			} else if (is_atx(X_LOGIC_COL|X_LEFT_IO_DEVS_COL, model, x)) {
+			} else if (is_atx(X_FABRIC_LOGIC_COL|X_CENTER_LOGIC_COL|X_LEFT_IO_DEVS_COL, model, x)) {
 				gclk_net.pts[next_net_o++].name = "HCLK_GCLK%i_CLB";
 			} else if (is_atx(X_FABRIC_BRAM_VIA_COL|X_FABRIC_MACC_VIA_COL, model, x)) {
 				gclk_net.pts[next_net_o++].name = "HCLK_GCLK%i_BRAM_INTER";
@@ -923,7 +923,7 @@ static int run_gclk(struct fpga_model* model)
 				} else {
 					if (row)
 						is_break = 1;
-					else if (is_atx(X_ROUTING_TO_BRAM_COL|X_ROUTING_TO_MACC_COL, model, x))
+					else if (is_atx(X_FABRIC_BRAM_ROUTING_COL|X_FABRIC_MACC_ROUTING_COL, model, x))
 						is_break = 1;
 				}
 
@@ -1625,7 +1625,7 @@ static int run_logic_inout(struct fpga_model* model)
 						if ((rc = add_conn_bi_pref(model, y, x, pf("LOGICIN%i", north_p[i]), y-2, x, pf("LOGICIN_N%i", north_p[i])))) goto xout;
 						if ((rc = add_conn_bi_pref(model, y-1, x, pf("LOGICIN_N%i", north_p[i]), y-2, x, pf("LOGICIN_N%i", north_p[i])))) goto xout;
 					}
-					if (is_aty(Y_INNER_BOTTOM, model, y+1) && !is_atx(X_ROUTING_TO_BRAM_COL, model, x)) {
+					if (is_aty(Y_INNER_BOTTOM, model, y+1) && !is_atx(X_FABRIC_BRAM_ROUTING_COL, model, x)) {
 						if ((rc = add_conn_bi_pref(model, y, x, pf("LOGICIN_N%i", north_p[i]), y+1, x, pf("LOGICIN_N%i", north_p[i])))) goto xout;
 					}
 				}
@@ -1638,7 +1638,7 @@ static int run_logic_inout(struct fpga_model* model)
 						if ((rc = add_conn_bi_pref(model,   y, x, pf("LOGICIN%i", south_p[i]), y+2, x, pf("LOGICIN_S%i", south_p[i])))) goto xout;
 						if ((rc = add_conn_bi_pref(model, y+1, x, pf("LOGICIN%i", south_p[i]), y+2, x, pf("LOGICIN_S%i", south_p[i])))) goto xout;
 					} else if (is_aty(Y_INNER_BOTTOM, model, y+1)) {
-						if (!is_atx(X_ROUTING_TO_BRAM_COL, model, x))
+						if (!is_atx(X_FABRIC_BRAM_ROUTING_COL, model, x))
 							if ((rc = add_conn_bi_pref(model, y, x, pf("LOGICIN%i", south_p[i]), y+1, x, pf("LOGICIN%i", south_p[i])))) goto xout;
 					} else {
 						if ((rc = add_conn_bi_pref(model, y, x, pf("LOGICIN%i", south_p[i]), y+1, x, pf("LOGICIN_S%i", south_p[i])))) goto xout;
@@ -1659,7 +1659,7 @@ static int run_logic_inout(struct fpga_model* model)
 					if ((rc = add_conn_range(model, NOPREF_BI_F, y, x, "LOGICIN_B%i", 5, 9, y, x+1, "IOI_LOGICINB%i", 5))) goto xout;
 					if ((rc = add_conn_range(model, NOPREF_BI_F, y, x, "LOGICIN_B%i", 11, 62, y, x+1, "IOI_LOGICINB%i", 11))) goto xout;
 				}
-				if (is_atx(X_ROUTING_TO_BRAM_COL, model, x)) {
+				if (is_atx(X_FABRIC_BRAM_ROUTING_COL, model, x)) {
 					if ((rc = add_conn_range(model, NOPREF_BI_F, y, x, "LOGICIN_B%i", 0, 62, y, x+1, "INT_INTERFACE_LOGICBIN%i", 0))) goto xout;
 					if (tile[2].flags & TF_BRAM_DEV) {
 						for (i = 0; i < 4; i++) {
@@ -1669,7 +1669,7 @@ static int run_logic_inout(struct fpga_model* model)
 						}
 					}
 				}
-				if (is_atx(X_ROUTING_TO_MACC_COL, model, x)) {
+				if (is_atx(X_FABRIC_MACC_ROUTING_COL, model, x)) {
 					if ((rc = add_conn_range(model, NOPREF_BI_F, y, x, "LOGICIN_B%i", 0, 62, y, x+1, "INT_INTERFACE_LOGICBIN%i", 0))) goto xout;
 					if (tile[2].flags & TF_MACC_DEV) {
 						for (i = 0; i < 4; i++) {
@@ -1903,7 +1903,7 @@ static int run_direction_wires(struct fpga_model* model)
 						 { "NR1E%i", 0, y-1, x },
 						 { "" }}};
 					if ((rc = add_conn_net(model, PREF_BI_F, &n))) goto xout; }
-					if (is_aty(Y_INNER_BOTTOM, model, y+1) && !is_atx(X_ROUTING_TO_BRAM_COL, model, x)) {
+					if (is_aty(Y_INNER_BOTTOM, model, y+1) && !is_atx(X_FABRIC_BRAM_ROUTING_COL, model, x)) {
 						{ struct w_net n = {
 							3,
 							{{ "NR1E%i", 0,   y, x },
@@ -1977,7 +1977,7 @@ static int run_direction_wires(struct fpga_model* model)
 					if ((rc = add_conn_bi(model, y-2, x, "NN2E0", y-1, x, "NN2E_S0"))) goto xout;
 					if (is_aty(Y_INNER_BOTTOM, model, y+1)) {
 						if ((rc = add_conn_bi(model, y, x, "NN2E_S0", y-1, x, "NN2E0"))) goto xout;
-						if (!is_atx(X_ROUTING_TO_BRAM_COL, model, x)) {
+						if (!is_atx(X_FABRIC_BRAM_ROUTING_COL, model, x)) {
 							{ struct w_net n = {
 								3,
 								{{ "NN2E%i", 0, y-1, x },
@@ -2026,7 +2026,7 @@ static int run_direction_wires(struct fpga_model* model)
 					if ((rc = add_conn_bi_pref(model,   y, x, "SS2B3",   y+2, x, "SS2E_N3"))) goto xout;
 					if ((rc = add_conn_bi_pref(model, y+2, x, "SS2E_N3", y+3, x, "SS2E3"))) goto xout;
 				} else if (is_aty(Y_INNER_BOTTOM, model, y+2)) {
-					if (!is_atx(X_ROUTING_TO_BRAM_COL, model, x)) {
+					if (!is_atx(X_FABRIC_BRAM_ROUTING_COL, model, x)) {
 						{ struct w_net n = {
 							3,
 							{{ "SS2B%i", 0,   y, x },
@@ -2036,7 +2036,7 @@ static int run_direction_wires(struct fpga_model* model)
 						if ((rc = add_conn_net(model, PREF_BI_F, &n))) goto xout; }
 					}
 				} else if (is_aty(Y_INNER_BOTTOM, model, y+1)) {
-					if (!is_atx(X_ROUTING_TO_BRAM_COL, model, x)) {
+					if (!is_atx(X_FABRIC_BRAM_ROUTING_COL, model, x)) {
 						if ((rc = add_conn_range(model, PREF_BI_F,   y, x, "SS2B%i", 0, 3, y+1, x, "SS2B%i", 0))) goto xout;
 						if ((rc = add_conn_bi_pref(model,   y, x, "SS2E_N3", y+1, x, "SS2E_N3"))) goto xout;
 					}

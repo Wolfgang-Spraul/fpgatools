@@ -265,7 +265,7 @@ int init_devices(struct fpga_model* model)
 
 	// ILOGIC/OLOGIC/IODELAY
 	for (x = LEFT_SIDE_WIDTH; x < model->x_width - RIGHT_SIDE_WIDTH; x++) {
-		if (!is_atx(X_LOGIC_COL, model, x)
+		if (!is_atx(X_FABRIC_LOGIC_COL|X_CENTER_LOGIC_COL, model, x)
 		    || is_atx(X_ROUTING_NO_IO, model, x-1))
 			continue;
 		for (i = 0; i <= 1; i++) {
@@ -394,7 +394,7 @@ int init_devices(struct fpga_model* model)
 				if ((rc = add_dev(model, y, x, DEV_TIEOFF, 0))) goto fail;
 			}
 		}
-		if (is_atx(X_LOGIC_COL, model, x)
+		if (is_atx(X_FABRIC_LOGIC_COL|X_CENTER_LOGIC_COL, model, x)
 		    && !is_atx(X_ROUTING_NO_IO, model, x-1)) {
 			for (i = 0; i <= 1; i++) {
 				y = TOP_IO_TILES+i;
@@ -406,7 +406,7 @@ int init_devices(struct fpga_model* model)
 	}
 	// LOGIC
 	for (x = 0; x < model->x_width; x++) {
-		if (!is_atx(X_LOGIC_COL, model, x))
+		if (!is_atx(X_FABRIC_LOGIC_COL|X_CENTER_LOGIC_COL, model, x))
 			continue;
 		for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
 			// M and L are at index 0 (DEV_LOGM and DEV_LOGL), X is at index 1 (DEV_LOGX).

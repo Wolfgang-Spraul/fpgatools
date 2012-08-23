@@ -37,7 +37,8 @@ int printf_tiles(FILE* f, struct fpga_model* model)
 				fprintf(f, "tile y%02i x%02i flags", y, x);
 
 				PRINT_FLAG(f, TF_FABRIC_ROUTING_COL);
-				PRINT_FLAG(f, TF_FABRIC_LOGIC_COL);
+				PRINT_FLAG(f, TF_FABRIC_LOGIC_XM_COL);
+				PRINT_FLAG(f, TF_FABRIC_LOGIC_XL_COL);
 				PRINT_FLAG(f, TF_FABRIC_BRAM_VIA_COL);
 				PRINT_FLAG(f, TF_FABRIC_MACC_VIA_COL);
 				PRINT_FLAG(f, TF_FABRIC_BRAM_COL);

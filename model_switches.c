@@ -136,7 +136,7 @@ static int init_logic_switches(struct fpga_model* model)
 	int x, y, rc;
 
 	for (x = LEFT_SIDE_WIDTH; x < model->x_width-RIGHT_SIDE_WIDTH; x++) {
-		if (!is_atx(X_LOGIC_COL, model, x))
+		if (!is_atx(X_FABRIC_LOGIC_COL|X_CENTER_LOGIC_COL, model, x))
 			continue;
 		for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
 			if (has_device(model, y, x, DEV_LOGIC)) {
@@ -603,7 +603,7 @@ static int init_north_south_dirwire_term(struct fpga_model* model)
 			"IOI_TTERM_", dir, /*inc*/ 3))) goto xout; }
 
 		// bottom
-		if (is_atx(X_ROUTING_TO_BRAM_COL, model, x))
+		if (is_atx(X_FABRIC_BRAM_ROUTING_COL, model, x))
 			continue;
 		for (i = 0; i < 4; i++) {
 			rc = add_switch(model,
@@ -704,7 +704,8 @@ static int init_ce_clk_switches(struct fpga_model* model)
 		}
 	}
 	for (x = LEFT_SIDE_WIDTH; x < model->x_width - RIGHT_SIDE_WIDTH; x++) {
-		if ((is_atx(X_FABRIC_LOGIC_IO_COL|X_CENTER_LOGIC_COL, model, x))) {
+		if (is_atx(X_FABRIC_LOGIC_COL|X_CENTER_LOGIC_COL, model, x)
+		    && !is_atx(X_ROUTING_NO_IO, model, x-1)) {
 			// top
 			for (i = 0; i <= 3; i++) {
 				rc = add_switch(model, TOP_INNER_ROW, x,

@@ -185,25 +185,26 @@ enum fpga_tile_type
 // tile flags
 
 #define TF_FABRIC_ROUTING_COL		0x00000001 // only set in y==0, not for left and right IO routing or center
-#define TF_FABRIC_LOGIC_COL		0x00000002 // only set in y==0
-#define TF_FABRIC_BRAM_VIA_COL		0x00000004 // only set in y==0
-#define TF_FABRIC_MACC_VIA_COL		0x00000008 // only set in y==0
-#define TF_FABRIC_BRAM_COL		0x00000010 // only set in y==0
-#define TF_FABRIC_MACC_COL		0x00000020 // only set in y==0
+#define TF_FABRIC_LOGIC_XM_COL		0x00000002 // only set in y==0
+#define TF_FABRIC_LOGIC_XL_COL		0x00000004 // only set in y==0
+#define TF_FABRIC_BRAM_VIA_COL		0x00000008 // only set in y==0
+#define TF_FABRIC_MACC_VIA_COL		0x00000010 // only set in y==0
+#define TF_FABRIC_BRAM_COL		0x00000020 // only set in y==0
+#define TF_FABRIC_MACC_COL		0x00000040 // only set in y==0
 // TF_ROUTING_NO_IO is only set in y==0 - automatically for BRAM and MACC
 // routing, and manually for logic routing with the noio flag in the column
 // configuration string
-#define TF_ROUTING_NO_IO		0x00000040
-#define TF_BRAM_DEV			0x00000080
-#define TF_MACC_DEV			0x00000100
-#define TF_LOGIC_XL_DEV			0x00000200
-#define TF_LOGIC_XM_DEV			0x00000400
-#define TF_IOLOGIC_DELAY_DEV		0x00000800
-#define TF_DCM_DEV			0x00001000
-#define TF_PLL_DEV			0x00002000
+#define TF_ROUTING_NO_IO		0x00000080
+#define TF_BRAM_DEV			0x00000100
+#define TF_MACC_DEV			0x00000200
+#define TF_LOGIC_XL_DEV			0x00000400
+#define TF_LOGIC_XM_DEV			0x00000800
+#define TF_IOLOGIC_DELAY_DEV		0x00001000
+#define TF_DCM_DEV			0x00002000
+#define TF_PLL_DEV			0x00004000
 // TF_WIRED is only set for x==0 on the left side or x==x_width-1
 // on the right side.
-#define TF_WIRED			0x00004000
+#define TF_WIRED			0x00008000
 
 #define Y_INNER_TOP		0x0001
 #define Y_INNER_BOTTOM		0x0002
@@ -223,40 +224,45 @@ enum fpga_tile_type
 // multiple checks are combined with OR logic
 int is_aty(int check, struct fpga_model* model, int y);
 
+#define X_FABRIC_LOGIC_COL		(X_FABRIC_LOGIC_XM_COL \
+					 |X_FABRIC_LOGIC_XL_COL)
+#define X_FABRIC_LOGIC_ROUTING_COL	(X_FABRIC_LOGIC_XM_ROUTING_COL \
+					 |X_FABRIC_LOGIC_XL_ROUTING_COL)
+#define X_FABRIC_ROUTING_COL		(X_FABRIC_LOGIC_XM_ROUTING_COL \
+					 |X_FABRIC_LOGIC_XL_ROUTING_COL \
+					 |X_FABRIC_BRAM_ROUTING_COL \
+					 |X_FABRIC_MACC_ROUTING_COL)
+#define X_ROUTING_COL			(X_FABRIC_ROUTING_COL \
+					 |X_CENTER_ROUTING_COL \
+					 |X_LEFT_IO_ROUTING_COL \
+					 |X_RIGHT_IO_ROUTING_COL)
+
 #define X_OUTER_LEFT			0x00000001
 #define X_INNER_LEFT			0x00000002
 #define X_INNER_RIGHT			0x00000004
 #define X_OUTER_RIGHT			0x00000008
-#define X_ROUTING_COL			0x00000010 // includes routing col in left and right IO and center
-#define X_ROUTING_TO_BRAM_COL		0x00000020
-#define X_ROUTING_TO_MACC_COL		0x00000040
-#define X_ROUTING_NO_IO			0x00000080
-#define X_ROUTING_HAS_IO		0x00000100
-#define X_LOGIC_COL			0x00000200 // includes the center logic col
-// todo: maybe X_FABRIC_ROUTING_COL could be logic+bram+macc?
-#define X_FABRIC_ROUTING_COL		0x00000400 // logic+BRAM+MACC
-#define X_FABRIC_LOGIC_ROUTING_COL	0x00000800 // logic only
-#define X_FABRIC_LOGIC_COL		0x00001000
-// X_FABRIC_LOGIC_IO_COL is like X_FABRIC_LOGIC_COL but
-// excluding those that have the no-io flag set.
-#define X_FABRIC_LOGIC_IO_COL		0x00002000
-#define X_FABRIC_BRAM_ROUTING_COL	0x00004000 // BRAM only
-#define X_FABRIC_MACC_ROUTING_COL	0x00008000 // MACC only
-#define X_FABRIC_BRAM_VIA_COL		0x00010000 // second routing col for BRAM
-#define X_FABRIC_MACC_VIA_COL		0x00020000 // second routing col for MACC
-#define X_FABRIC_BRAM_COL		0x00040000
-#define X_FABRIC_MACC_COL		0x00080000
-#define X_CENTER_ROUTING_COL		0x00100000
-#define X_CENTER_LOGIC_COL		0x00200000
-#define X_CENTER_CMTPLL_COL		0x00400000
-#define X_CENTER_REGS_COL		0x00800000
-#define X_LEFT_IO_ROUTING_COL		0x01000000
-#define X_LEFT_IO_DEVS_COL		0x02000000
-#define X_RIGHT_IO_ROUTING_COL		0x04000000
-#define X_RIGHT_IO_DEVS_COL		0x08000000
-#define X_LEFT_SIDE			0x10000000 // true for anything left of the center (not including center)
-#define X_LEFT_MCB			0x20000000
-#define X_RIGHT_MCB			0x40000000
+#define X_ROUTING_NO_IO			0x00000010
+#define X_FABRIC_LOGIC_XM_ROUTING_COL	0x00000020 // logic-xm only
+#define X_FABRIC_LOGIC_XL_ROUTING_COL	0x00000040 // logic-xl only
+#define X_FABRIC_LOGIC_XM_COL		0x00000080
+#define X_FABRIC_LOGIC_XL_COL		0x00000100
+#define X_FABRIC_BRAM_ROUTING_COL	0x00000200 // BRAM only
+#define X_FABRIC_MACC_ROUTING_COL	0x00000400 // MACC only
+#define X_FABRIC_BRAM_VIA_COL		0x00000800 // second routing col for BRAM
+#define X_FABRIC_MACC_VIA_COL		0x00001000 // second routing col for MACC
+#define X_FABRIC_BRAM_COL		0x00002000
+#define X_FABRIC_MACC_COL		0x00004000
+#define X_CENTER_ROUTING_COL		0x00008000
+#define X_CENTER_LOGIC_COL		0x00010000
+#define X_CENTER_CMTPLL_COL		0x00020000
+#define X_CENTER_REGS_COL		0x00040000
+#define X_LEFT_IO_ROUTING_COL		0x00080000
+#define X_LEFT_IO_DEVS_COL		0x00100000
+#define X_RIGHT_IO_ROUTING_COL		0x00200000
+#define X_RIGHT_IO_DEVS_COL		0x00400000
+#define X_LEFT_SIDE			0x00800000 // true for anything left of the center (not including center)
+#define X_LEFT_MCB			0x01000000
+#define X_RIGHT_MCB			0x02000000
 
 #define IS_TOP_ROW(row, model)		((row) == (model)->cfg_rows-1)
 #define IS_BOTTOM_ROW(row, model)	((row) == 0)
@@ -334,6 +340,32 @@ enum { LOGIC_M = 1, LOGIC_L, LOGIC_X };
 
 struct fpgadev_logic
 {
+// M_A1..A6, M_AX
+// X_A1 or XX_A1 for L
+   	// for X, L and M:
+	str16_t pinw_in_A1, pinw_in_A2, pinw_in_A3, pinw_in_A4, pinw_in_A5,
+		pinw_in_A6, pinw_in_AX;
+	str16_t pinw_in_B1, pinw_in_B2, pinw_in_B3, pinw_in_B4, pinw_in_B5,
+		pinw_in_B6, pinw_in_BX;
+	str16_t pinw_in_C1, pinw_in_C2, pinw_in_C3, pinw_in_C4, pinw_in_C5,
+		pinw_in_C6, pinw_in_CX;
+	str16_t pinw_in_D1, pinw_in_D2, pinw_in_D3, pinw_in_D4, pinw_in_D5,
+		pinw_in_D6, pinw_in_DX;
+// M_CLK, M_CE, M_SR
+	str16_t pinw_in_CLK, pinw_in_CE, pinw_in_SR;
+// M_A, M_AMUX, M_AQ
+	str16_t pinw_out_A, pinw_out_AMUX, pinw_out_AQ;
+	str16_t pinw_out_B, pinw_out_BMUX, pinw_out_BQ;
+	str16_t pinw_out_C, pinw_out_CMUX, pinw_out_CQ;
+	str16_t pinw_out_D, pinw_out_DMUX, pinw_out_DQ;
+	// only for L and M:
+// M_CIN, M_COUT
+// L_CIN, XL_COUT
+        str16_t pinw_in_CIN, pinw_out_COUT;
+	// only for M:
+// M_WE, M_AI-DI
+        str16_t pinw_in_WE, pinw_in_AI, pinw_in_BI, pinw_in_CI, pinw_in_DI;
+
 	int subtype; // LOGIC_M, LOGIC_L or LOGIC_X
 	int A_used, B_used, C_used, D_used;
 	char* A6_lut, *B6_lut, *C6_lut, *D6_lut;

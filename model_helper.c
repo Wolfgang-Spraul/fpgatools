@@ -535,30 +535,18 @@ int is_atx(int check, struct fpga_model* model, int x)
 	if (check & X_INNER_LEFT && x == 1) return 1;
 	if (check & X_INNER_RIGHT && x == model->x_width-2) return 1;
 	if (check & X_OUTER_RIGHT && x == model->x_width-1) return 1;
-	if (check & X_ROUTING_COL
-	    && (model->tiles[x].flags & TF_FABRIC_ROUTING_COL
-	        || x == LEFT_IO_ROUTING || x == model->x_width-5
-		|| x == model->center_x-3)) return 1;
-	if (model->tiles[x].flags & TF_FABRIC_ROUTING_COL) {
-		if (check & X_ROUTING_TO_BRAM_COL
-		    && model->tiles[x+1].flags & TF_FABRIC_BRAM_VIA_COL
-		    && model->tiles[x+2].flags & TF_FABRIC_BRAM_COL) return 1;
-		if (check & X_ROUTING_TO_MACC_COL
-		    && model->tiles[x+1].flags & TF_FABRIC_MACC_VIA_COL
-		    && model->tiles[x+2].flags & TF_FABRIC_MACC_COL) return 1;
-	}
-	if (check & X_ROUTING_NO_IO && model->tiles[x].flags & TF_ROUTING_NO_IO) return 1;
-	if (check & X_ROUTING_HAS_IO && !(model->tiles[x].flags & TF_ROUTING_NO_IO)) return 1;
-	if (check & X_LOGIC_COL
-	    && (model->tiles[x].flags & TF_FABRIC_LOGIC_COL
-	        || x == model->center_x-2)) return 1;
-	if (check & X_FABRIC_ROUTING_COL && model->tiles[x].flags & TF_FABRIC_ROUTING_COL) return 1;
-	// todo: the routing/no_io flags could be cleaned up
-	if (check & X_FABRIC_LOGIC_ROUTING_COL
+	if (check & X_ROUTING_NO_IO
+	    && model->tiles[x].flags & TF_ROUTING_NO_IO) return 1;
+	if (check & X_FABRIC_LOGIC_XM_ROUTING_COL
 	    && model->tiles[x].flags & TF_FABRIC_ROUTING_COL
-	    && model->tiles[x+1].flags & TF_FABRIC_LOGIC_COL) return 1;
-	if (check & X_FABRIC_LOGIC_COL && model->tiles[x].flags & TF_FABRIC_LOGIC_COL) return 1;
-	if (check & X_FABRIC_LOGIC_IO_COL && model->tiles[x].flags & TF_FABRIC_LOGIC_COL && !(model->tiles[x-1].flags & TF_ROUTING_NO_IO)) return 1;
+	    && model->tiles[x+1].flags & TF_FABRIC_LOGIC_XM_COL) return 1;
+	if (check & X_FABRIC_LOGIC_XL_ROUTING_COL
+	    && model->tiles[x].flags & TF_FABRIC_ROUTING_COL
+	    && model->tiles[x+1].flags & TF_FABRIC_LOGIC_XL_COL) return 1;
+	if (check & X_FABRIC_LOGIC_XM_COL
+	    && model->tiles[x].flags & TF_FABRIC_LOGIC_XM_COL) return 1;
+	if (check & X_FABRIC_LOGIC_XL_COL
+	    && model->tiles[x].flags & TF_FABRIC_LOGIC_XL_COL) return 1;
 	if (check & X_FABRIC_BRAM_ROUTING_COL
 	    && model->tiles[x].flags & TF_FABRIC_ROUTING_COL
 	    && model->tiles[x+1].flags & TF_FABRIC_BRAM_VIA_COL

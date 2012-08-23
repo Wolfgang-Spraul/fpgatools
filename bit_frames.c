@@ -129,7 +129,7 @@ int extract_model(struct fpga_model* model, struct fpga_bits* bits)
 
 	// logic
 	for (x = LEFT_SIDE_WIDTH; x < model->x_width-RIGHT_SIDE_WIDTH; x++) {
-		if (!is_atx(X_LOGIC_COL, model, x))
+		if (!is_atx(X_FABRIC_LOGIC_COL|X_CENTER_LOGIC_COL, model, x))
 			continue;
 		for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
 			if (!has_device_type(model, y, x, DEV_LOGIC, LOGIC_M))
