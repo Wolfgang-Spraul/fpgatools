@@ -10,6 +10,12 @@ PREFIX ?= /usr/local
 
 .PHONY:	all clean install uninstall
 .SECONDARY:
+
+# -fno-omit-frame-pointer and -ggdb add almost nothing to execution
+# time right now, so we can leave them in all the time.
+CFLAGS_DBG = -fno-omit-frame-pointer -ggdb
+CFLAGS += $(CFLAGS_DBG)
+
 CFLAGS += -Wall -Wshadow -Wmissing-prototypes -Wmissing-declarations \
 	-Wno-format-zero-length -Ofast
 CFLAGS += `pkg-config libxml-2.0 --cflags`

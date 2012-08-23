@@ -40,11 +40,7 @@ int fpga_connpt_lookup(struct fpga_model* model, int y, int x,
 const char* fpga_conn_dest(struct fpga_model* model, int y, int x,
 	int connpt_dest_idx, int* dest_y, int* dest_x);
 
-typedef int swidx_t;
-
-// SW_FROM and SW_TO values are chosen such that ! inverts them.
-#define SW_FROM	0
-#define SW_TO	1
+typedef int swidx_t; // swidx_t is an index into the uint32_t switches array
 
 // returns a switch index, or -1 (NO_SWITCH) if no switch was found
 swidx_t fpga_switch_first(struct fpga_model* model, int y, int x,
@@ -65,8 +61,13 @@ void fpga_switch_enable(struct fpga_model* model, int y, int x,
 void fpga_switch_disable(struct fpga_model* model, int y, int x,
 	swidx_t swidx);
 
+const char* fmt_sw(struct fpga_model* model, int y, int x,
+	swidx_t sw, int from_to);
+const char* fmt_swchain(struct fpga_model* model, int y, int x,
+	swidx_t* sw, int sw_size);
+
 #define SW_CHAIN_NEXT		0 // use for name
-#define MAX_SW_CHAIN_SIZE	32
+#define MAX_SW_CHAIN_SIZE	32 // largest seen so far was 10
 
 struct sw_chain
 {

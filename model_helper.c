@@ -76,14 +76,28 @@ static int _add_connpt_name(struct fpga_model* model, int y, int x,
 	int* conn_point_o);
 
 int add_connpt_name(struct fpga_model* model, int y, int x,
-	const char* connpt_name)
+	const char* connpt_name, int dup_warn)
 {
-	return _add_connpt_name(model, y, x, connpt_name,
-		1 /* warn_if_duplicate */,
+	return _add_connpt_name(model, y, x, connpt_name, dup_warn,
 		0 /* name_i */, 0 /* conn_point_o */);
 }
 
 #define CONN_NAMES_INCREMENT	128
+
+// add_switch() assumes that the new element is appended
+// at the end of the array.
+static void connpt_names_array_append(struct fpga_tile* tile, int name_i)
+{
+	if (!(tile->num_conn_point_names % CONN_NAMES_INCREMENT)) {
+		uint16_t* new_ptr = realloc(tile->conn_point_names,
+			(tile->num_conn_point_names+CONN_NAMES_INCREMENT)*2*sizeof(uint16_t));
+		if (!new_ptr) EXIT(ENOMEM);
+		tile->conn_point_names = new_ptr;
+	}
+	tile->conn_point_names[tile->num_conn_point_names*2] = tile->num_conn_point_dests;
+	tile->conn_point_names[tile->num_conn_point_names*2+1] = name_i;
+	tile->num_conn_point_names++;
+}
 
 static int _add_connpt_name(struct fpga_model* model, int y, int x,
 	const char* connpt_name, int warn_if_duplicate, uint16_t* name_i,
@@ -117,18 +131,7 @@ static int _add_connpt_name(struct fpga_model* model, int y, int x,
 		return 0;
 	}
 	// This is the first connection under name, add name.
-	if (!(tile->num_conn_point_names % CONN_NAMES_INCREMENT)) {
-		uint16_t* new_ptr = realloc(tile->conn_point_names,
-			(tile->num_conn_point_names+CONN_NAMES_INCREMENT)*2*sizeof(uint16_t));
-		if (!new_ptr) {
-			fprintf(stderr, "Out of memory %s:%i\n", __FILE__, __LINE__);
-			return 0;
-		}
-		tile->conn_point_names = new_ptr;
-	}
-	tile->conn_point_names[tile->num_conn_point_names*2] = tile->num_conn_point_dests;
-	tile->conn_point_names[tile->num_conn_point_names*2+1] = _name_i;
-	tile->num_conn_point_names++;
+	connpt_names_array_append(tile, _name_i);
 	return 0;
 }
 
@@ -168,16 +171,17 @@ int has_device_type(struct fpga_model* model, int y, int x, int dev, int subtype
 }
 
 int add_connpt_2(struct fpga_model* model, int y, int x,
-	const char* connpt_name, const char* suffix1, const char* suffix2)
+	const char* connpt_name, const char* suffix1, const char* suffix2,
+	int dup_warn)
 {
 	char name_buf[64];
 	int rc;
 
 	snprintf(name_buf, sizeof(name_buf), "%s%s", connpt_name, suffix1);
-	rc = add_connpt_name(model, y, x, name_buf);
+	rc = add_connpt_name(model, y, x, name_buf, dup_warn);
 	if (rc) goto xout;
 	snprintf(name_buf, sizeof(name_buf), "%s%s", connpt_name, suffix2);
-	rc = add_connpt_name(model, y, x, name_buf);
+	rc = add_connpt_name(model, y, x, name_buf, dup_warn);
 	if (rc) goto xout;
 	return 0;
 xout:
@@ -322,9 +326,13 @@ xout:
 	return rc;
 }
 
-#define SWITCH_ALLOC_INCREMENT 64
+#define SWITCH_ALLOC_INCREMENT 256
 
 #define DBG_ALLOW_ADDPOINTS
+// Enable CHECK_DUPLICATES when working on the switch architecture,
+// but otherwise keep it disabled since it slows down building the
+// model a lot.
+#undef CHECK_DUPLICATES
 
 int add_switch(struct fpga_model* model, int y, int x, const char* from,
 	const char* to, int is_bidirectional)
@@ -352,42 +360,31 @@ int add_switch(struct fpga_model* model, int y, int x, const char* from,
 		return -1;
 	}
 
+	// It seems searching backwards is a little faster than
+	// searching forwards. Merging the two loops into one
+	// made the total slower, presumably due to cache issues.
 	from_connpt_o = -1;
-	for (i = 0; i < tile->num_conn_point_names; i++) {
+	for (i = tile->num_conn_point_names-1; i >= 0; i--) {
 		if (tile->conn_point_names[i*2+1] == from_idx) {
 			from_connpt_o = i;
 			break;
 		}
 	}
-#ifdef DBG_ALLOW_ADDPOINTS
-	if (from_connpt_o == -1) {
-		rc = add_connpt_name(model, y, x, from);
-		if (rc) goto xout;
-		for (i = 0; i < tile->num_conn_point_names; i++) {
-			if (tile->conn_point_names[i*2+1] == from_idx) {
-				from_connpt_o = i;
-				break;
-			}
-		}
-	}
-#endif
 	to_connpt_o = -1;
-	for (i = 0; i < tile->num_conn_point_names; i++) {
+	for (i = tile->num_conn_point_names-1; i >= 0; i--) {
 		if (tile->conn_point_names[i*2+1] == to_idx) {
 			to_connpt_o = i;
 			break;
 		}
 	}
 #ifdef DBG_ALLOW_ADDPOINTS
+	if (from_connpt_o == -1) {
+		from_connpt_o = tile->num_conn_point_names;
+		connpt_names_array_append(tile, from_idx);
+	}
 	if (to_connpt_o == -1) {
-		rc = add_connpt_name(model, y, x, to);
-		if (rc) goto xout;
-		for (i = 0; i < tile->num_conn_point_names; i++) {
-			if (tile->conn_point_names[i*2+1] == to_idx) {
-				to_connpt_o = i;
-				break;
-			}
-		}
+		to_connpt_o = tile->num_conn_point_names;
+		connpt_names_array_append(tile, to_idx);
 	}
 #endif
 	if (from_connpt_o == -1 || to_connpt_o == -1) {
@@ -405,6 +402,7 @@ int add_switch(struct fpga_model* model, int y, int x, const char* from,
 	if (is_bidirectional)
 		new_switch |= SWITCH_BIDIRECTIONAL;
 
+#ifdef CHECK_DUPLICATES
 	for (i = 0; i < tile->num_switches; i++) {
 		if ((tile->switches[i] & 0x3FFFFFFF) == (new_switch & 0x3FFFFFFF)) {
 			fprintf(stderr, "Internal error in %s:%i duplicate switch from %s to %s\n",
@@ -412,6 +410,7 @@ int add_switch(struct fpga_model* model, int y, int x, const char* from,
 			return -1;
 		}
 	}
+#endif
 	if (!(tile->num_switches % SWITCH_ALLOC_INCREMENT)) {
 		uint32_t* new_ptr = realloc(tile->switches,
 			(tile->num_switches+SWITCH_ALLOC_INCREMENT)*sizeof(*tile->switches));
@@ -454,6 +453,35 @@ int add_switch_set(struct fpga_model* model, int y, int x, const char* prefix,
 	}
 	return 0;
 xout:
+	return rc;
+}
+
+int replicate_switches_and_names(struct fpga_model* model,
+	int y_from, int x_from, int y_to, int x_to)
+{
+	struct fpga_tile* from_tile, *to_tile;
+	int rc;
+
+	from_tile = YX_TILE(model, y_from, x_from);
+	to_tile = YX_TILE(model, y_to, x_to);
+	if (to_tile->num_conn_point_names
+	    || to_tile->num_conn_point_dests
+	    || to_tile->num_switches
+	    || from_tile->num_conn_point_dests
+	    || !from_tile->num_conn_point_names
+	    || !from_tile->num_switches) FAIL(EINVAL);
+
+	to_tile->conn_point_names = malloc(((from_tile->num_conn_point_names/CONN_NAMES_INCREMENT)+1)*CONN_NAMES_INCREMENT*2*sizeof(uint16_t));
+	if (!to_tile->conn_point_names) EXIT(ENOMEM);
+	memcpy(to_tile->conn_point_names, from_tile->conn_point_names, from_tile->num_conn_point_names*2*sizeof(uint16_t));
+	to_tile->num_conn_point_names = from_tile->num_conn_point_names;
+
+	to_tile->switches = malloc(((from_tile->num_switches/SWITCH_ALLOC_INCREMENT)+1)*SWITCH_ALLOC_INCREMENT*sizeof(*from_tile->switches));
+	if (!to_tile->switches) EXIT(ENOMEM);
+	memcpy(to_tile->switches, from_tile->switches, from_tile->num_switches*sizeof(*from_tile->switches));
+	to_tile->num_switches = from_tile->num_switches;
+	return 0;
+fail:
 	return rc;
 }
 
@@ -584,6 +612,12 @@ int is_atyx(int check, struct fpga_model* model, int y, int x)
 	tile = YX_TILE(model, y, x);
 	if (check & YX_IO_ROUTING
             && (tile->type == IO_ROUTING || tile->type == ROUTING_IO_L)) return 1;
+	if (check & YX_ROUTING_TO_FABLOGIC
+	    && model->tiles[x].flags & TF_FABRIC_ROUTING_COL
+	    && has_device(model, y, x+1, DEV_LOGIC)) return 1;
+	if (check & YX_DEV_ILOGIC && has_device(model, y, x, DEV_ILOGIC)) return 1;
+	if (check & YX_DEV_OLOGIC && has_device(model, y, x, DEV_OLOGIC)) return 1;
+	if (check & YX_DEV_LOGIC && has_device(model, y, x, DEV_LOGIC)) return 1;
 	return 0;
 }
 

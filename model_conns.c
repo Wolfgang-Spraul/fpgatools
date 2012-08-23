@@ -788,11 +788,11 @@ static int run_io_wires(struct fpga_model* model)
 			for (i = 0; s[i][0]; i++) {
 				struct w_net net1 = {
 					1,
-					{{ pf("BIOB_%s%%i",		s[i]), 0,   y,   x },
-					 { pf("IOI_BTERM_IOIUP_%s%%i",	s[i]), 0, y-1,   x },
-					 { pf("BTERM_IOIUP_%s%%i",	s[i]), 0, y-1, x+1 },
+					{{ pf("BIOI_INNER_%s%%i",	s[i]), 0, y-3, x+1 },
 					 { pf("BIOI_OUTER_%s%%i_EXT",	s[i]), 0, y-2, x+1 },
-					 { pf("BIOI_INNER_%s%%i",	s[i]), 0, y-3, x+1 },
+					 { pf("BTERM_IOIUP_%s%%i",	s[i]), 0, y-1, x+1 },
+					 { pf("IOI_BTERM_IOIUP_%s%%i",	s[i]), 0, y-1,   x },
+					 { pf("BIOB_%s%%i",		s[i]), 0,   y,   x },
 					 { "" }}};
 
 				if ((rc = add_conn_net(model, NOPREF_BI_F, &net1))) goto xout;

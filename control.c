@@ -333,9 +333,7 @@ swidx_t fpga_switch_first(struct fpga_model* model, int y, int x,
 	// Finds the first switch either from or to the name given.
 	tile = YX_TILE(model, y, x);
 	for (i = 0; i < tile->num_switches; i++) {
-		connpt_o = (from_to == SW_FROM)
-			? SWITCH_FROM(tile->switches[i])
-			: SWITCH_TO(tile->switches[i]);
+		connpt_o = SW_I(tile->switches[i], from_to);
 		if (tile->conn_point_names[connpt_o*2+1] == name_i)
 			break;
 	}
@@ -351,15 +349,11 @@ static swidx_t fpga_switch_search(struct fpga_model* model, int y, int x,
 	int connpt_o, name_i, i;
 	
 	tile = YX_TILE(model, y, x);
-	connpt_o = (from_to == SW_FROM)
-		? SWITCH_FROM(tile->switches[last])
-		: SWITCH_TO(tile->switches[last]);
+	connpt_o = SW_I(tile->switches[last], from_to);
 	name_i = tile->conn_point_names[connpt_o*2+1];
 
 	for (i = search_beg; i < tile->num_switches; i++) {
-		connpt_o = (from_to == SW_FROM)
-			? SWITCH_FROM(tile->switches[i])
-			: SWITCH_TO(tile->switches[i]);
+		connpt_o = SW_I(tile->switches[i], from_to);
 		if (tile->conn_point_names[connpt_o*2+1] == name_i)
 			break;
 	}
@@ -378,7 +372,7 @@ swidx_t fpga_switch_backtofirst(struct fpga_model* model, int y, int x,
 	return fpga_switch_search(model, y, x, last, /*search_beg*/ 0, from_to);
 }
 
-#define NUM_CONNPT_BUFS	16
+#define NUM_CONNPT_BUFS	64
 #define CONNPT_BUF_SIZE	128
 
 static const char* connpt_str(struct fpga_model* model, int y, int x, int connpt_o)
@@ -406,8 +400,7 @@ const char* fpga_switch_str(struct fpga_model* model, int y, int x,
 	swidx_t swidx, int from_to)
 {
 	uint32_t sw = YX_TILE(model, y, x)->switches[swidx];
-	return connpt_str(model, y, x,
-		(from_to == SW_FROM) ? SWITCH_FROM(sw) : SWITCH_TO(sw));
+	return connpt_str(model, y, x, SW_I(sw, from_to));
 }
 
 int fpga_switch_is_bidir(struct fpga_model* model, int y, int x,
@@ -434,9 +427,64 @@ void fpga_switch_disable(struct fpga_model* model, int y, int x,
 	YX_TILE(model, y, x)->switches[swidx] &= ~SWITCH_ON;
 }
 
+#define SW_BUF_SIZE	256
+#define NUM_SW_BUFS	64
+
+const char* fmt_sw(struct fpga_model* model, int y, int x, swidx_t sw, int from_to)
+{
+	static char sw_buf[NUM_SW_BUFS][SW_BUF_SIZE];
+	static int last_buf = 0;
+	char midstr[64];
+
+	last_buf = (last_buf+1)%NUM_SW_BUFS;
+
+	strcpy(midstr, fpga_switch_is_enabled(model, y, x, sw) ? "on:" : "");
+	if (fpga_switch_is_bidir(model, y, x, sw))
+		strcat(midstr, "<->");
+	else {
+		// a 'to-switch' is actually still a switch that physically
+		// points in the other direction (unless it's a bidir switch),
+		// so when displaying the 'to-switch', we make the arrow point
+		// to the left side to match the physical direction.
+		strcat(midstr, (from_to == SW_TO) ? "<-" : "->");
+	}
+	// fmt_sw() prints only the destination side of the switch (!from_to),
+	// because it is the significant one in a chain of switches, and if the
+	// caller wants the source side they can add it outside.
+	snprintf(sw_buf[last_buf], sizeof(sw_buf[0]), "%s%s%s",
+		(from_to == SW_FROM) ? "" : fpga_switch_str(model, y, x, sw, SW_FROM),
+		midstr,
+		(from_to == SW_TO) ? "" : fpga_switch_str(model, y, x, sw, SW_TO));
+
+	return sw_buf[last_buf];
+}
+
+#define FMT_SWCHAIN_BUF_SIZE	2048
+#define FMT_SWCHAIN_NUM_BUFS	8
+
+const char* fmt_swchain(struct fpga_model* model, int y, int x,
+	swidx_t* sw, int sw_size)
+{
+	static char buf[FMT_SWCHAIN_NUM_BUFS][FMT_SWCHAIN_BUF_SIZE];
+	static int last_buf = 0;
+	int i, o;
+
+	last_buf = (last_buf+1)%FMT_SWCHAIN_NUM_BUFS;
+	o = 0;
+	for (i = 0; i < sw_size; i++) {
+		if (i) buf[last_buf][o++] = ' ';
+		strcpy(&buf[last_buf][o], fmt_sw(model, y, x, sw[i], SW_FROM));
+		o += strlen(&buf[last_buf][o]);
+	}
+	buf[last_buf][o] = 0;
+	return buf[last_buf];
+}
+
 int fpga_switch_chain_enum(struct sw_chain* chain)
 {
 	swidx_t idx;
+	struct fpga_tile* tile;
+	int child_from_to, i;
 
 	if (chain->start_switch != SW_CHAIN_NEXT) {
 		idx = fpga_switch_first(chain->model, chain->y, chain->x,
@@ -478,24 +526,39 @@ int fpga_switch_chain_enum(struct sw_chain* chain)
 		chain->chain[chain->chain_size-1] = idx;
 	}
 	// look for children
+	tile = YX_TILE(chain->model, chain->y, chain->x);
 	while (1) {
 		idx = fpga_switch_first(chain->model, chain->y, chain->x,
 			fpga_switch_str(chain->model, chain->y, chain->x,
 			chain->chain[chain->chain_size-1], !chain->from_to),
 			chain->from_to);
-		chain->chain[chain->chain_size-1] = fpga_switch_next(
-			chain->model, chain->y, chain->x,
-			chain->chain[chain->chain_size-1], chain->from_to);
+		child_from_to = SW_I(tile->switches[chain->chain[chain->chain_size-1]],
+			!chain->from_to);
 		if (idx != NO_SWITCH) {
-			if (chain->chain_size >= MAX_SW_CHAIN_SIZE) {
-				HERE(); goto internal_error;
+			// If we have the same from-switch already among the
+			// parents, don't fall into endless recursion...
+			for (i = 0; i < chain->chain_size; i++) {
+				if (SW_I(tile->switches[chain->chain[i]], chain->from_to)
+					== child_from_to)
+					break;
 			}
-			chain->first_round = 1; // back to first round at new level
-			chain->chain[chain->chain_size] = idx;
-			chain->chain_size++;
-			return 0;
+			if (i >= chain->chain_size) {
+				if (chain->chain_size >= MAX_SW_CHAIN_SIZE) {
+					HERE(); goto internal_error;
+				}
+				// back to first round at new level
+				chain->first_round = 1;
+				chain->chain[chain->chain_size] = idx;
+				chain->chain_size++;
+				return 0;
+			}
 		}
-		while (chain->chain[chain->chain_size-1] == NO_SWITCH) {
+		while (1) {
+			chain->chain[chain->chain_size-1] = fpga_switch_next(
+				chain->model, chain->y, chain->x,
+				chain->chain[chain->chain_size-1], chain->from_to);
+			if (chain->chain[chain->chain_size-1] != NO_SWITCH)
+				break;
 			if (chain->chain_size <= 1) {
 				chain->chain_size = 0;
 				return NO_SWITCH;

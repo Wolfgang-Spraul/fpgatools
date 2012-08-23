@@ -270,6 +270,10 @@ int is_atx(int check, struct fpga_model* model, int x);
 // True for all tiles that are in the regular 0..15 row tiles of a routing col
 #define YX_ROUTING_TILE		0x0001
 #define YX_IO_ROUTING		0x0002
+#define YX_ROUTING_TO_FABLOGIC	0x0004 // left of a regular fabric logic device
+#define YX_DEV_ILOGIC		0x0008
+#define YX_DEV_OLOGIC		0x0010
+#define YX_DEV_LOGIC		0x0020
 
 int is_atyx(int check, struct fpga_model* model, int y, int x);
 
@@ -387,8 +391,14 @@ struct fpga_device
 #define SWITCH_ON		0x80000000
 #define SWITCH_BIDIRECTIONAL	0x40000000
 #define SWITCH_MAX_CONNPT_O	0x7FFF // 15 bits
-#define SWITCH_FROM(u32)	(((u32) >> 15) & SWITCH_MAX_CONNPT_O)
-#define SWITCH_TO(u32)		((u32) & SWITCH_MAX_CONNPT_O)
+#define SW_FROM_I(u32)		(((u32) >> 15) & SWITCH_MAX_CONNPT_O)
+#define SW_TO_I(u32)		((u32) & SWITCH_MAX_CONNPT_O)
+
+#define SW_I(u32, from_to)	((from_to) ? SW_FROM_I(u32) : SW_TO_I(u32))
+// SW_FROM and SW_TO values are chosen such that ! inverts them,
+// and swf() assumes that SW_FROM is positive.
+#define SW_FROM			1
+#define SW_TO			0
 
 #define NO_SWITCH	-1
 #define NO_CONN		-1
@@ -435,23 +445,30 @@ void fpga_free_model(struct fpga_model* model);
 const char* fpga_tiletype_str(enum fpga_tile_type type);
 
 int init_tiles(struct fpga_model* model);
-int init_conns(struct fpga_model* model);
-int init_ports(struct fpga_model* model);
 int init_devices(struct fpga_model* model);
 void free_devices(struct fpga_model* model);
-int init_switches(struct fpga_model* model);
+int init_ports(struct fpga_model* model, int dup_warn);
+int init_conns(struct fpga_model* model);
+
+int init_switches(struct fpga_model* model, int routing_sw);
+// replicate_routing_switches() is a high-speed optimized way to
+// initialize the routing switches, will only work before ports,
+// connections or other switches.
+int replicate_routing_switches(struct fpga_model* model);
 
 const char* pf(const char* fmt, ...);
 const char* wpref(struct fpga_model* model, int y, int x, const char* wire_name);
 char next_non_whitespace(const char* s);
 char last_major(const char* str, int cur_o);
 int has_connpt(struct fpga_model* model, int y, int x, const char* name);
-int add_connpt_name(struct fpga_model* model, int y, int x, const char* connpt_name);
+int add_connpt_name(struct fpga_model* model, int y, int x,
+	const char* connpt_name, int dup_warn);
 
 int has_device(struct fpga_model* model, int y, int x, int dev);
 int has_device_type(struct fpga_model* model, int y, int x, int dev, int subtype);
 int add_connpt_2(struct fpga_model* model, int y, int x,
-	const char* connpt_name, const char* suffix1, const char* suffix2);
+	const char* connpt_name, const char* suffix1, const char* suffix2,
+	int dup_warn);
 
 typedef int (*add_conn_f)(struct fpga_model* model,
 	int y1, int x1, const char* name1,
@@ -507,6 +524,12 @@ int add_switch(struct fpga_model* model, int y, int x, const char* from,
 	const char* to, int is_bidirectional);
 int add_switch_set(struct fpga_model* model, int y, int x, const char* prefix,
 	const char** pairs, int suffix_inc);
+
+// This will replicate the entire conn_point_names and switches arrays
+// from one tile to another, assuming that all of conn_point_names,
+// switches and conn_point_dests in the destination tile are empty.
+int replicate_switches_and_names(struct fpga_model* model,
+	int y_from, int x_from, int y_to, int x_to);
 
 struct seed_data
 {

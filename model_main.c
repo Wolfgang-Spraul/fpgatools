@@ -8,8 +8,10 @@
 #include <stdarg.h>
 #include "model.h"
 
-int fpga_build_model(struct fpga_model* model, int fpga_rows, const char* columns,
-	const char* left_wiring, const char* right_wiring)
+static int s_high_speed_replicate = 1;
+
+int fpga_build_model(struct fpga_model* model, int fpga_rows,
+	const char* columns, const char* left_wiring, const char* right_wiring)
 {
 	int rc;
 
@@ -27,21 +29,30 @@ int fpga_build_model(struct fpga_model* model, int fpga_rows, const char* column
 	// that the codes can build upon each other.
 
 	rc = init_tiles(model);
-	if (rc) return rc;
+	if (rc) FAIL(rc);
 
 	rc = init_devices(model);
-	if (rc) return rc;
+	if (rc) FAIL(rc);
 
-	rc = init_ports(model);
-	if (rc) return rc;
+	if (s_high_speed_replicate) {
+		rc = replicate_routing_switches(model);
+		if (rc) FAIL(rc);
+	}
+
+	// todo: compare.ports only works if other switches and conns
+	//       are disabled, as long as not all connections are supported
+	rc = init_ports(model, /*dup_warn*/ !s_high_speed_replicate);
+	if (rc) FAIL(rc);
 
 	rc = init_conns(model);
-	if (rc) return rc;
+	if (rc) FAIL(rc);
 
-	rc = init_switches(model);
-	if (rc) return rc;
+	rc = init_switches(model, /*routing_sw*/ !s_high_speed_replicate);
+	if (rc) FAIL(rc);
 
 	return 0;
+fail:
+	return rc;
 }
 
 void fpga_free_model(struct fpga_model* model)

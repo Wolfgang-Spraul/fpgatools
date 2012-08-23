@@ -57,37 +57,37 @@ static int init_iob(struct fpga_model* model, int y, int x,
 	snprintf(tile->devs[idx].iob.pinw_in_O,
 		sizeof(tile->devs[idx].iob.pinw_in_O),
 		"%s_O%i_PINW", prefix, type_idx);
-	rc = add_connpt_name(model, y, x, tile->devs[idx].iob.pinw_in_O);
+	rc = add_connpt_name(model, y, x, tile->devs[idx].iob.pinw_in_O, /*dup_warn*/ 1);
 	if (rc) FAIL(rc);
 	snprintf(tile->devs[idx].iob.pinw_in_T,
 		sizeof(tile->devs[idx].iob.pinw_in_T),
 		"%s_T%i_PINW", prefix, type_idx);
-	rc = add_connpt_name(model, y, x, tile->devs[idx].iob.pinw_in_T);
+	rc = add_connpt_name(model, y, x, tile->devs[idx].iob.pinw_in_T, /*dup_warn*/ 1);
 	if (rc) FAIL(rc);
 	snprintf(tile->devs[idx].iob.pinw_out_I,
 		sizeof(tile->devs[idx].iob.pinw_out_I),
 		"%s_IBUF%i_PINW", prefix, type_idx);
-	rc = add_connpt_name(model, y, x, tile->devs[idx].iob.pinw_out_I);
+	rc = add_connpt_name(model, y, x, tile->devs[idx].iob.pinw_out_I, /*dup_warn*/ 1);
 	if (rc) FAIL(rc);
 	snprintf(tile->devs[idx].iob.pinw_out_PADOUT,
 		sizeof(tile->devs[idx].iob.pinw_out_PADOUT),
 		"%s_PADOUT%i", prefix, type_idx);
-	rc = add_connpt_name(model, y, x, tile->devs[idx].iob.pinw_out_PADOUT);
+	rc = add_connpt_name(model, y, x, tile->devs[idx].iob.pinw_out_PADOUT, /*dup_warn*/ 1);
 	if (rc) FAIL(rc);
 	snprintf(tile->devs[idx].iob.pinw_in_DIFFI_IN,
 		sizeof(tile->devs[idx].iob.pinw_in_DIFFI_IN),
 		"%s_DIFFI_IN%i", prefix, type_idx);
-	rc = add_connpt_name(model, y, x, tile->devs[idx].iob.pinw_in_DIFFI_IN);
+	rc = add_connpt_name(model, y, x, tile->devs[idx].iob.pinw_in_DIFFI_IN, /*dup_warn*/ 1);
 	if (rc) FAIL(rc);
 	snprintf(tile->devs[idx].iob.pinw_in_DIFFO_IN,
 		sizeof(tile->devs[idx].iob.pinw_in_DIFFO_IN),
 		"%s_DIFFO_IN%i", prefix, type_idx);
-	rc = add_connpt_name(model, y, x, tile->devs[idx].iob.pinw_in_DIFFO_IN);
+	rc = add_connpt_name(model, y, x, tile->devs[idx].iob.pinw_in_DIFFO_IN, /*dup_warn*/ 1);
 	if (rc) FAIL(rc);
 	snprintf(tile->devs[idx].iob.pinw_out_DIFFO_OUT,
 		sizeof(tile->devs[idx].iob.pinw_out_DIFFO_OUT),
 		"%s_DIFFO_OUT%i", prefix, type_idx);
-	rc = add_connpt_name(model, y, x, tile->devs[idx].iob.pinw_out_DIFFO_OUT);
+	rc = add_connpt_name(model, y, x, tile->devs[idx].iob.pinw_out_DIFFO_OUT, /*dup_warn*/ 1);
 	if (rc) FAIL(rc);
 
 	if (!x && y == model->center_y - CENTER_TOP_IOB_O && type_idx == 1)
@@ -103,7 +103,7 @@ static int init_iob(struct fpga_model* model, int y, int x,
 			sizeof(tile->devs[idx].iob.pinw_out_PCI_RDY),
 			"%s_PCI_RDY%i", prefix, type_idx);
 	}
-	rc = add_connpt_name(model, y, x, tile->devs[idx].iob.pinw_out_PCI_RDY);
+	rc = add_connpt_name(model, y, x, tile->devs[idx].iob.pinw_out_PCI_RDY, /*dup_warn*/ 1);
 	if (rc) FAIL(rc);
 	return 0;
 fail:

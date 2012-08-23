@@ -115,6 +115,8 @@ struct hashed_strarray
 #define STRIDX_64K	0xFFFF
 #define STRIDX_1M	1000000
 
+typedef uint16_t str16_t;
+
 int strarray_init(struct hashed_strarray* array, int highest_index);
 void strarray_free(struct hashed_strarray* array);
 

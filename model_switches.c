@@ -15,9 +15,14 @@ static int init_north_south_dirwire_term(struct fpga_model* model);
 static int init_iologic_switches(struct fpga_model* model);
 static int init_logic_switches(struct fpga_model* model);
 
-int init_switches(struct fpga_model* model)
+int init_switches(struct fpga_model* model, int routing_sw)
 {
 	int rc;
+
+	if (routing_sw) {
+		rc = init_routing_switches(model);
+		if (rc) goto xout;
+	}
 
 	rc = init_logic_switches(model);
 	if (rc) goto xout;
@@ -34,10 +39,6 @@ int init_switches(struct fpga_model* model)
 	rc = init_io_switches(model);
 	if (rc) goto xout;
 
-#if 0
-	rc = init_routing_switches(model);
-	if (rc) goto xout;
-#endif
 	return 0;
 xout:
 	return rc;
@@ -1671,238 +1672,279 @@ xout:
 	return rc;
 }
 
-static int init_routing_switches(struct fpga_model* model)
+static int init_routing_tile(struct fpga_model* model, int y, int x)
 {
-	int x, y, i, j, routing_io, rc;
+	int i, j, routing_io, rc;
 	struct set_of_switches dir_EB_switches;
 	enum wire_type wire;
 	struct fpga_tile* tile;
 	const char* gfan_s, *gclk_s;
 
+	tile = YX_TILE(model, y, x);
+	routing_io = (tile->type == IO_ROUTING || tile->type == ROUTING_IO_L);
+	gfan_s = routing_io ? "INT_IOI_GFAN%i" : "GFAN%i";
+
+	// GND
+	for (i = 0; i <= 1; i++) {
+		rc = add_switch(model, y, x, "GND_WIRE",
+			pf(gfan_s, i), 0 /* bidir */);
+		if (rc) FAIL(rc);
+	}
+	rc = add_switch(model, y, x, "GND_WIRE", "SR1", 0 /* bidir */);
+	if (rc) FAIL(rc);
+
+	// VCC
+ 	{ int vcc_dest[] = {
+		X_A3, X_A4, X_A5, X_A6, X_B3, X_B4, X_B5, X_B6,
+		X_C3, X_C4, X_C5, X_C6, X_D3, X_D4, X_D5, X_D6,
+		M_A3, M_A4, M_A5, M_A6, M_B3, M_B4, M_B5, M_B6,
+		M_C3, M_C4, M_C5, M_C6, M_D3, M_D4, M_D5, M_D6 };
+
+	for (i = 0; i < sizeof(vcc_dest)/sizeof(vcc_dest[0]); i++) {
+		rc = add_switch(model, y, x, "VCC_WIRE",
+			logicin_s(vcc_dest[i], routing_io), 0 /* bidir */);
+		if (rc) FAIL(rc);
+	}}
+
+	// KEEP1
+	for (i = X_A1; i <= M_WE; i++) {
+		rc = add_switch(model, y, x, "KEEP1_WIRE",
+			logicin_s(i, routing_io), 0 /* bidir */);
+		if (rc) FAIL(rc);
+	}
+	rc = add_switch(model, y, x, "KEEP1_WIRE", "FAN_B", 0 /* bidir */);
+	if (rc) FAIL(rc);
+
+	// VCC and KEEP1 to CLK0:1, SR0:1, GFAN0:1
+	{ static const char* src[] = {"VCC_WIRE", "KEEP1_WIRE"};
+	for (i = 0; i <= 1; i++)
+		for (j = 0; j <= 1; j++) {
+			rc = add_switch(model, y, x, src[i],
+				pf("CLK%i", j), 0 /* bidir */);
+			if (rc) FAIL(rc);
+			rc = add_switch(model, y, x, src[i],
+				pf("SR%i", j), 0 /* bidir */);
+			if (rc) FAIL(rc);
+			rc = add_switch(model, y, x,
+				src[i], pf(gfan_s, j), 0 /* bidir */);
+			if (rc) FAIL(rc);
+		}
+	}
+
+	// GCLK0:15 -> CLK0:1, GFAN0:1/SR0:1
+	if (tile->type == ROUTING_BRK
+	    || tile->type == BRAM_ROUTING_BRK)
+		gclk_s = "GCLK%i_BRK";
+	else
+		gclk_s = "GCLK%i";
+	for (i = 0; i <= 15; i++) {
+		for (j = 0; j <= 1; j++) {
+			rc = add_switch(model, y, x, pf(gclk_s, i),
+				pf("CLK%i", j), 0 /* bidir */);
+			if (rc) FAIL(rc);
+			rc = add_switch(model, y, x,
+				pf(gclk_s, i),
+				(i < 8) ? pf(gfan_s, j) : pf("SR%i", j),
+				0 /* bidir */);
+			if (rc) FAIL(rc);
+		}
+	}
+
+	// FAN_B to SR0:1
+	for (i = 0; i <= 1; i++) {
+		rc = add_switch(model, y, x, "FAN_B",
+			pf("SR%i", i), 0 /* bidir */);
+		if (rc) FAIL(rc);
+	}
+
+	// some logicin wires are singled out
+	{ int logic_singles[] = {X_CE, X_CX, X_DX,
+		M_AI, M_BI, M_CX, M_DX, M_WE};
+	for (i = 0; i < sizeof(logic_singles)/sizeof(logic_singles[0]); i++) {
+		rc = add_switch(model, y, x,
+			pf("LOGICIN_B%i", logic_singles[i]),
+			pf("LOGICIN%i", logic_singles[i]), 0 /* bidir */);
+		if (rc) FAIL(rc);
+	}}
+
+	// connecting directional wires endpoints to logicin
+	rc = add_logicin_switches(model, y, x);
+	if (rc) FAIL(rc);
+
+	// connecting logicout back to directional wires
+	// beginning points (and some back to logicin)
+	rc = add_logicout_switches(model, y, x, routing_io);
+	if (rc) FAIL(rc);
+
+	// there are extra wires to send signals to logicin, or
+	// to share/multiply logicin signals
+	rc = add_logicio_extra(model, y, x, routing_io);
+	if (rc) FAIL(rc);
+
+	// extra wires going to SR, CLK and GFAN
+	{ int to_sr[] = {X_BX, M_BX, M_DI};
+	for (i = 0; i < sizeof(to_sr)/sizeof(to_sr[0]); i++) {
+		for (j = 0; j <= 1; j++) {
+			rc = add_switch(model, y, x,
+				pf("LOGICIN_B%i", to_sr[i]),
+				pf("SR%i", j), 0 /* bidir */);
+			if (rc) FAIL(rc);
+		}
+	}}
+	{ int to_clk[] = {M_BX, M_CI};
+	for (i = 0; i < sizeof(to_clk)/sizeof(to_clk[0]); i++) {
+		for (j = 0; j <= 1; j++) {
+			rc = add_switch(model, y, x,
+				pf("LOGICIN_B%i", to_clk[i]),
+				pf("CLK%i", j), 0 /* bidir */);
+			if (rc) FAIL(rc);
+		}
+	}}
+	{ int to_gf[] = {M_AX, X_AX, M_CE, M_CI};
+	for (i = 0; i < sizeof(to_gf)/sizeof(to_gf[0]); i++) {
+		for (j = 0; j <= 1; j++) {
+			int bidir = !routing_io
+			  && ((!j && i < 2) || (j && i >= 2));
+			rc = add_switch(model, y, x,
+				pf("LOGICIN_B%i", to_gf[i]),
+				pf(gfan_s, j), bidir);
+			if (rc) FAIL(rc);
+		}
+	}}
+
+	// connecting the directional wires from one's end
+	// to another one's beginning
+	wire = W_NN2;
+	do {
+		rc = build_dirwire_switches(&dir_EB_switches, W_TO_LEN1(wire));
+		if (rc) FAIL(rc);
+		for (i = 0; i < dir_EB_switches.num_s; i++) {
+			rc = add_switch(model, y, x,
+				dir_EB_switches.s[i].from,
+				dir_EB_switches.s[i].to, 0 /* bidir */);
+			if (rc) FAIL(rc);
+		}
+
+		rc = build_dirwire_switches(&dir_EB_switches, W_TO_LEN2(wire));
+		if (rc) FAIL(rc);
+		for (i = 0; i < dir_EB_switches.num_s; i++) {
+			rc = add_switch(model, y, x,
+				dir_EB_switches.s[i].from,
+				dir_EB_switches.s[i].to, 0 /* bidir */);
+			if (rc) FAIL(rc);
+		}
+
+		rc = build_dirwire_switches(&dir_EB_switches, W_TO_LEN4(wire));
+		if (rc) FAIL(rc);
+		for (i = 0; i < dir_EB_switches.num_s; i++) {
+			rc = add_switch(model, y, x,
+				dir_EB_switches.s[i].from,
+				dir_EB_switches.s[i].to, 0 /* bidir */);
+			if (rc) FAIL(rc);
+		}
+
+		wire = W_CLOCKWISE(wire);
+	} while (wire != W_NN2); // one full turn
+
+	// and finally, some end wires go to CLK, SR and GFAN
+	{ static const char* from[] = {"NR1E2", "WR1E2"};
+	for (i = 0; i < sizeof(from)/sizeof(from[0]); i++) {
+		for (j = 0; j <= 1; j++) {
+			rc = add_switch(model, y, x, from[i],
+				pf("CLK%i", j), 0 /* bidir */);
+			if (rc) FAIL(rc);
+			rc = add_switch(model, y, x, from[i],
+				pf("SR%i", j), 0 /* bidir */);
+			if (rc) FAIL(rc);
+		}
+	}}
+	{ static const char* from[] = {"ER1E1", "SR1E1"};
+	for (i = 0; i < sizeof(from)/sizeof(from[0]); i++) {
+		for (j = 0; j <= 1; j++) {
+			rc = add_switch(model, y, x, from[i],
+				pf("CLK%i", j), 0 /* bidir */);
+			if (rc) FAIL(rc);
+			rc = add_switch(model, y, x, from[i],
+				pf(gfan_s, j), 0 /* bidir */);
+			if (rc) FAIL(rc);
+		}
+	}}
+	{ static const char* from[] = {"NR1E1", "WR1E1"};
+	for (i = 0; i < sizeof(from)/sizeof(from[0]); i++) {
+		for (j = 0; j <= 1; j++) {
+			rc = add_switch(model, y, x, from[i],
+				pf(gfan_s, j), 0 /* bidir */);
+			if (rc) FAIL(rc);
+		}
+	}}
+	{ static const char* from[] = {"ER1E2", "SR1E2"};
+	for (i = 0; i < sizeof(from)/sizeof(from[0]); i++) {
+		for (j = 0; j <= 1; j++) {
+			rc = add_switch(model, y, x, from[i],
+				pf("SR%i", j), 0 /* bidir */);
+			if (rc) FAIL(rc);
+		}
+	}}
+	return 0;
+fail:
+	return rc;
+}
+
+static int init_routing_switches(struct fpga_model* model)
+{
+	int x, y, rc;
+
 	for (x = 0; x < model->x_width; x++) {
 		if (!is_atx(X_ROUTING_COL, model, x))
 			continue;
-		for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
+		for (y = TOP_IO_TILES; y < model->y_height-BOT_IO_TILES; y++) {
+			if (is_aty(Y_ROW_HORIZ_AXSYMM|Y_CHIP_HORIZ_REGS,
+					model, y))
+				continue;
+			rc = init_routing_tile(model, y, x);
+			if (rc) FAIL(rc);
+		}
+	}
+	return 0;
+fail:
+	return rc;
+}
+
+int replicate_routing_switches(struct fpga_model* model)
+{
+	struct fpga_tile* tile;
+	int x, y, first_y, first_x, rc;
+
+	first_y = -1;
+	for (x = 0; x < model->x_width; x++) {
+		if (!is_atx(X_ROUTING_COL, model, x))
+			continue;
+		for (y = TOP_IO_TILES; y < model->y_height-BOT_IO_TILES; y++) {
 			if (is_aty(Y_ROW_HORIZ_AXSYMM|Y_CHIP_HORIZ_REGS,
 					model, y))
 				continue;
 			tile = YX_TILE(model, y, x);
-			routing_io = (tile->type == IO_ROUTING || tile->type == ROUTING_IO_L);
-			gfan_s = routing_io ? "INT_IOI_GFAN%i" : "GFAN%i";
-
-			// GND
-			for (i = 0; i <= 1; i++) {
-				rc = add_switch(model, y, x, "GND_WIRE",
-					pf(gfan_s, i), 0 /* bidir */);
-				if (rc) goto xout;
+			// Some tiles are different so we cannot include
+			// them in the high-speed replication scheme.
+			if (tile->type == IO_ROUTING || tile->type == ROUTING_IO_L
+			    || tile->type == ROUTING_BRK || tile->type == BRAM_ROUTING_BRK) {
+				rc = init_routing_tile(model, y, x);
+				if (rc) FAIL(rc);
+				continue;
 			}
-			rc = add_switch(model, y, x, "GND_WIRE", "SR1",
-				0 /* bidir */);
-			if (rc) goto xout;
-
-			// VCC
-		 	{ int vcc_dest[] = {
-				X_A3, X_A4, X_A5, X_A6, X_B3, X_B4, X_B5, X_B6,
-				X_C3, X_C4, X_C5, X_C6, X_D3, X_D4, X_D5, X_D6,
-				M_A3, M_A4, M_A5, M_A6, M_B3, M_B4, M_B5, M_B6,
-				M_C3, M_C4, M_C5, M_C6, M_D3, M_D4, M_D5, M_D6 };
-
-			for (i = 0; i < sizeof(vcc_dest)/sizeof(vcc_dest[0]); i++) {
-				rc = add_switch(model, y, x, "VCC_WIRE",
-					logicin_s(vcc_dest[i], routing_io),
-					0 /* bidir */);
-				if (rc) goto xout;
-			}}
-
-			// KEEP1
-			for (i = X_A1; i <= M_WE; i++) {
-				rc = add_switch(model, y, x, "KEEP1_WIRE",
-					logicin_s(i, routing_io),
-					0 /* bidir */);
-				if (rc) goto xout;
+			if (first_y == -1) {
+				first_y = y;
+				first_x = x;
+				rc = init_routing_tile(model, y, x);
+				if (rc) FAIL(rc);
+				continue;
 			}
-			rc = add_switch(model, y, x, "KEEP1_WIRE", "FAN_B",
-				0 /* bidir */);
-			if (rc) goto xout;
-
-			// VCC and KEEP1 to CLK0:1, SR0:1, GFAN0:1
-			{ static const char* src[] = {"VCC_WIRE", "KEEP1_WIRE"};
-			for (i = 0; i <= 1; i++)
-				for (j = 0; j <= 1; j++) {
-					rc = add_switch(model, y, x, src[i],
-						pf("CLK%i", j), 0 /* bidir */);
-					if (rc) goto xout;
-					rc = add_switch(model, y, x, src[i],
-						pf("SR%i", j), 0 /* bidir */);
-					if (rc) goto xout;
-					rc = add_switch(model, y, x,
-						src[i],
-						pf(gfan_s, j),
-						0 /* bidir */);
-					if (rc) goto xout;
-				}
-			}
-
-			// GCLK0:15 -> CLK0:1, GFAN0:1/SR0:1
-			if (tile->type == ROUTING_BRK
-			    || tile->type == BRAM_ROUTING_BRK)
-				gclk_s = "GCLK%i_BRK";
-			else
-				gclk_s = "GCLK%i";
-			for (i = 0; i <= 15; i++) {
-				for (j = 0; j <= 1; j++) {
-					rc = add_switch(model, y, x,
-						pf(gclk_s, i),
-						pf("CLK%i", j),
-						0 /* bidir */);
-					if (rc) goto xout;
-					rc = add_switch(model, y, x,
-						pf(gclk_s, i),
-						(i < 8)
-						  ? pf(gfan_s, j)
-						  : pf("SR%i", j),
-						0 /* bidir */);
-					if (rc) goto xout;
-				}
-			}
-
-			// FAN_B to SR0:1
-			for (i = 0; i <= 1; i++) {
-				rc = add_switch(model, y, x, "FAN_B",
-					pf("SR%i", i), 0 /* bidir */);
-				if (rc) goto xout;
-			}
-
-			// some logicin wires are singled out
-			{ int logic_singles[] = {X_CE, X_CX, X_DX,
-				M_AI, M_BI, M_CX, M_DX, M_WE};
-			for (i = 0; i < sizeof(logic_singles)/sizeof(logic_singles[0]); i++) {
-				rc = add_switch(model, y, x, pf("LOGICIN_B%i", logic_singles[i]),
-					pf("LOGICIN%i", logic_singles[i]), 0 /* bidir */);
-				if (rc) goto xout;
-			}}
-
-			// connecting directional wires endpoints to logicin
-			rc = add_logicin_switches(model, y, x);
-			if (rc) goto xout;
-
-			// connecting logicout back to directional wires
-			// beginning points (and some back to logicin)
-			rc = add_logicout_switches(model, y, x, routing_io);
-			if (rc) goto xout;
-
-			// there are extra wires to send signals to logicin, or
-			// to share/multiply logicin signals
-			rc = add_logicio_extra(model, y, x, routing_io);
-			if (rc) goto xout;
-
-			// extra wires going to SR, CLK and GFAN
-			{ int to_sr[] = {X_BX, M_BX, M_DI};
-			for (i = 0; i < sizeof(to_sr)/sizeof(to_sr[0]); i++) {
-				for (j = 0; j <= 1; j++) {
-					rc = add_switch(model, y, x,
-						pf("LOGICIN_B%i", to_sr[i]),
-						pf("SR%i", j), 0 /* bidir */);
-					if (rc) goto xout;
-				}
-			}}
-			{ int to_clk[] = {M_BX, M_CI};
-			for (i = 0; i < sizeof(to_clk)/sizeof(to_clk[0]); i++) {
-				for (j = 0; j <= 1; j++) {
-					rc = add_switch(model, y, x,
-						pf("LOGICIN_B%i", to_clk[i]),
-						pf("CLK%i", j), 0 /* bidir */);
-					if (rc) goto xout;
-				}
-			}}
-			{ int to_gf[] = {M_AX, X_AX, M_CE, M_CI};
-			for (i = 0; i < sizeof(to_gf)/sizeof(to_gf[0]); i++) {
-				for (j = 0; j <= 1; j++) {
-					int bidir = !routing_io
-					  && ((!j && i < 2) || (j && i >= 2));
-					rc = add_switch(model, y, x,
-						pf("LOGICIN_B%i", to_gf[i]),
-						pf(gfan_s, j), bidir);
-					if (rc) goto xout;
-				}
-			}}
-
-			// connecting the directional wires from one's end
-			// to another one's beginning
-			wire = W_NN2;
-			do {
-				rc = build_dirwire_switches(&dir_EB_switches, W_TO_LEN1(wire));
-				if (rc) goto xout;
-				for (i = 0; i < dir_EB_switches.num_s; i++) {
-					rc = add_switch(model, y, x,
-						dir_EB_switches.s[i].from,
-						dir_EB_switches.s[i].to, 0 /* bidir */);
-					if (rc) goto xout;
-				}
-
-				rc = build_dirwire_switches(&dir_EB_switches, W_TO_LEN2(wire));
-				if (rc) goto xout;
-				for (i = 0; i < dir_EB_switches.num_s; i++) {
-					rc = add_switch(model, y, x,
-						dir_EB_switches.s[i].from,
-						dir_EB_switches.s[i].to, 0 /* bidir */);
-					if (rc) goto xout;
-				}
-
-				rc = build_dirwire_switches(&dir_EB_switches, W_TO_LEN4(wire));
-				if (rc) goto xout;
-				for (i = 0; i < dir_EB_switches.num_s; i++) {
-					rc = add_switch(model, y, x,
-						dir_EB_switches.s[i].from,
-						dir_EB_switches.s[i].to, 0 /* bidir */);
-					if (rc) goto xout;
-				}
-
-				wire = W_CLOCKWISE(wire);
-			} while (wire != W_NN2); // one full turn
-
-			// and finally, some end wires go to CLK, SR and GFAN
-			{ static const char* from[] = {"NR1E2", "WR1E2"};
-			for (i = 0; i < sizeof(from)/sizeof(from[0]); i++) {
-				for (j = 0; j <= 1; j++) {
-					rc = add_switch(model, y, x, from[i],
-						pf("CLK%i", j), 0 /* bidir */);
-					if (rc) goto xout;
-					rc = add_switch(model, y, x, from[i],
-						pf("SR%i", j), 0 /* bidir */);
-					if (rc) goto xout;
-				}
-			}}
-			{ static const char* from[] = {"ER1E1", "SR1E1"};
-			for (i = 0; i < sizeof(from)/sizeof(from[0]); i++) {
-				for (j = 0; j <= 1; j++) {
-					rc = add_switch(model, y, x, from[i],
-						pf("CLK%i", j), 0 /* bidir */);
-					if (rc) goto xout;
-					rc = add_switch(model, y, x, from[i],
-						pf(gfan_s, j), 0 /* bidir */);
-					if (rc) goto xout;
-				}
-			}}
-			{ static const char* from[] = {"NR1E1", "WR1E1"};
-			for (i = 0; i < sizeof(from)/sizeof(from[0]); i++) {
-				for (j = 0; j <= 1; j++) {
-					rc = add_switch(model, y, x, from[i],
-						pf(gfan_s, j), 0 /* bidir */);
-					if (rc) goto xout;
-				}
-			}}
-			{ static const char* from[] = {"ER1E2", "SR1E2"};
-			for (i = 0; i < sizeof(from)/sizeof(from[0]); i++) {
-				for (j = 0; j <= 1; j++) {
-					rc = add_switch(model, y, x, from[i],
-						pf("SR%i", j), 0 /* bidir */);
-					if (rc) goto xout;
-				}
-			}}
+			rc = replicate_switches_and_names(model,
+				first_y, first_x, y, x);
+			if (rc) FAIL(rc);
 		}
 	}
 	return 0;
-xout:
+fail:
 	return rc;
 }
