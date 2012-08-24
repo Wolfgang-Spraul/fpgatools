@@ -263,10 +263,10 @@ int fpga_set_lut(struct fpga_model* model, struct fpga_device* dev,
 }
 
 int fpga_connpt_find(struct fpga_model* model, int y, int x,
-	str16_t name_i, int* connpt_dests_o)
+	str16_t name_i, int* connpt_dests_o, int* num_dests)
 {
 	struct fpga_tile* tile;
-	int i, num_dests;
+	int i;
 
 	tile = YX_TILE(model, y, x);
 	for (i = 0; i < tile->num_conn_point_names; i++) {
@@ -275,15 +275,18 @@ int fpga_connpt_find(struct fpga_model* model, int y, int x,
 	}
 	if (i >= tile->num_conn_point_names)
 		{ HERE(); goto fail; }
-
-	*connpt_dests_o = tile->conn_point_names[i*2];
-	if (i < tile->num_conn_point_names-1)
-		num_dests = tile->conn_point_names[(i+1)*2] - *connpt_dests_o;
-	else
-		num_dests = tile->num_conn_point_dests - *connpt_dests_o;
-	return num_dests;
+	if (num_dests) {
+		*num_dests = (i < tile->num_conn_point_names-1)
+			? tile->conn_point_names[(i+1)*2]
+				- tile->conn_point_names[i*2]
+			: tile->num_conn_point_dests
+				- tile->conn_point_names[i*2];
+	}
+	if (connpt_dests_o)
+		*connpt_dests_o = tile->conn_point_names[i*2];
+	return i;
 fail:
-	return 0;
+	return NO_CONN;
 }
 
 void fpga_conn_dest(struct fpga_model* model, int y, int x,
@@ -346,6 +349,28 @@ swidx_t fpga_switch_backtofirst(struct fpga_model* model, int y, int x,
 	swidx_t last, int from_to)
 {
 	return fpga_switch_search(model, y, x, last, /*search_beg*/ 0, from_to);
+}
+
+swidx_t fpga_switch_lookup(struct fpga_model* model, int y, int x,
+	str16_t from_str_i, str16_t to_str_i)
+{
+	int from_connpt_o, to_connpt_o, i;
+	struct fpga_tile* tile;
+
+	from_connpt_o = fpga_connpt_find(model, y, x, from_str_i,
+		/*dests_o*/ 0, /*num_dests*/ 0);
+	to_connpt_o = fpga_connpt_find(model, y, x, to_str_i,
+		/*dests_o*/ 0, /*num_dests*/ 0);
+	if (from_connpt_o == NO_CONN || to_connpt_o == NO_CONN)
+		return NO_SWITCH;
+
+	tile = YX_TILE(model, y, x);
+	for (i = 0; i < tile->num_switches; i++) {
+		if (SW_FROM_I(tile->switches[i]) == from_connpt_o
+		    && SW_TO_I(tile->switches[i]) == to_connpt_o)
+			return i;
+	}
+	return NO_SWITCH;
 }
 
 #define NUM_CONNPT_BUFS	64
@@ -628,9 +653,9 @@ int fpga_switch_conns(struct sw_conns* conns)
 		if (end_of_chain_str == STRIDX_NO_ENTRY)
 			{ HERE(); goto internal_error; }
 		conns->dest_i = 0;
-		conns->num_dests = fpga_connpt_find(conns->model,
-			conns->y, conns->x, end_of_chain_str,
-			&conns->connpt_dest_start);
+		fpga_connpt_find(conns->model, conns->y, conns->x,
+			end_of_chain_str, &conns->connpt_dest_start,
+			&conns->num_dests);
 		if (conns->num_dests)
 			break;
 	}

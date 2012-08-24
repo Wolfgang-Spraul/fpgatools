@@ -673,6 +673,158 @@ static enum fpgadev_type to_type(const char* s, int len)
 	return DEV_NONE;
 }
 
+static int coord(const char* s, int start, int* end, int* y, int* x)
+{
+	int y_beg, y_end, x_beg, x_end, rc;
+
+	next_word(s, start, &y_beg, &y_end);
+	next_word(s, y_end, &x_beg, &x_end);
+	if (y_end < y_beg+2 || x_end < x_beg+2
+	    || s[y_beg] != 'y' || s[x_beg] != 'x'
+	    || !all_digits(&s[y_beg+1], y_end-y_beg-1)
+	    || !all_digits(&s[x_beg+1], x_end-x_beg-1)) {
+		FAIL(EINVAL);
+	}
+	*y = to_i(&s[y_beg+1], y_end-y_beg-1);
+	*x = to_i(&s[x_beg+1], x_end-x_beg-1);
+	*end = x_end;
+	return 0;
+fail:
+	return rc;
+}
+
+static void read_sw_line(struct fpga_model* model, const char* line, int start)
+{
+	int coord_end, y_coord, x_coord;
+	int from_beg, from_end, from_str_i;
+	int direction_beg, direction_end, is_bidir;
+	int to_beg, to_end, to_str_i;
+	int on_beg, on_end, is_on;
+	swidx_t sw_idx;
+	int sw_is_bidir;
+	char buf[1024];
+
+	if (coord(line, start, &coord_end, &y_coord, &x_coord))
+		return;
+
+	next_word(line, coord_end, &from_beg, &from_end);
+	next_word(line, from_end, &direction_beg, &direction_end);
+	next_word(line, direction_end, &to_beg, &to_end);
+	next_word(line, to_end, &on_beg, &on_end);
+
+	if (from_end <= from_beg || direction_end <= direction_beg
+	    || to_end <= to_beg) {
+		HERE();
+		return;
+	}
+	memcpy(buf, &line[from_beg], from_end-from_beg);
+	buf[from_end-from_beg] = 0;
+	if (strarray_find(&model->str, buf, &from_str_i)
+	    || from_str_i == STRIDX_NO_ENTRY) {
+		HERE();
+		return;
+	}
+	if (!str_cmp(&line[direction_beg], direction_end-direction_beg,
+		"->", 2))
+		is_bidir = 0;
+	else if (!str_cmp(&line[direction_beg], direction_end-direction_beg,
+		"<->", 3))
+		is_bidir = 1;
+	else {
+		HERE();
+		return;
+	}
+	memcpy(buf, &line[to_beg], to_end-to_beg);
+	buf[to_end-to_beg] = 0;
+	if (strarray_find(&model->str, buf, &to_str_i)
+	    || to_str_i == STRIDX_NO_ENTRY) {
+		HERE();
+		return;
+	}
+	if (on_end == on_beg)
+		is_on = 0;
+	else if (!str_cmp(&line[on_beg], on_end-on_beg, "on", 2))
+		is_on = 1;
+	else {
+		HERE();
+		return;
+	}
+
+	sw_idx = fpga_switch_lookup(model, y_coord, x_coord, from_str_i, to_str_i);
+	if (sw_idx == NO_SWITCH) {
+		HERE();
+		return;
+	}
+	sw_is_bidir = fpga_switch_is_bidir(model, y_coord, x_coord, sw_idx);
+	if ((is_bidir && !sw_is_bidir)
+	    || (!is_bidir && sw_is_bidir)) {
+		HERE();
+		return;
+	}
+	if (fpga_switch_is_enabled(model, y_coord, x_coord, sw_idx))
+		HERE();
+	if (is_on)
+		fpga_switch_enable(model, y_coord, x_coord, sw_idx);
+}
+
+static void read_dev_line(struct fpga_model* model, const char* line, int start)
+{
+	int coord_end, y_coord, x_coord;
+	int type_beg, type_end, idx_beg, idx_end;
+	enum fpgadev_type dev_type;
+	int dev_idx, words_consumed;
+	struct fpga_device* dev_ptr;
+	int next_beg, next_end, second_beg, second_end;
+
+	if (coord(line, start, &coord_end, &y_coord, &x_coord))
+		return;
+
+	next_word(line, coord_end, &type_beg, &type_end);
+	next_word(line, type_end, &idx_beg, &idx_end);
+
+	if (type_end == type_beg || idx_end == idx_beg
+	    || !all_digits(&line[idx_beg], idx_end-idx_beg)) {
+		fprintf(stderr, "error %i: %s", __LINE__, line);
+		return;
+	}
+	dev_type = to_type(&line[type_beg], type_end-type_beg);
+	dev_idx = to_i(&line[idx_beg], idx_end-idx_beg);
+	dev_ptr = fpga_dev(model, y_coord, x_coord, dev_type, dev_idx);
+	if (!dev_ptr) {
+		fprintf(stderr, "error %i: %s", __LINE__, line);
+		return;
+	}
+
+	next_end = idx_end;
+	while (next_word(line, next_end, &next_beg, &next_end),
+		next_end > next_beg) {
+		next_word(line, next_end, &second_beg, &second_end);
+		switch (dev_type) {
+			case DEV_IOB:
+				words_consumed = read_IOB_attr(model, dev_ptr,
+					&line[next_beg], next_end-next_beg,
+					&line[second_beg],
+					second_end-second_beg);
+				break;
+			case DEV_LOGIC:
+				words_consumed = read_LOGIC_attr(model, dev_ptr,
+					&line[next_beg], next_end-next_beg,
+					&line[second_beg],
+					second_end-second_beg);
+				break;
+			default:
+				fprintf(stderr, "error %i: %s", __LINE__, line);
+				return;
+		}
+		if (!words_consumed)
+			fprintf(stderr, "error %i w1 %.*s w2 %.*s: %s",
+				__LINE__, next_end-next_beg, &line[next_beg],
+				second_end-second_beg, &line[second_beg], line);
+		else if (words_consumed == 2)
+			next_end = second_end;
+	}
+}
+
 int read_floorplan(struct fpga_model* model, FILE* f)
 {
 	char line[1024];
@@ -682,81 +834,13 @@ int read_floorplan(struct fpga_model* model, FILE* f)
 		next_word(line, 0, &beg, &end);
 		if (end == beg) continue;
 
-		if (!str_cmp(&line[beg], end-beg, "dev", 3)) {
-			int y_beg, y_end, x_beg, x_end;
-			int y_coord, x_coord;
-			int type_beg, type_end, idx_beg, idx_end;
-			enum fpgadev_type dev_type;
-			int dev_idx, words_consumed;
-			struct fpga_device* dev_ptr;
-			int next_beg, next_end, second_beg, second_end;
-
-			next_word(line, end, &y_beg, &y_end);
-			next_word(line, y_end, &x_beg, &x_end);
-			if (y_end < y_beg+2 || x_end < x_beg+2
-			    || line[y_beg] != 'y' || line[x_beg] != 'x'
-			    || !all_digits(&line[y_beg+1], y_end-y_beg-1)
-			    || !all_digits(&line[x_beg+1], x_end-x_beg-1)) {
-				fprintf(stderr, "error %i: %s", __LINE__, line);
-				continue;
-			}
-			y_coord = to_i(&line[y_beg+1], y_end-y_beg-1);
-			x_coord = to_i(&line[x_beg+1], x_end-x_beg-1);
-
-			next_word(line, x_end, &type_beg, &type_end);
-			next_word(line, type_end, &idx_beg, &idx_end);
-
-			if (type_end == type_beg || idx_end == idx_beg
-			    || !all_digits(&line[idx_beg], idx_end-idx_beg)) {
-				fprintf(stderr, "error %i: %s", __LINE__, line);
-				continue;
-			}
-			dev_type = to_type(&line[type_beg], type_end-type_beg);
-			dev_idx = to_i(&line[idx_beg], idx_end-idx_beg);
-			dev_ptr = fpga_dev(model, y_coord, x_coord, dev_type, dev_idx);
-			if (!dev_ptr) {
-				fprintf(stderr, "error %i: %s", __LINE__, line);
-				continue;
-			}
-
-			next_end = idx_end;
-			while (next_word(line, next_end, &next_beg, &next_end),
-				next_end > next_beg) {
-				next_word(line, next_end, &second_beg, &second_end);
-				switch (dev_type) {
-					case DEV_IOB:
-						words_consumed = read_IOB_attr(
-							model, dev_ptr,
-							&line[next_beg],
-							next_end-next_beg,
-							&line[second_beg],
-							second_end-second_beg);
-						break;
-					case DEV_LOGIC:
-						words_consumed = read_LOGIC_attr(
-							model, dev_ptr,
-							&line[next_beg],
-							next_end-next_beg,
-							&line[second_beg],
-							second_end-second_beg);
-						break;
-					default:
-						fprintf(stderr, "error %i: %s",
-							__LINE__, line);
-						goto next_line;
-				}
-				if (!words_consumed)
-					fprintf(stderr,
-						"error %i w1 %.*s w2 %.*s: %s",
-						__LINE__, next_end-next_beg,
-						&line[next_beg],
-						second_end-second_beg,
-						&line[second_beg],
-						line);
-				else if (words_consumed == 2)
-					next_end = second_end;
-			}
-next_line: ;
+		if (end-beg == 2
+		    && !str_cmp(&line[beg], 2, "sw", 2)) {
+			read_sw_line(model, line, end);
+		}
+		if (end-beg == 3
+		    && !str_cmp(&line[beg], 3, "dev", 3)) {
+			read_dev_line(model, line, end);
 		}
 	}
 	return 0;

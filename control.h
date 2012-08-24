@@ -31,11 +31,12 @@ enum { A6_LUT, B6_LUT, C6_LUT, D6_LUT };
 int fpga_set_lut(struct fpga_model* model, struct fpga_device* dev,
 	int which_lut, const char* lut_str, int lut_len);
 
-// returns the number of outgoing connections for the
-// connection point given with 'name', and the connection
-// point's first dest offset in connpt_dests_o.
+// Returns the connpt index or NO_CONN if the name was not
+// found. connpt_dests_o and num_dests are optional and may
+// return the offset into the connpt's destination array
+// and number of elements there.
 int fpga_connpt_find(struct fpga_model* model, int y, int x,
-	str16_t name_i, int* connpt_dests_o);
+	str16_t name_i, int* connpt_dests_o, int* num_dests);
 
 void fpga_conn_dest(struct fpga_model* model, int y, int x,
 	int connpt_dest_idx, int* dest_y, int* dest_x, str16_t* str_i);
@@ -56,6 +57,8 @@ swidx_t fpga_switch_next(struct fpga_model* model, int y, int x,
 	swidx_t last, int from_to);
 swidx_t fpga_switch_backtofirst(struct fpga_model* model, int y, int x,
 	swidx_t last, int from_to);
+swidx_t fpga_switch_lookup(struct fpga_model* model, int y, int x,
+	str16_t from_str_i, str16_t to_str_i);
 
 const char* fpga_switch_str(struct fpga_model* model, int y, int x,
 	swidx_t swidx, int from_to);
