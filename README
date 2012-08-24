@@ -41,8 +41,8 @@ fpgatools Development Utilities
 TODO (as of 2012-08, expected time to delivery: months to years
       completion status overall: 1%)
 
-* support chips other than xc6slx9, like slx45, slx150
-* support xc7a100
+* support chips other than xc6slx9, maybe an ftg256 or fgg484-packaged
+  xc6 or the xc7a100
 * many more test cases for autotester
 * smarter autotester that can remember and verify groups of tests,
   automatically oversee test execution, etc.

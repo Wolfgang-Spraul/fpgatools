@@ -41,7 +41,7 @@ void fpga_conn_dest(struct fpga_model* model, int y, int x,
 	int connpt_dest_idx, int* dest_y, int* dest_x, str16_t* str_i);
 
 typedef int swidx_t; // swidx_t is an index into the uint32_t switches array
-#define MAX_SW_CHAIN_SIZE 64 // largest seen so far was 20
+#define MAX_SW_DEPTH 64 // largest seen so far was 20
 
 // returns a switch index, or -1 (NO_SWITCH) if no switch was found
 swidx_t fpga_switch_first(struct fpga_model* model, int y, int x,
@@ -67,7 +67,13 @@ void fpga_switch_disable(struct fpga_model* model, int y, int x,
 const char* fmt_sw(struct fpga_model* model, int y, int x,
 	swidx_t sw, int from_to);
 const char* fmt_swchain(struct fpga_model* model, int y, int x,
-	swidx_t* sw, int sw_size);
+	swidx_t* sw, int sw_size, int from_to);
+
+struct sw_set
+{
+	swidx_t sw[MAX_SW_DEPTH];
+	int len;
+};
 
 struct sw_chain
 {
@@ -78,19 +84,23 @@ struct sw_chain
 	// start_switch will be set to STRIDX_NO_ENTRY (0) after the first call
 	str16_t start_switch;
 	int from_to;
+	int max_chain_size;
 
 	// return values:
-	swidx_t chain[MAX_SW_CHAIN_SIZE];
-	int chain_size;
+	struct sw_set set;
 
 	// internal:
 	int first_round;	
 };
 
-// Returns 0 if another switch is returned in chain, or
-// NO_SWITCH (-1) if there is no other switch.
+// Returns 0 if another switchset is returned in chain, or
+// NO_SWITCH (-1) if there is no other switchset.
 // chain_size set to 0 when there are no more switches in the tree
 int fpga_switch_chain(struct sw_chain* chain);
+
+// returns error code or 0 for no errors
+int fpga_switch_chains(struct sw_chain* chain, int max_sets,
+	struct sw_set* sets, int* num_sets);
 
 struct sw_conns
 {
@@ -100,6 +110,7 @@ struct sw_conns
 	int x;
 	// start_switch will be set to STRIDX_NO_ENTRY (0) after first call
 	str16_t start_switch;
+	int max_switch_depth;
 
 	// return values:
 	struct sw_chain chain;
@@ -115,10 +126,15 @@ struct sw_conns
 // NO_CONN (-1) if there is no other connection.
 int fpga_switch_conns(struct sw_conns* conns);
 
-void printf_swconns(struct fpga_model* model, int y, int x, str16_t sw);
+void printf_swchain(struct fpga_model* model, int y, int x,
+	str16_t sw, int max_depth, int from_to);
+void printf_swconns(struct fpga_model* model, int y, int x,
+	str16_t sw, int max_depth);
 
-#define SWTO_YX_DEF		0
-#define SWTO_YX_CLOSEST		0x0001
+#define SWTO_YX_DEF			0
+#define SWTO_YX_CLOSEST			0x0001
+#define SWTO_YX_TARGET_CONNPT		0x0002
+#define SWTO_YX_MAX_SWITCH_DEPTH	0x0004
 
 struct switch_to_yx
 {
@@ -129,9 +145,11 @@ struct switch_to_yx
 	int y;
 	int x;
 	str16_t start_switch;
+	int max_switch_depth; // only if SWTO_YX_MAX_SWITCH_DEPTH is set
+	str16_t target_connpt; // only if SWTO_YX_TARGET_CONNPT is set
 
 	// output:
-	swidx_t chain[MAX_SW_CHAIN_SIZE];
+	swidx_t chain[MAX_SW_DEPTH];
 	int chain_size;
 	int dest_y;
 	int dest_x;
