@@ -167,14 +167,14 @@ int main(int argc, char** argv)
 	rc = diff_printf(&tstate);
 	if (rc) FAIL(rc);
 
-printf("P46 I pinw %s\n", strarray_lookup(&model.str, P46_dev->iob.pinw_out_I));
+printf("P46 I pinw %s\n", strarray_lookup(&model.str, P46_dev->pinw_out[IOB_OUT_I]));
 
 	switch_to.yx_req = YX_DEV_ILOGIC;
 	switch_to.flags = SWTO_YX_DEF;
 	switch_to.model = &model;
 	switch_to.y = P46_y;
 	switch_to.x = P46_x;
-	switch_to.start_switch = P46_dev->iob.pinw_out_I;
+	switch_to.start_switch = P46_dev->pinw_out[IOB_OUT_I];
 	rc = fpga_switch_to_yx(&switch_to);
 	if (rc) FAIL(rc);
 	rc = fpga_switch_set_enable(&model, switch_to.y, switch_to.x, &switch_to.set);
@@ -216,7 +216,7 @@ printf(" %s\n", fmt_swset(&model, switch_to.y, switch_to.x, &switch_to.set, SW_F
 		struct sw_chain c = {
 			.model = &model, .y = switch_to.dest_y,
 			.x = switch_to.dest_x+1,
-			.start_switch = logic_dev->logic.pinw_in[LUT_D][LUT_3],
+			.start_switch = logic_dev->pinw_in[LOGIC_IN_D3],
 			.from_to = SW_TO, .max_chain_size = MAX_SW_DEPTH };
 		if (fpga_switch_chain(&c) == NO_CONN) FAIL(EINVAL);
 		if (c.set.len == 0) { HERE(); FAIL(EINVAL); }
@@ -248,7 +248,7 @@ printf(" %s\n", fmt_swset(&model, c.y, c.x, &c.set, SW_FROM));
 	if (rc) FAIL(rc);
 
 	printf("\n");
-	printf("P48 O pinw %s\n", strarray_lookup(&model.str, P48_dev->iob.pinw_in_O));
+	printf("P48 O pinw %s\n", strarray_lookup(&model.str, P48_dev->pinw_in[IOB_IN_O]));
 
 	printf("\n");
 	printf("O Test suite completed.\n");

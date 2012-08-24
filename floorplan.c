@@ -638,7 +638,7 @@ int printf_switches(FILE* f, struct fpga_model* model, int enabled_only)
 				from_connpt_o = (tile->switches[i] & 0x3FFF8000) >> 15;
 				to_connpt_o = tile->switches[i] & 0x00007FFF;
 				is_bidirectional = (tile->switches[i] & SWITCH_BIDIRECTIONAL) != 0;
-				is_on = (tile->switches[i] & SWITCH_ON) != 0;
+				is_on = (tile->switches[i] & SWITCH_USED) != 0;
 
 				from_str_i = tile->conn_point_names[from_connpt_o*2+1];
 				to_str_i = tile->conn_point_names[to_connpt_o*2+1];
@@ -858,6 +858,8 @@ int write_floorplan(FILE* f, struct fpga_model* model, int flags)
 
 	rc = printf_switches(f, model, /*enabled_only*/ 1);
 	if (rc) FAIL(rc);
+
+// net 0 input y00 x00 name output y00 x00 name sw y00 x00 from -> to
 
 	return 0;
 fail:

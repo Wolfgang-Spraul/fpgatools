@@ -112,9 +112,9 @@ compare.%: xc6slx9_empty.%
 %.devs: %.fp
 	@cat $<|awk '{if ($$1=="dev") {if ($$6=="type") printf "%s %s %s %s\n",$$2,$$3,$$4,$$7; else printf "%s %s %s\n",$$2,$$3,$$4; }}'|sort >$@
 
-%.nets: %.fp pair2net
+%.cnets: %.fp pair2net
 	cat $<|awk '{if ($$1=="conn") printf "%s-%s-%s %s-%s-%s\n",$$2,$$3,$$4,$$5,$$6,$$7}' |./pair2net -|sort >$@
-	@echo Number of nets:
+	@echo Number of conn nets:
 	@cat $@|wc -l
 	@echo Number of connection points:
 	@cat $@|wc -w
@@ -143,15 +143,15 @@ clean:
 		pair2net pair2net.o \
 		xc6slx9_empty.fp xc6slx9.svg \
 		xc6slx9_empty.tiles xc6slx9_empty.devs xc6slx9_empty.conns \
-		xc6slx9_empty.ports xc6slx9_empty.sw xc6slx9_empty.nets \
+		xc6slx9_empty.ports xc6slx9_empty.sw xc6slx9_empty.cnets \
 		compare_other.tiles compare_other.devs compare_other.conns compare_other.ports \
-		compare_other.sw compare_other.nets \
+		compare_other.sw compare_other.cnets \
 		compare_tiles_matching.txt compare_tiles_diff.txt compare_tiles_extra.txt \
 		compare_devs_matching.txt compare_devs_diff.txt compare_devs_extra.txt \
 		compare_conns_matching.txt compare_conns_diff.txt compare_conns_extra.txt \
 		compare_ports_matching.txt compare_ports_diff.txt compare_ports_extra.txt \
 		compare_sw_matching.txt compare_sw_diff.txt compare_sw_extra.txt \
-		compare_nets_matching.txt compare_nets_diff.txt compare_nets_extra.txt
+		compare_cnets_matching.txt compare_cnets_diff.txt compare_cnets_extra.txt
 
 install:	all
 		mkdir -p $(DESTDIR)/$(PREFIX)/bin/

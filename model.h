@@ -342,24 +342,31 @@ enum fpgadev_type
 // data can safely be initialized to 0 meaning unconfigured.
 
 enum { LOGIC_M = 1, LOGIC_L, LOGIC_X };
-// LUT_ macros to make the pinw arrays more readable
-enum { LUT_A = 0, LUT_B, LUT_C, LUT_D };
-enum { LUT_1 = 0, LUT_2, LUT_3, LUT_4, LUT_5, LUT_6 };
+// All LOGICIN_IN A..D sequences must be exactly sequential as
+// here to match initialization in model_device:init_logic().
+enum { LOGIC_IN_A1 = 0, LOGIC_IN_A2, LOGIC_IN_A3, LOGIC_IN_A4, LOGIC_IN_A5,
+	LOGIC_IN_A6,
+	LOGIC_IN_B1, LOGIC_IN_B2, LOGIC_IN_B3, LOGIC_IN_B4, LOGIC_IN_B5,
+	LOGIC_IN_B6,
+	LOGIC_IN_C1, LOGIC_IN_C2, LOGIC_IN_C3, LOGIC_IN_C4, LOGIC_IN_C5,
+	LOGIC_IN_C6,
+	LOGIC_IN_D1, LOGIC_IN_D2, LOGIC_IN_D3, LOGIC_IN_D4, LOGIC_IN_D5,
+	LOGIC_IN_D6,
+	LOGIC_IN_AX, LOGIC_IN_BX, LOGIC_IN_CX, LOGIC_IN_DX,
+	LOGIC_IN_CLK, LOGIC_IN_CE, LOGIC_IN_SR,
+	// only for L and M:
+	LOGIC_IN_CIN, // only some L and M devs have this
+	// only for M:
+	LOGIC_IN_WE, LOGIC_IN_AI, LOGIC_IN_BI, LOGIC_IN_CI, LOGIC_IN_DI,
+	LOGIC_NUM_PINW_IN };
+enum { LOGIC_OUT_A = 0, LOGIC_OUT_B, LOGIC_OUT_C, LOGIC_OUT_D,
+	LOGIC_OUT_AMUX, LOGIC_OUT_BMUX, LOGIC_OUT_CMUX, LOGIC_OUT_DMUX,
+	LOGIC_OUT_AQ, LOGIC_OUT_BQ, LOGIC_OUT_CQ, LOGIC_OUT_DQ,
+	LOGIC_OUT_COUT, // only some L and M devs have this
+	LOGIC_NUM_PINW_OUT };
 
 struct fpgadev_logic
 {
-	// pinwires that don't exist for a specific device
-	// will be set to STRIDX_NO_ENTRY
-
-   	// for X, L and M:
-	str16_t pinw_in[4][6], pinw_in_X[4];
-	str16_t pinw_in_CLK, pinw_in_CE, pinw_in_SR;
-	str16_t pinw_out[4], pinw_out_MUX[4], pinw_out_Q[4];
-	// only for L and M:
-        str16_t pinw_in_CIN, pinw_out_COUT; // not all devs have this
-	// only for M:
-        str16_t pinw_in_WE, pinw_in_I[4];
-
 	int subtype; // LOGIC_M, LOGIC_L or LOGIC_X
 	int A_used, B_used, C_used, D_used;
 	char* A6_lut, *B6_lut, *C6_lut, *D6_lut;
@@ -378,17 +385,13 @@ enum { ITERM_NONE = 1, ITERM_UNTUNED_25, ITERM_UNTUNED_50,
 enum { OTERM_NONE = 1, OTERM_UNTUNED_25, OTERM_UNTUNED_50,
 	OTERM_UNTUNED_75 };
 
+enum { IOB_IN_O = 0, IOB_IN_T, IOB_IN_DIFFI_IN, IOB_IN_DIFFO_IN,
+	IOB_NUM_PINW_IN };
+enum { IOB_OUT_I = 0, IOB_OUT_PADOUT, IOB_OUT_PCI_RDY, IOB_OUT_DIFFO_OUT,
+	IOB_NUM_PINW_OUT };
+
 struct fpgadev_iob
 {
-	str16_t pinw_in_O;
-	str16_t pinw_in_T;
-	str16_t pinw_out_I;
-	str16_t pinw_out_PADOUT;
-	str16_t pinw_out_PCI_RDY;
-	str16_t pinw_in_DIFFI_IN;
-	str16_t pinw_in_DIFFO_IN;
-	str16_t pinw_out_DIFFO_OUT;
-
 	int subtype; // IOBM or IOBS
 	IOSTANDARD istandard;
 	IOSTANDARD ostandard;
@@ -402,17 +405,26 @@ struct fpgadev_iob
 	int out_term;
 };
 
+#define MAX_PINW_IN	64
+#define MAX_PINW_OUT	32
+
 struct fpga_device
 {
 	enum fpgadev_type type;
 	int instantiated;
+	int num_in_wires, num_out_wires;
+	// pinwires that are within the type-range of a device, but
+	// don't exist for that particular instance, will be set to
+	// STRIDX_NO_ENTRY
+	str16_t pinw_in[MAX_PINW_IN];
+	str16_t pinw_out[MAX_PINW_OUT];
 	union {
 		struct fpgadev_logic logic;
 		struct fpgadev_iob iob;
 	};
 };
 
-#define SWITCH_ON		0x80000000
+#define SWITCH_USED		0x80000000
 #define SWITCH_BIDIRECTIONAL	0x40000000
 #define SWITCH_MAX_CONNPT_O	0x7FFF // 15 bits
 #define SW_FROM_I(u32)		(((u32) >> 15) & SWITCH_MAX_CONNPT_O)

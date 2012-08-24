@@ -106,7 +106,8 @@ int extract_model(struct fpga_model* model, struct fpga_bits* bits)
 		if (!dev) FAIL(rc);
 
 		// we only support 2 hardcoded types of IOB right now
-		if (u32_p[0] == 0x00000100
+		// todo: bit 7 goes on when out-net connected?
+		if ((u32_p[0] & 0xFFFFFF7F) == 0x00000100
 		    && u32_p[1] == 0x06001100) {
 			dev->instantiated = 1;
 			strcpy(dev->iob.ostandard, IO_LVCMOS33);

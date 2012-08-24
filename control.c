@@ -426,13 +426,13 @@ int fpga_switch_is_bidir(struct fpga_model* model, int y, int x,
 int fpga_switch_is_enabled(struct fpga_model* model, int y, int x,
 	swidx_t swidx)
 {
-	return (YX_TILE(model, y, x)->switches[swidx] & SWITCH_ON) != 0;
+	return (YX_TILE(model, y, x)->switches[swidx] & SWITCH_USED) != 0;
 }
 
 void fpga_switch_enable(struct fpga_model* model, int y, int x,
 	swidx_t swidx)
 {
-	YX_TILE(model, y, x)->switches[swidx] |= SWITCH_ON;
+	YX_TILE(model, y, x)->switches[swidx] |= SWITCH_USED;
 }
 
 int fpga_switch_set_enable(struct fpga_model* model, int y, int x,
@@ -447,7 +447,7 @@ int fpga_switch_set_enable(struct fpga_model* model, int y, int x,
 void fpga_switch_disable(struct fpga_model* model, int y, int x,
 	swidx_t swidx)
 {
-	YX_TILE(model, y, x)->switches[swidx] &= ~SWITCH_ON;
+	YX_TILE(model, y, x)->switches[swidx] &= ~SWITCH_USED;
 }
 
 #define SW_BUF_SIZE	256
