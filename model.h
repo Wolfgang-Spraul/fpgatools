@@ -237,6 +237,11 @@ int is_aty(int check, struct fpga_model* model, int y);
 					 |X_LEFT_IO_ROUTING_COL \
 					 |X_RIGHT_IO_ROUTING_COL)
 
+// todo and realizations:
+// * maybe the center_logic and routing cols can also be
+//   seen as just a regular xl logic and routing cols.
+// * maybe the many special cases for bram are better
+//   tied to no-io columns
 #define X_OUTER_LEFT			0x00000001
 #define X_INNER_LEFT			0x00000002
 #define X_INNER_RIGHT			0x00000004
@@ -337,34 +342,23 @@ enum fpgadev_type
 // data can safely be initialized to 0 meaning unconfigured.
 
 enum { LOGIC_M = 1, LOGIC_L, LOGIC_X };
+// LUT_ macros to make the pinw arrays more readable
+enum { LUT_A = 0, LUT_B, LUT_C, LUT_D };
+enum { LUT_1 = 0, LUT_2, LUT_3, LUT_4, LUT_5, LUT_6 };
 
 struct fpgadev_logic
 {
-// M_A1..A6, M_AX
-// X_A1 or XX_A1 for L
+	// pinwires that don't exist for a specific device
+	// will be set to STRIDX_NO_ENTRY
+
    	// for X, L and M:
-	str16_t pinw_in_A1, pinw_in_A2, pinw_in_A3, pinw_in_A4, pinw_in_A5,
-		pinw_in_A6, pinw_in_AX;
-	str16_t pinw_in_B1, pinw_in_B2, pinw_in_B3, pinw_in_B4, pinw_in_B5,
-		pinw_in_B6, pinw_in_BX;
-	str16_t pinw_in_C1, pinw_in_C2, pinw_in_C3, pinw_in_C4, pinw_in_C5,
-		pinw_in_C6, pinw_in_CX;
-	str16_t pinw_in_D1, pinw_in_D2, pinw_in_D3, pinw_in_D4, pinw_in_D5,
-		pinw_in_D6, pinw_in_DX;
-// M_CLK, M_CE, M_SR
+	str16_t pinw_in[4][6], pinw_in_X[4];
 	str16_t pinw_in_CLK, pinw_in_CE, pinw_in_SR;
-// M_A, M_AMUX, M_AQ
-	str16_t pinw_out_A, pinw_out_AMUX, pinw_out_AQ;
-	str16_t pinw_out_B, pinw_out_BMUX, pinw_out_BQ;
-	str16_t pinw_out_C, pinw_out_CMUX, pinw_out_CQ;
-	str16_t pinw_out_D, pinw_out_DMUX, pinw_out_DQ;
+	str16_t pinw_out[4], pinw_out_MUX[4], pinw_out_Q[4];
 	// only for L and M:
-// M_CIN, M_COUT
-// L_CIN, XL_COUT
-        str16_t pinw_in_CIN, pinw_out_COUT;
+        str16_t pinw_in_CIN, pinw_out_COUT; // not all devs have this
 	// only for M:
-// M_WE, M_AI-DI
-        str16_t pinw_in_WE, pinw_in_AI, pinw_in_BI, pinw_in_CI, pinw_in_DI;
+        str16_t pinw_in_WE, pinw_in_I[4];
 
 	int subtype; // LOGIC_M, LOGIC_L or LOGIC_X
 	int A_used, B_used, C_used, D_used;

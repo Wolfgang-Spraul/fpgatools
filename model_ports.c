@@ -224,6 +224,7 @@ int init_ports(struct fpga_model* model, int dup_warn)
 	}
 
 	for (x = 0; x < model->x_width; x++) {
+		// VCC, GND and fans
 		if (is_atx(X_ROUTING_COL, model, x)) {
 			for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
 				if (is_aty(Y_ROW_HORIZ_AXSYMM|Y_CHIP_HORIZ_REGS,
@@ -269,6 +270,35 @@ int init_ports(struct fpga_model* model, int dup_warn)
 				}
 			}
 		}
+
+		// logicin
+		if (is_atx(X_FABRIC_LOGIC_XL_ROUTING_COL
+			  |X_CENTER_ROUTING_COL, model, x)) {
+			
+			for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
+				static const int n[] = { 36, 44, 53, 61, 62 };
+
+				if (is_aty(Y_TOPBOT_IO_RANGE, model, y)
+				     && !is_atx(X_ROUTING_NO_IO, model, x))
+					continue;
+				if (is_aty(Y_ROW_HORIZ_AXSYMM|Y_CHIP_HORIZ_REGS,
+					model, y))
+					continue;
+				if (is_atx(X_CENTER_ROUTING_COL, model, x)
+				    && (is_aty(Y_ROW_HORIZ_AXSYMM|Y_CHIP_HORIZ_REGS,
+						model, y+1)
+				        || is_aty(Y_ROW_HORIZ_AXSYMM, model, y-1)))
+					continue;
+
+				for (i = 0; i < sizeof(n)/sizeof(*n); i++) {
+					rc = add_connpt_name(model, y, x,
+						pf("LOGICIN_B%i", n[i]), dup_warn, 0, 0);
+					if (rc) goto xout;
+				}
+			}
+		}
+
+		// bram
 		if (is_atx(X_FABRIC_BRAM_COL, model, x)) {
 			for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
 				if (YX_TILE(model, y, x)->flags & TF_BRAM_DEV) {
@@ -318,6 +348,7 @@ int init_ports(struct fpga_model* model, int dup_warn)
 				}
 			}
 		}
+		// macc
 		if (is_atx(X_FABRIC_MACC_COL, model, x)) {
 			for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
 				if (YX_TILE(model, y, x)->flags & TF_MACC_DEV) {
@@ -391,71 +422,6 @@ int init_ports(struct fpga_model* model, int dup_warn)
 						rc = add_connpt_name(model, y, x, pf("OPMODE%i_DSP48A1_SITE", i),
 							dup_warn, 0, 0);
 						if (rc) goto xout;
-					}
-				}
-			}
-		}
-		if (is_atx(X_FABRIC_LOGIC_COL|X_CENTER_LOGIC_COL, model, x)) {
-			for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
-				if (YX_TILE(model, y, x)->flags & (TF_LOGIC_XM_DEV|TF_LOGIC_XL_DEV)) {
-					const char* pref[2];
-
-					if (YX_TILE(model, y, x)->flags & TF_LOGIC_XM_DEV) {
-						// The first SLICEM on the bottom has a given C_IN port.
-						if (is_aty(Y_INNER_BOTTOM, model, y+3)) {
-							rc = add_connpt_name(model, y, x, "M_CIN",
-								dup_warn, 0, 0);
-							if (rc) goto xout;
-						}
-						rc = add_connpt_name(model, y, x, "M_COUT",
-							dup_warn, 0, 0);
-						if (rc) goto xout;
-						rc = add_connpt_name(model, y, x, "M_WE",
-							dup_warn, 0, 0);
-						if (rc) goto xout;
-						for (i = 'A'; i <= 'D'; i++) {
-							rc = add_connpt_name(model, y, x, pf("M_%cI", i),
-								dup_warn, 0, 0);
-							if (rc) goto xout;
-						}
-						pref[0] = "M";
-						pref[1] = "X";
-					} else { // LOGIC_XL
-						rc = add_connpt_name(model, y, x, "XL_COUT",
-							dup_warn, 0, 0);
-						if (rc) goto xout;
-						pref[0] = "L";
-						pref[1] = "XX";
-					}
-					for (k = 0; k <= 1; k++) {
-						rc = add_connpt_name(model, y, x, pf("%s_CE", pref[k]),
-							dup_warn, 0, 0);
-						if (rc) goto xout;
-						rc = add_connpt_name(model, y, x, pf("%s_SR", pref[k]),
-							dup_warn, 0, 0);
-						if (rc) goto xout;
-						rc = add_connpt_name(model, y, x, pf("%s_CLK", pref[k]),
-							dup_warn, 0, 0);
-						if (rc) goto xout;
-						for (i = 'A'; i <= 'D'; i++) {
-							for (j = 1; j <= 6; j++) {
-								rc = add_connpt_name(model, y, x, pf("%s_%c%i", pref[k], i, j),
-									dup_warn, 0, 0);
-								if (rc) goto xout;
-							}
-							rc = add_connpt_name(model, y, x, pf("%s_%c", pref[k], i),
-								dup_warn, 0, 0);
-							if (rc) goto xout;
-							rc = add_connpt_name(model, y, x, pf("%s_%cMUX", pref[k], i),
-								dup_warn, 0, 0);
-							if (rc) goto xout;
-							rc = add_connpt_name(model, y, x, pf("%s_%cQ", pref[k], i),
-								dup_warn, 0, 0);
-							if (rc) goto xout;
-							rc = add_connpt_name(model, y, x, pf("%s_%cX", pref[k], i),
-								dup_warn, 0, 0);
-							if (rc) goto xout;
-						}
 					}
 				}
 			}

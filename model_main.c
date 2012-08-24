@@ -49,7 +49,6 @@ int fpga_build_model(struct fpga_model* model, int fpga_rows,
 
 	rc = init_switches(model, /*routing_sw*/ !s_high_speed_replicate);
 	if (rc) FAIL(rc);
-
 	return 0;
 fail:
 	return rc;

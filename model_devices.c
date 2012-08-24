@@ -9,135 +9,12 @@
 #include "model.h"
 #include "control.h"
 
-void free_devices(struct fpga_model* model)
-{
-	int i, j;
-	for (i = 0; i < model->x_width * model->y_height; i++) {
-		if (!model->tiles[i].num_devs)
-			continue;
-		EXIT(!model->tiles[i].devs);
-		for (j = 0; j < model->tiles[i].num_devs; j++) {
-			if (model->tiles[i].devs[j].type != DEV_LOGIC)
-				continue;
-			free(model->tiles[i].devs[i].logic.A6_lut);
-			model->tiles[i].devs[i].logic.A6_lut = 0;
-			free(model->tiles[i].devs[i].logic.B6_lut);
-			model->tiles[i].devs[i].logic.B6_lut = 0;
-			free(model->tiles[i].devs[i].logic.C6_lut);
-			model->tiles[i].devs[i].logic.C6_lut = 0;
-			free(model->tiles[i].devs[i].logic.D6_lut);
-			model->tiles[i].devs[i].logic.D6_lut = 0;
-		}
-		free(model->tiles[i].devs);
-		model->tiles[i].devs = 0;
-		model->tiles[i].num_devs = 0;
-	}
-}
-
-static int init_iob(struct fpga_model* model, int y, int x,
-	int idx, int subtype)
-{
-	struct fpga_tile* tile;
-	const char* prefix;
-	int type_idx, rc;
-	char tmp_str[128];
-
-	tile = YX_TILE(model, y, x);
-	tile->devs[idx].iob.subtype = subtype;
-	type_idx = fpga_dev_typecount(model, y, x, DEV_IOB, idx);
-	if (!y)
-		prefix = "TIOB";
-	else if (y == model->y_height - BOT_OUTER_ROW)
-		prefix = "BIOB";
-	else if (x == 0)
-		prefix = "LIOB";
-	else if (x == model->x_width - RIGHT_OUTER_O)
-		prefix = "RIOB";
-	else
-		FAIL(EINVAL);
-
-	snprintf(tmp_str, sizeof(tmp_str), "%s_O%i_PINW", prefix, type_idx);
-	rc = add_connpt_name(model, y, x, tmp_str, /*dup_warn*/ 1,
-		&tile->devs[idx].iob.pinw_in_O, 0);
-	if (rc) FAIL(rc);
-
-	snprintf(tmp_str, sizeof(tmp_str), "%s_T%i_PINW", prefix, type_idx);
-	rc = add_connpt_name(model, y, x, tmp_str, /*dup_warn*/ 1,
-		&tile->devs[idx].iob.pinw_in_T, 0);
-	if (rc) FAIL(rc);
-	snprintf(tmp_str, sizeof(tmp_str), "%s_IBUF%i_PINW", prefix, type_idx);
-	rc = add_connpt_name(model, y, x, tmp_str, /*dup_warn*/ 1,
-		&tile->devs[idx].iob.pinw_out_I, 0);
-	if (rc) FAIL(rc);
-	snprintf(tmp_str, sizeof(tmp_str), "%s_PADOUT%i", prefix, type_idx);
-	rc = add_connpt_name(model, y, x, tmp_str, /*dup_warn*/ 1,
-		&tile->devs[idx].iob.pinw_out_PADOUT, 0);
-	if (rc) FAIL(rc);
-	snprintf(tmp_str, sizeof(tmp_str), "%s_DIFFI_IN%i", prefix, type_idx);
-	rc = add_connpt_name(model, y, x, tmp_str, /*dup_warn*/ 1,
-		&tile->devs[idx].iob.pinw_in_DIFFI_IN, 0);
-	if (rc) FAIL(rc);
-	snprintf(tmp_str, sizeof(tmp_str), "%s_DIFFO_IN%i", prefix, type_idx);
-	rc = add_connpt_name(model, y, x, tmp_str, /*dup_warn*/ 1,
-		&tile->devs[idx].iob.pinw_in_DIFFO_IN, 0);
-	if (rc) FAIL(rc);
-	snprintf(tmp_str, sizeof(tmp_str), "%s_DIFFO_OUT%i", prefix, type_idx);
-	rc = add_connpt_name(model, y, x, tmp_str, /*dup_warn*/ 1,
-		&tile->devs[idx].iob.pinw_out_DIFFO_OUT, 0);
-	if (rc) FAIL(rc);
-
-	if (!x && y == model->center_y - CENTER_TOP_IOB_O && type_idx == 1)
-		strcpy(tmp_str, "LIOB_TOP_PCI_RDY0");
-	else if (!x && y == model->center_y + CENTER_BOT_IOB_O && type_idx == 0)
-		strcpy(tmp_str, "LIOB_BOT_PCI_RDY0");
-	else if (x == model->x_width-RIGHT_OUTER_O && y == model->center_y - CENTER_TOP_IOB_O && type_idx == 0)
-		strcpy(tmp_str, "RIOB_BOT_PCI_RDY0");
-	else if (x == model->x_width-RIGHT_OUTER_O && y == model->center_y + CENTER_BOT_IOB_O && type_idx == 1)
-		strcpy(tmp_str, "RIOB_TOP_PCI_RDY1");
-	else {
-		snprintf(tmp_str, sizeof(tmp_str),
-			"%s_PCI_RDY%i", prefix, type_idx);
-	}
-	rc = add_connpt_name(model, y, x, tmp_str, /*dup_warn*/ 1,
-		&tile->devs[idx].iob.pinw_out_PCI_RDY, 0);
-	if (rc) FAIL(rc);
-	return 0;
-fail:
-	return rc;
-}
-
-#define DEV_INCREMENT 8
-
 static int add_dev(struct fpga_model* model,
-	int y, int x, int type, int subtype)
-{
-	struct fpga_tile* tile;
-	int new_dev_i;
-	int rc;
-
-	tile = YX_TILE(model, y, x);
-	if (!(tile->num_devs % DEV_INCREMENT)) {
-		void* new_ptr = realloc(tile->devs,
-			(tile->num_devs+DEV_INCREMENT)*sizeof(*tile->devs));
-		EXIT(!new_ptr);
-		memset(new_ptr + tile->num_devs * sizeof(*tile->devs),
-			0, DEV_INCREMENT*sizeof(*tile->devs));
-		tile->devs = new_ptr;
-	}
-	new_dev_i = tile->num_devs;
-	tile->num_devs++;
-
-	// init new device
-	tile->devs[new_dev_i].type = type;
-	if (type == DEV_IOB) {
-		rc = init_iob(model, y, x, new_dev_i, subtype);
-		if (rc) FAIL(rc);
-	} else if (type == DEV_LOGIC)
-		tile->devs[new_dev_i].logic.subtype = subtype;
-	return 0;
-fail:
-	return rc;
-}
+	int y, int x, int type, int subtype);
+static int init_iob(struct fpga_model* model, int y, int x,
+	int idx, int subtype);
+static int init_logic(struct fpga_model* model, int y, int x,
+	int idx, int subtype);
 
 int init_devices(struct fpga_model* model)
 {
@@ -420,6 +297,234 @@ int init_devices(struct fpga_model* model)
 			}
 		}
 	}
+	return 0;
+fail:
+	return rc;
+}
+
+void free_devices(struct fpga_model* model)
+{
+	int i, j;
+	for (i = 0; i < model->x_width * model->y_height; i++) {
+		if (!model->tiles[i].num_devs)
+			continue;
+		EXIT(!model->tiles[i].devs);
+		for (j = 0; j < model->tiles[i].num_devs; j++) {
+			if (model->tiles[i].devs[j].type != DEV_LOGIC)
+				continue;
+			free(model->tiles[i].devs[i].logic.A6_lut);
+			model->tiles[i].devs[i].logic.A6_lut = 0;
+			free(model->tiles[i].devs[i].logic.B6_lut);
+			model->tiles[i].devs[i].logic.B6_lut = 0;
+			free(model->tiles[i].devs[i].logic.C6_lut);
+			model->tiles[i].devs[i].logic.C6_lut = 0;
+			free(model->tiles[i].devs[i].logic.D6_lut);
+			model->tiles[i].devs[i].logic.D6_lut = 0;
+		}
+		free(model->tiles[i].devs);
+		model->tiles[i].devs = 0;
+		model->tiles[i].num_devs = 0;
+	}
+}
+
+#define DEV_INCREMENT 8
+
+static int add_dev(struct fpga_model* model,
+	int y, int x, int type, int subtype)
+{
+	struct fpga_tile* tile;
+	int new_dev_i;
+	int rc;
+
+	tile = YX_TILE(model, y, x);
+	if (!(tile->num_devs % DEV_INCREMENT)) {
+		void* new_ptr = realloc(tile->devs,
+			(tile->num_devs+DEV_INCREMENT)*sizeof(*tile->devs));
+		EXIT(!new_ptr);
+		memset(new_ptr + tile->num_devs * sizeof(*tile->devs),
+			0, DEV_INCREMENT*sizeof(*tile->devs));
+		tile->devs = new_ptr;
+	}
+	new_dev_i = tile->num_devs;
+	tile->num_devs++;
+
+	// init new device
+	tile->devs[new_dev_i].type = type;
+	if (type == DEV_IOB) {
+		rc = init_iob(model, y, x, new_dev_i, subtype);
+		if (rc) FAIL(rc);
+	} else if (type == DEV_LOGIC) {
+		rc = init_logic(model, y, x, new_dev_i, subtype);
+		if (rc) FAIL(rc);
+	}
+	return 0;
+fail:
+	return rc;
+}
+
+static int init_iob(struct fpga_model* model, int y, int x,
+	int idx, int subtype)
+{
+	struct fpga_tile* tile;
+	const char* prefix;
+	int type_idx, rc;
+	char tmp_str[128];
+
+	tile = YX_TILE(model, y, x);
+	tile->devs[idx].iob.subtype = subtype;
+	type_idx = fpga_dev_typecount(model, y, x, DEV_IOB, idx);
+	if (!y)
+		prefix = "TIOB";
+	else if (y == model->y_height - BOT_OUTER_ROW)
+		prefix = "BIOB";
+	else if (x == 0)
+		prefix = "LIOB";
+	else if (x == model->x_width - RIGHT_OUTER_O)
+		prefix = "RIOB";
+	else
+		FAIL(EINVAL);
+
+	snprintf(tmp_str, sizeof(tmp_str), "%s_O%i_PINW", prefix, type_idx);
+	rc = add_connpt_name(model, y, x, tmp_str, /*dup_warn*/ 1,
+		&tile->devs[idx].iob.pinw_in_O, 0);
+	if (rc) FAIL(rc);
+
+	snprintf(tmp_str, sizeof(tmp_str), "%s_T%i_PINW", prefix, type_idx);
+	rc = add_connpt_name(model, y, x, tmp_str, /*dup_warn*/ 1,
+		&tile->devs[idx].iob.pinw_in_T, 0);
+	if (rc) FAIL(rc);
+	snprintf(tmp_str, sizeof(tmp_str), "%s_IBUF%i_PINW", prefix, type_idx);
+	rc = add_connpt_name(model, y, x, tmp_str, /*dup_warn*/ 1,
+		&tile->devs[idx].iob.pinw_out_I, 0);
+	if (rc) FAIL(rc);
+	snprintf(tmp_str, sizeof(tmp_str), "%s_PADOUT%i", prefix, type_idx);
+	rc = add_connpt_name(model, y, x, tmp_str, /*dup_warn*/ 1,
+		&tile->devs[idx].iob.pinw_out_PADOUT, 0);
+	if (rc) FAIL(rc);
+	snprintf(tmp_str, sizeof(tmp_str), "%s_DIFFI_IN%i", prefix, type_idx);
+	rc = add_connpt_name(model, y, x, tmp_str, /*dup_warn*/ 1,
+		&tile->devs[idx].iob.pinw_in_DIFFI_IN, 0);
+	if (rc) FAIL(rc);
+	snprintf(tmp_str, sizeof(tmp_str), "%s_DIFFO_IN%i", prefix, type_idx);
+	rc = add_connpt_name(model, y, x, tmp_str, /*dup_warn*/ 1,
+		&tile->devs[idx].iob.pinw_in_DIFFO_IN, 0);
+	if (rc) FAIL(rc);
+	snprintf(tmp_str, sizeof(tmp_str), "%s_DIFFO_OUT%i", prefix, type_idx);
+	rc = add_connpt_name(model, y, x, tmp_str, /*dup_warn*/ 1,
+		&tile->devs[idx].iob.pinw_out_DIFFO_OUT, 0);
+	if (rc) FAIL(rc);
+
+	if (!x && y == model->center_y - CENTER_TOP_IOB_O && type_idx == 1)
+		strcpy(tmp_str, "LIOB_TOP_PCI_RDY0");
+	else if (!x && y == model->center_y + CENTER_BOT_IOB_O && type_idx == 0)
+		strcpy(tmp_str, "LIOB_BOT_PCI_RDY0");
+	else if (x == model->x_width-RIGHT_OUTER_O && y == model->center_y - CENTER_TOP_IOB_O && type_idx == 0)
+		strcpy(tmp_str, "RIOB_BOT_PCI_RDY0");
+	else if (x == model->x_width-RIGHT_OUTER_O && y == model->center_y + CENTER_BOT_IOB_O && type_idx == 1)
+		strcpy(tmp_str, "RIOB_TOP_PCI_RDY1");
+	else {
+		snprintf(tmp_str, sizeof(tmp_str),
+			"%s_PCI_RDY%i", prefix, type_idx);
+	}
+	rc = add_connpt_name(model, y, x, tmp_str, /*dup_warn*/ 1,
+		&tile->devs[idx].iob.pinw_out_PCI_RDY, 0);
+	if (rc) FAIL(rc);
+	return 0;
+fail:
+	return rc;
+}
+
+static int init_logic(struct fpga_model* model, int y, int x,
+	int idx, int subtype)
+{
+	struct fpga_tile* tile;
+	const char* pre;
+	int i, j, rc;
+
+	tile = YX_TILE(model, y, x);
+	tile->devs[idx].logic.subtype = subtype;
+	if (subtype == LOGIC_M)
+		pre = "M_";
+	else if (subtype == LOGIC_L)
+		pre = "L_";
+	else if (subtype == LOGIC_X) {
+		pre = is_atx(X_FABRIC_LOGIC_XL_COL|X_CENTER_LOGIC_COL, model, x)
+			? "XX_" : "X_";
+	} else FAIL(EINVAL);
+
+	for (i = LUT_A; i <= LUT_D; i++) {
+		for (j = LUT_1; j <= LUT_6; j++) {
+			rc = add_connpt_name(model, y, x, pf("%s%c%i", pre, 'A'+i, j+1),
+				/*dup_warn*/ 1,
+				&tile->devs[idx].logic.pinw_in[i][j], 0);
+			if (rc) FAIL(rc);
+		}
+		rc = add_connpt_name(model, y, x, pf("%s%cX", pre, 'A'+i),
+			/*dup_warn*/ 1,
+			&tile->devs[idx].logic.pinw_in_X[i], 0);
+		if (rc) FAIL(rc);
+		if (subtype == LOGIC_M) {
+			rc = add_connpt_name(model, y, x, pf("%s%cI", pre, 'A'+i),
+				/*dup_warn*/ 1,
+				&tile->devs[idx].logic.pinw_in_I[i], 0);
+			if (rc) FAIL(rc);
+		} else
+			tile->devs[idx].logic.pinw_in_I[i] = STRIDX_NO_ENTRY;
+		rc = add_connpt_name(model, y, x, pf("%s%c", pre, 'A'+i),
+			/*dup_warn*/ 1,
+			&tile->devs[idx].logic.pinw_out[i], 0);
+		if (rc) FAIL(rc);
+		rc = add_connpt_name(model, y, x, pf("%s%cMUX", pre, 'A'+i),
+			/*dup_warn*/ 1,
+			&tile->devs[idx].logic.pinw_out_MUX[i], 0);
+		if (rc) FAIL(rc);
+		rc = add_connpt_name(model, y, x, pf("%s%cQ", pre, 'A'+i),
+			/*dup_warn*/ 1,
+			&tile->devs[idx].logic.pinw_out_Q[i], 0);
+		if (rc) FAIL(rc);
+	}
+	rc = add_connpt_name(model, y, x, pf("%sCLK", pre),
+		/*dup_warn*/ 1,
+		&tile->devs[idx].logic.pinw_in_CLK, 0);
+	if (rc) FAIL(rc);
+	rc = add_connpt_name(model, y, x, pf("%sCE", pre),
+		/*dup_warn*/ 1,
+		&tile->devs[idx].logic.pinw_in_CE, 0);
+	if (rc) FAIL(rc);
+	rc = add_connpt_name(model, y, x, pf("%sSR", pre),
+		/*dup_warn*/ 1,
+		&tile->devs[idx].logic.pinw_in_SR, 0);
+	if (rc) FAIL(rc);
+	if (subtype == LOGIC_M) {
+		rc = add_connpt_name(model, y, x, pf("%sWE", pre),
+			/*dup_warn*/ 1,
+			&tile->devs[idx].logic.pinw_in_WE, 0);
+		if (rc) FAIL(rc);
+	} else
+		tile->devs[idx].logic.pinw_in_WE = STRIDX_NO_ENTRY;
+	if (subtype != LOGIC_X
+	    && ((is_atx(X_ROUTING_NO_IO, model, x-1)
+		 && is_aty(Y_INNER_BOTTOM, model, y+1))
+		|| (!is_atx(X_ROUTING_NO_IO, model, x-1)
+		    && is_aty(Y_BOT_INNER_IO, model, y+1)))) {
+		rc = add_connpt_name(model, y, x, pf("%sCIN", pre),
+			/*dup_warn*/ 1,
+			&tile->devs[idx].logic.pinw_in_CIN, 0);
+		if (rc) FAIL(rc);
+	} else
+		tile->devs[idx].logic.pinw_in_CIN = STRIDX_NO_ENTRY;
+	if (subtype == LOGIC_M) {
+		rc = add_connpt_name(model, y, x, "M_COUT",
+			/*dup_warn*/ 1,
+			&tile->devs[idx].logic.pinw_out_COUT, 0);
+		if (rc) FAIL(rc);
+	} else if (subtype == LOGIC_L) {
+		rc = add_connpt_name(model, y, x, "XL_COUT",
+			/*dup_warn*/ 1,
+			&tile->devs[idx].logic.pinw_out_COUT, 0);
+		if (rc) FAIL(rc);
+	} else 
+		tile->devs[idx].logic.pinw_out_COUT = STRIDX_NO_ENTRY;
 	return 0;
 fail:
 	return rc;
