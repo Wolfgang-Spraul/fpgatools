@@ -410,6 +410,15 @@ void fpga_switch_enable(struct fpga_model* model, int y, int x,
 	YX_TILE(model, y, x)->switches[swidx] |= SWITCH_ON;
 }
 
+int fpga_switch_set_enable(struct fpga_model* model, int y, int x,
+	struct sw_set* set)
+{
+	int i;
+	for (i = 0; i < set->len; i++)
+		fpga_switch_enable(model, y, x, set->sw[i]);
+	return 0;
+}
+
 void fpga_switch_disable(struct fpga_model* model, int y, int x,
 	swidx_t swidx)
 {
@@ -448,35 +457,35 @@ const char* fmt_sw(struct fpga_model* model, int y, int x, swidx_t sw, int from_
 	return sw_buf[last_buf];
 }
 
-#define FMT_SWCHAIN_BUF_SIZE	2048
-#define FMT_SWCHAIN_NUM_BUFS	8
+#define FMT_SWSET_BUF_SIZE	2048
+#define FMT_SWSET_NUM_BUFS	8
 
-const char* fmt_swchain(struct fpga_model* model, int y, int x,
-	swidx_t* sw, int sw_size, int from_to)
+const char* fmt_swset(struct fpga_model* model, int y, int x,
+	struct sw_set* set, int from_to)
 {
-	static char buf[FMT_SWCHAIN_NUM_BUFS][FMT_SWCHAIN_BUF_SIZE];
+	static char buf[FMT_SWSET_NUM_BUFS][FMT_SWSET_BUF_SIZE];
 	static int last_buf = 0;
 	int i, o;
 
-	last_buf = (last_buf+1)%FMT_SWCHAIN_NUM_BUFS;
+	last_buf = (last_buf+1)%FMT_SWSET_NUM_BUFS;
 	o = 0;
-	if (sw_size) {
+	if (set->len) {
 		if (from_to == SW_FROM) {
-			strcpy(&buf[last_buf][o], fpga_switch_str(model, y, x, sw[0], SW_FROM));
+			strcpy(&buf[last_buf][o], fpga_switch_str(model, y, x, set->sw[0], SW_FROM));
 			o += strlen(&buf[last_buf][o]);
-			for (i = 0; i < sw_size; i++) {
+			for (i = 0; i < set->len; i++) {
 				buf[last_buf][o++] = ' ';
-				strcpy(&buf[last_buf][o], fmt_sw(model, y, x, sw[i], SW_FROM));
+				strcpy(&buf[last_buf][o], fmt_sw(model, y, x, set->sw[i], SW_FROM));
 				o += strlen(&buf[last_buf][o]);
 			}
 		} else { // SW_TO
-			for (i = sw_size-1; i >= 0; i--) {
-				if (i < sw_size-1) buf[last_buf][o++] = ' ';
-				strcpy(&buf[last_buf][o], fmt_sw(model, y, x, sw[i], SW_TO));
+			for (i = set->len-1; i >= 0; i--) {
+				if (i < set->len-1) buf[last_buf][o++] = ' ';
+				strcpy(&buf[last_buf][o], fmt_sw(model, y, x, set->sw[i], SW_TO));
 				o += strlen(&buf[last_buf][o]);
 			}
 			buf[last_buf][o++] = ' ';
-			strcpy(&buf[last_buf][o], fpga_switch_str(model, y, x, sw[0], SW_TO));
+			strcpy(&buf[last_buf][o], fpga_switch_str(model, y, x, set->sw[0], SW_TO));
 			o += strlen(&buf[last_buf][o]);
 		}
 	}
@@ -645,8 +654,8 @@ void printf_swchain(struct fpga_model* model, int y, int x,
 		{ .model = model, .y = y, .x = x, .start_switch = sw,
 		  .from_to = from_to, .max_chain_size = max_depth};
 	while (fpga_switch_chain(&chain) != NO_CONN) {
-		printf("sw %s\n", fmt_swchain(model, y, x,
-			chain.set.sw, chain.set.len, from_to));
+		printf("sw %s\n", fmt_swset(model, y, x,
+			&chain.set, from_to));
 	}
 }
 
@@ -657,8 +666,8 @@ void printf_swconns(struct fpga_model* model, int y, int x,
 		{ .model = model, .y = y, .x = x, .start_switch = sw,
 		  .max_switch_depth = max_depth };
 	while (fpga_switch_conns(&conns) != NO_CONN) {
-		printf("sw %s conn y%02i x%02i %s\n", fmt_swchain(model, y, x,
-			conns.chain.set.sw, conns.chain.set.len, SW_FROM),
+		printf("sw %s conn y%02i x%02i %s\n", fmt_swset(model, y, x,
+			&conns.chain.set, SW_FROM),
 			conns.dest_y, conns.dest_x,
 			strarray_lookup(&model->str, conns.dest_str_i));
 	}
@@ -673,10 +682,10 @@ int fpga_switch_to_yx(struct switch_to_yx* p)
 		  (p->flags & SWTO_YX_MAX_SWITCH_DEPTH)
 			? p->max_switch_depth : MAX_SW_DEPTH };
 
-	int best_y, best_x, best_chain_size, best_distance, distance;
+	struct sw_set best_set;
+	int best_y, best_x, best_distance, distance;
 	int best_num_dests;
 	str16_t best_connpt;
-	swidx_t best_chain[MAX_SW_DEPTH];
 
 	best_y = -1;
 	while (fpga_switch_conns(&conns) != NO_CONN) {
@@ -691,12 +700,10 @@ int fpga_switch_to_yx(struct switch_to_yx* p)
 					continue;
 				else if (conns.num_dests > best_num_dests)
 					continue;
-				else if (conns.chain.set.len > best_chain_size)
+				else if (conns.chain.set.len > best_set.len)
 					continue;
 			}
-			memcpy(best_chain, conns.chain.set.sw,
-				conns.chain.set.len*sizeof(*best_chain));
-			best_chain_size = conns.chain.set.len;
+			best_set = conns.chain.set;
 			best_y = conns.dest_y;
 			best_x = conns.dest_x;
 			best_num_dests = conns.num_dests;
@@ -708,10 +715,9 @@ int fpga_switch_to_yx(struct switch_to_yx* p)
 		}
 	}
 	if (best_y == -1)
-		p->chain_size = 0;
+		p->set.len = 0;
 	else {
-		memcpy(p->chain, best_chain, best_chain_size*sizeof(*p->chain));
-		p->chain_size = best_chain_size;
+		p->set = best_set;
 		p->dest_y = best_y;
 		p->dest_x = best_x;
 		p->dest_connpt = best_connpt;

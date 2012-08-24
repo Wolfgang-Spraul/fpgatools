@@ -631,7 +631,9 @@ int printf_switches(FILE* f, struct fpga_model* model, int enabled_only)
 		for (y = 0; y < model->y_height; y++) {
 			tile = YX_TILE(model, y, x);
 
-			first_switch_printed = 0;
+			// no newlines between tiles in enabled_only mode
+			first_switch_printed = enabled_only;
+
 			for (i = 0; i < tile->num_switches; i++) {
 				from_connpt_o = (tile->switches[i] & 0x3FFF8000) >> 15;
 				to_connpt_o = tile->switches[i] & 0x00007FFF;
@@ -654,9 +656,10 @@ int printf_switches(FILE* f, struct fpga_model* model, int enabled_only)
 					first_switch_printed = 1;	
 					fprintf(f, "\n");
 				}
-				fprintf(f, "sw y%02i x%02i %s %s %s\n",
+				fprintf(f, "sw y%02i x%02i %s %s %s%s\n",
 					y, x, from_str, is_bidirectional
-					? "<->" : "->", to_str);
+					? "<->" : "->", to_str,
+					is_on ? " on" : "");
 			}
 		}
 	}

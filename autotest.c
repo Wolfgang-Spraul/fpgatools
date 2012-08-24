@@ -167,7 +167,7 @@ int main(int argc, char** argv)
 	rc = diff_printf(&tstate);
 	if (rc) FAIL(rc);
 
-	printf("P46 I pinw %s\n", strarray_lookup(&model.str, P46_dev->iob.pinw_out_I));
+printf("P46 I pinw %s\n", strarray_lookup(&model.str, P46_dev->iob.pinw_out_I));
 
 	switch_to.yx_req = YX_DEV_ILOGIC;
 	switch_to.flags = SWTO_YX_DEF;
@@ -177,7 +177,10 @@ int main(int argc, char** argv)
 	switch_to.start_switch = P46_dev->iob.pinw_out_I;
 	rc = fpga_switch_to_yx(&switch_to);
 	if (rc) FAIL(rc);
-	printf(" %s\n", fmt_swchain(&model, switch_to.y, switch_to.x, switch_to.chain, switch_to.chain_size, SW_FROM));
+	rc = fpga_switch_set_enable(&model, switch_to.y, switch_to.x, &switch_to.set);
+	if (rc) FAIL(rc);
+
+printf(" %s\n", fmt_swset(&model, switch_to.y, switch_to.x, &switch_to.set, SW_FROM));
 
 	switch_to.yx_req = YX_ROUTING_TILE;
 	switch_to.flags = SWTO_YX_DEF;
@@ -186,7 +189,10 @@ int main(int argc, char** argv)
 	switch_to.start_switch = switch_to.dest_connpt;
 	rc = fpga_switch_to_yx(&switch_to);
 	if (rc) FAIL(rc);
-	printf(" %s\n", fmt_swchain(&model, switch_to.y, switch_to.x, switch_to.chain, switch_to.chain_size, SW_FROM));
+	rc = fpga_switch_set_enable(&model, switch_to.y, switch_to.x, &switch_to.set);
+	if (rc) FAIL(rc);
+
+printf(" %s\n", fmt_swset(&model, switch_to.y, switch_to.x, &switch_to.set, SW_FROM));
 
 	switch_to.yx_req = YX_ROUTING_TO_FABLOGIC;
 	switch_to.flags = SWTO_YX_CLOSEST;
@@ -195,7 +201,10 @@ int main(int argc, char** argv)
 	switch_to.start_switch = switch_to.dest_connpt;
 	rc = fpga_switch_to_yx(&switch_to);
 	if (rc) FAIL(rc);
-	printf(" %s\n", fmt_swchain(&model, switch_to.y, switch_to.x, switch_to.chain, switch_to.chain_size, SW_FROM));
+	rc = fpga_switch_set_enable(&model, switch_to.y, switch_to.x, &switch_to.set);
+	if (rc) FAIL(rc);
+
+printf(" %s\n", fmt_swset(&model, switch_to.y, switch_to.x, &switch_to.set, SW_FROM));
 
 	switch_to.yx_req = YX_DEV_LOGIC;
 	switch_to.flags = SWTO_YX_TARGET_CONNPT|SWTO_YX_MAX_SWITCH_DEPTH;
@@ -217,7 +226,10 @@ int main(int argc, char** argv)
 	}
 	rc = fpga_switch_to_yx(&switch_to);
 	if (rc) FAIL(rc);
-	printf(" %s\n", fmt_swchain(&model, switch_to.y, switch_to.x, switch_to.chain, switch_to.chain_size, SW_FROM));
+	rc = fpga_switch_set_enable(&model, switch_to.y, switch_to.x, &switch_to.set);
+	if (rc) FAIL(rc);
+
+printf(" %s\n", fmt_swset(&model, switch_to.y, switch_to.x, &switch_to.set, SW_FROM));
 
 	{
 		struct sw_chain c = {
@@ -227,8 +239,13 @@ int main(int argc, char** argv)
 			.from_to = SW_FROM, .max_chain_size = MAX_SW_DEPTH };
 		if (fpga_switch_chain(&c) == NO_CONN) FAIL(EINVAL);
 		if (c.set.len == 0) { HERE(); FAIL(EINVAL); }
-		printf(" %s\n", fmt_swchain(&model, c.y, c.x, c.set.sw, c.set.len, SW_FROM));
+		rc = fpga_switch_set_enable(&model, c.y, c.x, &c.set);
+		if (rc) FAIL(rc);
+printf(" %s\n", fmt_swset(&model, c.y, c.x, &c.set, SW_FROM));
 	}
+
+	rc = diff_printf(&tstate);
+	if (rc) FAIL(rc);
 
 	printf("\n");
 	printf("P48 O pinw %s\n", strarray_lookup(&model.str, P48_dev->iob.pinw_in_O));
