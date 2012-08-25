@@ -75,6 +75,8 @@ struct fpga_model
 	struct fpga_tile* tiles;
 	struct hashed_strarray str;
 
+	struct fpga_net* nets;
+
 	// tmp_str will be allocated to hold max(x_width, y_height)
 	// pointers, useful for string seeding when running wires.
 	const char** tmp_str;
@@ -330,6 +332,21 @@ enum fpgadev_type
 	DEV_OCT_CALIBRATE,
 	DEV_SPI_ACCESS
 };
+
+// We use two types of device indices, one is a flat index
+// into the tile->devs array (dev_idx_t), the other
+// one counts up from 0 through devices of one particular
+// type in the tile. The first logic device has type_idx == 0,
+// the second logic device has type_idx == 1, etc, no matter
+// at which index they are in the device array. The type indices
+// are used in the floorplan, the flat array indices internally
+// in memory.
+
+typedef int dev_idx_t;
+typedef int dev_type_idx_t;
+
+#define NO_DEV -1
+#define FPGA_DEV(model, y, x, dev_idx)	(&YX_TILE(model, y, x)->devs[dev_idx])
 
 // M and L device is always at type index 0, X device
 // is always at type index 1.

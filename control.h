@@ -17,14 +17,14 @@ const char* fpga_iob_sitename(struct fpga_model* model, int y, int x,
 // 2. The index of the device within devices of the same type in the tile.
 //
 
-// Looks up a device pointer based on the type index.
-struct fpga_device* fpga_dev(struct fpga_model* model,
-	int y, int x, enum fpgadev_type type, int type_idx);
+// Looks up a device index based on the type index.
+dev_idx_t fpga_dev_idx(struct fpga_model* model,
+	int y, int x, enum fpgadev_type type, dev_type_idx_t type_idx);
 
-// Counts how many devices of type 'type' are in the device
-// array up to devidx.
-int fpga_dev_typecount(struct fpga_model* model, int y, int x,
-	enum fpgadev_type type, int dev_idx);
+// Counts how many devices of the same type as dev_idx are in
+// the array up to dev_idx.
+dev_type_idx_t fpga_dev_typeidx(struct fpga_model* model, int y, int x,
+	dev_idx_t dev_idx);
 
 enum { A6_LUT, B6_LUT, C6_LUT, D6_LUT };
 // lut_len can be -1 (ZTERM)
@@ -40,6 +40,10 @@ int fpga_connpt_find(struct fpga_model* model, int y, int x,
 
 void fpga_conn_dest(struct fpga_model* model, int y, int x,
 	int connpt_dest_idx, int* dest_y, int* dest_x, str16_t* str_i);
+
+//
+// switches
+//
 
 typedef int swidx_t; // swidx_t is an index into the uint32_t switches array
 #define MAX_SW_DEPTH 64 // largest seen so far was 20
@@ -161,3 +165,47 @@ struct switch_to_yx
 };
 
 int fpga_switch_to_yx(struct switch_to_yx* p);
+
+//
+// nets
+//
+
+// The last m1 soc has about 20k nets with about 470k
+// connection points. The largest net has about 110
+// connection points. For now we work with a simple
+// fixed-size array, we can later make this more dynamic
+// depending on which load on the memory manager is better.
+#define MAX_NET_SIZE	128
+
+#define NET_IDX_IS_PINW	0x8000
+#define NET_IDX_MASK	0x7FFF
+
+struct net_el
+{
+	uint16_t y;
+	uint16_t x;
+	// idx is either an index into tile->switches[]
+	// if bit15 (NET_IDX_IS_PINW) is off, or an index
+	// into dev->pinw[] if bit15 is on.
+	uint16_t idx;
+	uint16_t dev_idx; // only used if idx&NET_IDX_IS_PINW
+};
+
+struct fpga_net
+{
+	int size;
+	struct net_el el[MAX_NET_SIZE];
+};
+
+typedef int net_idx_t;
+#define NO_NET 0
+
+int fpga_net_new(struct fpga_model* model, net_idx_t* new_idx);
+// start a new enumeration by calling with last==NO_NET
+int fpga_net_enum(struct fpga_model* model, net_idx_t last, net_idx_t* next);
+struct fpga_net* fpga_net_get(struct fpga_model* model, net_idx_t net_i);
+int fpga_net_add_port(struct fpga_model* model, net_idx_t net_i,
+	int y, int x, dev_idx_t dev_idx, pinw_idx_t pinw_idx);
+int fpga_net_add_switches(struct fpga_model* model, net_idx_t net_i,
+	const struct sw_set* set);
+void fpga_net_free_all(struct fpga_model* model);

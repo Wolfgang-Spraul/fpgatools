@@ -772,7 +772,7 @@ static void read_dev_line(struct fpga_model* model, const char* line, int start)
 	int coord_end, y_coord, x_coord;
 	int type_beg, type_end, idx_beg, idx_end;
 	enum fpgadev_type dev_type;
-	int dev_idx, words_consumed;
+	int dev_type_idx, dev_idx, words_consumed;
 	struct fpga_device* dev_ptr;
 	int next_beg, next_end, second_beg, second_end;
 
@@ -788,12 +788,13 @@ static void read_dev_line(struct fpga_model* model, const char* line, int start)
 		return;
 	}
 	dev_type = to_type(&line[type_beg], type_end-type_beg);
-	dev_idx = to_i(&line[idx_beg], idx_end-idx_beg);
-	dev_ptr = fpga_dev(model, y_coord, x_coord, dev_type, dev_idx);
-	if (!dev_ptr) {
+	dev_type_idx = to_i(&line[idx_beg], idx_end-idx_beg);
+	dev_idx = fpga_dev_idx(model, y_coord, x_coord, dev_type, dev_type_idx);
+	if (dev_idx == NO_DEV) {
 		fprintf(stderr, "error %i: %s", __LINE__, line);
 		return;
 	}
+	dev_ptr = FPGA_DEV(model, y_coord, x_coord, dev_idx);
 
 	next_end = idx_end;
 	while (next_word(line, next_end, &next_beg, &next_end),

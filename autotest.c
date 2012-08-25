@@ -107,7 +107,7 @@ int main(int argc, char** argv)
 {
 	struct fpga_model model;
 	struct fpga_device* P46_dev, *P48_dev, *logic_dev;
-	int P46_y, P46_x, P46_idx, P48_y, P48_x, P48_idx, rc;
+	int P46_y, P46_x, P46_idx, P48_y, P48_x, P48_idx, dev_idx, rc;
 	struct test_state tstate;
 	struct switch_to_yx switch_to;
 
@@ -137,8 +137,9 @@ int main(int argc, char** argv)
 	// configure P46
 	rc = fpga_find_iob(&model, "P46", &P46_y, &P46_x, &P46_idx);
 	if (rc) FAIL(rc);
-	P46_dev = fpga_dev(&model, P46_y, P46_x, DEV_IOB, P46_idx);
-	if (!P46_dev) FAIL(EINVAL);
+	dev_idx = fpga_dev_idx(&model, P46_y, P46_x, DEV_IOB, P46_idx);
+	if (dev_idx == NO_DEV) FAIL(EINVAL);
+	P46_dev = FPGA_DEV(&model, P46_y, P46_x, dev_idx);
 	P46_dev->instantiated = 1;
 	strcpy(P46_dev->iob.istandard, IO_LVCMOS33);
 	P46_dev->iob.bypass_mux = BYPASS_MUX_I;
@@ -147,8 +148,9 @@ int main(int argc, char** argv)
 	// configure P48
 	rc = fpga_find_iob(&model, "P48", &P48_y, &P48_x, &P48_idx);
 	if (rc) FAIL(rc);
-	P48_dev = fpga_dev(&model, P48_y, P48_x, DEV_IOB, P48_idx);
-	if (!P48_dev) FAIL(EINVAL);
+	dev_idx = fpga_dev_idx(&model, P48_y, P48_x, DEV_IOB, P48_idx);
+	if (dev_idx == NO_DEV) FAIL(EINVAL);
+	P48_dev = FPGA_DEV(&model, P48_y, P48_x, dev_idx);
 	P48_dev->instantiated = 1;
 	strcpy(P48_dev->iob.ostandard, IO_LVCMOS33);
 	P48_dev->iob.drive_strength = 12;
@@ -157,8 +159,9 @@ int main(int argc, char** argv)
 	P48_dev->iob.suspend = SUSP_3STATE;
 
 	// configure logic
-	logic_dev = fpga_dev(&model, /*y*/ 68, /*x*/ 13, DEV_LOGIC, DEV_LOGX);
-	if (!logic_dev) FAIL(EINVAL);
+	dev_idx = fpga_dev_idx(&model, /*y*/ 68, /*x*/ 13, DEV_LOGIC, DEV_LOGX);
+	if (dev_idx == NO_DEV) FAIL(EINVAL);
+	logic_dev = FPGA_DEV(&model, /*y*/ 68, /*x*/ 13, dev_idx);
 	logic_dev->instantiated = 1;
 	logic_dev->logic.D_used = 1;
 	rc = fpga_set_lut(&model, logic_dev, D6_LUT, "A3", ZTERM);

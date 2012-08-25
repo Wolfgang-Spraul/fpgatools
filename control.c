@@ -200,34 +200,35 @@ const char* fpga_iob_sitename(struct fpga_model* model, int y, int x,
 	return 0;
 }
 
-struct fpga_device* fpga_dev(struct fpga_model* model,
-	int y, int x, enum fpgadev_type type, int type_idx)
+dev_idx_t fpga_dev_idx(struct fpga_model* model,
+	int y, int x, enum fpgadev_type type, dev_type_idx_t type_idx)
 {
 	struct fpga_tile* tile;
-	int type_count, i;
+	dev_type_idx_t type_count;
+	dev_idx_t i;
 
 	tile = YX_TILE(model, y, x);
 	type_count = 0;
 	for (i = 0; i < tile->num_devs; i++) {
 		if (tile->devs[i].type == type) {
 			if (type_count == type_idx)
-				return &tile->devs[i];
+				return i;
 			type_count++;
 		}
 	}
-	return 0;
+	return NO_DEV;
 }
 
-int fpga_dev_typecount(struct fpga_model* model, int y, int x,
-	enum fpgadev_type type, int dev_idx)
+dev_type_idx_t fpga_dev_typeidx(struct fpga_model* model, int y, int x,
+	dev_idx_t dev_idx)
 {
 	struct fpga_tile* tile;
-	int type_count, i;
+	dev_type_idx_t type_count, i;
 
 	tile = YX_TILE(model, y, x);
 	type_count = 0;
 	for (i = 0; i < dev_idx; i++) {
-		if (tile->devs[i].type == type)
+		if (tile->devs[i].type == tile->devs[dev_idx].type)
 			type_count++;
 	}
 	return type_count;
@@ -748,4 +749,38 @@ int fpga_switch_to_yx(struct switch_to_yx* p)
 		p->dest_connpt = best_connpt;
 	}
 	return 0;
+}
+
+int fpga_net_new(struct fpga_model* model, net_idx_t* new_idx)
+{
+	return -1;
+}
+
+int fpga_net_enum(struct fpga_model* model, net_idx_t last, net_idx_t* next)
+{
+	*next = NO_NET;
+	return 0;
+}
+
+struct fpga_net* fpga_net_get(struct fpga_model* model, net_idx_t net_i)
+{
+	return 0;
+}
+
+int fpga_net_add_port(struct fpga_model* model, net_idx_t net_i,
+	int y, int x, dev_idx_t dev_idx, pinw_idx_t pinw_idx)
+{
+	return -1;
+}
+
+int fpga_net_add_switches(struct fpga_model* model, net_idx_t net_i,
+	const struct sw_set* set)
+{
+	return -1;
+}
+
+void fpga_net_free_all(struct fpga_model* model)
+{
+	free(model->nets);
+	model->nets = 0;
 }

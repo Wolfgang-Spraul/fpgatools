@@ -424,7 +424,7 @@ static int init_iob(struct fpga_model* model, int y, int x,
 
 	tile = YX_TILE(model, y, x);
 	tile->devs[idx].iob.subtype = subtype;
-	type_idx = fpga_dev_typecount(model, y, x, DEV_IOB, idx);
+	type_idx = fpga_dev_typeidx(model, y, x, idx);
 	if (!y)
 		prefix = "TIOB";
 	else if (y == model->y_height - BOT_OUTER_ROW)

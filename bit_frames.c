@@ -75,7 +75,7 @@ static struct bit_pos s_default_bits[] = {
 
 int extract_model(struct fpga_model* model, struct fpga_bits* bits)
 {
-	int i, num_iobs, iob_y, iob_x, iob_idx, row, row_pos, rc;
+	int i, num_iobs, iob_y, iob_x, iob_idx, dev_idx, row, row_pos, rc;
 	int x, y, byte_off;
 	uint32_t* u32_p;
 	uint8_t* u8_p;
@@ -102,8 +102,9 @@ int extract_model(struct fpga_model* model, struct fpga_bits* bits)
 		}
 		rc = fpga_find_iob(model, iob_sitename, &iob_y, &iob_x, &iob_idx);
 		if (rc) FAIL(rc);
-		dev = fpga_dev(model, iob_y, iob_x, DEV_IOB, iob_idx);
-		if (!dev) FAIL(rc);
+		dev_idx = fpga_dev_idx(model, iob_y, iob_x, DEV_IOB, iob_idx);
+		if (dev_idx == NO_DEV) FAIL(EINVAL);
+		dev = FPGA_DEV(model, iob_y, iob_x, dev_idx);
 
 		// we only support 2 hardcoded types of IOB right now
 		// todo: bit 7 goes on when out-net connected?
@@ -173,8 +174,9 @@ int extract_model(struct fpga_model* model, struct fpga_bits* bits)
 				clear_bit(bits, /*row*/ 0, /*major*/ 17,
 					/*minor*/ 22, /*bit_i*/ 980);
 
-				dev = fpga_dev(model, y, x, DEV_LOGIC, DEV_LOGX);
-				if (!dev) FAIL(EINVAL);
+				dev_idx = fpga_dev_idx(model, y, x, DEV_LOGIC, DEV_LOGX);
+				if (dev_idx == NO_DEV) FAIL(EINVAL);
+				dev = FPGA_DEV(model, y, x, dev_idx);
 				dev->instantiated = 1;
 				*(uint64_t*)(u8_p+26*FRAME_SIZE+byte_off) = 0;
 
