@@ -99,6 +99,9 @@ int str_cmp(const char* a, int a_len, const char* b, int b_len);
 int all_digits(const char* a, int len);
 int to_i(const char* s, int len);
 
+void printf_wrap(FILE* f, char* line, int prefix_len,
+	const char* fmt, ...);
+
 uint32_t hash_djb2(const unsigned char* str);
 
 // Strings are distributed among bins. Each bin is

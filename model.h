@@ -304,35 +304,21 @@ int pos_in_row(int y, struct fpga_model* model);
 const char* logicin_s(int wire, int routing_io);
 
 enum fpgadev_type
-{
-	DEV_NONE = 0,
-
-	DEV_LOGIC,
-	DEV_TIEOFF,
-	DEV_MACC,
-	DEV_IOB,
-	DEV_ILOGIC,
-	DEV_OLOGIC,
-	DEV_IODELAY,
-	DEV_BRAM16,
-	DEV_BRAM8,
-	DEV_BUFH,
-	DEV_BUFIO,
-	DEV_BUFIO_FB,
-	DEV_BUFPLL,
-	DEV_BUFPLL_MCB,
-	DEV_BUFGMUX,
-	DEV_BSCAN,
-	DEV_DCM,
-	DEV_PLL,
-	DEV_ICAP,
-	DEV_POST_CRC_INTERNAL,
-	DEV_STARTUP,
-	DEV_SLAVE_SPI,
-	DEV_SUSPEND_SYNC,
-	DEV_OCT_CALIBRATE,
-	DEV_SPI_ACCESS
-};
+	{ DEV_NONE = 0,
+	DEV_LOGIC, DEV_TIEOFF, DEV_MACC, DEV_IOB,
+	DEV_ILOGIC, DEV_OLOGIC, DEV_IODELAY, DEV_BRAM16, DEV_BRAM8,
+	DEV_BUFH, DEV_BUFIO, DEV_BUFIO_FB, DEV_BUFPLL, DEV_BUFPLL_MCB,
+	DEV_BUFGMUX, DEV_BSCAN, DEV_DCM, DEV_PLL, DEV_ICAP,
+	DEV_POST_CRC_INTERNAL, DEV_STARTUP, DEV_SLAVE_SPI,
+	DEV_SUSPEND_SYNC, DEV_OCT_CALIBRATE, DEV_SPI_ACCESS };
+#define FPGA_DEV_STR \
+	{ 0, \
+	  "LOGIC", "TIEOFF", "MACC", "IOB", \
+	  "ILOGIC", "OLOGIC", "IODELAY", "BRAM16", "BRAM8", \
+	  "BUFH", "BUFIO", "BUFIO_FB", "BUFPLL", "BUFPLL_MCB", \
+	  "BUFGMUX", "BSCAN", "DCM", "PLL", "ICAP", \
+	  "POST_CRC_INTERNAL", "STARTUP", "SLAVE_SPI", \
+	  "SUSPEND_SYNC", "OCT_CALIBRATE", "SPI_ACCESS" }
 
 // We use two types of device indices, one is a flat index
 // into the tile->devs array (dev_idx_t), the other
@@ -523,6 +509,7 @@ int init_tiles(struct fpga_model* model);
 
 int init_devices(struct fpga_model* model);
 void free_devices(struct fpga_model* model);
+const char* fpgadev_str(enum fpgadev_type type);
 #define PINW_NO_IDX -1
 pinw_idx_t fpgadev_pinw_str2idx(int devtype, const char* str);
 // returns 0 when idx not found for the given devtype

@@ -37,7 +37,7 @@ int main(int argc, char** argv)
 		if (rc) goto fail;
 	}
 
-	rc = printf_switches(stdout, &model, /*enabled_only*/ 0);
+	rc = printf_switches(stdout, &model);
 	if (rc) goto fail;
 
 	return EXIT_SUCCESS;

@@ -418,6 +418,24 @@ str16_t fpga_switch_str_i(struct fpga_model* model, int y, int x,
 	return tile->conn_point_names[connpt_o*2+1];
 }
 
+const char* fpga_switch_print(struct fpga_model* model, int y, int x,
+	swidx_t swidx)
+{
+ 	enum { NUM_BUFS = 16, BUF_SIZE = 128 };
+	static char buf[NUM_BUFS][BUF_SIZE];
+	static int last_buf = 0;
+	uint32_t sw;
+
+	sw = YX_TILE(model, y, x)->switches[swidx];
+	last_buf = (last_buf+1)%NUM_BUFS;
+
+	snprintf(buf[last_buf], sizeof(*buf), "%s %s %s",
+		connpt_str(model, y, x, SW_FROM_I(sw)),
+		sw & SWITCH_BIDIRECTIONAL ? "<->" : "->",
+		connpt_str(model, y, x, SW_TO_I(sw)));
+	return buf[last_buf];
+}
+
 int fpga_switch_is_bidir(struct fpga_model* model, int y, int x,
 	swidx_t swidx)
 {
@@ -454,7 +472,8 @@ void fpga_switch_disable(struct fpga_model* model, int y, int x,
 #define SW_BUF_SIZE	256
 #define NUM_SW_BUFS	64
 
-const char* fmt_sw(struct fpga_model* model, int y, int x, swidx_t sw, int from_to)
+static const char* fmt_swset_el(struct fpga_model* model, int y, int x,
+	swidx_t sw, int from_to)
 {
 	static char sw_buf[NUM_SW_BUFS][SW_BUF_SIZE];
 	static int last_buf = 0;
@@ -472,7 +491,7 @@ const char* fmt_sw(struct fpga_model* model, int y, int x, swidx_t sw, int from_
 		// to the left side to match the physical direction.
 		strcat(midstr, (from_to == SW_TO) ? "<-" : "->");
 	}
-	// fmt_sw() prints only the destination side of the switch (!from_to),
+	// fmt_swset_el() prints only the destination side of the switch (!from_to),
 	// because it is the significant one in a chain of switches, and if the
 	// caller wants the source side they can add it outside.
 	snprintf(sw_buf[last_buf], sizeof(sw_buf[0]), "%s%s%s",
@@ -501,13 +520,15 @@ const char* fmt_swset(struct fpga_model* model, int y, int x,
 			o += strlen(&buf[last_buf][o]);
 			for (i = 0; i < set->len; i++) {
 				buf[last_buf][o++] = ' ';
-				strcpy(&buf[last_buf][o], fmt_sw(model, y, x, set->sw[i], SW_FROM));
+				strcpy(&buf[last_buf][o],
+					fmt_swset_el(model, y, x, set->sw[i], SW_FROM));
 				o += strlen(&buf[last_buf][o]);
 			}
 		} else { // SW_TO
 			for (i = set->len-1; i >= 0; i--) {
 				if (i < set->len-1) buf[last_buf][o++] = ' ';
-				strcpy(&buf[last_buf][o], fmt_sw(model, y, x, set->sw[i], SW_TO));
+				strcpy(&buf[last_buf][o],
+					fmt_swset_el(model, y, x, set->sw[i], SW_TO));
 				o += strlen(&buf[last_buf][o]);
 			}
 			buf[last_buf][o++] = ' ';
@@ -794,7 +815,8 @@ struct fpga_net* fpga_net_get(struct fpga_model* model, net_idx_t net_i)
 {
 	if (net_i <= NO_NET
 	    || net_i > model->num_nets) {
-		HERE();
+		fprintf(stderr, "%s:%i net_i %i num_nets %i\n", __FILE__,
+			__LINE__, net_i, model->num_nets);
 		return 0;
 	}
 	return &model->nets[net_i-1];

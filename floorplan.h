@@ -34,4 +34,5 @@ int printf_tiles(FILE* f, struct fpga_model* model);
 int printf_devices(FILE* f, struct fpga_model* model, int config_only);
 int printf_ports(FILE* f, struct fpga_model* model);
 int printf_conns(FILE* f, struct fpga_model* model);
-int printf_switches(FILE* f, struct fpga_model* model, int enabled_only);
+int printf_switches(FILE* f, struct fpga_model* model);
+int printf_nets(FILE* f, struct fpga_model* model);

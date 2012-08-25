@@ -5,6 +5,7 @@
 // For details see the UNLICENSE file at the root of the source tree.
 //
 
+#include <stdarg.h>
 #include "helper.h"
 #include "parts.h"
 
@@ -746,6 +747,26 @@ int to_i(const char* s, int len)
 	int num, base;
 	for (base = 1, num = 0; len; num += base*(s[--len]-'0'), base *= 10);
 	return num;
+}
+
+void printf_wrap(FILE* f, char* line, int prefix_len,
+	const char* fmt, ...)
+{
+	va_list list;
+	int i;
+
+	va_start(list, fmt);
+	i = strlen(line);
+	if (i >= 80) {
+		line[i] = '\n';
+		line[i+1] = 0;
+		fprintf(f, line);
+		line[prefix_len] = 0;
+		i = prefix_len;
+	}	
+	line[i] = ' ';
+	vsnprintf(&line[i+1], 256, fmt, list);
+	va_end(list);
 }
 
 // Dan Bernstein's hash function

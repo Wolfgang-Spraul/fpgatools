@@ -68,6 +68,8 @@ const char* fpga_switch_str(struct fpga_model* model, int y, int x,
 	swidx_t swidx, int from_to);
 str16_t fpga_switch_str_i(struct fpga_model* model, int y, int x,
 	swidx_t swidx, int from_to);
+const char* fpga_switch_print(struct fpga_model* model, int y, int x,
+	swidx_t swidx);
 int fpga_switch_is_bidir(struct fpga_model* model, int y, int x,
 	swidx_t swidx);
 int fpga_switch_is_used(struct fpga_model* model, int y, int x,
@@ -79,8 +81,6 @@ int fpga_switch_set_enable(struct fpga_model* model, int y, int x,
 void fpga_switch_disable(struct fpga_model* model, int y, int x,
 	swidx_t swidx);
 
-const char* fmt_sw(struct fpga_model* model, int y, int x,
-	swidx_t sw, int from_to);
 const char* fmt_swset(struct fpga_model* model, int y, int x,
 	struct sw_set* set, int from_to);
 

@@ -81,7 +81,7 @@ static int diff_printf(struct test_state* tstate)
 
 	rc = printf_devices(dest_f, tstate->model, /*config_only*/ 1);
 	if (rc) FAIL(rc);
-	rc = printf_switches(dest_f, tstate->model, /*enabled_only*/ 1);
+	rc = printf_nets(dest_f, tstate->model);
 	if (rc) FAIL(rc);
 
 	fclose(dest_f);
@@ -108,7 +108,7 @@ int main(int argc, char** argv)
 	struct fpga_model model;
 	struct fpga_device* P46_dev, *P48_dev, *logic_dev;
 	int P46_y, P46_x, P46_dev_idx, P46_type_idx;
-	int P48_y, P48_x, P48_dev_idx, P48_type_idx, dev_idx, rc;
+	int P48_y, P48_x, P48_dev_idx, P48_type_idx, logic_dev_idx, rc;
 	struct test_state tstate;
 	struct switch_to_yx switch_to;
 	net_idx_t P46_net;
@@ -161,9 +161,9 @@ int main(int argc, char** argv)
 	P48_dev->iob.suspend = SUSP_3STATE;
 
 	// configure logic
-	dev_idx = fpga_dev_idx(&model, /*y*/ 68, /*x*/ 13, DEV_LOGIC, DEV_LOGX);
-	if (dev_idx == NO_DEV) FAIL(EINVAL);
-	logic_dev = FPGA_DEV(&model, /*y*/ 68, /*x*/ 13, dev_idx);
+	logic_dev_idx = fpga_dev_idx(&model, /*y*/ 68, /*x*/ 13, DEV_LOGIC, DEV_LOGX);
+	if (logic_dev_idx == NO_DEV) FAIL(EINVAL);
+	logic_dev = FPGA_DEV(&model, /*y*/ 68, /*x*/ 13, logic_dev_idx);
 	logic_dev->instantiated = 1;
 	logic_dev->logic.D_used = 1;
 	rc = fpga_set_lut(&model, logic_dev, D6_LUT, "A3", ZTERM);
@@ -177,6 +177,9 @@ int main(int argc, char** argv)
 	if (rc) FAIL(rc);
 	rc = fpga_net_add_port(&model, P46_net, P46_y, P46_x,
 		P46_dev_idx, IOB_OUT_I);
+	if (rc) FAIL(rc);
+	rc = fpga_net_add_port(&model, P46_net, /*y*/ 68, /*x*/ 13,
+		logic_dev_idx, LOGIC_IN_D3);
 	if (rc) FAIL(rc);
 
 printf("P46 I pinw %s\n", strarray_lookup(&model.str, P46_dev->pinw[IOB_OUT_I]));

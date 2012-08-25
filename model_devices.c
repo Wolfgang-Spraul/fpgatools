@@ -332,13 +332,23 @@ void free_devices(struct fpga_model* model)
 		model->tiles[i].num_devs = 0;
 	}
 }
- 
+
+const char* fpgadev_str(enum fpgadev_type type)
+{
+	static const char* dev_str[] = FPGA_DEV_STR;
+
+	if (type < 0 || type >= sizeof(dev_str)/sizeof(*dev_str))
+		{ HERE(); return 0; }
+	return dev_str[type];
+}
+
 static const char* iob_pinw_str[] = IOB_PINW_STR;
 static const char* logic_pinw_str[] = LOGIC_PINW_STR;
 
 pinw_idx_t fpgadev_pinw_str2idx(int devtype, const char* str)
 {
 	int i;
+
 	if (devtype == DEV_IOB) {
 		for (i = 0; i < sizeof(iob_pinw_str)/sizeof(*iob_pinw_str); i++) {
 			if (!strcmp(iob_pinw_str[i], str))

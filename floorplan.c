@@ -61,32 +61,12 @@ int printf_tiles(FILE* f, struct fpga_model* model)
 	return 0;
 }
 
-static void printf_wrap(FILE* f, char* line, int prefix_len,
-	const char* fmt, ...)
-{
-	va_list list;
-	int i;
-
-	va_start(list, fmt);
-	i = strlen(line);
-	if (i >= 80) {
-		line[i] = '\n';
-		line[i+1] = 0;
-		fprintf(f, line);
-		line[prefix_len] = 0;
-		i = prefix_len;
-	}	
-	line[i] = ' ';
-	vsnprintf(&line[i+1], 256, fmt, list);
-	va_end(list);
-}
-
 static int printf_IOB(FILE* f, struct fpga_model* model,
 	int y, int x, int config_only)
 {
 	struct fpga_tile* tile;
-	char line[1024];
-	int type_count, plen, i;
+	char pref[256];
+	int type_count, i;
 
 	tile = YX_TILE(model, y, x);
 	type_count = 0;
@@ -97,111 +77,109 @@ static int printf_IOB(FILE* f, struct fpga_model* model,
 			type_count++;
 			continue;
 		}
-		snprintf(line, sizeof(line), "dev y%02i x%02i IOB %i",
+		snprintf(pref, sizeof(pref), "dev y%02i x%02i IOB %i",
 			y, x, type_count);
 		type_count++;
-		plen = strlen(line);
 
-		printf_wrap(f, line, plen, "type %s", 
-			tile->devs[i].iob.subtype == IOBM
-				? "M" : "S");
+		if (!config_only) {
+			fprintf(f, "%s type %s\n", pref,
+				tile->devs[i].iob.subtype == IOBM ? "M" : "S");
+		}
 		if (tile->devs[i].iob.istandard[0])
-			printf_wrap(f, line, plen, "istd %s", 
+			fprintf(f, "%s istd %s\n", pref, 
 				tile->devs[i].iob.istandard);
 		if (tile->devs[i].iob.ostandard[0])
-			printf_wrap(f, line, plen, "ostd %s", 
+			fprintf(f, "%s ostd %s\n", pref, 
 				tile->devs[i].iob.ostandard);
 		switch (tile->devs[i].iob.bypass_mux) {
 			case BYPASS_MUX_I:
-				printf_wrap(f, line, plen, "bypass_mux I");
+				fprintf(f, "%s bypass_mux I\n", pref);
 				break;
 			case BYPASS_MUX_O:
-				printf_wrap(f, line, plen, "bypass_mux O");
+				fprintf(f, "%s bypass_mux O\n", pref);
 				break;
 			case BYPASS_MUX_T:
-				printf_wrap(f, line, plen, "bypass_mux T");
+				fprintf(f, "%s bypass_mux T\n", pref);
 				break;
 			case 0: break; default: EXIT(1);
 		}
 		switch (tile->devs[i].iob.I_mux) {
 			case IMUX_I_B:
-				printf_wrap(f, line, plen, "imux I_B");
+				fprintf(f, "%s imux I_B\n", pref);
 				break;
 			case IMUX_I: 
-				printf_wrap(f, line, plen, "imux I");
+				fprintf(f, "%s imux I\n", pref);
 				break;
 			case 0: break; default: EXIT(1);
 		}
 		if (tile->devs[i].iob.drive_strength)
-			printf_wrap(f, line, plen, "strength %i",
+			fprintf(f, "%s strength %i\n", pref,
 				tile->devs[i].iob.drive_strength);
 		switch (tile->devs[i].iob.slew) {
 			case SLEW_SLOW:
-				printf_wrap(f, line, plen, "slew SLOW");
+				fprintf(f, "%s slew SLOW\n", pref);
 				break;
 			case SLEW_FAST:
-				printf_wrap(f, line, plen, "slew FAST");
+				fprintf(f, "%s slew FAST\n", pref);
 				break;
 			case SLEW_QUIETIO:
-				printf_wrap(f, line, plen, "slew QUIETIO");
+				fprintf(f, "%s slew QUIETIO\n", pref);
 				break;
 			case 0: break; default: EXIT(1);
 		}
 		if (tile->devs[i].iob.O_used)
-			printf_wrap(f, line, plen, "O_used");
+			fprintf(f, "%s O_used\n", pref);
 		switch (tile->devs[i].iob.suspend) {
 			case SUSP_LAST_VAL:
-				printf_wrap(f, line, plen, "suspend DRIVE_LAST_VALUE");
+				fprintf(f, "%s suspend DRIVE_LAST_VALUE\n", pref);
 				break;
 			case SUSP_3STATE:
-				printf_wrap(f, line, plen, "suspend 3STATE");
+				fprintf(f, "%s suspend 3STATE\n", pref);
 				break;
 			case SUSP_3STATE_PULLUP:
-				printf_wrap(f, line, plen, "suspend 3STATE_PULLUP");
+				fprintf(f, "%s suspend 3STATE_PULLUP\n", pref);
 				break;
 			case SUSP_3STATE_PULLDOWN:
-				printf_wrap(f, line, plen, "suspend 3STATE_PULLDOWN");
+				fprintf(f, "%s suspend 3STATE_PULLDOWN\n", pref);
 				break;
 			case SUSP_3STATE_KEEPER:
-				printf_wrap(f, line, plen, "suspend 3STATE_KEEPER");
+				fprintf(f, "%s suspend 3STATE_KEEPER\n", pref);
 				break;
 			case SUSP_3STATE_OCT_ON:
-				printf_wrap(f, line, plen, "suspend 3STATE_OCT_ON");
+				fprintf(f, "%s suspend 3STATE_OCT_ON\n", pref);
 				break;
 			case 0: break; default: EXIT(1);
 		}
 		switch (tile->devs[i].iob.in_term) {
 			case ITERM_NONE: 
-				printf_wrap(f, line, plen, "in_term NONE");
+				fprintf(f, "%s in_term NONE\n", pref);
 				break;
 			case ITERM_UNTUNED_25:
-				printf_wrap(f, line, plen, "in_term UNTUNED_SPLIT_25");
+				fprintf(f, "%s in_term UNTUNED_SPLIT_25\n", pref);
 				break;
 			case ITERM_UNTUNED_50:
-				printf_wrap(f, line, plen, "in_term UNTUNED_SPLIT_50");
+				fprintf(f, "%s in_term UNTUNED_SPLIT_50\n", pref);
 				break;
 			case ITERM_UNTUNED_75:
-				printf_wrap(f, line, plen, "in_term UNTUNED_SPLIT_75");
+				fprintf(f, "%s in_term UNTUNED_SPLIT_75\n", pref);
 				break;
 			case 0: break; default: EXIT(1);
 		}
 		switch (tile->devs[i].iob.out_term) {
 			case OTERM_NONE: 
-				printf_wrap(f, line, plen, "out_term NONE");
+				fprintf(f, "%s out_term NONE\n", pref);
 				break;
 			case OTERM_UNTUNED_25:
-				printf_wrap(f, line, plen, "out_term UNTUNED_25");
+				fprintf(f, "%s out_term UNTUNED_25\n", pref);
 				break;
 			case OTERM_UNTUNED_50:
-				printf_wrap(f, line, plen, "out_term UNTUNED_50");
+				fprintf(f, "%s out_term UNTUNED_50\n", pref);
 				break;
 			case OTERM_UNTUNED_75:
-				printf_wrap(f, line, plen, "out_term UNTUNED_75");
+				fprintf(f, "%s out_term UNTUNED_75\n", pref);
 				break;
 			case 0: break; default: EXIT(1);
 		}
-		strcat(line, "\n");
-		fprintf(f, line);
 	}
 	return 0;
 }
@@ -313,8 +291,8 @@ static int printf_LOGIC(FILE* f, struct fpga_model* model,
 	int y, int x, int config_only)
 {
 	struct fpga_tile* tile;
-	char line[1024];
-	int type_count, plen, i;
+	char pref[256];
+	int type_count, i;
 
 	tile = YX_TILE(model, y, x);
 	type_count = 0;
@@ -325,45 +303,44 @@ static int printf_LOGIC(FILE* f, struct fpga_model* model,
 			type_count++;
 			continue;
 		}
-		snprintf(line, sizeof(line), "dev y%02i x%02i LOGIC %i",
+		snprintf(pref, sizeof(pref), "dev y%02i x%02i LOGIC %i",
 			y, x, type_count);
 		type_count++;
-		plen = strlen(line);
 
-		switch (tile->devs[i].logic.subtype) {
-			case LOGIC_X:
-				printf_wrap(f, line, plen, "type X");
-				break;
-			case LOGIC_L:
-				printf_wrap(f, line, plen, "type L");
-				break;
-			case LOGIC_M:
-				printf_wrap(f, line, plen, "type M");
-				break;
-			default: EXIT(1);
+		if (!config_only) {
+			switch (tile->devs[i].logic.subtype) {
+				case LOGIC_X:
+					fprintf(f, "%s type X\n", pref);
+					break;
+				case LOGIC_L:
+					fprintf(f, "%s type L\n", pref);
+					break;
+				case LOGIC_M:
+					fprintf(f, "%s type M\n", pref);
+					break;
+				default: EXIT(1);
+			}
 		}
 		if (tile->devs[i].logic.A_used)
-			printf_wrap(f, line, plen, "A_used");
+			fprintf(f, "%s A_used\n", pref);
 		if (tile->devs[i].logic.B_used)
-			printf_wrap(f, line, plen, "B_used");
+			fprintf(f, "%s B_used\n", pref);
 		if (tile->devs[i].logic.C_used)
-			printf_wrap(f, line, plen, "C_used");
+			fprintf(f, "%s C_used\n", pref);
 		if (tile->devs[i].logic.D_used)
-			printf_wrap(f, line, plen, "D_used");
+			fprintf(f, "%s D_used\n", pref);
 		if (tile->devs[i].logic.A6_lut && tile->devs[i].logic.A6_lut[0])
-			printf_wrap(f, line, plen, "A6_lut %s",
+			fprintf(f, "%s A6_lut %s\n", pref,
 				tile->devs[i].logic.A6_lut);
 		if (tile->devs[i].logic.B6_lut && tile->devs[i].logic.B6_lut[0])
-			printf_wrap(f, line, plen, "B6_lut %s",
+			fprintf(f, "%s B6_lut %s\n", pref,
 				tile->devs[i].logic.B6_lut);
 		if (tile->devs[i].logic.C6_lut && tile->devs[i].logic.C6_lut[0])
-			printf_wrap(f, line, plen, "C6_lut %s",
+			fprintf(f, "%s C6_lut %s\n", pref,
 				tile->devs[i].logic.C6_lut);
 		if (tile->devs[i].logic.D6_lut && tile->devs[i].logic.D6_lut[0])
-			printf_wrap(f, line, plen, "D6_lut %s",
+			fprintf(f, "%s D6_lut %s\n", pref,
 				tile->devs[i].logic.D6_lut);
-		strcat(line, "\n");
-		fprintf(f, line);
 	}
 	return 0;
 }
@@ -438,82 +415,11 @@ int printf_devices(FILE* f, struct fpga_model* model, int config_only)
 			for (i = 0; i < tile->num_devs; i++) {
 				if (config_only && !(tile->devs[i].instantiated))
 					continue;
-				switch (tile->devs[i].type) {
-					case DEV_MACC:
-						fprintf(f, "dev y%02i x%02i DSP48A1\n", y, x);
-						break;
-					case DEV_TIEOFF:
-						fprintf(f, "dev y%02i x%02i TIEOFF\n", y, x);
-						break;
-					case DEV_ILOGIC:
-						fprintf(f, "dev y%02i x%02i ILOGIC\n", y, x);
-						break;
-					case DEV_OLOGIC:
-						fprintf(f, "dev y%02i x%02i OLOGIC\n", y, x);
-						break;
-					case DEV_IODELAY:
-						fprintf(f, "dev y%02i x%02i IODELAY\n", y, x);
-						break;
-					case DEV_BRAM16:
-						fprintf(f, "dev y%02i x%02i RAMB16\n", y, x);
-						break;
-					case DEV_BRAM8:
-						fprintf(f, "dev y%02i x%02i RAMB8\n", y, x);
-						break;
-					case DEV_BUFH:
-						fprintf(f, "dev y%02i x%02i BUFH\n", y, x);
-						break;
-					case DEV_BUFIO:
-						fprintf(f, "dev y%02i x%02i BUFIO2\n", y, x);
-						break;
-					case DEV_BUFIO_FB:
-						fprintf(f, "dev y%02i x%02i BUFIO2FB\n", y, x);
-						break;
-					case DEV_BUFPLL:
-						fprintf(f, "dev y%02i x%02i BUFPLL\n", y, x);
-						break;
-					case DEV_BUFPLL_MCB:
-						fprintf(f, "dev y%02i x%02i BUFPLL_MCB\n", y, x);
-						break;
-					case DEV_BUFGMUX:
-						fprintf(f, "dev y%02i x%02i BUFGMUX\n", y, x);
-						break;
-					case DEV_BSCAN:
-						fprintf(f, "dev y%02i x%02i BSCAN\n", y, x);
-						break;
-					case DEV_DCM:
-						fprintf(f, "dev y%02i x%02i DCM\n", y, x);
-						break;
-					case DEV_PLL:
-						fprintf(f, "dev y%02i x%02i PLL\n", y, x);
-						break;
-					case DEV_ICAP:
-						fprintf(f, "dev y%02i x%02i ICAP\n", y, x);
-						break;
-					case DEV_POST_CRC_INTERNAL:
-						fprintf(f, "dev y%02i x%02i POST_CRC_INTERNAL\n", y, x);
-						break;
-					case DEV_STARTUP:
-						fprintf(f, "dev y%02i x%02i STARTUP\n", y, x);
-						break;
-					case DEV_SLAVE_SPI:
-						fprintf(f, "dev y%02i x%02i SLAVE_SPI\n", y, x);
-						break;
-					case DEV_SUSPEND_SYNC:
-						fprintf(f, "dev y%02i x%02i SUSPEND_SYNC\n", y, x);
-						break;
-					case DEV_OCT_CALIBRATE:
-						fprintf(f, "dev y%02i x%02i OCT_CALIBRATE\n", y, x);
-						break;
-					case DEV_SPI_ACCESS:
-						fprintf(f, "dev y%02i x%02i SPI_ACCESS\n", y, x);
-						break;
-					case DEV_IOB:
-					case DEV_LOGIC:
-					case DEV_NONE:
-						// to suppress compiler warning
-						break;
-				}
+				if (tile->devs[i].type == DEV_LOGIC
+				    || tile->devs[i].type == DEV_IOB)
+					continue; // handled above
+				fprintf(f, "dev y%02i x%02i %s\n", y, x,
+					fpgadev_str(tile->devs[i].type));
 			}
 		}
 	}
@@ -620,50 +526,87 @@ int printf_conns(FILE* f, struct fpga_model* model)
 	return 0;
 }
 
-int printf_switches(FILE* f, struct fpga_model* model, int enabled_only)
+int printf_switches(FILE* f, struct fpga_model* model)
 {
 	struct fpga_tile* tile;
-	int x, y, i, from_connpt_o, to_connpt_o, from_str_i, to_str_i;
-	int first_switch_printed, is_bidirectional, is_on;
-	const char* from_str, *to_str;
+	int x, y, i, first_switch_printed;
 
 	for (x = 0; x < model->x_width; x++) {
 		for (y = 0; y < model->y_height; y++) {
 			tile = YX_TILE(model, y, x);
-
-			// no newlines between tiles in enabled_only mode
-			first_switch_printed = enabled_only;
-
+			first_switch_printed = 0;
 			for (i = 0; i < tile->num_switches; i++) {
-				from_connpt_o = (tile->switches[i] & 0x3FFF8000) >> 15;
-				to_connpt_o = tile->switches[i] & 0x00007FFF;
-				is_bidirectional = (tile->switches[i] & SWITCH_BIDIRECTIONAL) != 0;
-				is_on = (tile->switches[i] & SWITCH_USED) != 0;
-
-				from_str_i = tile->conn_point_names[from_connpt_o*2+1];
-				to_str_i = tile->conn_point_names[to_connpt_o*2+1];
-
-				from_str = strarray_lookup(&model->str, from_str_i);
-				to_str = strarray_lookup(&model->str, to_str_i);
-				if (!from_str || !to_str) {
-					fprintf(stderr, "Internal error in %s:%i, cannot lookup from_i %i or to_i %i\n",
-						__FILE__, __LINE__, from_str_i, to_str_i);
-					continue;
-				}
-				if (enabled_only && !is_on)
-					continue;
 				if (!first_switch_printed) {
 					first_switch_printed = 1;	
 					fprintf(f, "\n");
 				}
-				fprintf(f, "sw y%02i x%02i %s %s %s%s\n",
-					y, x, from_str, is_bidirectional
-					? "<->" : "->", to_str,
-					is_on ? " on" : "");
+				fprintf(f, "sw y%02i x%02i %s\n",
+					y, x, fpga_switch_print(model, y, x, i));
 			}
 		}
 	}
 	return 0;
+}
+
+static void printf_inout_pin(FILE* f, struct fpga_model* model,
+	net_idx_t net_i, struct net_el* el)
+{
+	struct fpga_tile* tile;
+	pinw_idx_t pinw_i;
+	dev_idx_t dev_idx;
+	int in_pin;
+	const char* pin_str;
+	char buf[1024];
+
+	if (!(el->idx & NET_IDX_IS_PINW))
+		{ HERE(); return; }
+
+	tile = YX_TILE(model, el->y, el->x);
+	dev_idx = el->dev_idx;
+	if (dev_idx < 0 || dev_idx >= tile->num_devs)
+		{ HERE(); return; }
+	pinw_i = el->idx & NET_IDX_MASK;
+	if (pinw_i < 0 || pinw_i >= tile->devs[dev_idx].num_pinw_total)
+		{ HERE(); return; }
+	in_pin = pinw_i < tile->devs[dev_idx].num_pinw_in;
+
+   	pin_str = fpgadev_pinw_idx2str(tile->devs[dev_idx].type, pinw_i);
+	if (!pin_str) { HERE(); return; }
+
+	snprintf(buf, sizeof(buf), "net %i %s y%02i x%02i %s %i pin %s\n",
+		net_i, in_pin ? "in" : "out", el->y, el->x,
+		fpgadev_str(tile->devs[dev_idx].type),
+		fpga_dev_typeidx(model, el->y, el->x, dev_idx),
+		pin_str);
+	fprintf(f, buf);
+}
+
+int printf_nets(FILE* f, struct fpga_model* model)
+{
+	net_idx_t net_i;
+	struct fpga_net* net;
+	int i, rc;
+
+	net_i = NO_NET;
+	while (!(rc = fpga_net_enum(model, net_i, &net_i)) && net_i != NO_NET) {
+		net = fpga_net_get(model, net_i);
+		if (!net) FAIL(rc);
+		for (i = 0; i < net->len; i++) {
+			if (net->el[i].idx & NET_IDX_IS_PINW) {
+				printf_inout_pin(f, model, net_i, &net->el[i]);
+				continue;
+			}
+			// switch
+			fprintf(f, "net %i sw y%02i x%02i %s\n",
+				net_i, net->el[i].y, net->el[i].x,
+				fpga_switch_print(model, net->el[i].y,
+					net->el[i].x, net->el[i].idx));
+		}
+	}
+	if (rc) FAIL(rc);
+	return 0;
+fail:
+	return rc;
 }
 
 static enum fpgadev_type to_type(const char* s, int len)
@@ -857,10 +800,8 @@ int write_floorplan(FILE* f, struct fpga_model* model, int flags)
 	rc = printf_devices(f, model, /*config_only*/ 1);
 	if (rc) FAIL(rc);
 
-	rc = printf_switches(f, model, /*enabled_only*/ 1);
+	rc = printf_nets(f, model);
 	if (rc) FAIL(rc);
-
-// net 0 input y00 x00 name output y00 x00 name sw y00 x00 from -> to
 
 	return 0;
 fail:
