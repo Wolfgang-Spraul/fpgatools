@@ -761,7 +761,7 @@ static void read_sw_line(struct fpga_model* model, const char* line, int start)
 		HERE();
 		return;
 	}
-	if (fpga_switch_is_enabled(model, y_coord, x_coord, sw_idx))
+	if (fpga_switch_is_used(model, y_coord, x_coord, sw_idx))
 		HERE();
 	if (is_on)
 		fpga_switch_enable(model, y_coord, x_coord, sw_idx);

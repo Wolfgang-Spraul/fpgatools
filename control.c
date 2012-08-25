@@ -423,7 +423,7 @@ int fpga_switch_is_bidir(struct fpga_model* model, int y, int x,
 	return (YX_TILE(model, y, x)->switches[swidx] & SWITCH_BIDIRECTIONAL) != 0;
 }
 
-int fpga_switch_is_enabled(struct fpga_model* model, int y, int x,
+int fpga_switch_is_used(struct fpga_model* model, int y, int x,
 	swidx_t swidx)
 {
 	return (YX_TILE(model, y, x)->switches[swidx] & SWITCH_USED) != 0;
@@ -461,7 +461,7 @@ const char* fmt_sw(struct fpga_model* model, int y, int x, swidx_t sw, int from_
 
 	last_buf = (last_buf+1)%NUM_SW_BUFS;
 
-	strcpy(midstr, fpga_switch_is_enabled(model, y, x, sw) ? "on:" : "");
+	strcpy(midstr, fpga_switch_is_used(model, y, x, sw) ? "on:" : "");
 	if (fpga_switch_is_bidir(model, y, x, sw))
 		strcat(midstr, "<->");
 	else {

@@ -344,8 +344,9 @@ enum fpgadev_type
 enum { LOGIC_M = 1, LOGIC_L, LOGIC_X };
 // All LOGICIN_IN A..D sequences must be exactly sequential as
 // here to match initialization in model_device:init_logic().
-enum { LOGIC_IN_A1 = 0, LOGIC_IN_A2, LOGIC_IN_A3, LOGIC_IN_A4, LOGIC_IN_A5,
-	LOGIC_IN_A6,
+enum { // input:
+	LOGIC_IN_A1 = 0,
+	LOGIC_IN_A2, LOGIC_IN_A3, LOGIC_IN_A4, LOGIC_IN_A5, LOGIC_IN_A6,
 	LOGIC_IN_B1, LOGIC_IN_B2, LOGIC_IN_B3, LOGIC_IN_B4, LOGIC_IN_B5,
 	LOGIC_IN_B6,
 	LOGIC_IN_C1, LOGIC_IN_C2, LOGIC_IN_C3, LOGIC_IN_C4, LOGIC_IN_C5,
@@ -358,12 +359,26 @@ enum { LOGIC_IN_A1 = 0, LOGIC_IN_A2, LOGIC_IN_A3, LOGIC_IN_A4, LOGIC_IN_A5,
 	LOGIC_IN_CIN, // only some L and M devs have this
 	// only for M:
 	LOGIC_IN_WE, LOGIC_IN_AI, LOGIC_IN_BI, LOGIC_IN_CI, LOGIC_IN_DI,
-	LOGIC_NUM_PINW_IN };
-enum { LOGIC_OUT_A = 0, LOGIC_OUT_B, LOGIC_OUT_C, LOGIC_OUT_D,
+	// output:
+	LOGIC_OUT_A, LOGIC_OUT_B, LOGIC_OUT_C, LOGIC_OUT_D,
 	LOGIC_OUT_AMUX, LOGIC_OUT_BMUX, LOGIC_OUT_CMUX, LOGIC_OUT_DMUX,
 	LOGIC_OUT_AQ, LOGIC_OUT_BQ, LOGIC_OUT_CQ, LOGIC_OUT_DQ,
-	LOGIC_OUT_COUT, // only some L and M devs have this
-	LOGIC_NUM_PINW_OUT };
+	LOGIC_OUT_COUT }; // only some L and M devs have this
+#define LOGIC_LAST_INPUT_PINW	LOGIC_IN_DI
+#define LOGIC_LAST_OUTPUT_PINW	LOGIC_OUT_COUT
+#define LOGIC_PINW_STR \
+	{ "A1", "A2", "A3", "A4", "A5", "A6", \
+	  "B1", "B2", "B3", "B4", "B5", "B6", \
+	  "C1", "C2", "C3", "C4", "C5", "C6", \
+	  "D1", "D2", "D3", "D4", "D5", "D6", \
+	  "AX", "BX", "CX", "DX", \
+	  "CLK", "CE", "SR", \
+	  "CIN", \
+	  "WE", "AI", "BI", "CI", "DI", \
+	  "A", "B", "C", "D", \
+	  "AMUX", "BMUX", "CMUX", "DMUX", \
+	  "AQ", "BQ", "CQ", "DQ", \
+	  "COUT" }
 
 struct fpgadev_logic
 {
@@ -385,10 +400,15 @@ enum { ITERM_NONE = 1, ITERM_UNTUNED_25, ITERM_UNTUNED_50,
 enum { OTERM_NONE = 1, OTERM_UNTUNED_25, OTERM_UNTUNED_50,
 	OTERM_UNTUNED_75 };
 
-enum { IOB_IN_O = 0, IOB_IN_T, IOB_IN_DIFFI_IN, IOB_IN_DIFFO_IN,
-	IOB_NUM_PINW_IN };
-enum { IOB_OUT_I = 0, IOB_OUT_PADOUT, IOB_OUT_PCI_RDY, IOB_OUT_DIFFO_OUT,
-	IOB_NUM_PINW_OUT };
+enum { // input:
+	IOB_IN_O = 0, IOB_IN_T, IOB_IN_DIFFI_IN, IOB_IN_DIFFO_IN,
+	// output:
+	IOB_OUT_I, IOB_OUT_PADOUT, IOB_OUT_PCI_RDY, IOB_OUT_DIFFO_OUT };
+#define IOB_LAST_INPUT_PINW	IOB_IN_DIFFO_IN
+#define IOB_LAST_OUTPUT_PINW	IOB_OUT_DIFFO_OUT
+#define IOB_PINW_STR \
+	{ "O", "T", "DIFFI_IN", "DIFFO_IN", \
+	  "I", "PADOUT", "PCI_RDY", "DIFFO_OUT" }
 
 struct fpgadev_iob
 {
@@ -405,19 +425,20 @@ struct fpgadev_iob
 	int out_term;
 };
 
-#define MAX_PINW_IN	64
-#define MAX_PINW_OUT	32
+typedef int pinw_idx_t; // index into pinw array
 
 struct fpga_device
 {
 	enum fpgadev_type type;
 	int instantiated;
-	int num_in_wires, num_out_wires;
-	// pinwires that are within the type-range of a device, but
-	// don't exist for that particular instance, will be set to
-	// STRIDX_NO_ENTRY
-	str16_t pinw_in[MAX_PINW_IN];
-	str16_t pinw_out[MAX_PINW_OUT];
+
+	// A bram dev has about 190 pinwires (input and output
+	// combined), macc about 350, mcb about 1200.
+	int num_pinw_total, num_pinw_in;
+	// The array holds first the input wires, then the output wires.
+	// Unused members are set to STRIDX_NO_ENTRY.
+	str16_t* pinw;
+	
 	union {
 		struct fpgadev_logic logic;
 		struct fpgadev_iob iob;
@@ -481,8 +502,14 @@ void fpga_free_model(struct fpga_model* model);
 const char* fpga_tiletype_str(enum fpga_tile_type type);
 
 int init_tiles(struct fpga_model* model);
+
 int init_devices(struct fpga_model* model);
 void free_devices(struct fpga_model* model);
+#define PINW_NO_IDX -1
+pinw_idx_t fpgadev_pinw_str2idx(int devtype, const char* str);
+// returns 0 when idx not found for the given devtype
+const char* fpgadev_pinw_idx2str(int devtype, pinw_idx_t idx);
+
 int init_ports(struct fpga_model* model, int dup_warn);
 int init_conns(struct fpga_model* model);
 

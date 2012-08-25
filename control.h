@@ -66,7 +66,7 @@ str16_t fpga_switch_str_i(struct fpga_model* model, int y, int x,
 	swidx_t swidx, int from_to);
 int fpga_switch_is_bidir(struct fpga_model* model, int y, int x,
 	swidx_t swidx);
-int fpga_switch_is_enabled(struct fpga_model* model, int y, int x,
+int fpga_switch_is_used(struct fpga_model* model, int y, int x,
 	swidx_t swidx);
 void fpga_switch_enable(struct fpga_model* model, int y, int x,
 	swidx_t swidx);
