@@ -107,9 +107,11 @@ int main(int argc, char** argv)
 {
 	struct fpga_model model;
 	struct fpga_device* P46_dev, *P48_dev, *logic_dev;
-	int P46_y, P46_x, P46_idx, P48_y, P48_x, P48_idx, dev_idx, rc;
+	int P46_y, P46_x, P46_dev_idx, P46_type_idx;
+	int P48_y, P48_x, P48_dev_idx, P48_type_idx, dev_idx, rc;
 	struct test_state tstate;
 	struct switch_to_yx switch_to;
+	net_idx_t P46_net;
 
 	printf("\n");
 	printf("O fpgatools automatic test suite. Be welcome and be "
@@ -135,22 +137,22 @@ int main(int argc, char** argv)
 	if (rc) FAIL(rc);
 	
 	// configure P46
-	rc = fpga_find_iob(&model, "P46", &P46_y, &P46_x, &P46_idx);
+	rc = fpga_find_iob(&model, "P46", &P46_y, &P46_x, &P46_type_idx);
 	if (rc) FAIL(rc);
-	dev_idx = fpga_dev_idx(&model, P46_y, P46_x, DEV_IOB, P46_idx);
-	if (dev_idx == NO_DEV) FAIL(EINVAL);
-	P46_dev = FPGA_DEV(&model, P46_y, P46_x, dev_idx);
+	P46_dev_idx = fpga_dev_idx(&model, P46_y, P46_x, DEV_IOB, P46_type_idx);
+	if (P46_dev_idx == NO_DEV) FAIL(EINVAL);
+	P46_dev = FPGA_DEV(&model, P46_y, P46_x, P46_dev_idx);
 	P46_dev->instantiated = 1;
 	strcpy(P46_dev->iob.istandard, IO_LVCMOS33);
 	P46_dev->iob.bypass_mux = BYPASS_MUX_I;
 	P46_dev->iob.I_mux = IMUX_I;
 
 	// configure P48
-	rc = fpga_find_iob(&model, "P48", &P48_y, &P48_x, &P48_idx);
+	rc = fpga_find_iob(&model, "P48", &P48_y, &P48_x, &P48_type_idx);
 	if (rc) FAIL(rc);
-	dev_idx = fpga_dev_idx(&model, P48_y, P48_x, DEV_IOB, P48_idx);
-	if (dev_idx == NO_DEV) FAIL(EINVAL);
-	P48_dev = FPGA_DEV(&model, P48_y, P48_x, dev_idx);
+	P48_dev_idx = fpga_dev_idx(&model, P48_y, P48_x, DEV_IOB, P48_type_idx);
+	if (P48_dev_idx == NO_DEV) FAIL(EINVAL);
+	P48_dev = FPGA_DEV(&model, P48_y, P48_x, P48_dev_idx);
 	P48_dev->instantiated = 1;
 	strcpy(P48_dev->iob.ostandard, IO_LVCMOS33);
 	P48_dev->iob.drive_strength = 12;
@@ -170,6 +172,13 @@ int main(int argc, char** argv)
 	rc = diff_printf(&tstate);
 	if (rc) FAIL(rc);
 
+	// configure net from P46.I to logic.D3
+	rc = fpga_net_new(&model, &P46_net);
+	if (rc) FAIL(rc);
+	rc = fpga_net_add_port(&model, P46_net, P46_y, P46_x,
+		P46_dev_idx, IOB_OUT_I);
+	if (rc) FAIL(rc);
+
 printf("P46 I pinw %s\n", strarray_lookup(&model.str, P46_dev->pinw[IOB_OUT_I]));
 
 	switch_to.yx_req = YX_DEV_ILOGIC;
@@ -180,7 +189,8 @@ printf("P46 I pinw %s\n", strarray_lookup(&model.str, P46_dev->pinw[IOB_OUT_I]))
 	switch_to.start_switch = P46_dev->pinw[IOB_OUT_I];
 	rc = fpga_switch_to_yx(&switch_to);
 	if (rc) FAIL(rc);
-	rc = fpga_switch_set_enable(&model, switch_to.y, switch_to.x, &switch_to.set);
+	rc = fpga_net_add_switches(&model, P46_net, switch_to.y,
+		switch_to.x, &switch_to.set);
 	if (rc) FAIL(rc);
 
 printf(" %s\n", fmt_swset(&model, switch_to.y, switch_to.x, &switch_to.set, SW_FROM));
@@ -192,7 +202,8 @@ printf(" %s\n", fmt_swset(&model, switch_to.y, switch_to.x, &switch_to.set, SW_F
 	switch_to.start_switch = switch_to.dest_connpt;
 	rc = fpga_switch_to_yx(&switch_to);
 	if (rc) FAIL(rc);
-	rc = fpga_switch_set_enable(&model, switch_to.y, switch_to.x, &switch_to.set);
+	rc = fpga_net_add_switches(&model, P46_net, switch_to.y,
+		switch_to.x, &switch_to.set);
 	if (rc) FAIL(rc);
 
 printf(" %s\n", fmt_swset(&model, switch_to.y, switch_to.x, &switch_to.set, SW_FROM));
@@ -204,7 +215,8 @@ printf(" %s\n", fmt_swset(&model, switch_to.y, switch_to.x, &switch_to.set, SW_F
 	switch_to.start_switch = switch_to.dest_connpt;
 	rc = fpga_switch_to_yx(&switch_to);
 	if (rc) FAIL(rc);
-	rc = fpga_switch_set_enable(&model, switch_to.y, switch_to.x, &switch_to.set);
+	rc = fpga_net_add_switches(&model, P46_net, switch_to.y,
+		switch_to.x, &switch_to.set);
 	if (rc) FAIL(rc);
 
 printf(" %s\n", fmt_swset(&model, switch_to.y, switch_to.x, &switch_to.set, SW_FROM));
@@ -229,7 +241,8 @@ printf(" %s\n", fmt_swset(&model, switch_to.y, switch_to.x, &switch_to.set, SW_F
 	}
 	rc = fpga_switch_to_yx(&switch_to);
 	if (rc) FAIL(rc);
-	rc = fpga_switch_set_enable(&model, switch_to.y, switch_to.x, &switch_to.set);
+	rc = fpga_net_add_switches(&model, P46_net, switch_to.y,
+		switch_to.x, &switch_to.set);
 	if (rc) FAIL(rc);
 
 printf(" %s\n", fmt_swset(&model, switch_to.y, switch_to.x, &switch_to.set, SW_FROM));
@@ -242,7 +255,7 @@ printf(" %s\n", fmt_swset(&model, switch_to.y, switch_to.x, &switch_to.set, SW_F
 			.from_to = SW_FROM, .max_chain_size = MAX_SW_DEPTH };
 		if (fpga_switch_chain(&c) == NO_CONN) FAIL(EINVAL);
 		if (c.set.len == 0) { HERE(); FAIL(EINVAL); }
-		rc = fpga_switch_set_enable(&model, c.y, c.x, &c.set);
+		rc = fpga_net_add_switches(&model, P46_net, c.y, c.x, &c.set);
 		if (rc) FAIL(rc);
 printf(" %s\n", fmt_swset(&model, c.y, c.x, &c.set, SW_FROM));
 	}

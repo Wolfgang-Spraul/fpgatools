@@ -75,6 +75,7 @@ struct fpga_model
 	struct fpga_tile* tiles;
 	struct hashed_strarray str;
 
+	int num_nets;
 	struct fpga_net* nets;
 
 	// tmp_str will be allocated to hold max(x_width, y_height)

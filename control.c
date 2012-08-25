@@ -109,7 +109,7 @@ static const struct iob_site xc6slx9_iob_right[] =
 };
 
 int fpga_find_iob(struct fpga_model* model, const char* sitename,
-	int* y, int* x, int* idx)
+	int* y, int* x, dev_type_idx_t* idx)
 {
 	int i, j;
 
@@ -157,7 +157,7 @@ int fpga_find_iob(struct fpga_model* model, const char* sitename,
 }
 
 const char* fpga_iob_sitename(struct fpga_model* model, int y, int x,
-	int idx)
+	dev_type_idx_t idx)
 {
 	int i;
 
@@ -751,36 +751,101 @@ int fpga_switch_to_yx(struct switch_to_yx* p)
 	return 0;
 }
 
+#define NET_ALLOC_INCREMENT 64
+
 int fpga_net_new(struct fpga_model* model, net_idx_t* new_idx)
 {
-	return -1;
+	int rc;
+
+	if (!(model->num_nets % NET_ALLOC_INCREMENT)) {
+		void* new_ptr;
+		int new_len;
+
+		new_len = (model->num_nets+NET_ALLOC_INCREMENT)
+				*sizeof(*model->nets);
+		new_ptr = realloc(model->nets, new_len);
+		if (!new_ptr) FAIL(ENOMEM);
+		model->nets = new_ptr;
+	}
+	model->nets[model->num_nets].len = 0;
+	model->num_nets++;
+	*new_idx = model->num_nets;
+	return 0;
+fail:
+	return rc;
 }
 
 int fpga_net_enum(struct fpga_model* model, net_idx_t last, net_idx_t* next)
 {
+	int i;
+
+	// last can be NO_NET which becomes 1 = the first net index
+	for (i = last+1; i <= model->num_nets; i++) {
+		if (model->nets[i-1].len) {
+			*next = i;
+			return 0;
+		}
+	}
 	*next = NO_NET;
 	return 0;
 }
 
 struct fpga_net* fpga_net_get(struct fpga_model* model, net_idx_t net_i)
 {
-	return 0;
+	if (net_i <= NO_NET
+	    || net_i > model->num_nets) {
+		HERE();
+		return 0;
+	}
+	return &model->nets[net_i-1];
 }
 
 int fpga_net_add_port(struct fpga_model* model, net_idx_t net_i,
 	int y, int x, dev_idx_t dev_idx, pinw_idx_t pinw_idx)
 {
-	return -1;
+	struct fpga_net* net;
+	int rc;
+
+	net = &model->nets[net_i-1];
+	if (net->len >= MAX_NET_LEN)
+		FAIL(EINVAL);
+	net->el[net->len].y = y;
+	net->el[net->len].x = x;
+	net->el[net->len].idx = pinw_idx | NET_IDX_IS_PINW;
+	net->el[net->len].dev_idx = dev_idx;
+	net->len++;
+	return 0;
+fail:
+	return rc;
 }
 
 int fpga_net_add_switches(struct fpga_model* model, net_idx_t net_i,
-	const struct sw_set* set)
+	int y, int x, const struct sw_set* set)
 {
-	return -1;
+	struct fpga_net* net;
+	int i, rc;
+
+	net = &model->nets[net_i-1];
+	if (net->len+set->len > MAX_NET_LEN)
+		FAIL(EINVAL);
+	for (i = 0; i < set->len; i++) {
+		net->el[net->len].y = y;
+		net->el[net->len].x = x;
+		if (OUT_OF_U16(set->sw[i])) FAIL(EINVAL);
+		if (fpga_switch_is_used(model, y, x, set->sw[i]))
+			HERE();
+		fpga_switch_enable(model, y, x, set->sw[i]);
+		net->el[net->len].idx = set->sw[i];
+		net->len++;
+	}
+	return 0;
+fail:
+	return rc;
 }
 
 void fpga_net_free_all(struct fpga_model* model)
 {
 	free(model->nets);
 	model->nets = 0;
+	model->num_nets = 0;
 }

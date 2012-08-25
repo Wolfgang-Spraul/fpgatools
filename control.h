@@ -6,10 +6,10 @@
 //
 
 int fpga_find_iob(struct fpga_model* model, const char* sitename,
-	int* y, int* x, int* idx);
+	int* y, int* x, dev_type_idx_t* idx);
 
 const char* fpga_iob_sitename(struct fpga_model* model, int y, int x,
-	int idx);
+	dev_type_idx_t idx);
 
 //
 // When dealing with devices, there are two indices:
@@ -175,7 +175,7 @@ int fpga_switch_to_yx(struct switch_to_yx* p);
 // connection points. For now we work with a simple
 // fixed-size array, we can later make this more dynamic
 // depending on which load on the memory manager is better.
-#define MAX_NET_SIZE	128
+#define MAX_NET_LEN	128
 
 #define NET_IDX_IS_PINW	0x8000
 #define NET_IDX_MASK	0x7FFF
@@ -193,11 +193,11 @@ struct net_el
 
 struct fpga_net
 {
-	int size;
-	struct net_el el[MAX_NET_SIZE];
+	int len;
+	struct net_el el[MAX_NET_LEN];
 };
 
-typedef int net_idx_t;
+typedef int net_idx_t; // net indices are 1-based
 #define NO_NET 0
 
 int fpga_net_new(struct fpga_model* model, net_idx_t* new_idx);
@@ -207,5 +207,5 @@ struct fpga_net* fpga_net_get(struct fpga_model* model, net_idx_t net_i);
 int fpga_net_add_port(struct fpga_model* model, net_idx_t net_i,
 	int y, int x, dev_idx_t dev_idx, pinw_idx_t pinw_idx);
 int fpga_net_add_switches(struct fpga_model* model, net_idx_t net_i,
-	const struct sw_set* set);
+	int y, int x, const struct sw_set* set);
 void fpga_net_free_all(struct fpga_model* model);

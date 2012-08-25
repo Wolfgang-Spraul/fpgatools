@@ -26,6 +26,8 @@
 #define FAIL(code) do { HERE(); rc = (code); goto fail; } while (0)
 #define XOUT() do { HERE(); goto xout; } while (0)
 
+#define OUT_OF_U16(val)	((val) < 0 || (val) > 0xFFFF)
+
 const char* bitstr(uint32_t value, int digits);
 void hexdump(int indent, const uint8_t* data, int len);
 
