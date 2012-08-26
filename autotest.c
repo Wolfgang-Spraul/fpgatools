@@ -161,7 +161,8 @@ int main(int argc, char** argv)
 	P48_dev->iob.suspend = SUSP_3STATE;
 
 	// configure logic
-	logic_dev_idx = fpga_dev_idx(&model, /*y*/ 68, /*x*/ 13, DEV_LOGIC, DEV_LOGX);
+	logic_dev_idx = fpga_dev_idx(&model, /*y*/ 68, /*x*/ 13,
+		DEV_LOGIC, DEV_LOGX);
 	if (logic_dev_idx == NO_DEV) FAIL(EINVAL);
 	logic_dev = FPGA_DEV(&model, /*y*/ 68, /*x*/ 13, logic_dev_idx);
 	logic_dev->instantiated = 1;
@@ -182,8 +183,6 @@ int main(int argc, char** argv)
 		logic_dev_idx, LOGIC_IN_D3);
 	if (rc) FAIL(rc);
 
-printf("P46 I pinw %s\n", strarray_lookup(&model.str, P46_dev->pinw[IOB_OUT_I]));
-
 	switch_to.yx_req = YX_DEV_ILOGIC;
 	switch_to.flags = SWTO_YX_DEF;
 	switch_to.model = &model;
@@ -196,8 +195,6 @@ printf("P46 I pinw %s\n", strarray_lookup(&model.str, P46_dev->pinw[IOB_OUT_I]))
 		switch_to.x, &switch_to.set);
 	if (rc) FAIL(rc);
 
-printf(" %s\n", fmt_swset(&model, switch_to.y, switch_to.x, &switch_to.set, SW_FROM));
-
 	switch_to.yx_req = YX_ROUTING_TILE;
 	switch_to.flags = SWTO_YX_DEF;
 	switch_to.y = switch_to.dest_y;
@@ -209,8 +206,6 @@ printf(" %s\n", fmt_swset(&model, switch_to.y, switch_to.x, &switch_to.set, SW_F
 		switch_to.x, &switch_to.set);
 	if (rc) FAIL(rc);
 
-printf(" %s\n", fmt_swset(&model, switch_to.y, switch_to.x, &switch_to.set, SW_FROM));
-
 	switch_to.yx_req = YX_ROUTING_TO_FABLOGIC;
 	switch_to.flags = SWTO_YX_CLOSEST;
 	switch_to.y = switch_to.dest_y;
@@ -221,8 +216,6 @@ printf(" %s\n", fmt_swset(&model, switch_to.y, switch_to.x, &switch_to.set, SW_F
 	rc = fpga_net_add_switches(&model, P46_net, switch_to.y,
 		switch_to.x, &switch_to.set);
 	if (rc) FAIL(rc);
-
-printf(" %s\n", fmt_swset(&model, switch_to.y, switch_to.x, &switch_to.set, SW_FROM));
 
 	switch_to.yx_req = YX_DEV_LOGIC;
 	switch_to.flags = SWTO_YX_TARGET_CONNPT|SWTO_YX_MAX_SWITCH_DEPTH;
@@ -248,8 +241,6 @@ printf(" %s\n", fmt_swset(&model, switch_to.y, switch_to.x, &switch_to.set, SW_F
 		switch_to.x, &switch_to.set);
 	if (rc) FAIL(rc);
 
-printf(" %s\n", fmt_swset(&model, switch_to.y, switch_to.x, &switch_to.set, SW_FROM));
-
 	{
 		struct sw_chain c = {
 			.model = &model, .y = switch_to.dest_y,
@@ -260,14 +251,10 @@ printf(" %s\n", fmt_swset(&model, switch_to.y, switch_to.x, &switch_to.set, SW_F
 		if (c.set.len == 0) { HERE(); FAIL(EINVAL); }
 		rc = fpga_net_add_switches(&model, P46_net, c.y, c.x, &c.set);
 		if (rc) FAIL(rc);
-printf(" %s\n", fmt_swset(&model, c.y, c.x, &c.set, SW_FROM));
 	}
 
 	rc = diff_printf(&tstate);
 	if (rc) FAIL(rc);
-
-	printf("\n");
-	printf("P48 O pinw %s\n", strarray_lookup(&model.str, P48_dev->pinw[IOB_IN_O]));
 
 	printf("\n");
 	printf("O Test suite completed.\n");

@@ -846,24 +846,25 @@ int fpga_switch_to_yx(struct switch_to_yx* p)
 
 static int fpga_net_useidx(struct fpga_model* model, net_idx_t new_idx)
 {
-	int rc;
+	void* new_ptr;
+	int new_array_size, rc;
 
 	if (new_idx <= NO_NET) FAIL(EINVAL);
-	if ((new_idx-1) < model->num_nets)
-		return 0;
-	if ((new_idx-1) >= (model->num_nets+NET_ALLOC_INCREMENT-1)
-		/NET_ALLOC_INCREMENT*NET_ALLOC_INCREMENT) {
-		void* new_ptr;
-		int new_len;
+	if (new_idx > model->highest_used_net)
+		model->highest_used_net = new_idx;
 
-		new_len = ((new_idx-1)/NET_ALLOC_INCREMENT+1)
-			*NET_ALLOC_INCREMENT*sizeof(*model->nets);
-		new_ptr = realloc(model->nets, new_len);
-		if (!new_ptr) FAIL(ENOMEM);
-		model->nets = new_ptr;
-	}
-	model->nets[(new_idx-1)].len = 0;
-	model->num_nets++;
+	if ((new_idx-1) < model->nets_array_size)
+		return 0;
+
+	new_array_size = ((new_idx-1)/NET_ALLOC_INCREMENT+1)*NET_ALLOC_INCREMENT;
+	new_ptr = realloc(model->nets, new_array_size*sizeof(*model->nets));
+	if (!new_ptr) FAIL(ENOMEM);
+	// the memset will set the 'len' of each new net to 0
+	memset(new_ptr + model->nets_array_size*sizeof(*model->nets), 0,
+		(new_array_size - model->nets_array_size)*sizeof(*model->nets));
+
+	model->nets = new_ptr;
+	model->nets_array_size = new_array_size;
 	return 0;
 fail:
 	return rc;
@@ -873,10 +874,10 @@ int fpga_net_new(struct fpga_model* model, net_idx_t* new_idx)
 {
 	int rc;
 
-	rc = fpga_net_useidx(model, model->num_nets+1);
+	// highest_used_net is initialized to NO_NET which becomes 1
+	rc = fpga_net_useidx(model, model->highest_used_net+1);
 	if (rc) return rc;
-	*new_idx = model->num_nets+1;
-	model->num_nets++;
+	*new_idx = model->highest_used_net;
 	return 0;
 }
 
@@ -885,7 +886,7 @@ int fpga_net_enum(struct fpga_model* model, net_idx_t last, net_idx_t* next)
 	int i;
 
 	// last can be NO_NET which becomes 1 = the first net index
-	for (i = last+1; i <= model->num_nets; i++) {
+	for (i = last+1; i <= model->highest_used_net; i++) {
 		if (model->nets[i-1].len) {
 			*next = i;
 			return 0;
@@ -898,9 +899,9 @@ int fpga_net_enum(struct fpga_model* model, net_idx_t last, net_idx_t* next)
 struct fpga_net* fpga_net_get(struct fpga_model* model, net_idx_t net_i)
 {
 	if (net_i <= NO_NET
-	    || net_i > model->num_nets) {
-		fprintf(stderr, "%s:%i net_i %i num_nets %i\n", __FILE__,
-			__LINE__, net_i, model->num_nets);
+	    || net_i > model->highest_used_net) {
+		fprintf(stderr, "%s:%i net_i %i highest_used %i\n", __FILE__,
+			__LINE__, net_i, model->highest_used_net);
 		return 0;
 	}
 	return &model->nets[net_i-1];
@@ -959,5 +960,59 @@ void fpga_net_free_all(struct fpga_model* model)
 {
 	free(model->nets);
 	model->nets = 0;
-	model->num_nets = 0;
+	model->nets_array_size = 0;
+	model->highest_used_net = 0;
+}
+
+static void fprintf_inout_pin(FILE* f, struct fpga_model* model,
+	net_idx_t net_i, struct net_el* el)
+{
+	struct fpga_tile* tile;
+	pinw_idx_t pinw_i;
+	dev_idx_t dev_idx;
+	int in_pin;
+	const char* pin_str;
+	char buf[1024];
+
+	if (!(el->idx & NET_IDX_IS_PINW))
+		{ HERE(); return; }
+
+	tile = YX_TILE(model, el->y, el->x);
+	dev_idx = el->dev_idx;
+	if (dev_idx < 0 || dev_idx >= tile->num_devs)
+		{ HERE(); return; }
+	pinw_i = el->idx & NET_IDX_MASK;
+	if (pinw_i < 0 || pinw_i >= tile->devs[dev_idx].num_pinw_total)
+		{ HERE(); return; }
+	in_pin = pinw_i < tile->devs[dev_idx].num_pinw_in;
+
+   	pin_str = fpgadev_pinw_idx2str(tile->devs[dev_idx].type, pinw_i);
+	if (!pin_str) { HERE(); return; }
+
+	snprintf(buf, sizeof(buf), "net %i %s y%02i x%02i %s %i pin %s\n",
+		net_i, in_pin ? "in" : "out", el->y, el->x,
+		fpgadev_str(tile->devs[dev_idx].type),
+		fpga_dev_typeidx(model, el->y, el->x, dev_idx),
+		pin_str);
+	fprintf(f, buf);
+}
+
+void fprintf_net(FILE* f, struct fpga_model* model, net_idx_t net_i)
+{
+	struct fpga_net* net;
+	int i;
+
+	net = fpga_net_get(model, net_i);
+	if (!net) { HERE(); return; }
+	for (i = 0; i < net->len; i++) {
+		if (net->el[i].idx & NET_IDX_IS_PINW) {
+			fprintf_inout_pin(f, model, net_i, &net->el[i]);
+			continue;
+		}
+		// switch
+		fprintf(f, "net %i sw y%02i x%02i %s\n",
+			net_i, net->el[i].y, net->el[i].x,
+			fpga_switch_print(model, net->el[i].y,
+				net->el[i].x, net->el[i].idx));
+	}
 }

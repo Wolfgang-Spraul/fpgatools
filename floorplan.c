@@ -548,61 +548,14 @@ int printf_switches(FILE* f, struct fpga_model* model)
 	return 0;
 }
 
-static void printf_inout_pin(FILE* f, struct fpga_model* model,
-	net_idx_t net_i, struct net_el* el)
-{
-	struct fpga_tile* tile;
-	pinw_idx_t pinw_i;
-	dev_idx_t dev_idx;
-	int in_pin;
-	const char* pin_str;
-	char buf[1024];
-
-	if (!(el->idx & NET_IDX_IS_PINW))
-		{ HERE(); return; }
-
-	tile = YX_TILE(model, el->y, el->x);
-	dev_idx = el->dev_idx;
-	if (dev_idx < 0 || dev_idx >= tile->num_devs)
-		{ HERE(); return; }
-	pinw_i = el->idx & NET_IDX_MASK;
-	if (pinw_i < 0 || pinw_i >= tile->devs[dev_idx].num_pinw_total)
-		{ HERE(); return; }
-	in_pin = pinw_i < tile->devs[dev_idx].num_pinw_in;
-
-   	pin_str = fpgadev_pinw_idx2str(tile->devs[dev_idx].type, pinw_i);
-	if (!pin_str) { HERE(); return; }
-
-	snprintf(buf, sizeof(buf), "net %i %s y%02i x%02i %s %i pin %s\n",
-		net_i, in_pin ? "in" : "out", el->y, el->x,
-		fpgadev_str(tile->devs[dev_idx].type),
-		fpga_dev_typeidx(model, el->y, el->x, dev_idx),
-		pin_str);
-	fprintf(f, buf);
-}
-
 int printf_nets(FILE* f, struct fpga_model* model)
 {
 	net_idx_t net_i;
-	struct fpga_net* net;
-	int i, rc;
+	int rc;
 
 	net_i = NO_NET;
-	while (!(rc = fpga_net_enum(model, net_i, &net_i)) && net_i != NO_NET) {
-		net = fpga_net_get(model, net_i);
-		if (!net) FAIL(rc);
-		for (i = 0; i < net->len; i++) {
-			if (net->el[i].idx & NET_IDX_IS_PINW) {
-				printf_inout_pin(f, model, net_i, &net->el[i]);
-				continue;
-			}
-			// switch
-			fprintf(f, "net %i sw y%02i x%02i %s\n",
-				net_i, net->el[i].y, net->el[i].x,
-				fpga_switch_print(model, net->el[i].y,
-					net->el[i].x, net->el[i].idx));
-		}
-	}
+	while (!(rc = fpga_net_enum(model, net_i, &net_i)) && net_i != NO_NET)
+		fprintf_net(f, model, net_i);
 	if (rc) FAIL(rc);
 	return 0;
 fail:

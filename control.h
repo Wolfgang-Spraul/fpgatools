@@ -218,3 +218,5 @@ int fpga_net_add_port(struct fpga_model* model, net_idx_t net_i,
 int fpga_net_add_switches(struct fpga_model* model, net_idx_t net_i,
 	int y, int x, const struct sw_set* set);
 void fpga_net_free_all(struct fpga_model* model);
+
+void fprintf_net(FILE* f, struct fpga_model* model, net_idx_t net_i);
