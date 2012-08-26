@@ -509,11 +509,6 @@ int init_tiles(struct fpga_model* model);
 
 int init_devices(struct fpga_model* model);
 void free_devices(struct fpga_model* model);
-const char* fpgadev_str(enum fpgadev_type type);
-#define PINW_NO_IDX -1
-pinw_idx_t fpgadev_pinw_str2idx(int devtype, const char* str);
-// returns 0 when idx not found for the given devtype
-const char* fpgadev_pinw_idx2str(int devtype, pinw_idx_t idx);
 
 int init_ports(struct fpga_model* model, int dup_warn);
 int init_conns(struct fpga_model* model);

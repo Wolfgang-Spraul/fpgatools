@@ -17,7 +17,11 @@ const char* fpga_iob_sitename(struct fpga_model* model, int y, int x,
 // 2. The index of the device within devices of the same type in the tile.
 //
 
+const char* fpgadev_str(enum fpgadev_type type);
+enum fpgadev_type fpgadev_str2type(const char* str, int len);
+
 // Looks up a device index based on the type index.
+// returns NO_DEV (-1) if not found
 dev_idx_t fpga_dev_idx(struct fpga_model* model,
 	int y, int x, enum fpgadev_type type, dev_type_idx_t type_idx);
 
@@ -25,6 +29,11 @@ dev_idx_t fpga_dev_idx(struct fpga_model* model,
 // the array up to dev_idx.
 dev_type_idx_t fpga_dev_typeidx(struct fpga_model* model, int y, int x,
 	dev_idx_t dev_idx);
+
+#define PINW_NO_IDX -1
+pinw_idx_t fpgadev_pinw_str2idx(int devtype, const char* str, int len);
+// returns 0 when idx not found for the given devtype
+const char* fpgadev_pinw_idx2str(int devtype, pinw_idx_t idx);
 
 enum { A6_LUT, B6_LUT, C6_LUT, D6_LUT };
 // lut_len can be -1 (ZTERM)

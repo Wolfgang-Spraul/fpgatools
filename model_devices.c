@@ -333,62 +333,6 @@ void free_devices(struct fpga_model* model)
 	}
 }
 
-const char* fpgadev_str(enum fpgadev_type type)
-{
-	static const char* dev_str[] = FPGA_DEV_STR;
-
-	if (type < 0 || type >= sizeof(dev_str)/sizeof(*dev_str))
-		{ HERE(); return 0; }
-	return dev_str[type];
-}
-
-static const char* iob_pinw_str[] = IOB_PINW_STR;
-static const char* logic_pinw_str[] = LOGIC_PINW_STR;
-
-pinw_idx_t fpgadev_pinw_str2idx(int devtype, const char* str)
-{
-	int i;
-
-	if (devtype == DEV_IOB) {
-		for (i = 0; i < sizeof(iob_pinw_str)/sizeof(*iob_pinw_str); i++) {
-			if (!strcmp(iob_pinw_str[i], str))
-				return i;
-		}
-		HERE();
-		return PINW_NO_IDX;
-	}
-	if (devtype == DEV_LOGIC) {
-		for (i = 0; i < sizeof(logic_pinw_str)/sizeof(*logic_pinw_str); i++) {
-			if (!strcmp(logic_pinw_str[i], str))
-				return i;
-		}
-		HERE();
-		return PINW_NO_IDX;
-	}
-	HERE();
-	return PINW_NO_IDX;
-}
-
-const char* fpgadev_pinw_idx2str(int devtype, pinw_idx_t idx)
-{
-	if (devtype == DEV_IOB) {
-		if (idx < 0 || idx >= sizeof(iob_pinw_str)/sizeof(*iob_pinw_str)) {
-			HERE();
-			return 0;
-		}
-		return iob_pinw_str[idx];
-	}
-	if (devtype == DEV_LOGIC) {
-		if (idx < 0 || idx >= sizeof(logic_pinw_str)/sizeof(*logic_pinw_str)) {
-			HERE();
-			return 0;
-		}
-		return logic_pinw_str[idx];
-	}
-	HERE();
-	return 0;
-}
-
 #define DEV_INCREMENT 4
 
 static int add_dev(struct fpga_model* model,

@@ -200,6 +200,27 @@ const char* fpga_iob_sitename(struct fpga_model* model, int y, int x,
 	return 0;
 }
 
+static const char* dev_str[] = FPGA_DEV_STR;
+
+const char* fpgadev_str(enum fpgadev_type type)
+{
+	if (type < 0 || type >= sizeof(dev_str)/sizeof(*dev_str))
+		{ HERE(); return 0; }
+	return dev_str[type];
+}
+
+enum fpgadev_type fpgadev_str2type(const char* str, int len)
+{
+	int i;
+	for (i = 0; i < sizeof(dev_str)/sizeof(*dev_str); i++) {
+		if (dev_str[i]
+		    && strlen(dev_str[i]) == len
+		    && !str_cmp(dev_str[i], len, str, len))
+			return i;
+	}
+	return DEV_NONE;
+}
+
 dev_idx_t fpga_dev_idx(struct fpga_model* model,
 	int y, int x, enum fpgadev_type type, dev_type_idx_t type_idx)
 {
@@ -232,6 +253,55 @@ dev_type_idx_t fpga_dev_typeidx(struct fpga_model* model, int y, int x,
 			type_count++;
 	}
 	return type_count;
+}
+
+static const char* iob_pinw_str[] = IOB_PINW_STR;
+static const char* logic_pinw_str[] = LOGIC_PINW_STR;
+
+pinw_idx_t fpgadev_pinw_str2idx(int devtype, const char* str, int len)
+{
+	int i;
+
+	if (devtype == DEV_IOB) {
+		for (i = 0; i < sizeof(iob_pinw_str)/sizeof(*iob_pinw_str); i++) {
+			if (strlen(iob_pinw_str[i]) == len
+			    && !str_cmp(iob_pinw_str[i], len, str, len))
+				return i;
+		}
+		HERE();
+		return PINW_NO_IDX;
+	}
+	if (devtype == DEV_LOGIC) {
+		for (i = 0; i < sizeof(logic_pinw_str)/sizeof(*logic_pinw_str); i++) {
+			if (strlen(logic_pinw_str[i]) == len
+			    && !str_cmp(logic_pinw_str[i], len, str, len))
+				return i;
+		}
+		HERE();
+		return PINW_NO_IDX;
+	}
+	HERE();
+	return PINW_NO_IDX;
+}
+
+const char* fpgadev_pinw_idx2str(int devtype, pinw_idx_t idx)
+{
+	if (devtype == DEV_IOB) {
+		if (idx < 0 || idx >= sizeof(iob_pinw_str)/sizeof(*iob_pinw_str)) {
+			HERE();
+			return 0;
+		}
+		return iob_pinw_str[idx];
+	}
+	if (devtype == DEV_LOGIC) {
+		if (idx < 0 || idx >= sizeof(logic_pinw_str)/sizeof(*logic_pinw_str)) {
+			HERE();
+			return 0;
+		}
+		return logic_pinw_str[idx];
+	}
+	HERE();
+	return 0;
 }
 
 #define MAX_LUT_LEN	512
@@ -774,26 +844,40 @@ int fpga_switch_to_yx(struct switch_to_yx* p)
 
 #define NET_ALLOC_INCREMENT 64
 
-int fpga_net_new(struct fpga_model* model, net_idx_t* new_idx)
+static int fpga_net_useidx(struct fpga_model* model, net_idx_t new_idx)
 {
 	int rc;
 
-	if (!(model->num_nets % NET_ALLOC_INCREMENT)) {
+	if (new_idx <= NO_NET) FAIL(EINVAL);
+	if ((new_idx-1) < model->num_nets)
+		return 0;
+	if ((new_idx-1) >= (model->num_nets+NET_ALLOC_INCREMENT-1)
+		/NET_ALLOC_INCREMENT*NET_ALLOC_INCREMENT) {
 		void* new_ptr;
 		int new_len;
 
-		new_len = (model->num_nets+NET_ALLOC_INCREMENT)
-				*sizeof(*model->nets);
+		new_len = ((new_idx-1)/NET_ALLOC_INCREMENT+1)
+			*NET_ALLOC_INCREMENT*sizeof(*model->nets);
 		new_ptr = realloc(model->nets, new_len);
 		if (!new_ptr) FAIL(ENOMEM);
 		model->nets = new_ptr;
 	}
-	model->nets[model->num_nets].len = 0;
+	model->nets[(new_idx-1)].len = 0;
 	model->num_nets++;
-	*new_idx = model->num_nets;
 	return 0;
 fail:
 	return rc;
+}
+
+int fpga_net_new(struct fpga_model* model, net_idx_t* new_idx)
+{
+	int rc;
+
+	rc = fpga_net_useidx(model, model->num_nets+1);
+	if (rc) return rc;
+	*new_idx = model->num_nets+1;
+	model->num_nets++;
+	return 0;
 }
 
 int fpga_net_enum(struct fpga_model* model, net_idx_t last, net_idx_t* next)
@@ -828,6 +912,9 @@ int fpga_net_add_port(struct fpga_model* model, net_idx_t net_i,
 	struct fpga_net* net;
 	int rc;
 
+	rc = fpga_net_useidx(model, net_i);
+	if (rc) FAIL(rc);
+	
 	net = &model->nets[net_i-1];
 	if (net->len >= MAX_NET_LEN)
 		FAIL(EINVAL);
@@ -846,6 +933,9 @@ int fpga_net_add_switches(struct fpga_model* model, net_idx_t net_i,
 {
 	struct fpga_net* net;
 	int i, rc;
+
+	rc = fpga_net_useidx(model, net_i);
+	if (rc) FAIL(rc);
 
 	net = &model->nets[net_i-1];
 	if (net->len+set->len > MAX_NET_LEN)

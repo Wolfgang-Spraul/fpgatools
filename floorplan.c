@@ -636,78 +636,124 @@ fail:
 	return rc;
 }
 
-static void read_sw_line(struct fpga_model* model, const char* line, int start)
+static void read_net_line(struct fpga_model* model, const char* line, int start)
 {
 	int coord_end, y_coord, x_coord;
 	int from_beg, from_end, from_str_i;
 	int direction_beg, direction_end, is_bidir;
 	int to_beg, to_end, to_str_i;
-	int on_beg, on_end, is_on;
-	swidx_t sw_idx;
-	int sw_is_bidir;
+	int net_idx_beg, net_idx_end, el_type_beg, el_type_end;
+	int dev_str_beg, dev_str_end, dev_type_idx_str_beg, dev_type_idx_str_end;
+	int pin_str_beg, pin_str_end, pin_name_beg, pin_name_end;
+	enum fpgadev_type dev_type;
 	char buf[1024];
+	net_idx_t net_idx;
+	dev_idx_t dev_idx;
+	pinw_idx_t pinw_idx;
+	int sw_is_bidir;
 
-	if (coord(line, start, &coord_end, &y_coord, &x_coord))
+	// net lines will be one of the following three types:
+	// in-port:  net 1 in y68 x13 LOGIC 1 pin D3
+	// out-port: net 1 out y72 x12 IOB 0 pin I
+	// switch:   net 1 sw y72 x12 BIOB_IBUF0_PINW -> BIOB_IBUF0
+
+	next_word(line, start, &net_idx_beg, &net_idx_end);
+	if (net_idx_end == net_idx_beg
+	    || !all_digits(&line[net_idx_beg], net_idx_end-net_idx_beg))
+		{ HERE(); return; }
+	net_idx = to_i(&line[net_idx_beg], net_idx_end-net_idx_beg);
+	if (net_idx < 1)
+		{ HERE(); return; }
+
+	next_word(line, net_idx_end, &el_type_beg, &el_type_end);
+	if (!str_cmp(&line[el_type_beg], el_type_end-el_type_beg, "sw", 2)) {
+		struct sw_set sw;
+
+		if (coord(line, el_type_end, &coord_end, &y_coord, &x_coord))
+			return;
+
+		next_word(line, coord_end, &from_beg, &from_end);
+		next_word(line, from_end, &direction_beg, &direction_end);
+		next_word(line, direction_end, &to_beg, &to_end);
+
+		if (from_end <= from_beg || direction_end <= direction_beg
+		    || to_end <= to_beg) {
+			HERE();
+			return;
+		}
+		memcpy(buf, &line[from_beg], from_end-from_beg);
+		buf[from_end-from_beg] = 0;
+		if (strarray_find(&model->str, buf, &from_str_i)
+		    || from_str_i == STRIDX_NO_ENTRY) {
+			HERE();
+			return;
+		}
+		if (!str_cmp(&line[direction_beg], direction_end-direction_beg,
+			"->", 2))
+			is_bidir = 0;
+		else if (!str_cmp(&line[direction_beg], direction_end-direction_beg,
+			"<->", 3))
+			is_bidir = 1;
+		else {
+			HERE();
+			return;
+		}
+		memcpy(buf, &line[to_beg], to_end-to_beg);
+		buf[to_end-to_beg] = 0;
+		if (strarray_find(&model->str, buf, &to_str_i)
+		    || to_str_i == STRIDX_NO_ENTRY) {
+			HERE();
+			return;
+		}
+
+		sw.sw[0] = fpga_switch_lookup(model, y_coord, x_coord, from_str_i, to_str_i);
+		if (sw.sw[0] == NO_SWITCH) {
+			HERE();
+			return;
+		}
+		sw_is_bidir = fpga_switch_is_bidir(model, y_coord, x_coord, sw.sw[0]);
+		if ((is_bidir && !sw_is_bidir)
+		    || (!is_bidir && sw_is_bidir)) {
+			HERE();
+			return;
+		}
+		if (fpga_switch_is_used(model, y_coord, x_coord, sw.sw[0]))
+			HERE();
+		sw.len = 1;
+		if (fpga_net_add_switches(model, net_idx, y_coord, x_coord, &sw))
+			HERE();
+		return;
+	}
+
+	if (str_cmp(&line[el_type_beg], el_type_end-el_type_beg, "in", 2)
+	    && str_cmp(&line[el_type_beg], el_type_end-el_type_beg, "out", 3))
+		{ HERE(); return; }
+
+	if (coord(line, el_type_end, &coord_end, &y_coord, &x_coord))
 		return;
 
-	next_word(line, coord_end, &from_beg, &from_end);
-	next_word(line, from_end, &direction_beg, &direction_end);
-	next_word(line, direction_end, &to_beg, &to_end);
-	next_word(line, to_end, &on_beg, &on_end);
-
-	if (from_end <= from_beg || direction_end <= direction_beg
-	    || to_end <= to_beg) {
+	next_word(line, coord_end, &dev_str_beg, &dev_str_end);
+	next_word(line, dev_str_end, &dev_type_idx_str_beg, &dev_type_idx_str_end);
+	next_word(line, dev_type_idx_str_end, &pin_str_beg, &pin_str_end);
+	next_word(line, pin_str_end, &pin_name_beg, &pin_name_end);
+	if (dev_str_end <= dev_str_beg
+	    || dev_type_idx_str_end <= dev_type_idx_str_beg
+	    || pin_str_end <= pin_str_beg
+	    || pin_name_end <= pin_name_beg
+	    || !all_digits(&line[dev_type_idx_str_beg], dev_type_idx_str_end-dev_type_idx_str_beg)
+	    || str_cmp(&line[pin_str_beg], pin_str_end-pin_str_beg, "pin", 3))
+		{ HERE(); return; }
+	dev_type = fpgadev_str2type(&line[dev_str_beg], dev_str_end-dev_str_beg);
+	if (dev_type == DEV_NONE) { HERE(); return; }
+	dev_idx = fpga_dev_idx(model, y_coord, x_coord, dev_type,
+		to_i(&line[dev_type_idx_str_beg],
+			dev_type_idx_str_end-dev_type_idx_str_beg));
+	if (dev_idx == NO_DEV) { HERE(); return; }
+	pinw_idx = fpgadev_pinw_str2idx(dev_type, &line[pin_name_beg],
+		pin_name_end-pin_name_beg);
+	if (pinw_idx == PINW_NO_IDX) { HERE(); return; }
+	if (fpga_net_add_port(model, net_idx, y_coord, x_coord, dev_idx, pinw_idx))
 		HERE();
-		return;
-	}
-	memcpy(buf, &line[from_beg], from_end-from_beg);
-	buf[from_end-from_beg] = 0;
-	if (strarray_find(&model->str, buf, &from_str_i)
-	    || from_str_i == STRIDX_NO_ENTRY) {
-		HERE();
-		return;
-	}
-	if (!str_cmp(&line[direction_beg], direction_end-direction_beg,
-		"->", 2))
-		is_bidir = 0;
-	else if (!str_cmp(&line[direction_beg], direction_end-direction_beg,
-		"<->", 3))
-		is_bidir = 1;
-	else {
-		HERE();
-		return;
-	}
-	memcpy(buf, &line[to_beg], to_end-to_beg);
-	buf[to_end-to_beg] = 0;
-	if (strarray_find(&model->str, buf, &to_str_i)
-	    || to_str_i == STRIDX_NO_ENTRY) {
-		HERE();
-		return;
-	}
-	if (on_end == on_beg)
-		is_on = 0;
-	else if (!str_cmp(&line[on_beg], on_end-on_beg, "on", 2))
-		is_on = 1;
-	else {
-		HERE();
-		return;
-	}
-
-	sw_idx = fpga_switch_lookup(model, y_coord, x_coord, from_str_i, to_str_i);
-	if (sw_idx == NO_SWITCH) {
-		HERE();
-		return;
-	}
-	sw_is_bidir = fpga_switch_is_bidir(model, y_coord, x_coord, sw_idx);
-	if ((is_bidir && !sw_is_bidir)
-	    || (!is_bidir && sw_is_bidir)) {
-		HERE();
-		return;
-	}
-	if (fpga_switch_is_used(model, y_coord, x_coord, sw_idx))
-		HERE();
-	if (is_on)
-		fpga_switch_enable(model, y_coord, x_coord, sw_idx);
 }
 
 static void read_dev_line(struct fpga_model* model, const char* line, int start)
@@ -778,9 +824,9 @@ int read_floorplan(struct fpga_model* model, FILE* f)
 		next_word(line, 0, &beg, &end);
 		if (end == beg) continue;
 
-		if (end-beg == 2
-		    && !str_cmp(&line[beg], 2, "sw", 2)) {
-			read_sw_line(model, line, end);
+		if (end-beg == 3
+		    && !str_cmp(&line[beg], 3, "net", 3)) {
+			read_net_line(model, line, end);
 		}
 		if (end-beg == 3
 		    && !str_cmp(&line[beg], 3, "dev", 3)) {
