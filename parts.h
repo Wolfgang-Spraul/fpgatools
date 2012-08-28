@@ -39,5 +39,10 @@
 #define BITS_LEN		(IOB_DATA_START+IOB_DATA_LEN)
 
 int get_major_minors(int idcode, int major);
+
+enum major_type { MAJ_ZERO, MAJ_LEFT, MAJ_RIGHT, MAJ_CENTER,
+	MAJ_LOGIC_XM, MAJ_LOGIC_XL, MAJ_BRAM, MAJ_MACC };
+enum major_type get_major_type(int idcode, int major);
+
 int get_num_iobs(int idcode);
 const char* get_iob_sitename(int idcode, int idx);

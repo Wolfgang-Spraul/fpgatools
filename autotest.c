@@ -136,7 +136,7 @@ static int test_net(struct test_state* tstate, net_idx_t net_i)
 			net->el[2].y, net->el[2].x,
 			fpga_switch_str_i(tstate->model,
 				net->el[2].y, net->el[2].x,
-				net->el[2].idx, SW_TO), 1, SW_TO);
+				net->el[2].idx, SW_TO), SW_TO, 1);
 		same_len = sizeof(same_sw)/sizeof(*same_sw);
 		rc = fpga_switch_same_fromto(tstate->model,
 			net->el[2].y, net->el[2].x,
@@ -174,7 +174,7 @@ static int test_net2(struct test_state* tstate, net_idx_t net_i)
 			net->el[i-1].y, net->el[i-1].x,
 			fpga_switch_str_i(tstate->model,
 				net->el[i-1].y, net->el[i-1].x,
-				net->el[i-1].idx, SW_FROM), 1, SW_FROM);
+				net->el[i-1].idx, SW_FROM), SW_FROM, 1);
 		same_len = sizeof(same_sw)/sizeof(*same_sw);
 		rc = fpga_switch_same_fromto(tstate->model,
 			net->el[i-1].y, net->el[i-1].x,
@@ -195,37 +195,13 @@ fail:
 	return rc;
 }
 
-static void fdev_print_required_pins(struct fpga_model* model, int y, int x,
-	int type, int type_idx)
-{
-	struct fpga_device* dev;
-	int i;
-
-	dev = fdev_p(model, y, x, type, type_idx);
-	if (!dev) { HERE(); return; }
-
-	printf("y%02i x%02i %s %i inpin", y, x, fdev_type2str(type), type_idx);
-	if (!dev->pinw_req_in)
-		printf(" -\n");
-	else {
-		for (i = 0; i < dev->pinw_req_in; i++)
-			printf(" %s", fdev_pinw_idx2str(type, dev->pinw_req_for_cfg[i]));
-		printf("\n");
-	}
-
-	printf("y%02i x%02i %s %i outpin", y, x, fdev_type2str(type), type_idx);
-	if (dev->pinw_req_total <= dev->pinw_req_in)
-		printf(" -\n");
-	else {
-		for (i = dev->pinw_req_in; i < dev->pinw_req_total; i++)
-			printf(" %s", fdev_pinw_idx2str(type, dev->pinw_req_for_cfg[i]));
-		printf("\n");
-	}
-}
-
 static int test_all_logic_configs(struct test_state* tstate)
 {
-	int y, x, rc;
+	struct fpga_device* dev;
+	struct switch_to_yx switch_to;
+	struct sw_chain chain;
+	net_idx_t net_idx;
+	int y, x, i, from_to, rc;
 
 // todo: goal: configure valid logic with as many possible in and out
 //       pins, for M and X device
@@ -238,10 +214,54 @@ static int test_all_logic_configs(struct test_state* tstate)
 
 	rc = fdev_set_required_pins(tstate->model, y, x, DEV_LOGIC, DEV_LOGX);
 	if (rc) FAIL(rc);
+// fdev_print_required_pins(tstate->model, y, x, DEV_LOGIC, DEV_LOGX);
 
-	fdev_print_required_pins(tstate->model, y, x, DEV_LOGIC, DEV_LOGX);
-	rc = diff_printf(tstate);
-	if (rc) FAIL(rc);
+	dev = fdev_p(tstate->model, y, x, DEV_LOGIC, DEV_LOGX);
+	if (!dev) FAIL(EINVAL);
+	for (i = 0; i < dev->pinw_req_total; i++) {
+		from_to = (i < dev->pinw_req_in) ? SW_TO : SW_FROM;
+		switch_to.yx_req = YX_ROUTING_TILE;
+		switch_to.flags = SWTO_YX_DEF;
+		switch_to.model = tstate->model;
+		switch_to.y = y;
+		switch_to.x = x;
+		switch_to.start_switch = dev->pinw[dev->pinw_req_for_cfg[i]];
+		switch_to.from_to = from_to;
+		rc = fpga_switch_to_yx(&switch_to);
+		if (rc) FAIL(rc);
+// printf_switch_to_result(&switch_to);
+
+		chain.model = tstate->model;
+		chain.y = switch_to.dest_y;
+		chain.x = switch_to.dest_x;
+		chain.start_switch = switch_to.dest_connpt;
+		chain.from_to = from_to;
+		chain.max_chain_size = 1;
+		while (fpga_switch_chain(&chain) != NO_SWITCH) {
+			rc = fpga_net_new(tstate->model, &net_idx);
+			if (rc) FAIL(rc);
+
+			// add port
+			rc = fpga_net_add_port(tstate->model, net_idx,
+				y, x, fpga_dev_idx(tstate->model, y, x,
+				DEV_LOGIC, DEV_LOGX), dev->pinw_req_for_cfg[i]);
+			if (rc) FAIL(rc);
+			// add (one) switch in logic tile
+			rc = fpga_net_add_switches(tstate->model, net_idx,
+				y, x, &switch_to.set);
+			if (rc) FAIL(rc);
+			// add switches in routing tile
+			rc = fpga_net_add_switches(tstate->model, net_idx,
+				switch_to.dest_y, switch_to.dest_x, &chain.set);
+			if (rc) FAIL(rc);
+
+// fprintf_net(stdout, tstate->model, net_idx);
+
+			rc = diff_printf(tstate);
+			if (rc) FAIL(rc);
+			fpga_net_delete(tstate->model, net_idx);
+		}
+	}
 	return 0;
 fail:
 	return rc;
@@ -349,6 +369,7 @@ int main(int argc, char** argv)
 	switch_to.y = P46_y;
 	switch_to.x = P46_x;
 	switch_to.start_switch = P46_dev->pinw[IOB_OUT_I];
+	switch_to.from_to = SW_FROM;
 	rc = fpga_switch_to_yx(&switch_to);
 	if (rc) FAIL(rc);
 	rc = fpga_net_add_switches(&model, P46_net, switch_to.y,
@@ -357,9 +378,11 @@ int main(int argc, char** argv)
 
 	switch_to.yx_req = YX_ROUTING_TILE;
 	switch_to.flags = SWTO_YX_DEF;
+	switch_to.model = &model;
 	switch_to.y = switch_to.dest_y;
 	switch_to.x = switch_to.dest_x;
 	switch_to.start_switch = switch_to.dest_connpt;
+	switch_to.from_to = SW_FROM;
 	rc = fpga_switch_to_yx(&switch_to);
 	if (rc) FAIL(rc);
 	rc = fpga_net_add_switches(&model, P46_net, switch_to.y,
@@ -368,9 +391,11 @@ int main(int argc, char** argv)
 
 	switch_to.yx_req = YX_ROUTING_TO_FABLOGIC;
 	switch_to.flags = SWTO_YX_CLOSEST;
+	switch_to.model = &model;
 	switch_to.y = switch_to.dest_y;
 	switch_to.x = switch_to.dest_x;
 	switch_to.start_switch = switch_to.dest_connpt;
+	switch_to.from_to = SW_FROM;
 	rc = fpga_switch_to_yx(&switch_to);
 	if (rc) FAIL(rc);
 	rc = fpga_net_add_switches(&model, P46_net, switch_to.y,
@@ -379,9 +404,11 @@ int main(int argc, char** argv)
 
 	switch_to.yx_req = YX_DEV_LOGIC;
 	switch_to.flags = SWTO_YX_TARGET_CONNPT|SWTO_YX_MAX_SWITCH_DEPTH;
+	switch_to.model = &model;
 	switch_to.y = switch_to.dest_y;
 	switch_to.x = switch_to.dest_x;
 	switch_to.start_switch = switch_to.dest_connpt;
+	switch_to.from_to = SW_FROM;
 	switch_to.max_switch_depth = 1;
 	{
 		struct sw_chain c = {

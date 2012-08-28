@@ -70,34 +70,64 @@ const char* get_iob_sitename(int idcode, int idx)
 	return iob_xc6slx9_sitenames[idx];
 }
 
-static const int minors_per_major[] = // for slx4 and slx9
-{
-	/*  0 */	 4, // 505 bytes = middle 8-bit for each minor?
-	/*  1 */ 	30, // left
-	/*  2 */ 	31, // logic M
-	/*  3 */ 	30, // logic L
-	/*  4 */ 	25, // bram
-	/*  5 */ 	31, // logic M
-	/*  6 */ 	30, // logic L
-	/*  7 */ 	24, // macc
-	/*  8 */ 	31, // logic M
-	/*  9 */ 	31, // center
-	/* 10 */ 	31, // logic M
-	/* 11 */ 	30, // logic L
-	/* 12 */ 	31, // logic M
-	/* 13 */ 	30, // logic L
-	/* 14 */ 	25, // bram
-	/* 15 */ 	31, // logic M
-	/* 16 */ 	30, // logic L
-	/* 17 */	30, // right
-};
-
 int get_major_minors(int idcode, int major)
 {
+	static const int minors_per_major[] = // for slx9
+	{
+		/*  0 */	 4, // 505 bytes = middle 8-bit for each minor?
+		/*  1 */ 	30, // left
+		/*  2 */ 	31, // logic M
+		/*  3 */ 	30, // logic L
+		/*  4 */ 	25, // bram
+		/*  5 */ 	31, // logic M
+		/*  6 */ 	30, // logic L
+		/*  7 */ 	24, // macc
+		/*  8 */ 	31, // logic M
+		/*  9 */ 	31, // center
+		/* 10 */ 	31, // logic M
+		/* 11 */ 	30, // logic L
+		/* 12 */ 	31, // logic M
+		/* 13 */ 	30, // logic L
+		/* 14 */ 	25, // bram
+		/* 15 */ 	31, // logic M
+		/* 16 */ 	30, // logic L
+		/* 17 */	30, // right
+	};
 	if ((idcode & IDCODE_MASK) != XC6SLX9)
 		EXIT(1);
 	if (major < 0 || major
 		> sizeof(minors_per_major)/sizeof(minors_per_major[0]))
 		EXIT(1);
 	return minors_per_major[major];
+}
+
+enum major_type get_major_type(int idcode, int major)
+{
+	static const int major_types[] = // for slx9
+	{
+		/*  0 */ MAJ_ZERO,
+		/*  1 */ MAJ_LEFT,
+		/*  2 */ MAJ_LOGIC_XM,
+		/*  3 */ MAJ_LOGIC_XL,
+		/*  4 */ MAJ_BRAM,
+		/*  5 */ MAJ_LOGIC_XM,
+		/*  6 */ MAJ_LOGIC_XL,
+		/*  7 */ MAJ_MACC,
+		/*  8 */ MAJ_LOGIC_XM,
+		/*  9 */ MAJ_CENTER,
+		/* 10 */ MAJ_LOGIC_XM,
+		/* 11 */ MAJ_LOGIC_XL,
+		/* 12 */ MAJ_LOGIC_XM,
+		/* 13 */ MAJ_LOGIC_XL,
+		/* 14 */ MAJ_BRAM,
+		/* 15 */ MAJ_LOGIC_XM,
+		/* 16 */ MAJ_LOGIC_XL,
+		/* 17 */ MAJ_RIGHT
+	};
+	if ((idcode & IDCODE_MASK) != XC6SLX9)
+		EXIT(1);
+	if (major < 0 || major
+		> sizeof(major_types)/sizeof(major_types[0]))
+		EXIT(1);
+	return major_types[major];
 }

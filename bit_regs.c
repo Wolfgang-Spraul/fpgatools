@@ -713,103 +713,28 @@ static void print_ramb16_cfg(ramb16_cfg_t* cfg)
 	printf("}\n");
 }
 
-static void printf_clb(uint8_t* maj_bits, int row, int major)
+static void printf_routing_2minors(uint8_t* bits, int row, int major,
+	int even_minor)
 {
-	int i, j, start, max_idx, frame_off;
-	const char* lut_str;
-	uint64_t lut64;
+	int y, i, hclk;
+	uint64_t u64_0, u64_1;
+	char bit_str[128];
 
-	// the first two slots on top and bottom row are not used for clb
-	if (!row) {
-		start = 0;
-		max_idx = 14;
-	} else if (row == 3) {
-		start = 2;
-		max_idx = 16;
-	} else {
-		start = 0;
-		max_idx = 16;
-	}
-
-	for (i = start; i < max_idx; i++) {
-		if (clb_empty(maj_bits, i))
-			continue;
-		frame_off = i*64;
-		if (i >= 8)
-			frame_off += 16; // skip clock bits for idx >= 8
-
-		// LUTs
-		lut64 = read_lut64(&maj_bits[24*130], frame_off+32);
-		{ int logic_base[6] = {0,1,0,0,1,0};
-		  lut_str = lut2bool(lut64, 64, &logic_base, 1 /* flip_b0 */); }
-		if (*lut_str)
-			printf("r%i ma%i clb i%i s0_A6LUT \"%s\"\n",
-				row, major, i-start, lut_str);
-
-		lut64 = read_lut64(&maj_bits[21*130], frame_off+32);
-		{ int logic_base[6] = {1,1,0,1,0,1};
-		  lut_str = lut2bool(lut64, 64, &logic_base, 1 /* flip_b0 */); }
-		if (*lut_str)
-			printf("r%i ma%i clb i%i s0_B6LUT \"%s\"\n",
-				row, major, i-start, lut_str);
-
-		lut64 = read_lut64(&maj_bits[24*130], frame_off);
-		{ int logic_base[6] = {0,1,0,0,1,0};
-		  lut_str = lut2bool(lut64, 64, &logic_base, 1 /* flip_b0 */); }
-		if (*lut_str)
-			printf("r%i ma%i clb i%i s0_C6LUT \"%s\"\n",
-				row, major, i-start, lut_str);
-
-		lut64 = read_lut64(&maj_bits[21*130], frame_off);
-		{ int logic_base[6] = {1,1,0,1,0,1};
-		  lut_str = lut2bool(lut64, 64, &logic_base, 1 /* flip_b0 */); }
-		if (*lut_str)
-			printf("r%i ma%i clb i%i s0_D6LUT \"%s\"\n",
-				row, major, i-start, lut_str);
-
-		lut64 = read_lut64(&maj_bits[27*130], frame_off+32);
-		{ int logic_base[6] = {1,1,0,1,1,0};
-		  lut_str = lut2bool(lut64, 64, &logic_base, 0 /* flip_b0 */); }
-		if (*lut_str)
-			printf("r%i ma%i clb i%i s1_A6LUT \"%s\"\n",
-				row, major, i-start, lut_str);
-
-		lut64 = read_lut64(&maj_bits[29*130], frame_off+32);
-		{ int logic_base[6] = {1,1,0,1,1,0};
-		  lut_str = lut2bool(lut64, 64, &logic_base, 0 /* flip_b0 */); }
-		if (*lut_str)
-			printf("r%i ma%i clb i%i s1_B6LUT \"%s\"\n",
-				row, major, i-start, lut_str);
-
-		lut64 = read_lut64(&maj_bits[27*130], frame_off);
-		{ int logic_base[6] = {0,1,0,0,0,1};
-		  lut_str = lut2bool(lut64, 64, &logic_base, 0 /* flip_b0 */); }
-		if (*lut_str)
-			printf("r%i ma%i clb i%i s1_C6LUT \"%s\"\n",
-				row, major, i-start, lut_str);
-
-		lut64 = read_lut64(&maj_bits[29*130], frame_off);
-		{ int logic_base[6] = {0,1,0,0,0,1};
-		  lut_str = lut2bool(lut64, 64, &logic_base, 0 /* flip_b0 */); }
-		if (*lut_str)
-			printf("r%i ma%i clb i%i s1_D6LUT \"%s\"\n",
-				row, major, i-start, lut_str);
-
-		// bits
-		for (j = 0; j < 64; j++) {
-			if (frame_get_bit(&maj_bits[20*130], frame_off + j))
-				printf("r%i ma%i clb i%i mi20 bit %i\n",
-					row, major, i-start, j); 
-		}
-		for (j = 0; j < 64; j++) {
-			if (frame_get_bit(&maj_bits[23*130], frame_off + j))
-				printf("r%i ma%i clb i%i mi23 bit %i\n",
-					row, major, i-start, j); 
-		}
-		for (j = 0; j < 64; j++) {
-			if (frame_get_bit(&maj_bits[26*130], frame_off + j))
-				printf("r%i ma%i clb i%i mi26 bit %i\n",
-					row, major, i-start, j); 
+	for (y = 0; y < 16; y++) {
+		hclk = (y < 8) ? 0 : 2;
+		u64_0 = frame_get_u64(bits + y*8 + hclk);
+		u64_1 = frame_get_u64(bits + y*8 + hclk + FRAME_SIZE);
+		if (u64_0 || u64_1) {
+			for (i = 0; i < sizeof(bit_str); i++)
+				bit_str[i] = '0';
+			for (i = 0; i < 64; i++) {
+				if (u64_0 & (1ULL << i))
+					bit_str[i*2] = '1';
+				if (u64_1 & (1ULL << i))
+					bit_str[i*2+1] = '1';
+			}
+			printf("r%i ma%i v64_%i mip%i %s\n",
+				row, major, y, even_minor, bit_str);
 		}
 	}
 }
@@ -823,7 +748,8 @@ static int dump_bits(struct fpga_config* cfg)
 	for (row = 0; row < 4; row++) {
 		for (major = 0; major < 18; major++) {
 			// todo: the macc/bram/logic special cases can be removed
-			if (0 && major == 7) { // MACC
+			if (get_major_type(cfg->reg[cfg->idcode_reg].int_v,
+				major) == MAJ_MACC) {
 				int last_extra_minor;
 
 				if (!row || row == 3)
@@ -851,30 +777,25 @@ static int dump_bits(struct fpga_config* cfg)
 						}
 					}
 				}
-			} else if (0 && (major == 2 || major == 5 || major == 8 || major == 10
-				   || major == 12 || major == 15)) { // logic_m
+			} else if (get_major_type(cfg->reg[cfg->idcode_reg].int_v, major) == MAJ_LOGIC_XM) {
+				// clock
+				for (minor = 0; minor < 31; minor++)
+					printf_clock(
+						&cfg->bits.d[off+minor*130],
+						row, major, minor);
+
+				// bitwise
 				minor = 0;
-				while (minor < 20) {
+				while (minor < 31) {
 					minor += printf_frames(&cfg->bits.d[off
-					  +minor*130], 31 - minor, row,
-					  major, minor, /*print_empty*/ 0);
+					  +minor*130], 31 - minor,
+					  row, major, minor, /*print_empty*/ 0);
 				}
 
-				// clock
-				for (minor = 20; minor < 31; minor++)
-					printf_clock(&cfg->bits.d[off+minor*130],
-						row, major, minor);
-				// extra bits at bottom of row0 and top of row3
-				if (row == 3)
-					printf_extrabits(&cfg->bits.d[off], 20, 11,
-						0, 128, row, major);
-				else if (!row)
-					printf_extrabits(&cfg->bits.d[off], 20, 11,
-						14*64 + 16, 128, row, major);
-
-				// clbs
-				printf_clb(&cfg->bits.d[off], row, major);
-			} else if (0 && (major == 4 || major == 14)) { // bram
+				// 0:20 routing minor pairs
+				for (i = 0; i < 10; i++)
+					printf_routing_2minors(&cfg->bits.d[off+i*2*FRAME_SIZE], row, major, i*2);
+			} else if (get_major_type(cfg->reg[cfg->idcode_reg].int_v, major) == MAJ_BRAM) {
 				ramb16_cfg_t ramb16_cfg[4];
 
 				// minors 0..22
@@ -910,7 +831,7 @@ static int dump_bits(struct fpga_config* cfg)
 				}
 			} else {
 				int major_minors =
-					get_major_minors(XC6SLX9, major);
+					get_major_minors(cfg->reg[cfg->idcode_reg].int_v, major);
 				minor = 0;
 				while (minor < major_minors) {
 					minor += printf_frames(&cfg->bits.d[off

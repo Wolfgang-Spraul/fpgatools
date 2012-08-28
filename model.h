@@ -348,7 +348,8 @@ typedef int dev_type_idx_t;
 
 enum { LOGIC_M = 1, LOGIC_L, LOGIC_X };
 // All LOGICIN_IN A..D sequences must be exactly sequential as
-// here to match initialization in model_device:init_logic().
+// here to match initialization in model_devices.c:init_logic()
+// and control.c:fdev_set_required_pins().
 enum { // input:
 	LOGIC_IN_A1 = 0,
 	LOGIC_IN_A2, LOGIC_IN_A3, LOGIC_IN_A4, LOGIC_IN_A5, LOGIC_IN_A6,
@@ -385,8 +386,11 @@ enum { // input:
 	  "AQ", "BQ", "CQ", "DQ", \
 	  "COUT" }
 
-// offsets into fpgadev_logic:luts[]
-enum { A5_LUT = 0, A6_LUT, B5_LUT, B6_LUT, C5_LUT, C6_LUT, D5_LUT, D6_LUT, NUM_LUTS };
+// offsets into fpgadev_logic:luts[], also hardcoded in
+// control.c:fdev_set_required_pins(), where we assume
+// that div2 will lead to A-D
+enum { A5_LUT = 0, A6_LUT, B5_LUT, B6_LUT,
+	C5_LUT, C6_LUT, D5_LUT, D6_LUT, NUM_LUTS };
 #define FP_LUT_STR \
 	{ "A5_lut", "A6_lut", "B5_lut", "B6_lut", \
 	  "C5_lut", "C6_lut", "D5_lut", "D6_lut" }

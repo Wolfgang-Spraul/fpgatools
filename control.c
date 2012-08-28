@@ -312,12 +312,67 @@ const char* fdev_pinw_idx2str(int devtype, pinw_idx_t idx)
 	return 0;
 }
 
-static void free_required_pins(struct fpga_device* dev)
+static int reset_required_pins(struct fpga_device* dev)
 {
-	free(dev->pinw_req_for_cfg);
-	dev->pinw_req_for_cfg = 0;
+	int rc;
+
+	if (!dev->pinw_req_for_cfg) {
+		dev->pinw_req_for_cfg = malloc(dev->num_pinw_total
+			* sizeof(*dev->pinw_req_for_cfg));
+		if (!dev->pinw_req_for_cfg) FAIL(ENOMEM);
+	}
 	dev->pinw_req_total = 0;
 	dev->pinw_req_in = 0;
+	return 0;
+fail:
+	return rc;
+}
+
+void fdev_print_required_pins(struct fpga_model* model, int y, int x,
+	int type, int type_idx)
+{
+	struct fpga_device* dev;
+	int i;
+
+	dev = fdev_p(model, y, x, type, type_idx);
+	if (!dev) { HERE(); return; }
+
+	printf("y%02i x%02i %s %i inpin", y, x, fdev_type2str(type), type_idx);
+	if (!dev->pinw_req_in)
+		printf(" -\n");
+	else {
+		for (i = 0; i < dev->pinw_req_in; i++)
+			printf(" %s", fdev_pinw_idx2str(type, dev->pinw_req_for_cfg[i]));
+		printf("\n");
+	}
+
+	printf("y%02i x%02i %s %i outpin", y, x, fdev_type2str(type), type_idx);
+	if (dev->pinw_req_total <= dev->pinw_req_in)
+		printf(" -\n");
+	else {
+		for (i = dev->pinw_req_in; i < dev->pinw_req_total; i++)
+			printf(" %s", fdev_pinw_idx2str(type, dev->pinw_req_for_cfg[i]));
+		printf("\n");
+	}
+}
+
+static void add_req_inpin(struct fpga_device* dev, pinw_idx_t pinw_i)
+{
+	if (dev->pinw_req_total > dev->pinw_req_in) {
+		memmove(&dev->pinw_req_for_cfg[dev->pinw_req_in+1],
+			&dev->pinw_req_for_cfg[dev->pinw_req_in],
+			(dev->pinw_req_total-dev->pinw_req_in)
+			*sizeof(*dev->pinw_req_for_cfg));
+	}
+	dev->pinw_req_for_cfg[dev->pinw_req_in] = pinw_i;
+	dev->pinw_req_in++;
+	dev->pinw_req_total++;
+}
+
+static void add_req_outpin(struct fpga_device* dev, pinw_idx_t pinw_i)
+{
+	dev->pinw_req_for_cfg[dev->pinw_req_total] = pinw_i;
+	dev->pinw_req_total++;
 }
 
 #define MAX_LUT_LEN	512
@@ -331,7 +386,8 @@ int fdev_logic_set_lut(struct fpga_model* model, int y, int x, int type_idx,
 
 	dev = fdev_p(model, y, x, DEV_LOGIC, type_idx);
 	if (!dev) FAIL(EINVAL);
-	free_required_pins(dev);
+	rc = reset_required_pins(dev);
+	if (rc) FAIL(rc);
 
 	luts = dev->u.logic.luts;
 	if (!luts[which_lut]) {
@@ -371,23 +427,50 @@ fail:
 	return rc;
 }
 
+static void scan_lut_digits(const char* s, int* digits)
+{
+	int i;
+	
+	for (i = 0; i < 6; i++)
+		digits[i] = 0;
+	if (!s) return;
+	for (i = 0; s[i]; i++) {
+		if (s[i] >= '1' && s[i] <= '6')
+			digits[s[i]-'1']++;
+	}
+}
+
 int fdev_set_required_pins(struct fpga_model* model, int y, int x, int type,
 	int type_idx)
 {
 	struct fpga_device* dev;
-	int rc;
+	int digits[6];
+	int i, j, rc;
 
 	dev = fdev_p(model, y, x, type, type_idx);
 	if (!dev) FAIL(EINVAL);
-	free_required_pins(dev);
+	rc = reset_required_pins(dev);
+	if (rc) FAIL(rc);
 	if (type == DEV_LOGIC) {
-#if 0
-TODO:
-	// required pinwires depend on the given config and will
-	// be deleted/invalidated on any config change.
-	int pinw_req_total, pinw_req_in;
-	pinw_idx_t* pinw_req_for_cfg;
-#endif
+		if (dev->u.logic.A_used)
+			add_req_outpin(dev, LOGIC_OUT_A);
+		if (dev->u.logic.B_used)
+			add_req_outpin(dev, LOGIC_OUT_B);
+		if (dev->u.logic.C_used)
+			add_req_outpin(dev, LOGIC_OUT_C);
+		if (dev->u.logic.D_used)
+			add_req_outpin(dev, LOGIC_OUT_D);
+		for (i = 0; i < sizeof(dev->u.logic.luts)
+			/sizeof(dev->u.logic.luts[0]); i++) {
+			if (!dev->u.logic.luts[i]) continue;
+			scan_lut_digits(dev->u.logic.luts[i], digits);
+			for (j = 0; j < 6; j++) {
+				// i/2 because luts order is A5-A6 B5-B6, etc.
+				if (digits[j])
+					add_req_inpin(dev,
+						LOGIC_IN_A1+(i/2)*6+j);
+			}
+		}
 	}
 	return 0;
 fail:
@@ -402,7 +485,10 @@ void fdev_delete(struct fpga_model* model, int y, int x, int type, int type_idx)
 	dev = fdev_p(model, y, x, type, type_idx);
 	if (!dev) { HERE(); return; }
 	if (!dev->instantiated) return;
-	free_required_pins(dev);
+	free(dev->pinw_req_for_cfg);
+	dev->pinw_req_for_cfg = 0;
+	dev->pinw_req_total = 0;
+	dev->pinw_req_in = 0;
 	if (dev->type == DEV_LOGIC) {
 		for (i = 0; i < sizeof(dev->u.logic.luts)
 			/sizeof(dev->u.logic.luts[0]); i++) {
@@ -825,7 +911,7 @@ int fpga_switch_conns(struct sw_conns* conns)
 		conns->chain.y = conns->y;
 		conns->chain.x = conns->x;
 		conns->chain.start_switch = conns->start_switch;
-		conns->chain.from_to = SW_FROM;
+		conns->chain.from_to = conns->from_to;
 		conns->chain.max_chain_size = conns->max_switch_depth;
 
 		conns->start_switch = STRIDX_NO_ENTRY;
@@ -841,7 +927,7 @@ int fpga_switch_conns(struct sw_conns* conns)
 		end_of_chain_str = fpga_switch_str_i(conns->model,
 			conns->y, conns->x,
 			conns->chain.set.sw[conns->chain.set.len-1],
-			SW_TO);
+			!conns->from_to);
 		if (end_of_chain_str == STRIDX_NO_ENTRY)
 			{ HERE(); goto internal_error; }
 		conns->dest_i = 0;
@@ -865,7 +951,7 @@ internal_error:
 }
 
 void printf_swchain(struct fpga_model* model, int y, int x,
-	str16_t sw, int max_depth, int from_to)
+	str16_t sw, int from_to, int max_depth)
 {
 	struct sw_chain chain =
 		{ .model = model, .y = y, .x = x, .start_switch = sw,
@@ -877,14 +963,14 @@ void printf_swchain(struct fpga_model* model, int y, int x,
 }
 
 void printf_swconns(struct fpga_model* model, int y, int x,
-	str16_t sw, int max_depth)
+	str16_t sw, int from_to, int max_depth)
 {
 	struct sw_conns conns =
 		{ .model = model, .y = y, .x = x, .start_switch = sw,
-		  .max_switch_depth = max_depth };
+		  .from_to = from_to, .max_switch_depth = max_depth };
 	while (fpga_switch_conns(&conns) != NO_CONN) {
 		printf("sw %s conn y%02i x%02i %s\n", fmt_swset(model, y, x,
-			&conns.chain.set, SW_FROM),
+			&conns.chain.set, from_to),
 			conns.dest_y, conns.dest_x,
 			strarray_lookup(&model->str, conns.dest_str_i));
 	}
@@ -894,7 +980,7 @@ int fpga_switch_to_yx(struct switch_to_yx* p)
 {
 	struct sw_conns conns = {
 		.model = p->model, .y = p->y, .x = p->x,
-		.start_switch = p->start_switch,
+		.start_switch = p->start_switch, .from_to = p->from_to,
 		.max_switch_depth =
 		  (p->flags & SWTO_YX_MAX_SWITCH_DEPTH)
 			? p->max_switch_depth : MAX_SW_DEPTH };
@@ -942,6 +1028,18 @@ int fpga_switch_to_yx(struct switch_to_yx* p)
 	return 0;
 }
 
+void printf_switch_to_result(struct switch_to_yx* p)
+{
+	printf("switch_to_yx() from y%02i x%02i connpt %s (%s)\n",
+		p->y, p->x, strarray_lookup(&p->model->str, p->start_switch),
+		p->from_to == SW_FROM ? "SW_FROM" : "SW_TO");
+	printf(" %s y%02i x%02i %s via %s\n",
+		p->from_to == SW_FROM ? "to" : "from",
+		p->dest_y, p->dest_x,
+		strarray_lookup(&p->model->str, p->dest_connpt),
+		fmt_swset(p->model, p->y, p->x, &p->set, p->from_to));
+}
+
 #define NET_ALLOC_INCREMENT 64
 
 static int fpga_net_useidx(struct fpga_model* model, net_idx_t new_idx)
@@ -979,6 +1077,26 @@ int fpga_net_new(struct fpga_model* model, net_idx_t* new_idx)
 	if (rc) return rc;
 	*new_idx = model->highest_used_net;
 	return 0;
+}
+
+void fpga_net_delete(struct fpga_model* model, net_idx_t net_idx)
+{
+	struct fpga_net* net;
+	int i;
+
+	net = &model->nets[net_idx-1];
+	for (i = 0; i < net->len; i++) {
+		if (net->el[i].idx & NET_IDX_IS_PINW)
+			continue;
+		if (!fpga_switch_is_used(model, net->el[i].y, net->el[i].x,
+			net->el[i].idx))
+			HERE();
+		fpga_switch_disable(model, net->el[i].y, net->el[i].x,
+			net->el[i].idx);
+	}
+	model->nets[net_idx-1].len = 0;
+	if (model->highest_used_net == net_idx)
+		model->highest_used_net--;
 }
 
 int fpga_net_enum(struct fpga_model* model, net_idx_t last, net_idx_t* next)
@@ -1027,6 +1145,15 @@ int fpga_net_add_port(struct fpga_model* model, net_idx_t net_i,
 	return 0;
 fail:
 	return rc;
+}
+
+int fpga_net_add_switch(struct fpga_model* model, net_idx_t net_i,
+	int y, int x, swidx_t one_sw)
+{
+	struct sw_set set;
+	set.sw[0] = one_sw;
+	set.len = 1;
+	return fpga_net_add_switches(model, net_i, y, x, &set);
 }
 
 int fpga_net_add_switches(struct fpga_model* model, net_idx_t net_i,

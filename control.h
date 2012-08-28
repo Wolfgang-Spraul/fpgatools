@@ -43,6 +43,8 @@ int fdev_logic_set_lut(struct fpga_model* model, int y, int x, int type_idx,
 	int which_lut, const char* lut_str, int lut_len);
 int fdev_set_required_pins(struct fpga_model* model, int y, int x, int type,
 	int type_idx);
+void fdev_print_required_pins(struct fpga_model* model, int y, int x,
+	int type, int type_idx);
 void fdev_delete(struct fpga_model* model, int y, int x, int type,
 	int type_idx);
 
@@ -139,6 +141,7 @@ struct sw_conns
 	int x;
 	// start_switch will be set to STRIDX_NO_ENTRY (0) after first call
 	str16_t start_switch;
+	int from_to;
 	int max_switch_depth;
 
 	// return values:
@@ -156,9 +159,9 @@ struct sw_conns
 int fpga_switch_conns(struct sw_conns* conns);
 
 void printf_swchain(struct fpga_model* model, int y, int x,
-	str16_t sw, int max_depth, int from_to);
+	str16_t sw, int from_to, int max_depth);
 void printf_swconns(struct fpga_model* model, int y, int x,
-	str16_t sw, int max_depth);
+	str16_t sw, int from_to, int max_depth);
 
 #define SWTO_YX_DEF			0
 #define SWTO_YX_CLOSEST			0x0001
@@ -174,6 +177,7 @@ struct switch_to_yx
 	int y;
 	int x;
 	str16_t start_switch;
+	int from_to;
 	int max_switch_depth; // only if SWTO_YX_MAX_SWITCH_DEPTH is set
 	str16_t target_connpt; // only if SWTO_YX_TARGET_CONNPT is set
 
@@ -185,6 +189,7 @@ struct switch_to_yx
 };
 
 int fpga_switch_to_yx(struct switch_to_yx* p);
+void printf_switch_to_result(struct switch_to_yx* p);
 
 //
 // nets
@@ -221,11 +226,14 @@ typedef int net_idx_t; // net indices are 1-based
 #define NO_NET 0
 
 int fpga_net_new(struct fpga_model* model, net_idx_t* new_idx);
+void fpga_net_delete(struct fpga_model* model, net_idx_t net_idx);
 // start a new enumeration by calling with last==NO_NET
 int fpga_net_enum(struct fpga_model* model, net_idx_t last, net_idx_t* next);
 struct fpga_net* fpga_net_get(struct fpga_model* model, net_idx_t net_i);
 int fpga_net_add_port(struct fpga_model* model, net_idx_t net_i,
 	int y, int x, dev_idx_t dev_idx, pinw_idx_t pinw_idx);
+int fpga_net_add_switch(struct fpga_model* model, net_idx_t net_i,
+	int y, int x, swidx_t one_sw);
 int fpga_net_add_switches(struct fpga_model* model, net_idx_t net_i,
 	int y, int x, const struct sw_set* set);
 void fpga_net_free_all(struct fpga_model* model);

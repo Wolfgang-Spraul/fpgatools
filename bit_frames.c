@@ -165,15 +165,6 @@ int extract_model(struct fpga_model* model, struct fpga_bits* bits)
 					continue;
 				}
 
-				// any logic block will enable r0ma17mi22b980
-				if (!get_bit(bits, /*row*/ 0, /*major*/ 17,
-					/*minor*/ 22, /*bit_i*/ 980)) {
-					HERE();
-					continue;
-				}
-				clear_bit(bits, /*row*/ 0, /*major*/ 17,
-					/*minor*/ 22, /*bit_i*/ 980);
-
 				dev_idx = fpga_dev_idx(model, y, x, DEV_LOGIC, DEV_LOGX);
 				if (dev_idx == NO_DEV) FAIL(EINVAL);
 				dev = FPGA_DEV(model, y, x, dev_idx);
@@ -216,6 +207,36 @@ int extract_model(struct fpga_model* model, struct fpga_bits* bits)
 					*(uint32_t*)(u8_p+29*FRAME_SIZE+byte_off) = 0;
 					*(uint32_t*)(u8_p+30*FRAME_SIZE+byte_off) = 0;
 				}
+#if 0
+		// M-LUTs
+		lut64 = read_lut64(&maj_bits[24*130], frame_off+32);
+		{ int logic_base[6] = {0,1,0,0,1,0};
+		  lut_str = lut2bool(lut64, 64, &logic_base, 1 /* flip_b0 */); }
+		if (*lut_str)
+			printf("r%i ma%i clb i%i s0_A6LUT \"%s\"\n",
+				row, major, i-start, lut_str);
+
+		lut64 = read_lut64(&maj_bits[21*130], frame_off+32);
+		{ int logic_base[6] = {1,1,0,1,0,1};
+		  lut_str = lut2bool(lut64, 64, &logic_base, 1 /* flip_b0 */); }
+		if (*lut_str)
+			printf("r%i ma%i clb i%i s0_B6LUT \"%s\"\n",
+				row, major, i-start, lut_str);
+
+		lut64 = read_lut64(&maj_bits[24*130], frame_off);
+		{ int logic_base[6] = {0,1,0,0,1,0};
+		  lut_str = lut2bool(lut64, 64, &logic_base, 1 /* flip_b0 */); }
+		if (*lut_str)
+			printf("r%i ma%i clb i%i s0_C6LUT \"%s\"\n",
+				row, major, i-start, lut_str);
+
+		lut64 = read_lut64(&maj_bits[21*130], frame_off);
+		{ int logic_base[6] = {1,1,0,1,0,1};
+		  lut_str = lut2bool(lut64, 64, &logic_base, 1 /* flip_b0 */); }
+		if (*lut_str)
+			printf("r%i ma%i clb i%i s0_D6LUT \"%s\"\n",
+				row, major, i-start, lut_str);
+#endif
 			}
 		}
 	}
