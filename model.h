@@ -385,11 +385,16 @@ enum { // input:
 	  "AQ", "BQ", "CQ", "DQ", \
 	  "COUT" }
 
+// offsets into fpgadev_logic:luts[]
+enum { A5_LUT = 0, A6_LUT, B5_LUT, B6_LUT, C5_LUT, C6_LUT, D5_LUT, D6_LUT, NUM_LUTS };
+#define FP_LUT_STR \
+	{ "A5_lut", "A6_lut", "B5_lut", "B6_lut", \
+	  "C5_lut", "C6_lut", "D5_lut", "D6_lut" }
+
 struct fpgadev_logic
 {
-	int subtype; // LOGIC_M, LOGIC_L or LOGIC_X
 	int A_used, B_used, C_used, D_used;
-	char* A6_lut, *B6_lut, *C6_lut, *D6_lut;
+	char* luts[NUM_LUTS];
 };
 
 enum { IOBM = 1, IOBS };
@@ -417,7 +422,6 @@ enum { // input:
 
 struct fpgadev_iob
 {
-	int subtype; // IOBM or IOBS
 	IOSTANDARD istandard;
 	IOSTANDARD ostandard;
 	int bypass_mux;
@@ -435,6 +439,10 @@ typedef int pinw_idx_t; // index into pinw array
 struct fpga_device
 {
 	enum fpgadev_type type;
+	// subtypes:
+	// IOB:   IOBM, IOBS
+	// LOGIC: LOGIC_M, LOGIC_L, LOGIC_X
+	int subtype;
 	int instantiated;
 
 	// A bram dev has about 190 pinwires (input and output
@@ -443,11 +451,17 @@ struct fpga_device
 	// The array holds first the input wires, then the output wires.
 	// Unused members are set to STRIDX_NO_ENTRY.
 	str16_t* pinw;
+
+	// required pinwires depend on the given config and will
+	// be deleted/invalidated on any config change.
+	int pinw_req_total, pinw_req_in;
+	pinw_idx_t* pinw_req_for_cfg;
 	
+	// the rest will be memset to 0 on any device removal/uninstantiation
 	union {
 		struct fpgadev_logic logic;
 		struct fpgadev_iob iob;
-	};
+	} u;
 };
 
 #define SWITCH_USED		0x80000000

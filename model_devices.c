@@ -11,10 +11,8 @@
 
 static int add_dev(struct fpga_model* model,
 	int y, int x, int type, int subtype);
-static int init_iob(struct fpga_model* model, int y, int x,
-	int idx, int subtype);
-static int init_logic(struct fpga_model* model, int y, int x,
-	int idx, int subtype);
+static int init_iob(struct fpga_model* model, int y, int x, int idx);
+static int init_logic(struct fpga_model* model, int y, int x, int idx);
 
 int init_devices(struct fpga_model* model)
 {
@@ -304,32 +302,26 @@ fail:
 
 void free_devices(struct fpga_model* model)
 {
-	int i, j;
-	for (i = 0; i < model->x_width * model->y_height; i++) {
-		if (!model->tiles[i].num_devs)
-			continue;
-		EXIT(!model->tiles[i].devs);
-		for (j = 0; j < model->tiles[i].num_devs; j++) {
-			free(model->tiles[i].devs[j].pinw);
-			model->tiles[i].devs[j].pinw = 0;
-			model->tiles[i].devs[j].num_pinw_total = 0;
-			model->tiles[i].devs[j].num_pinw_in = 0;
+	struct fpga_tile* tile;
+	int x, y, i;
 
-			if (model->tiles[i].devs[j].type != DEV_LOGIC)
+	for (x = 0; x < model->x_width; x++) {
+		for (y = 0; y < model->y_height; y++) {
+			tile = YX_TILE(model, y, x);
+			if (!tile->num_devs)
 				continue;
-
-			free(model->tiles[i].devs[i].logic.A6_lut);
-			model->tiles[i].devs[i].logic.A6_lut = 0;
-			free(model->tiles[i].devs[i].logic.B6_lut);
-			model->tiles[i].devs[i].logic.B6_lut = 0;
-			free(model->tiles[i].devs[i].logic.C6_lut);
-			model->tiles[i].devs[i].logic.C6_lut = 0;
-			free(model->tiles[i].devs[i].logic.D6_lut);
-			model->tiles[i].devs[i].logic.D6_lut = 0;
+			if (!tile->devs) {
+				HERE();
+				continue;
+			}
+			for (i = 0; i < tile->num_devs; i++) {
+				fdev_delete(model, y, x, tile->devs[i].type,
+					fdev_typeidx(model, y, x, i));
+			}
+			free(tile->devs);
+			tile->devs = 0;
+			tile->num_devs = 0;
 		}
-		free(model->tiles[i].devs);
-		model->tiles[i].devs = 0;
-		model->tiles[i].num_devs = 0;
 	}
 }
 
@@ -356,11 +348,12 @@ static int add_dev(struct fpga_model* model,
 
 	// init new device
 	tile->devs[new_dev_i].type = type;
+	tile->devs[new_dev_i].subtype = subtype;
 	if (type == DEV_IOB) {
-		rc = init_iob(model, y, x, new_dev_i, subtype);
+		rc = init_iob(model, y, x, new_dev_i);
 		if (rc) FAIL(rc);
 	} else if (type == DEV_LOGIC) {
-		rc = init_logic(model, y, x, new_dev_i, subtype);
+		rc = init_logic(model, y, x, new_dev_i);
 		if (rc) FAIL(rc);
 	}
 	return 0;
@@ -368,8 +361,7 @@ fail:
 	return rc;
 }
 
-static int init_iob(struct fpga_model* model, int y, int x,
-	int idx, int subtype)
+static int init_iob(struct fpga_model* model, int y, int x, int idx)
 {
 	struct fpga_tile* tile;
 	const char* prefix;
@@ -377,8 +369,7 @@ static int init_iob(struct fpga_model* model, int y, int x,
 	char tmp_str[128];
 
 	tile = YX_TILE(model, y, x);
-	tile->devs[idx].iob.subtype = subtype;
-	type_idx = fpga_dev_typeidx(model, y, x, idx);
+	type_idx = fdev_typeidx(model, y, x, idx);
 	if (!y)
 		prefix = "TIOB";
 	else if (y == model->y_height - BOT_OUTER_ROW)
@@ -446,20 +437,18 @@ fail:
 	return rc;
 }
 
-static int init_logic(struct fpga_model* model, int y, int x,
-	int idx, int subtype)
+static int init_logic(struct fpga_model* model, int y, int x, int idx)
 {
 	struct fpga_tile* tile;
 	const char* pre;
 	int i, j, rc;
 
 	tile = YX_TILE(model, y, x);
-	tile->devs[idx].logic.subtype = subtype;
-	if (subtype == LOGIC_M)
+	if (tile->devs[idx].subtype == LOGIC_M)
 		pre = "M_";
-	else if (subtype == LOGIC_L)
+	else if (tile->devs[idx].subtype == LOGIC_L)
 		pre = "L_";
-	else if (subtype == LOGIC_X) {
+	else if (tile->devs[idx].subtype == LOGIC_X) {
 		pre = is_atx(X_FABRIC_LOGIC_XL_COL|X_CENTER_LOGIC_COL, model, x)
 			? "XX_" : "X_";
 	} else FAIL(EINVAL);
@@ -481,7 +470,7 @@ static int init_logic(struct fpga_model* model, int y, int x,
 			/*dup_warn*/ 1,
 			&tile->devs[idx].pinw[LOGIC_IN_AX+i], 0);
 		if (rc) FAIL(rc);
-		if (subtype == LOGIC_M) {
+		if (tile->devs[idx].subtype == LOGIC_M) {
 			rc = add_connpt_name(model, y, x, pf("%s%cI", pre, 'A'+i),
 				/*dup_warn*/ 1,
 				&tile->devs[idx].pinw[LOGIC_IN_AI+i], 0);
@@ -513,14 +502,14 @@ static int init_logic(struct fpga_model* model, int y, int x,
 		/*dup_warn*/ 1,
 		&tile->devs[idx].pinw[LOGIC_IN_SR], 0);
 	if (rc) FAIL(rc);
-	if (subtype == LOGIC_M) {
+	if (tile->devs[idx].subtype == LOGIC_M) {
 		rc = add_connpt_name(model, y, x, pf("%sWE", pre),
 			/*dup_warn*/ 1,
 			&tile->devs[idx].pinw[LOGIC_IN_WE], 0);
 		if (rc) FAIL(rc);
 	} else
 		tile->devs[idx].pinw[LOGIC_IN_WE] = STRIDX_NO_ENTRY;
-	if (subtype != LOGIC_X
+	if (tile->devs[idx].subtype != LOGIC_X
 	    && ((is_atx(X_ROUTING_NO_IO, model, x-1)
 		 && is_aty(Y_INNER_BOTTOM, model, y+1))
 		|| (!is_atx(X_ROUTING_NO_IO, model, x-1)
@@ -531,12 +520,12 @@ static int init_logic(struct fpga_model* model, int y, int x,
 		if (rc) FAIL(rc);
 	} else
 		tile->devs[idx].pinw[LOGIC_IN_CIN] = STRIDX_NO_ENTRY;
-	if (subtype == LOGIC_M) {
+	if (tile->devs[idx].subtype == LOGIC_M) {
 		rc = add_connpt_name(model, y, x, "M_COUT",
 			/*dup_warn*/ 1,
 			&tile->devs[idx].pinw[LOGIC_OUT_COUT], 0);
 		if (rc) FAIL(rc);
-	} else if (subtype == LOGIC_L) {
+	} else if (tile->devs[idx].subtype == LOGIC_L) {
 		rc = add_connpt_name(model, y, x, "XL_COUT",
 			/*dup_warn*/ 1,
 			&tile->devs[idx].pinw[LOGIC_OUT_COUT], 0);

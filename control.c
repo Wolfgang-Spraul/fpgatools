@@ -202,14 +202,14 @@ const char* fpga_iob_sitename(struct fpga_model* model, int y, int x,
 
 static const char* dev_str[] = FPGA_DEV_STR;
 
-const char* fpgadev_str(enum fpgadev_type type)
+const char* fdev_type2str(enum fpgadev_type type)
 {
 	if (type < 0 || type >= sizeof(dev_str)/sizeof(*dev_str))
 		{ HERE(); return 0; }
 	return dev_str[type];
 }
 
-enum fpgadev_type fpgadev_str2type(const char* str, int len)
+enum fpgadev_type fdev_str2type(const char* str, int len)
 {
 	int i;
 	for (i = 0; i < sizeof(dev_str)/sizeof(*dev_str); i++) {
@@ -219,6 +219,14 @@ enum fpgadev_type fpgadev_str2type(const char* str, int len)
 			return i;
 	}
 	return DEV_NONE;
+}
+
+struct fpga_device* fdev_p(struct fpga_model* model,
+	int y, int x, enum fpgadev_type type, dev_type_idx_t type_idx)
+{
+	dev_idx_t dev_idx = fpga_dev_idx(model, y, x, type, type_idx);
+	if (dev_idx == NO_DEV) { HERE(); return 0; }
+	return FPGA_DEV(model, y, x, dev_idx);
 }
 
 dev_idx_t fpga_dev_idx(struct fpga_model* model,
@@ -240,7 +248,7 @@ dev_idx_t fpga_dev_idx(struct fpga_model* model,
 	return NO_DEV;
 }
 
-dev_type_idx_t fpga_dev_typeidx(struct fpga_model* model, int y, int x,
+dev_type_idx_t fdev_typeidx(struct fpga_model* model, int y, int x,
 	dev_idx_t dev_idx)
 {
 	struct fpga_tile* tile;
@@ -258,7 +266,7 @@ dev_type_idx_t fpga_dev_typeidx(struct fpga_model* model, int y, int x,
 static const char* iob_pinw_str[] = IOB_PINW_STR;
 static const char* logic_pinw_str[] = LOGIC_PINW_STR;
 
-pinw_idx_t fpgadev_pinw_str2idx(int devtype, const char* str, int len)
+pinw_idx_t fdev_pinw_str2idx(int devtype, const char* str, int len)
 {
 	int i;
 
@@ -284,7 +292,7 @@ pinw_idx_t fpgadev_pinw_str2idx(int devtype, const char* str, int len)
 	return PINW_NO_IDX;
 }
 
-const char* fpgadev_pinw_idx2str(int devtype, pinw_idx_t idx)
+const char* fdev_pinw_idx2str(int devtype, pinw_idx_t idx)
 {
 	if (devtype == DEV_IOB) {
 		if (idx < 0 || idx >= sizeof(iob_pinw_str)/sizeof(*iob_pinw_str)) {
@@ -304,33 +312,106 @@ const char* fpgadev_pinw_idx2str(int devtype, pinw_idx_t idx)
 	return 0;
 }
 
+static void free_required_pins(struct fpga_device* dev)
+{
+	free(dev->pinw_req_for_cfg);
+	dev->pinw_req_for_cfg = 0;
+	dev->pinw_req_total = 0;
+	dev->pinw_req_in = 0;
+}
+
 #define MAX_LUT_LEN	512
 
-int fpga_set_lut(struct fpga_model* model, struct fpga_device* dev,
+int fdev_logic_set_lut(struct fpga_model* model, int y, int x, int type_idx,
 	int which_lut, const char* lut_str, int lut_len)
 {
-	char** ptr;
+	struct fpga_device* dev;
+	char** luts;
+	int rc;
 
-	if (dev->type != DEV_LOGIC)
-		return -1;
-	switch (which_lut) {
-		case A6_LUT: ptr = &dev->logic.A6_lut; break;
-		case B6_LUT: ptr = &dev->logic.B6_lut; break;
-		case C6_LUT: ptr = &dev->logic.C6_lut; break;
-		case D6_LUT: ptr = &dev->logic.D6_lut; break;
-		default: return -1;
-	}
-	if (!(*ptr)) {
-		*ptr = malloc(MAX_LUT_LEN);
-		if (!(*ptr)) {
+	dev = fdev_p(model, y, x, DEV_LOGIC, type_idx);
+	if (!dev) FAIL(EINVAL);
+	free_required_pins(dev);
+
+	luts = dev->u.logic.luts;
+	if (!luts[which_lut]) {
+		luts[which_lut] = malloc(MAX_LUT_LEN);
+		if (!luts[which_lut]) {
 			OUT_OF_MEM();
 			return -1;
 		}
 	}
 	if (lut_len == ZTERM) lut_len = strlen(lut_str);
-	memcpy(*ptr, lut_str, lut_len);
-	(*ptr)[lut_len] = 0;
+	memcpy(luts[which_lut], lut_str, lut_len);
+	luts[which_lut][lut_len] = 0;
+
+	switch (which_lut) {
+		case A5_LUT:
+		case A6_LUT:
+			dev->u.logic.A_used = 1;
+			break;
+		case B5_LUT:
+		case B6_LUT:
+			dev->u.logic.B_used = 1;
+			break;
+		case C5_LUT:
+		case C6_LUT:
+			dev->u.logic.C_used = 1;
+			break;
+		case D5_LUT:
+		case D6_LUT:
+			dev->u.logic.D_used = 1;
+			break;
+		default: FAIL(EINVAL);
+	}
+
+	dev->instantiated = 1;
 	return 0;
+fail:
+	return rc;
+}
+
+int fdev_set_required_pins(struct fpga_model* model, int y, int x, int type,
+	int type_idx)
+{
+	struct fpga_device* dev;
+	int rc;
+
+	dev = fdev_p(model, y, x, type, type_idx);
+	if (!dev) FAIL(EINVAL);
+	free_required_pins(dev);
+	if (type == DEV_LOGIC) {
+#if 0
+TODO:
+	// required pinwires depend on the given config and will
+	// be deleted/invalidated on any config change.
+	int pinw_req_total, pinw_req_in;
+	pinw_idx_t* pinw_req_for_cfg;
+#endif
+	}
+	return 0;
+fail:
+	return rc;
+}
+
+void fdev_delete(struct fpga_model* model, int y, int x, int type, int type_idx)
+{
+	struct fpga_device* dev;
+	int i;
+
+	dev = fdev_p(model, y, x, type, type_idx);
+	if (!dev) { HERE(); return; }
+	if (!dev->instantiated) return;
+	free_required_pins(dev);
+	if (dev->type == DEV_LOGIC) {
+		for (i = 0; i < sizeof(dev->u.logic.luts)
+			/sizeof(dev->u.logic.luts[0]); i++) {
+			free(dev->u.logic.luts[i]);
+			dev->u.logic.luts[i] = 0;
+		}
+	}
+	dev->instantiated = 0;
+	memset(&dev->u, 0, sizeof(dev->u));
 }
 
 int fpga_connpt_find(struct fpga_model* model, int y, int x,
@@ -420,6 +501,29 @@ swidx_t fpga_switch_backtofirst(struct fpga_model* model, int y, int x,
 	swidx_t last, int from_to)
 {
 	return fpga_switch_search(model, y, x, last, /*search_beg*/ 0, from_to);
+}
+
+int fpga_switch_same_fromto(struct fpga_model* model, int y, int x,
+	swidx_t sw, int from_to, swidx_t* same_sw, int *same_len)
+{
+	swidx_t cur_sw;
+	int max_len, rc;
+
+	max_len = *same_len;
+	*same_len = 0;
+	if (max_len < 1) FAIL(EINVAL);
+	cur_sw = fpga_switch_search(model, y, x, sw, /*search_beg*/ 0, from_to);
+	// We should at least fine sw itself, if not something is wrong...
+	if (cur_sw == NO_SWITCH) FAIL(EINVAL);
+
+	same_sw[(*same_len)++] = cur_sw;
+	while ((cur_sw = fpga_switch_search(model, y, x, sw, cur_sw+1, from_to)) != NO_SWITCH) {
+		same_sw[(*same_len)++] = cur_sw;
+		if ((*same_len) >= max_len) FAIL(EINVAL);
+	}
+	return 0;
+fail:
+	return rc;
 }
 
 swidx_t fpga_switch_lookup(struct fpga_model* model, int y, int x,
@@ -550,24 +654,20 @@ static const char* fmt_swset_el(struct fpga_model* model, int y, int x,
 	char midstr[64];
 
 	last_buf = (last_buf+1)%NUM_SW_BUFS;
-
-	strcpy(midstr, fpga_switch_is_used(model, y, x, sw) ? "on:" : "");
 	if (fpga_switch_is_bidir(model, y, x, sw))
-		strcat(midstr, "<->");
-	else {
-		// a 'to-switch' is actually still a switch that physically
-		// points in the other direction (unless it's a bidir switch),
-		// so when displaying the 'to-switch', we make the arrow point
-		// to the left side to match the physical direction.
-		strcat(midstr, (from_to == SW_TO) ? "<-" : "->");
-	}
-	// fmt_swset_el() prints only the destination side of the switch (!from_to),
-	// because it is the significant one in a chain of switches, and if the
-	// caller wants the source side they can add it outside.
+		strcpy(midstr, "<->");
+	else
+		strcpy(midstr, "->");
+	// fmt_swset_el() prints only the destination side of the
+	// switch (!from_to), because it is the significant one in
+	// a chain of switches, and if the caller wants the source
+	// side they can add it outside.
 	snprintf(sw_buf[last_buf], sizeof(sw_buf[0]), "%s%s%s",
-		(from_to == SW_FROM) ? "" : fpga_switch_str(model, y, x, sw, SW_FROM),
+		(from_to == SW_FROM) ? ""
+			: fpga_switch_str(model, y, x, sw, SW_FROM),
 		midstr,
-		(from_to == SW_TO) ? "" : fpga_switch_str(model, y, x, sw, SW_TO));
+		(from_to == SW_TO) ? ""
+			: fpga_switch_str(model, y, x, sw, SW_TO));
 
 	return sw_buf[last_buf];
 }
@@ -986,13 +1086,13 @@ static void fprintf_inout_pin(FILE* f, struct fpga_model* model,
 		{ HERE(); return; }
 	in_pin = pinw_i < tile->devs[dev_idx].num_pinw_in;
 
-   	pin_str = fpgadev_pinw_idx2str(tile->devs[dev_idx].type, pinw_i);
+   	pin_str = fdev_pinw_idx2str(tile->devs[dev_idx].type, pinw_i);
 	if (!pin_str) { HERE(); return; }
 
 	snprintf(buf, sizeof(buf), "net %i %s y%02i x%02i %s %i pin %s\n",
 		net_i, in_pin ? "in" : "out", el->y, el->x,
-		fpgadev_str(tile->devs[dev_idx].type),
-		fpga_dev_typeidx(model, el->y, el->x, dev_idx),
+		fdev_type2str(tile->devs[dev_idx].type),
+		fdev_typeidx(model, el->y, el->x, dev_idx),
 		pin_str);
 	fprintf(f, buf);
 }

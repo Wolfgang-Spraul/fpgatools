@@ -83,15 +83,15 @@ static int printf_IOB(FILE* f, struct fpga_model* model,
 
 		if (!config_only) {
 			fprintf(f, "%s type %s\n", pref,
-				tile->devs[i].iob.subtype == IOBM ? "M" : "S");
+				tile->devs[i].subtype == IOBM ? "M" : "S");
 		}
-		if (tile->devs[i].iob.istandard[0])
+		if (tile->devs[i].u.iob.istandard[0])
 			fprintf(f, "%s istd %s\n", pref, 
-				tile->devs[i].iob.istandard);
-		if (tile->devs[i].iob.ostandard[0])
+				tile->devs[i].u.iob.istandard);
+		if (tile->devs[i].u.iob.ostandard[0])
 			fprintf(f, "%s ostd %s\n", pref, 
-				tile->devs[i].iob.ostandard);
-		switch (tile->devs[i].iob.bypass_mux) {
+				tile->devs[i].u.iob.ostandard);
+		switch (tile->devs[i].u.iob.bypass_mux) {
 			case BYPASS_MUX_I:
 				fprintf(f, "%s bypass_mux I\n", pref);
 				break;
@@ -103,7 +103,7 @@ static int printf_IOB(FILE* f, struct fpga_model* model,
 				break;
 			case 0: break; default: EXIT(1);
 		}
-		switch (tile->devs[i].iob.I_mux) {
+		switch (tile->devs[i].u.iob.I_mux) {
 			case IMUX_I_B:
 				fprintf(f, "%s imux I_B\n", pref);
 				break;
@@ -112,10 +112,10 @@ static int printf_IOB(FILE* f, struct fpga_model* model,
 				break;
 			case 0: break; default: EXIT(1);
 		}
-		if (tile->devs[i].iob.drive_strength)
+		if (tile->devs[i].u.iob.drive_strength)
 			fprintf(f, "%s strength %i\n", pref,
-				tile->devs[i].iob.drive_strength);
-		switch (tile->devs[i].iob.slew) {
+				tile->devs[i].u.iob.drive_strength);
+		switch (tile->devs[i].u.iob.slew) {
 			case SLEW_SLOW:
 				fprintf(f, "%s slew SLOW\n", pref);
 				break;
@@ -127,9 +127,9 @@ static int printf_IOB(FILE* f, struct fpga_model* model,
 				break;
 			case 0: break; default: EXIT(1);
 		}
-		if (tile->devs[i].iob.O_used)
+		if (tile->devs[i].u.iob.O_used)
 			fprintf(f, "%s O_used\n", pref);
-		switch (tile->devs[i].iob.suspend) {
+		switch (tile->devs[i].u.iob.suspend) {
 			case SUSP_LAST_VAL:
 				fprintf(f, "%s suspend DRIVE_LAST_VALUE\n", pref);
 				break;
@@ -150,7 +150,7 @@ static int printf_IOB(FILE* f, struct fpga_model* model,
 				break;
 			case 0: break; default: EXIT(1);
 		}
-		switch (tile->devs[i].iob.in_term) {
+		switch (tile->devs[i].u.iob.in_term) {
 			case ITERM_NONE: 
 				fprintf(f, "%s in_term NONE\n", pref);
 				break;
@@ -165,7 +165,7 @@ static int printf_IOB(FILE* f, struct fpga_model* model,
 				break;
 			case 0: break; default: EXIT(1);
 		}
-		switch (tile->devs[i].iob.out_term) {
+		switch (tile->devs[i].u.iob.out_term) {
 			case OTERM_NONE: 
 				fprintf(f, "%s out_term NONE\n", pref);
 				break;
@@ -189,7 +189,7 @@ static int read_IOB_attr(struct fpga_model* model, struct fpga_device* dev,
 {
 	// First the one-word attributes.
 	if (!str_cmp(w1, w1_len, "O_used", ZTERM)) {
-		dev->iob.O_used = 1;
+		dev->u.iob.O_used = 1;
 		goto inst_1;
 	}
 	// The remaining attributes all require 2 words.
@@ -197,84 +197,84 @@ static int read_IOB_attr(struct fpga_model* model, struct fpga_device* dev,
 	if (!str_cmp(w1, w1_len, "type", ZTERM))
 		return 2; // no reason for instantiation
 	if (!str_cmp(w1, w1_len, "istd", ZTERM)) {
-		memcpy(dev->iob.istandard, w2, w2_len);
-		dev->iob.istandard[w2_len] = 0;
+		memcpy(dev->u.iob.istandard, w2, w2_len);
+		dev->u.iob.istandard[w2_len] = 0;
 		goto inst_2;
 	}
 	if (!str_cmp(w1, w1_len, "ostd", ZTERM)) {
-		memcpy(dev->iob.ostandard, w2, w2_len);
-		dev->iob.ostandard[w2_len] = 0;
+		memcpy(dev->u.iob.ostandard, w2, w2_len);
+		dev->u.iob.ostandard[w2_len] = 0;
 		goto inst_2;
 	}
 	if (!str_cmp(w1, w1_len, "bypass_mux", ZTERM)) {
 		if (!str_cmp(w2, w2_len, "I", ZTERM))
-			dev->iob.bypass_mux = BYPASS_MUX_I;
+			dev->u.iob.bypass_mux = BYPASS_MUX_I;
 		else if (!str_cmp(w2, w2_len, "O", ZTERM))
-			dev->iob.bypass_mux = BYPASS_MUX_O;
+			dev->u.iob.bypass_mux = BYPASS_MUX_O;
 		else if (!str_cmp(w2, w2_len, "T", ZTERM))
-			dev->iob.bypass_mux = BYPASS_MUX_T;
+			dev->u.iob.bypass_mux = BYPASS_MUX_T;
 		else return 0;
 		goto inst_2;
 	}
 	if (!str_cmp(w1, w1_len, "imux", ZTERM)) {
 		if (!str_cmp(w2, w2_len, "I_B", ZTERM))
-			dev->iob.I_mux = IMUX_I_B;
+			dev->u.iob.I_mux = IMUX_I_B;
 		else if (!str_cmp(w2, w2_len, "I", ZTERM))
-			dev->iob.I_mux = IMUX_I;
+			dev->u.iob.I_mux = IMUX_I;
 		else return 0;
 		goto inst_2;
 	}
 	if (!str_cmp(w1, w1_len, "strength", ZTERM)) {
-		dev->iob.drive_strength = to_i(w2, w2_len);
+		dev->u.iob.drive_strength = to_i(w2, w2_len);
 		goto inst_2;
 	}
 	if (!str_cmp(w1, w1_len, "slew", ZTERM)) {
 		if (!str_cmp(w2, w2_len, "SLOW", ZTERM))
-			dev->iob.slew = SLEW_SLOW;
+			dev->u.iob.slew = SLEW_SLOW;
 		else if (!str_cmp(w2, w2_len, "FAST", ZTERM))
-			dev->iob.slew = SLEW_FAST;
+			dev->u.iob.slew = SLEW_FAST;
 		else if (!str_cmp(w2, w2_len, "QUIETIO", ZTERM))
-			dev->iob.slew = SLEW_QUIETIO;
+			dev->u.iob.slew = SLEW_QUIETIO;
 		else return 0;
 		goto inst_2;
 	}
 	if (!str_cmp(w1, w1_len, "suspend", 7)) {
 		if (!str_cmp(w2, w2_len, "DRIVE_LAST_VALUE", ZTERM))
-			dev->iob.suspend = SUSP_LAST_VAL;
+			dev->u.iob.suspend = SUSP_LAST_VAL;
 		else if (!str_cmp(w2, w2_len, "3STATE", ZTERM))
-			dev->iob.suspend = SUSP_3STATE;
+			dev->u.iob.suspend = SUSP_3STATE;
 		else if (!str_cmp(w2, w2_len, "3STATE_PULLUP", ZTERM))
-			dev->iob.suspend = SUSP_3STATE_PULLUP;
+			dev->u.iob.suspend = SUSP_3STATE_PULLUP;
 		else if (!str_cmp(w2, w2_len, "3STATE_PULLDOWN", ZTERM))
-			dev->iob.suspend = SUSP_3STATE_PULLDOWN;
+			dev->u.iob.suspend = SUSP_3STATE_PULLDOWN;
 		else if (!str_cmp(w2, w2_len, "3STATE_KEEPER", ZTERM))
-			dev->iob.suspend = SUSP_3STATE_KEEPER;
+			dev->u.iob.suspend = SUSP_3STATE_KEEPER;
 		else if (!str_cmp(w2, w2_len, "3STATE_OCT_ON", ZTERM))
-			dev->iob.suspend = SUSP_3STATE_OCT_ON;
+			dev->u.iob.suspend = SUSP_3STATE_OCT_ON;
 		else return 0;
 		goto inst_2;
 	}
 	if (!str_cmp(w1, w1_len, "in_term", ZTERM)) {
 		if (!str_cmp(w2, w2_len, "NONE", ZTERM))
-			dev->iob.in_term = ITERM_NONE;
+			dev->u.iob.in_term = ITERM_NONE;
 		else if (!str_cmp(w2, w2_len, "UNTUNED_SPLIT_25", ZTERM))
-			dev->iob.in_term = ITERM_UNTUNED_25;
+			dev->u.iob.in_term = ITERM_UNTUNED_25;
 		else if (!str_cmp(w2, w2_len, "UNTUNED_SPLIT_50", ZTERM))
-			dev->iob.in_term = ITERM_UNTUNED_50;
+			dev->u.iob.in_term = ITERM_UNTUNED_50;
 		else if (!str_cmp(w2, w2_len, "UNTUNED_SPLIT_75", ZTERM))
-			dev->iob.in_term = ITERM_UNTUNED_75;
+			dev->u.iob.in_term = ITERM_UNTUNED_75;
 		else return 0;
 		goto inst_2;
 	}
 	if (!str_cmp(w1, w1_len, "out_term", ZTERM)) {
 		if (!str_cmp(w2, w2_len, "NONE", ZTERM))
-			dev->iob.out_term = OTERM_NONE;
+			dev->u.iob.out_term = OTERM_NONE;
 		else if (!str_cmp(w2, w2_len, "UNTUNED_25", ZTERM))
-			dev->iob.out_term = OTERM_UNTUNED_25;
+			dev->u.iob.out_term = OTERM_UNTUNED_25;
 		else if (!str_cmp(w2, w2_len, "UNTUNED_50", ZTERM))
-			dev->iob.out_term = OTERM_UNTUNED_50;
+			dev->u.iob.out_term = OTERM_UNTUNED_50;
 		else if (!str_cmp(w2, w2_len, "UNTUNED_75", ZTERM))
-			dev->iob.out_term = OTERM_UNTUNED_75;
+			dev->u.iob.out_term = OTERM_UNTUNED_75;
 		else return 0;
 		goto inst_2;
 	}
@@ -287,12 +287,14 @@ inst_2:
 	return 2;
 }
 
+static const char* s_fplut_str[] = FP_LUT_STR;
+
 static int printf_LOGIC(FILE* f, struct fpga_model* model,
 	int y, int x, int config_only)
 {
 	struct fpga_tile* tile;
 	char pref[256];
-	int type_count, i;
+	int type_count, i, j;
 
 	tile = YX_TILE(model, y, x);
 	type_count = 0;
@@ -308,7 +310,7 @@ static int printf_LOGIC(FILE* f, struct fpga_model* model,
 		type_count++;
 
 		if (!config_only) {
-			switch (tile->devs[i].logic.subtype) {
+			switch (tile->devs[i].subtype) {
 				case LOGIC_X:
 					fprintf(f, "%s type X\n", pref);
 					break;
@@ -321,73 +323,64 @@ static int printf_LOGIC(FILE* f, struct fpga_model* model,
 				default: EXIT(1);
 			}
 		}
-		if (tile->devs[i].logic.A_used)
+		if (tile->devs[i].u.logic.A_used)
 			fprintf(f, "%s A_used\n", pref);
-		if (tile->devs[i].logic.B_used)
+		if (tile->devs[i].u.logic.B_used)
 			fprintf(f, "%s B_used\n", pref);
-		if (tile->devs[i].logic.C_used)
+		if (tile->devs[i].u.logic.C_used)
 			fprintf(f, "%s C_used\n", pref);
-		if (tile->devs[i].logic.D_used)
+		if (tile->devs[i].u.logic.D_used)
 			fprintf(f, "%s D_used\n", pref);
-		if (tile->devs[i].logic.A6_lut && tile->devs[i].logic.A6_lut[0])
-			fprintf(f, "%s A6_lut %s\n", pref,
-				tile->devs[i].logic.A6_lut);
-		if (tile->devs[i].logic.B6_lut && tile->devs[i].logic.B6_lut[0])
-			fprintf(f, "%s B6_lut %s\n", pref,
-				tile->devs[i].logic.B6_lut);
-		if (tile->devs[i].logic.C6_lut && tile->devs[i].logic.C6_lut[0])
-			fprintf(f, "%s C6_lut %s\n", pref,
-				tile->devs[i].logic.C6_lut);
-		if (tile->devs[i].logic.D6_lut && tile->devs[i].logic.D6_lut[0])
-			fprintf(f, "%s D6_lut %s\n", pref,
-				tile->devs[i].logic.D6_lut);
+		{
+			for (j = 0; j < sizeof(tile->devs[i].u.logic.luts)
+				/ sizeof(tile->devs[i].u.logic.luts[0]); j++) {
+				if (tile->devs[i].u.logic.luts[j]
+				    && tile->devs[i].u.logic.luts[j][0])
+					fprintf(f, "%s %s %s\n", pref,
+						s_fplut_str[j],
+						tile->devs[i].u.logic.luts[j]);
+			}
+		}
 	}
 	return 0;
 }
 
-static int read_LOGIC_attr(struct fpga_model* model, struct fpga_device* dev,
+static int read_LOGIC_attr(struct fpga_model* model, int y, int x, int type_idx,
 	const char* w1, int w1_len, const char* w2, int w2_len)
 {
+	struct fpga_device* dev;
+	int i, rc;
+
+	dev = fdev_p(model, y, x, DEV_LOGIC, type_idx);
+	if (!dev) { HERE(); return 0; }
+
 	// First the one-word attributes.
 	if (!str_cmp(w1, w1_len, "A_used", ZTERM)) {
-		dev->logic.A_used = 1;
+		dev->u.logic.A_used = 1;
 		goto inst_1;
 	}
 	if (!str_cmp(w1, w1_len, "B_used", ZTERM)) {
-		dev->logic.B_used = 1;
+		dev->u.logic.B_used = 1;
 		goto inst_1;
 	}
 	if (!str_cmp(w1, w1_len, "C_used", ZTERM)) {
-		dev->logic.C_used = 1;
+		dev->u.logic.C_used = 1;
 		goto inst_1;
 	}
 	if (!str_cmp(w1, w1_len, "D_used", ZTERM)) {
-		dev->logic.D_used = 1;
+		dev->u.logic.D_used = 1;
 		goto inst_1;
 	}
 	// The remaining attributes all require 2 words.
 	if (w2_len < 1) return 0;
 	if (!str_cmp(w1, w1_len, "type", ZTERM))
 		return 2; // no reason for instantiation
-	if (!str_cmp(w1, w1_len, "A6_lut", ZTERM)) {
-		if (fpga_set_lut(model, dev, A6_LUT, w2, w2_len))
-			return 0;
-		goto inst_2;
-	}
-	if (!str_cmp(w1, w1_len, "B6_lut", ZTERM)) {
-		if (fpga_set_lut(model, dev, B6_LUT, w2, w2_len))
-			return 0;
-		goto inst_2;
-	}
-	if (!str_cmp(w1, w1_len, "C6_lut", ZTERM)) {
-		if (fpga_set_lut(model, dev, C6_LUT, w2, w2_len))
-			return 0;
-		goto inst_2;
-	}
-	if (!str_cmp(w1, w1_len, "D6_lut", ZTERM)) {
-		if (fpga_set_lut(model, dev, D6_LUT, w2, w2_len))
-			return 0;
-		goto inst_2;
+	for (i = 0; i < sizeof(dev->u.logic.luts)/sizeof(dev->u.logic.luts[0]); i++) {
+		if (!str_cmp(w1, w1_len, s_fplut_str[i], ZTERM)) {
+			rc = fdev_logic_set_lut(model, y, x, type_idx, i, w2, w2_len);
+			if (rc) return 0;
+			goto inst_2;
+		}
 	}
 	return 0;
 inst_1:
@@ -419,7 +412,7 @@ int printf_devices(FILE* f, struct fpga_model* model, int config_only)
 				    || tile->devs[i].type == DEV_IOB)
 					continue; // handled above
 				fprintf(f, "dev y%02i x%02i %s\n", y, x,
-					fpgadev_str(tile->devs[i].type));
+					fdev_type2str(tile->devs[i].type));
 			}
 		}
 	}
@@ -696,13 +689,13 @@ static void read_net_line(struct fpga_model* model, const char* line, int start)
 	    || !all_digits(&line[dev_type_idx_str_beg], dev_type_idx_str_end-dev_type_idx_str_beg)
 	    || str_cmp(&line[pin_str_beg], pin_str_end-pin_str_beg, "pin", 3))
 		{ HERE(); return; }
-	dev_type = fpgadev_str2type(&line[dev_str_beg], dev_str_end-dev_str_beg);
+	dev_type = fdev_str2type(&line[dev_str_beg], dev_str_end-dev_str_beg);
 	if (dev_type == DEV_NONE) { HERE(); return; }
 	dev_idx = fpga_dev_idx(model, y_coord, x_coord, dev_type,
 		to_i(&line[dev_type_idx_str_beg],
 			dev_type_idx_str_end-dev_type_idx_str_beg));
 	if (dev_idx == NO_DEV) { HERE(); return; }
-	pinw_idx = fpgadev_pinw_str2idx(dev_type, &line[pin_name_beg],
+	pinw_idx = fdev_pinw_str2idx(dev_type, &line[pin_name_beg],
 		pin_name_end-pin_name_beg);
 	if (pinw_idx == PINW_NO_IDX) { HERE(); return; }
 	if (fpga_net_add_port(model, net_idx, y_coord, x_coord, dev_idx, pinw_idx))
@@ -750,7 +743,8 @@ static void read_dev_line(struct fpga_model* model, const char* line, int start)
 					second_end-second_beg);
 				break;
 			case DEV_LOGIC:
-				words_consumed = read_LOGIC_attr(model, dev_ptr,
+				words_consumed = read_LOGIC_attr(model, y_coord,
+					x_coord, dev_type_idx,
 					&line[next_beg], next_end-next_beg,
 					&line[second_beg],
 					second_end-second_beg);

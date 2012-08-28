@@ -17,8 +17,12 @@ const char* fpga_iob_sitename(struct fpga_model* model, int y, int x,
 // 2. The index of the device within devices of the same type in the tile.
 //
 
-const char* fpgadev_str(enum fpgadev_type type);
-enum fpgadev_type fpgadev_str2type(const char* str, int len);
+const char* fdev_type2str(enum fpgadev_type type);
+enum fpgadev_type fdev_str2type(const char* str, int len);
+
+// returns 0 if device not found
+struct fpga_device* fdev_p(struct fpga_model* model,
+	int y, int x, enum fpgadev_type type, dev_type_idx_t type_idx);
 
 // Looks up a device index based on the type index.
 // returns NO_DEV (-1) if not found
@@ -27,18 +31,20 @@ dev_idx_t fpga_dev_idx(struct fpga_model* model,
 
 // Counts how many devices of the same type as dev_idx are in
 // the array up to dev_idx.
-dev_type_idx_t fpga_dev_typeidx(struct fpga_model* model, int y, int x,
+dev_type_idx_t fdev_typeidx(struct fpga_model* model, int y, int x,
 	dev_idx_t dev_idx);
 
 #define PINW_NO_IDX -1
-pinw_idx_t fpgadev_pinw_str2idx(int devtype, const char* str, int len);
+pinw_idx_t fdev_pinw_str2idx(int devtype, const char* str, int len);
 // returns 0 when idx not found for the given devtype
-const char* fpgadev_pinw_idx2str(int devtype, pinw_idx_t idx);
+const char* fdev_pinw_idx2str(int devtype, pinw_idx_t idx);
 
-enum { A6_LUT, B6_LUT, C6_LUT, D6_LUT };
-// lut_len can be -1 (ZTERM)
-int fpga_set_lut(struct fpga_model* model, struct fpga_device* dev,
+int fdev_logic_set_lut(struct fpga_model* model, int y, int x, int type_idx,
 	int which_lut, const char* lut_str, int lut_len);
+int fdev_set_required_pins(struct fpga_model* model, int y, int x, int type,
+	int type_idx);
+void fdev_delete(struct fpga_model* model, int y, int x, int type,
+	int type_idx);
 
 // Returns the connpt index or NO_CONN if the name was not
 // found. connpt_dests_o and num_dests are optional and may
@@ -70,6 +76,11 @@ swidx_t fpga_switch_next(struct fpga_model* model, int y, int x,
 	swidx_t last, int from_to);
 swidx_t fpga_switch_backtofirst(struct fpga_model* model, int y, int x,
 	swidx_t last, int from_to);
+// When calling, same_len must contain the size of the
+// same_sw array. Upon return same_len returns how many
+// switches were found and writen to same_sw.
+int fpga_switch_same_fromto(struct fpga_model* model, int y, int x,
+	swidx_t sw, int from_to, swidx_t* same_sw, int *same_len);
 swidx_t fpga_switch_lookup(struct fpga_model* model, int y, int x,
 	str16_t from_str_i, str16_t to_str_i);
 

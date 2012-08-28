@@ -145,11 +145,8 @@ int has_device_type(struct fpga_model* model, int y, int x, int dev, int subtype
 		if (tile->devs[i].type == dev) {
 			switch (dev) {
 				case DEV_LOGIC:
-					if (tile->devs[i].logic.subtype == subtype)
-						return 1;
-					break;
 				case DEV_IOB:
-					if (tile->devs[i].iob.subtype == subtype)
+					if (tile->devs[i].subtype == subtype)
 						return 1;
 					break;
 				default: EXIT(1);

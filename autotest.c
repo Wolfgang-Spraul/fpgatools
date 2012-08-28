@@ -46,7 +46,6 @@ static int dump_file(const char* path)
 	}
 	fclose(f);
 	printf("O end dump %s\n", path);
-	printf("\n");
 	return 0;
 }
 
@@ -103,6 +102,151 @@ fail:
 	return rc;
 }
 
+static void cut_sw_from_end(struct fpga_net* net, int cut_o)
+{
+	if (cut_o <= 2) return;
+	memmove(&net->el[2], &net->el[cut_o],
+		(net->len-cut_o)*sizeof(net->el[0]));
+	net->len = 2 + net->len-cut_o;
+}
+
+static int test_net(struct test_state* tstate, net_idx_t net_i)
+{
+	struct fpga_net* net;
+	struct fpga_net copy_net;
+	swidx_t same_sw[64];
+	int same_len;
+	int i, j, rc;
+
+	net = fpga_net_get(tstate->model, net_i);
+	if (!net) FAIL(EINVAL);
+	copy_net = *net;
+
+	for (i = net->len-1; i >= 2; i--) {
+		printf("round i %i\n", i);
+		*net = copy_net;
+		cut_sw_from_end(net, i);
+		if (net->len <= 2) {
+			rc = diff_printf(tstate);
+			if (rc) FAIL(rc);
+			continue;
+		}
+		// what other switches go to SW_TO(el[2])?
+		printf_swchain(tstate->model,
+			net->el[2].y, net->el[2].x,
+			fpga_switch_str_i(tstate->model,
+				net->el[2].y, net->el[2].x,
+				net->el[2].idx, SW_TO), 1, SW_TO);
+		same_len = sizeof(same_sw)/sizeof(*same_sw);
+		rc = fpga_switch_same_fromto(tstate->model,
+			net->el[2].y, net->el[2].x,
+			net->el[2].idx, SW_TO, same_sw, &same_len);
+		if (rc) FAIL(rc);
+		printf("same_len at this level %i\n", same_len);
+		for (j = 0; j < same_len; j++) {
+			net->el[2].idx = same_sw[j];
+			rc = diff_printf(tstate);
+			if (rc) FAIL(rc);
+		}
+	}
+	return 0;
+fail:
+	return rc;
+}
+
+static int test_net2(struct test_state* tstate, net_idx_t net_i)
+{
+	struct fpga_net* net;
+	struct fpga_net copy_net;
+	swidx_t same_sw[64];
+	int same_len;
+	int i, j, rc;
+
+	net = fpga_net_get(tstate->model, net_i);
+	if (!net) FAIL(EINVAL);
+	copy_net = *net;
+
+	for (i = 3; i <= net->len-1; i++) {
+		printf("round i %i\n", i);
+		net->len = i;
+		// what other switches go from SW_FROM(el[i-1])?
+		printf_swchain(tstate->model,
+			net->el[i-1].y, net->el[i-1].x,
+			fpga_switch_str_i(tstate->model,
+				net->el[i-1].y, net->el[i-1].x,
+				net->el[i-1].idx, SW_FROM), 1, SW_FROM);
+		same_len = sizeof(same_sw)/sizeof(*same_sw);
+		rc = fpga_switch_same_fromto(tstate->model,
+			net->el[i-1].y, net->el[i-1].x,
+			net->el[i-1].idx, SW_FROM, same_sw, &same_len);
+		if (rc) FAIL(rc);
+		printf("same_len at this level %i\n", same_len);
+#if 1
+		for (j = 0; j < same_len; j++) {
+			net->el[i-1].idx = same_sw[j];
+			rc = diff_printf(tstate);
+			if (rc) FAIL(rc);
+		}
+#endif
+		*net = copy_net;
+	}
+	return 0;
+fail:
+	return rc;
+}
+
+static void fdev_print_required_pins(struct fpga_model* model, int y, int x,
+	int type, int type_idx)
+{
+	struct fpga_device* dev;
+	int i;
+
+	dev = fdev_p(model, y, x, type, type_idx);
+	if (!dev) { HERE(); return; }
+
+	printf("y%02i x%02i %s %i inpin", y, x, fdev_type2str(type), type_idx);
+	if (!dev->pinw_req_in)
+		printf(" -\n");
+	else {
+		for (i = 0; i < dev->pinw_req_in; i++)
+			printf(" %s", fdev_pinw_idx2str(type, dev->pinw_req_for_cfg[i]));
+		printf("\n");
+	}
+
+	printf("y%02i x%02i %s %i outpin", y, x, fdev_type2str(type), type_idx);
+	if (dev->pinw_req_total <= dev->pinw_req_in)
+		printf(" -\n");
+	else {
+		for (i = dev->pinw_req_in; i < dev->pinw_req_total; i++)
+			printf(" %s", fdev_pinw_idx2str(type, dev->pinw_req_for_cfg[i]));
+		printf("\n");
+	}
+}
+
+static int test_all_logic_configs(struct test_state* tstate)
+{
+	int y, x, rc;
+
+// todo: goal: configure valid logic with as many possible in and out
+//       pins, for M and X device
+        y = 68;
+	x = 13;
+
+	rc = fdev_logic_set_lut(tstate->model, y, x,
+		DEV_LOGX, D6_LUT, "A3", ZTERM);
+	if (rc) FAIL(rc);
+
+	rc = fdev_set_required_pins(tstate->model, y, x, DEV_LOGIC, DEV_LOGX);
+	if (rc) FAIL(rc);
+
+	fdev_print_required_pins(tstate->model, y, x, DEV_LOGIC, DEV_LOGX);
+	rc = diff_printf(tstate);
+	if (rc) FAIL(rc);
+	return 0;
+fail:
+	return rc;
+}
+
 int main(int argc, char** argv)
 {
 	struct fpga_model model;
@@ -112,6 +256,11 @@ int main(int argc, char** argv)
 	struct test_state tstate;
 	struct switch_to_yx switch_to;
 	net_idx_t P46_net;
+
+	// flush after every line is better for the autotest
+	// output, tee, etc.
+	// for example: ./autotest 2>&1 | tee autotest.log
+	setvbuf(stdout, /*buf*/ 0, _IOLBF, /*size*/ 0);
 
 	printf("\n");
 	printf("O fpgatools automatic test suite. Be welcome and be "
@@ -136,6 +285,7 @@ int main(int argc, char** argv)
 	rc = diff_start(&tstate, "and");
 	if (rc) FAIL(rc);
 	
+#if 0
 	// configure P46
 	rc = fpga_find_iob(&model, "P46", &P46_y, &P46_x, &P46_type_idx);
 	if (rc) FAIL(rc);
@@ -159,8 +309,12 @@ int main(int argc, char** argv)
 	P48_dev->iob.O_used = 1;
 	P48_dev->iob.slew = SLEW_SLOW;
 	P48_dev->iob.suspend = SUSP_3STATE;
+#endif
 
 	// configure logic
+// todo: goal: configure valid logic with as many possible in and out
+//       pins, for M and X device
+#if 0
 	logic_dev_idx = fpga_dev_idx(&model, /*y*/ 68, /*x*/ 13,
 		DEV_LOGIC, DEV_LOGX);
 	if (logic_dev_idx == NO_DEV) FAIL(EINVAL);
@@ -169,10 +323,16 @@ int main(int argc, char** argv)
 	logic_dev->logic.D_used = 1;
 	rc = fpga_set_lut(&model, logic_dev, D6_LUT, "A3", ZTERM);
 	if (rc) FAIL(rc);
-
-	rc = diff_printf(&tstate);
+#endif
+	rc = test_all_logic_configs(&tstate);
 	if (rc) FAIL(rc);
 
+#if 0
+	rc = diff_printf(&tstate);
+	if (rc) FAIL(rc);
+#endif
+
+#if 0
 	// configure net from P46.I to logic.D3
 	rc = fpga_net_new(&model, &P46_net);
 	if (rc) FAIL(rc);
@@ -253,8 +413,9 @@ int main(int argc, char** argv)
 		if (rc) FAIL(rc);
 	}
 
-	rc = diff_printf(&tstate);
+	rc = test_net2(&tstate, P46_net);
 	if (rc) FAIL(rc);
+#endif
 
 	printf("\n");
 	printf("O Test suite completed.\n");
