@@ -130,7 +130,7 @@ const char* strarray_lookup(struct hashed_strarray* array, int idx);
 // The found or created index will never be 0, so the caller
 // can use 0 as a special value to indicate 'no string'.
 #define STRIDX_NO_ENTRY 0
-int strarray_find(struct hashed_strarray* array, const char* str, int* idx);
+int strarray_find(struct hashed_strarray* array, const char* str);
 int strarray_add(struct hashed_strarray* array, const char* str, int* idx);
 // If you stash a string to a fixed index, you cannot use strarray_find()
 // anymore, only strarray_lookup().

@@ -85,11 +85,7 @@ int main(int argc, char** argv)
 		next_wrd = strtok_r(line, " \n", &lasts);
 		if (next_wrd) {
 			do {
-				rc = strarray_find(&search_arr, next_wrd, &search_idx);
-				if (rc) {
-					fprintf(stderr, "Internal error in %s:%i\n", __FILE__, __LINE__);
-					goto xout;
-				}
+				search_idx = strarray_find(&search_arr, next_wrd);
 				if (search_idx == STRIDX_NO_ENTRY)
 					fputs(next_wrd, stdout);
 				else {

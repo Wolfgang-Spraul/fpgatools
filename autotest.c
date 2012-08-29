@@ -181,13 +181,11 @@ static int test_net2(struct test_state* tstate, net_idx_t net_i)
 			net->el[i-1].idx, SW_FROM, same_sw, &same_len);
 		if (rc) FAIL(rc);
 		printf("same_len at this level %i\n", same_len);
-#if 1
 		for (j = 0; j < same_len; j++) {
 			net->el[i-1].idx = same_sw[j];
 			rc = diff_printf(tstate);
 			if (rc) FAIL(rc);
 		}
-#endif
 		*net = copy_net;
 	}
 	return 0;
@@ -195,30 +193,27 @@ fail:
 	return rc;
 }
 
-static int test_all_logic_configs(struct test_state* tstate)
+static int test_device_fingers(struct test_state* tstate, int y, int x,
+	int type, int type_idx, int test_inpins, int test_outpins)
 {
 	struct fpga_device* dev;
 	struct switch_to_yx switch_to;
 	struct sw_chain chain;
 	net_idx_t net_idx;
-	int y, x, i, from_to, rc;
+	int i, from_to, rc;
 
-// todo: goal: configure valid logic with as many possible in and out
-//       pins, for M and X device
-        y = 68;
-	x = 13;
-
-	rc = fdev_logic_set_lut(tstate->model, y, x,
-		DEV_LOGX, D6_LUT, "A3", ZTERM);
+	rc = fdev_set_required_pins(tstate->model, y, x, type, type_idx);
 	if (rc) FAIL(rc);
+// fdev_print_required_pins(tstate->model, y, x, type, type_idx);
 
-	rc = fdev_set_required_pins(tstate->model, y, x, DEV_LOGIC, DEV_LOGX);
-	if (rc) FAIL(rc);
-// fdev_print_required_pins(tstate->model, y, x, DEV_LOGIC, DEV_LOGX);
-
-	dev = fdev_p(tstate->model, y, x, DEV_LOGIC, DEV_LOGX);
+	dev = fdev_p(tstate->model, y, x, type, type_idx);
 	if (!dev) FAIL(EINVAL);
 	for (i = 0; i < dev->pinw_req_total; i++) {
+
+		if ((i < dev->pinw_req_in && !test_inpins)
+		    || (i >= dev->pinw_req_in && !test_outpins))
+			continue;
+		
 		from_to = (i < dev->pinw_req_in) ? SW_TO : SW_FROM;
 		switch_to.yx_req = YX_ROUTING_TILE;
 		switch_to.flags = SWTO_YX_DEF;
@@ -244,7 +239,7 @@ static int test_all_logic_configs(struct test_state* tstate)
 			// add port
 			rc = fpga_net_add_port(tstate->model, net_idx,
 				y, x, fpga_dev_idx(tstate->model, y, x,
-				DEV_LOGIC, DEV_LOGX), dev->pinw_req_for_cfg[i]);
+				type, type_idx), dev->pinw_req_for_cfg[i]);
 			if (rc) FAIL(rc);
 			// add (one) switch in logic tile
 			rc = fpga_net_add_switches(tstate->model, net_idx,
@@ -260,6 +255,36 @@ static int test_all_logic_configs(struct test_state* tstate)
 			rc = diff_printf(tstate);
 			if (rc) FAIL(rc);
 			fpga_net_delete(tstate->model, net_idx);
+		}
+	}
+	return 0;
+fail:
+	return rc;
+}
+
+static int test_all_logic_configs(struct test_state* tstate)
+{
+	int a_to_d[] = { A6_LUT, B6_LUT, C6_LUT, D6_LUT };
+	int idx_enum[] = { DEV_LOGM, DEV_LOGX };
+	int y, x, i, j, k, rc;
+
+// todo: goal: configure valid logic with as many possible in and out
+//       pins, for M and X device
+        y = 68;
+	x = 13;
+
+	for (i = 0; i < sizeof(idx_enum)/sizeof(*idx_enum); i++) {
+		for (j = 0; j < sizeof(a_to_d)/sizeof(*a_to_d); j++) {
+			for (k = '1'; k <= '6'; k++) {
+				rc = fdev_logic_set_lut(tstate->model, y, x,
+					idx_enum[i], a_to_d[j], pf("A%c", k), ZTERM);
+				if (rc) FAIL(rc);
+
+				rc = test_device_fingers(tstate, y, x, DEV_LOGIC,
+					idx_enum[i], /*in*/ 1, /*out*/ k=='1');
+				if (rc) FAIL(rc);
+				fdev_delete(tstate->model, y, x, DEV_LOGIC, idx_enum[i]);
+			}
 		}
 	}
 	return 0;
@@ -304,6 +329,19 @@ int main(int argc, char** argv)
 	mkdir(tstate.tmp_dir, S_IRWXU|S_IRWXG|S_IROTH|S_IXOTH);
 	rc = diff_start(&tstate, "and");
 	if (rc) FAIL(rc);
+
+	// test_logic_config
+	// test_logic_routing_switches
+	// test_iob_config
+	// test_iologic_routing_switches
+
+#if 0
+	rc = test_all_logic_configs(&tstate);
+	if (rc) FAIL(rc);
+#endif
+
+	printf_swchain(&model, 69, 13, strarray_find(&model.str, "BIOI_INNER_IBUF0"), SW_FROM, MAX_SW_DEPTH);
+//	printf_swchain(&model, 68, 12, strarray_find(&model.str, "NR1E0"), SW_FROM, MAX_SW_DEPTH);
 	
 #if 0
 	// configure P46
@@ -329,12 +367,8 @@ int main(int argc, char** argv)
 	P48_dev->iob.O_used = 1;
 	P48_dev->iob.slew = SLEW_SLOW;
 	P48_dev->iob.suspend = SUSP_3STATE;
-#endif
 
 	// configure logic
-// todo: goal: configure valid logic with as many possible in and out
-//       pins, for M and X device
-#if 0
 	logic_dev_idx = fpga_dev_idx(&model, /*y*/ 68, /*x*/ 13,
 		DEV_LOGIC, DEV_LOGX);
 	if (logic_dev_idx == NO_DEV) FAIL(EINVAL);
@@ -343,16 +377,10 @@ int main(int argc, char** argv)
 	logic_dev->logic.D_used = 1;
 	rc = fpga_set_lut(&model, logic_dev, D6_LUT, "A3", ZTERM);
 	if (rc) FAIL(rc);
-#endif
-	rc = test_all_logic_configs(&tstate);
-	if (rc) FAIL(rc);
 
-#if 0
 	rc = diff_printf(&tstate);
 	if (rc) FAIL(rc);
-#endif
 
-#if 0
 	// configure net from P46.I to logic.D3
 	rc = fpga_net_new(&model, &P46_net);
 	if (rc) FAIL(rc);

@@ -718,14 +718,15 @@ static void printf_routing_2minors(uint8_t* bits, int row, int major,
 {
 	int y, i, hclk;
 	uint64_t u64_0, u64_1;
-	char bit_str[128];
+	char bit_str[129];
 
+	bit_str[128] = 0;
 	for (y = 0; y < 16; y++) {
 		hclk = (y < 8) ? 0 : 2;
 		u64_0 = frame_get_u64(bits + y*8 + hclk);
 		u64_1 = frame_get_u64(bits + y*8 + hclk + FRAME_SIZE);
 		if (u64_0 || u64_1) {
-			for (i = 0; i < sizeof(bit_str); i++)
+			for (i = 0; i < 128; i++)
 				bit_str[i] = '0';
 			for (i = 0; i < 64; i++) {
 				if (u64_0 & (1ULL << i))

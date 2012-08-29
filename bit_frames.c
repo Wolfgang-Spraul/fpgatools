@@ -147,6 +147,69 @@ int extract_model(struct fpga_model* model, struct fpga_bits* bits)
 			byte_off = row_pos * 8;
 			if (row_pos >= 8) byte_off += HCLK_BYTES;
 
+			// M device
+			dev_idx = fpga_dev_idx(model, y, x, DEV_LOGIC, DEV_LOGM);
+			if (dev_idx == NO_DEV) FAIL(EINVAL);
+			dev = FPGA_DEV(model, y, x, dev_idx);
+
+			// A6_LUT
+			if (frame_get_u32(u8_p + 24*FRAME_SIZE + byte_off + 4)
+			    || frame_get_u32(u8_p + 25*FRAME_SIZE + byte_off + 4)) {
+				u64 = read_lut64(u8_p + 24*FRAME_SIZE, (byte_off+4)*8);
+				{ int logic_base[6] = {0,1,0,0,1,0};
+				  lut_str = lut2bool(u64, 64, &logic_base, /*flip_b0*/ 1); }
+				if (*lut_str) {
+					rc = fdev_logic_set_lut(model, y, x, DEV_LOGM,
+						A6_LUT, lut_str, ZTERM);
+					if (rc) FAIL(rc);
+					*(uint32_t*)(u8_p+24*FRAME_SIZE+byte_off+4) = 0;
+					*(uint32_t*)(u8_p+25*FRAME_SIZE+byte_off+4) = 0;
+				}
+			}
+			// B6_LUT
+			if (frame_get_u32(u8_p + 21*FRAME_SIZE + byte_off + 4)
+			    || frame_get_u32(u8_p + 22*FRAME_SIZE + byte_off + 4)) {
+				u64 = read_lut64(u8_p + 21*FRAME_SIZE, (byte_off+4)*8);
+				{ int logic_base[6] = {1,1,0,1,0,1};
+				  lut_str = lut2bool(u64, 64, &logic_base, /*flip_b0*/ 1); }
+				if (*lut_str) {
+					rc = fdev_logic_set_lut(model, y, x, DEV_LOGM,
+						B6_LUT, lut_str, ZTERM);
+					if (rc) FAIL(rc);
+					*(uint32_t*)(u8_p+21*FRAME_SIZE+byte_off+4) = 0;
+					*(uint32_t*)(u8_p+22*FRAME_SIZE+byte_off+4) = 0;
+				}
+			}
+			// C6_LUT
+			if (frame_get_u32(u8_p + 24*FRAME_SIZE + byte_off)
+			    || frame_get_u32(u8_p + 25*FRAME_SIZE + byte_off)) {
+				u64 = read_lut64(u8_p + 24*FRAME_SIZE, byte_off*8);
+				{ int logic_base[6] = {0,1,0,0,1,0};
+				  lut_str = lut2bool(u64, 64, &logic_base, /*flip_b0*/ 1); }
+				if (*lut_str) {
+					rc = fdev_logic_set_lut(model, y, x, DEV_LOGM,
+						C6_LUT, lut_str, ZTERM);
+					if (rc) FAIL(rc);
+					*(uint32_t*)(u8_p+24*FRAME_SIZE+byte_off) = 0;
+					*(uint32_t*)(u8_p+25*FRAME_SIZE+byte_off) = 0;
+				}
+			}
+			// D6_LUT
+			if (frame_get_u32(u8_p + 21*FRAME_SIZE + byte_off)
+			    || frame_get_u32(u8_p + 22*FRAME_SIZE + byte_off)) {
+				u64 = read_lut64(u8_p + 21*FRAME_SIZE, byte_off*8);
+				{ int logic_base[6] = {1,1,0,1,0,1};
+				  lut_str = lut2bool(u64, 64, &logic_base, /*flip_b0*/ 1); }
+				if (*lut_str) {
+					rc = fdev_logic_set_lut(model, y, x, DEV_LOGM,
+						D6_LUT, lut_str, ZTERM);
+					if (rc) FAIL(rc);
+					*(uint32_t*)(u8_p+21*FRAME_SIZE+byte_off) = 0;
+					*(uint32_t*)(u8_p+22*FRAME_SIZE+byte_off) = 0;
+				}
+			}
+
+			// X device
 			u64 = frame_get_u64(u8_p + 26*FRAME_SIZE + byte_off);
 			if ( u64 ) {
 				// 21, 22, 36 and 37 are actually not default
@@ -170,6 +233,7 @@ int extract_model(struct fpga_model* model, struct fpga_bits* bits)
 				dev = FPGA_DEV(model, y, x, dev_idx);
 				*(uint64_t*)(u8_p+26*FRAME_SIZE+byte_off) = 0;
 
+				// A6_LUT
 				u64 = read_lut64(u8_p + 27*FRAME_SIZE, (byte_off+4)*8);
 				{ int logic_base[6] = {1,1,0,1,1,0};
 				  lut_str = lut2bool(u64, 64, &logic_base, /*flip_b0*/ 0); }
@@ -180,6 +244,7 @@ int extract_model(struct fpga_model* model, struct fpga_bits* bits)
 					*(uint32_t*)(u8_p+27*FRAME_SIZE+byte_off+4) = 0;
 					*(uint32_t*)(u8_p+28*FRAME_SIZE+byte_off+4) = 0;
 				}
+				// B6_LUT
 				u64 = read_lut64(u8_p + 29*FRAME_SIZE, (byte_off+4)*8);
 				{ int logic_base[6] = {1,1,0,1,1,0};
 				  lut_str = lut2bool(u64, 64, &logic_base, /*flip_b0*/ 0); }
@@ -189,6 +254,7 @@ int extract_model(struct fpga_model* model, struct fpga_bits* bits)
 					*(uint32_t*)(u8_p+29*FRAME_SIZE+byte_off+4) = 0;
 					*(uint32_t*)(u8_p+30*FRAME_SIZE+byte_off+4) = 0;
 				}
+				// C6_LUT
 				u64 = read_lut64(u8_p + 27*FRAME_SIZE, byte_off*8);
 				{ int logic_base[6] = {0,1,0,0,0,1};
 				  lut_str = lut2bool(u64, 64, &logic_base, /*flip_b0*/ 0); }
@@ -198,6 +264,7 @@ int extract_model(struct fpga_model* model, struct fpga_bits* bits)
 					*(uint32_t*)(u8_p+27*FRAME_SIZE+byte_off) = 0;
 					*(uint32_t*)(u8_p+28*FRAME_SIZE+byte_off) = 0;
 				}
+				// D6_LUT
 				u64 = read_lut64(u8_p + 29*FRAME_SIZE, byte_off*8);
 				{ int logic_base[6] = {0,1,0,0,0,1};
 				  lut_str = lut2bool(u64, 64, &logic_base, /*flip_b0*/ 0); }
@@ -207,36 +274,6 @@ int extract_model(struct fpga_model* model, struct fpga_bits* bits)
 					*(uint32_t*)(u8_p+29*FRAME_SIZE+byte_off) = 0;
 					*(uint32_t*)(u8_p+30*FRAME_SIZE+byte_off) = 0;
 				}
-#if 0
-		// M-LUTs
-		lut64 = read_lut64(&maj_bits[24*130], frame_off+32);
-		{ int logic_base[6] = {0,1,0,0,1,0};
-		  lut_str = lut2bool(lut64, 64, &logic_base, 1 /* flip_b0 */); }
-		if (*lut_str)
-			printf("r%i ma%i clb i%i s0_A6LUT \"%s\"\n",
-				row, major, i-start, lut_str);
-
-		lut64 = read_lut64(&maj_bits[21*130], frame_off+32);
-		{ int logic_base[6] = {1,1,0,1,0,1};
-		  lut_str = lut2bool(lut64, 64, &logic_base, 1 /* flip_b0 */); }
-		if (*lut_str)
-			printf("r%i ma%i clb i%i s0_B6LUT \"%s\"\n",
-				row, major, i-start, lut_str);
-
-		lut64 = read_lut64(&maj_bits[24*130], frame_off);
-		{ int logic_base[6] = {0,1,0,0,1,0};
-		  lut_str = lut2bool(lut64, 64, &logic_base, 1 /* flip_b0 */); }
-		if (*lut_str)
-			printf("r%i ma%i clb i%i s0_C6LUT \"%s\"\n",
-				row, major, i-start, lut_str);
-
-		lut64 = read_lut64(&maj_bits[21*130], frame_off);
-		{ int logic_base[6] = {1,1,0,1,0,1};
-		  lut_str = lut2bool(lut64, 64, &logic_base, 1 /* flip_b0 */); }
-		if (*lut_str)
-			printf("r%i ma%i clb i%i s0_D6LUT \"%s\"\n",
-				row, major, i-start, lut_str);
-#endif
 			}
 		}
 	}

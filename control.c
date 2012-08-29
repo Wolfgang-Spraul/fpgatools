@@ -819,13 +819,15 @@ int fpga_switch_chain(struct sw_chain* chain)
 		// one level down for each member. This sorts the
 		// returned switches in a nice way.
 		chain->first_round = 1;
+		chain->prior_parents = 0;
+		chain->num_prior_parents = 0;
 		return 0;
 	}
 	if (!chain->set.len) {
 		HERE(); goto internal_error;
 	}
 	if (chain->first_round) {
-		// first go through all members are present level
+		// first go through all members at present level
 		idx = fpga_switch_next(chain->model, chain->y, chain->x,
 			chain->set.sw[chain->set.len-1], chain->from_to);
 		if (idx != NO_SWITCH) {

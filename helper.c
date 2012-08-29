@@ -819,7 +819,7 @@ const char* strarray_lookup(struct hashed_strarray* array, int idx)
 	return &array->bin_strings[bin][offset];
 }
 
-int strarray_find(struct hashed_strarray* array, const char* str, int* idx)
+int strarray_find(struct hashed_strarray* array, const char* str)
 {
 	int bin, search_off, i;
 	uint32_t hash;
@@ -834,16 +834,14 @@ int strarray_find(struct hashed_strarray* array, const char* str, int* idx)
 				i = *(uint32_t*)&array->bin_strings[bin][search_off-6];
 				if (!i) {
 					fprintf(stderr, "Internal error - index 0.\n");
-					return -1;
+					return STRIDX_NO_ENTRY;
 				}
-				*idx = i+1;
-				return 0;
+				return i+1;
 			}
 			search_off += *(uint16_t*)&array->bin_strings[bin][search_off-2];
 		}
 	}
-	*idx = STRIDX_NO_ENTRY;
-	return 0;
+	return STRIDX_NO_ENTRY;
 }
 
 int s_stash_at_bin(struct hashed_strarray* array, const char* str, int idx, int bin);
@@ -853,8 +851,7 @@ int strarray_add(struct hashed_strarray* array, const char* str, int* idx)
 	int bin, i, free_index, rc, start_index;
 	unsigned long hash;
 
-	rc = strarray_find(array, str, idx);
-	if (rc) return rc;
+	*idx = strarray_find(array, str);
 	if (*idx != STRIDX_NO_ENTRY) return 0;
 
 	hash = hash_djb2((const unsigned char*) str);

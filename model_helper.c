@@ -57,8 +57,7 @@ int has_connpt(struct fpga_model* model, int y, int x,
 	uint16_t name_i;
 	int i;
 
-	if (strarray_find(&model->str, name, &i))
-		EXIT(1);
+	i = strarray_find(&model->str, name);
 	if (i == STRIDX_NO_ENTRY)
 		return 0;
 	name_i = i;
@@ -337,10 +336,8 @@ int add_switch(struct fpga_model* model, int y, int x, const char* from,
 	rc = strarray_add(&model->str, to, &to_idx);
 	if (rc) goto xout;
 #else
-	rc = strarray_find(&model->str, from, &from_idx);
-	if (rc) goto xout;
-	rc = strarray_find(&model->str, to, &to_idx);
-	if (rc) goto xout;
+	from_idx = strarray_find(&model->str, from);
+	to_idx = strarray_find(&model->str, to);
 #endif
 	if (from_idx == STRIDX_NO_ENTRY || to_idx == STRIDX_NO_ENTRY) {
 		fprintf(stderr, "No string for switch from %s (%i) or %s (%i).\n",

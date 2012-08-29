@@ -106,6 +106,10 @@ void fpga_switch_disable(struct fpga_model* model, int y, int x,
 const char* fmt_swset(struct fpga_model* model, int y, int x,
 	struct sw_set* set, int from_to);
 
+// MAX_PRIOR_PARENTS should be larger than the largest known
+// numer of switches in a tile, currently 3459 in a slx9 routing tile.
+#define MAX_PRIOR_PARENTS 4000
+
 struct sw_chain
 {
 	// start and recurring values:
@@ -122,6 +126,8 @@ struct sw_chain
 
 	// internal:
 	int first_round;	
+	swidx_t* prior_parents;
+	int num_prior_parents;
 };
 
 // Returns 0 if another switchset is returned in chain, or

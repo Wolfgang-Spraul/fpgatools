@@ -629,8 +629,8 @@ static void read_net_line(struct fpga_model* model, const char* line, int start)
 		}
 		memcpy(buf, &line[from_beg], from_end-from_beg);
 		buf[from_end-from_beg] = 0;
-		if (strarray_find(&model->str, buf, &from_str_i)
-		    || from_str_i == STRIDX_NO_ENTRY) {
+		from_str_i = strarray_find(&model->str, buf);
+		if (from_str_i == STRIDX_NO_ENTRY) {
 			HERE();
 			return;
 		}
@@ -646,8 +646,8 @@ static void read_net_line(struct fpga_model* model, const char* line, int start)
 		}
 		memcpy(buf, &line[to_beg], to_end-to_beg);
 		buf[to_end-to_beg] = 0;
-		if (strarray_find(&model->str, buf, &to_str_i)
-		    || to_str_i == STRIDX_NO_ENTRY) {
+		to_str_i = strarray_find(&model->str, buf);
+		if (to_str_i == STRIDX_NO_ENTRY) {
 			HERE();
 			return;
 		}
