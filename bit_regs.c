@@ -740,6 +740,25 @@ static void printf_routing_2minors(uint8_t* bits, int row, int major,
 	}
 }
 
+static void printf_v64_mi20(uint8_t* bits, int row, int major)
+{
+	int y, i, hclk;
+	uint64_t u64;
+	char bit_str[65];
+
+	bit_str[64] = 0;
+	for (y = 0; y < 16; y++) {
+		hclk = (y < 8) ? 0 : 2;
+		u64 = frame_get_u64(bits + y*8 + hclk);
+		if (u64) {
+			for (i = 0; i < 64; i++)
+				bit_str[i] = (u64 & (1ULL << i)) ? '1' : '0';
+			printf("r%i ma%i v64_%02i mi20 %s\n",
+				row, major, y, bit_str);
+		}
+	}
+}
+
 static int dump_bits(struct fpga_config* cfg)
 {
 	int row, major, minor, i, j, off, offset_in_frame;
@@ -795,7 +814,12 @@ static int dump_bits(struct fpga_config* cfg)
 
 				// 0:20 routing minor pairs
 				for (i = 0; i < 10; i++)
-					printf_routing_2minors(&cfg->bits.d[off+i*2*FRAME_SIZE], row, major, i*2);
+					printf_routing_2minors(&cfg->bits.d[
+					  off+i*2*FRAME_SIZE], row, major, i*2);
+
+				// mi20 as 64-char 0/1 string
+				printf_v64_mi20(&cfg->bits.d[
+					off+20*FRAME_SIZE], row, major);
 			} else if (get_major_type(cfg->reg[cfg->idcode_reg].int_v, major) == MAJ_BRAM) {
 				ramb16_cfg_t ramb16_cfg[4];
 

@@ -63,11 +63,12 @@ void fpga_conn_dest(struct fpga_model* model, int y, int x,
 //
 
 typedef int swidx_t; // swidx_t is an index into the uint32_t switches array
-// SW_SET_SIZE should be enough for both the largest number
-// of switches that can go from or to one specific connection
-// point (32), as well as the largest depth of a path inside
-// a switchbox (ca. 20).
-#define SW_SET_SIZE 64
+// SW_SET_SIZE should be enough for:
+// *) largest number of switches that can go from or to one
+//    specific connection point (ca. 32)
+// *) largest depth inside a switchbox (ca. 20)
+// *) some wires that go 'everywhere' like GFAN (70)
+#define SW_SET_SIZE 128
 
 struct sw_set
 {

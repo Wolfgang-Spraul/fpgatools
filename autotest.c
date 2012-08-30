@@ -280,7 +280,7 @@ static int test_device_fingers(struct test_state* tstate, int y, int x,
 // fprintf_net(stdout, tstate->model, net_idx);
 // printf("set %s\n", fmt_swset(tstate->model, switch_to.dest_y, switch_to.dest_x, &chain.set, from_to));
 
-#if 0
+#if 1
 			rc = diff_printf(tstate);
 			if (rc) FAIL(rc);
 #endif
@@ -295,6 +295,189 @@ fail:
 	return rc;
 }
 
+static int test_logic_net(struct test_state* tstate, int logic_y, int logic_x,
+	int type_idx, pinw_idx_t port, const struct sw_set* logic_switch_set,
+	int routing_y, int routing_x, swidx_t routing_sw1, swidx_t routing_sw2)
+{
+	net_idx_t net_idx;
+	struct sw_set routing_switches;
+	int rc;
+
+	rc = fpga_net_new(tstate->model, &net_idx);
+	if (rc) FAIL(rc);
+
+	// add port
+	rc = fpga_net_add_port(tstate->model, net_idx, logic_y, logic_x,
+		fpga_dev_idx(tstate->model, logic_y, logic_x, DEV_LOGIC,
+		type_idx), port);
+	if (rc) FAIL(rc);
+
+	// add (one) switch in logic tile
+	rc = fpga_net_add_switches(tstate->model, net_idx,
+		logic_y, logic_x, logic_switch_set);
+	if (rc) FAIL(rc);
+
+	// add switches in routing tile
+	routing_switches.len = 0;
+	if (routing_sw1 == NO_SWITCH) FAIL(EINVAL);
+	routing_switches.sw[routing_switches.len++] = routing_sw1;
+	if (routing_sw2 != NO_SWITCH)
+		routing_switches.sw[routing_switches.len++] = routing_sw2;
+	rc = fpga_net_add_switches(tstate->model, net_idx,
+		routing_y, routing_x, &routing_switches);
+	if (rc) FAIL(rc);
+
+#if 0
+	printf("lnet %s %s\n", fpga_switch_print(tstate->model, routing_y,
+		routing_x, routing_sw1), routing_sw2 == NO_SWITCH ? ""
+		: fpga_switch_print(tstate->model, routing_y, routing_x, routing_sw2));
+#endif
+#if 1
+	rc = diff_printf(tstate);
+	if (rc) FAIL(rc);
+#endif
+	fpga_net_delete(tstate->model, net_idx);
+	return 0;
+fail:
+	return rc;
+}
+
+static int test_logic_fingers(struct test_state* tstate, int y, int x,
+	int type, int type_idx, str16_t* done_pinw_list, int* done_pinw_len,
+	swidx_t* l2_done_list, int* l2_done_len)
+{
+	struct fpga_device* dev;
+	struct switch_to_yx switch_to;
+	struct sw_chain chain;
+	net_idx_t net_idx;
+	int i, j, k, l, from_to, direction, rc;
+	struct sw_set set_l1, set_l2;
+	struct fpga_tile* switch_tile;
+
+	rc = fdev_set_required_pins(tstate->model, y, x, type, type_idx);
+	if (rc) FAIL(rc);
+// fdev_print_required_pins(tstate->model, y, x, type, type_idx);
+
+	dev = fdev_p(tstate->model, y, x, type, type_idx);
+	if (!dev) FAIL(EINVAL);
+	for (i = 0; i < dev->pinw_req_total; i++) {
+
+		// do every pinw only once across all configs
+		for (j = 0; j < *done_pinw_len; j++) {
+			if (done_pinw_list[j] == dev->pinw[dev->pinw_req_for_cfg[i]])
+				break;
+		}
+		if (j < *done_pinw_len)
+			continue;
+		done_pinw_list[(*done_pinw_len)++] = dev->pinw[dev->pinw_req_for_cfg[i]];
+	
+		from_to = (i < dev->pinw_req_in) ? SW_TO : SW_FROM;
+		switch_to.yx_req = YX_ROUTING_TILE;
+		switch_to.flags = SWTO_YX_DEF;
+		switch_to.model = tstate->model;
+		switch_to.y = y;
+		switch_to.x = x;
+		switch_to.start_switch = dev->pinw[dev->pinw_req_for_cfg[i]];
+		switch_to.from_to = from_to;
+		rc = fpga_switch_to_yx(&switch_to);
+		if (rc) FAIL(rc);
+// printf_switch_to_result(&switch_to);
+
+		switch_tile = YX_TILE(tstate->model, switch_to.dest_y, switch_to.dest_x);
+		rc = fpga_swset_fromto(tstate->model, switch_to.dest_y,
+			switch_to.dest_x, switch_to.dest_connpt, from_to, &set_l1);
+		if (rc) FAIL(rc);
+
+//		if (1||(i < dev->pinw_req_in)) {
+//		if (i >= dev->pinw_req_in) {
+		if (1) {
+// fpga_swset_print(tstate->model, switch_to.dest_y, switch_to.dest_x, &set_l1, from_to);
+			for (j = 0; j < set_l1.len; j++) {
+				rc = test_logic_net(tstate, y, x, type_idx, dev->pinw_req_for_cfg[i],
+					&switch_to.set, switch_to.dest_y, switch_to.dest_x,
+					set_l1.sw[j], NO_SWITCH);
+				if (rc) FAIL(rc);
+				// level one switches themselves cannot become duplicates
+				// because we check for unique pinwires already. but we still
+				// need to add them to the done_list to compare against
+				// future l2 switches.
+// todo: rename l2_done_list to just done_list
+				l2_done_list[(*l2_done_len)++] = set_l1.sw[j];
+
+				rc = fpga_swset_fromto(tstate->model, switch_to.dest_y,
+					switch_to.dest_x, CONNPT_STR16(switch_tile,
+					SW_I(switch_tile->switches[set_l1.sw[j]], !from_to)),
+					i < dev->pinw_req_in ? from_to : !from_to, &set_l2);
+				if (rc) FAIL(rc);
+
+				for (k = 0; k < set_l2.len; k++) {
+					// on an out pin, we are reversing direction and looking
+					// for other switches pointing *to* the output, but we
+					// can skip ourselves...
+					if (set_l2.sw[k] == set_l1.sw[j])
+						continue;
+
+					// The level 1 switches cannot duplicate because we
+					// already track unique pinwires. But level 2 switches
+					// must be checked for duplicates.
+					for (l = 0; l < *l2_done_len; l++) {
+						if (l2_done_list[l] == set_l2.sw[k])
+							break;
+					}
+					if (l < *l2_done_len)
+						continue;
+					l2_done_list[(*l2_done_len)++] = set_l2.sw[k];
+
+					rc = test_logic_net(tstate, y, x, type_idx, dev->pinw_req_for_cfg[i],
+						&switch_to.set, switch_to.dest_y, switch_to.dest_x,
+						set_l1.sw[j], set_l2.sw[k]);
+					if (rc) FAIL(rc);
+				}
+			}
+		}
+
+
+#if 0
+
+
+		// loop twice, first continue in the same direction as
+		// the in/out pin, second loop in reverse direction
+		for (direction = 0; direction <= 1; direction++) {
+//printf("direction %i\n", direction);
+			for (j = 0; j < set_l1.len; j++) {
+
+//printf("j %i\n", j);
+				rc = fpga_swset_fromto(tstate->model, switch_to.dest_y,
+					switch_to.dest_x, CONNPT_STR16(switch_tile,
+					SW_I(switch_tile->switches[set_l1.sw[j]], !from_to)),
+					direction ? !from_to : from_to, &set_l2);
+				if (rc) FAIL(rc);
+
+#if 0
+				rc = test_logic_net(tstate, y, x, type_idx, dev->pinw_req_for_cfg[i],
+					&switch_to.set, switch_to.dest_y, switch_to.dest_x,
+					set_l1.sw[j], NO_SWITCH);
+				if (rc) FAIL(rc);
+#endif
+
+				for (k = 0; k < set_l2.len; k++) {
+#if 0
+					rc = test_logic_net(tstate, y, x, type_idx, dev->pinw_req_for_cfg[i],
+						&switch_to.set, switch_to.dest_y, switch_to.dest_x,
+						set_l1.sw[j], set_l2.sw[k]);
+					if (rc) FAIL(rc);
+#endif
+				}
+// fpga_swset_print(tstate->model, switch_to.dest_y, switch_to.dest_x, &set_l2, direction ? !from_to: from_to);
+			}
+		}
+#endif
+	}
+	return 0;
+fail:
+	return rc;
+}
+
 // goal: use all switches in a routing switchbox
 int test_logic_routing_switches(struct test_state* tstate);
 int test_logic_routing_switches(struct test_state* tstate)
@@ -302,13 +485,16 @@ int test_logic_routing_switches(struct test_state* tstate)
 	int a_to_d[] = { A6_LUT, B6_LUT, C6_LUT, D6_LUT };
 	int idx_enum[] = { DEV_LOGM, DEV_LOGX };
 	int y, x, i, j, k, rc;
-	swidx_t done_list[MAX_SWITCHBOX_SIZE];
-	int done_list_len;
-
+	swidx_t l2_done_list[MAX_SWITCHBOX_SIZE];
+	int l2_done_len;
+	str16_t done_pinw_list[2000];
+	int done_pinw_len;
+	
         y = 68;
 	x = 13;
 
-	done_list_len = 0;
+	done_pinw_len = 0;
+	l2_done_len = 0;
 	for (i = 0; i < sizeof(idx_enum)/sizeof(*idx_enum); i++) {
 		for (j = 0; j < sizeof(a_to_d)/sizeof(*a_to_d); j++) {
 			for (k = '1'; k <= '6'; k++) {
@@ -316,8 +502,9 @@ int test_logic_routing_switches(struct test_state* tstate)
 					idx_enum[i], a_to_d[j], pf("A%c", k), ZTERM);
 				if (rc) FAIL(rc);
 
-				rc = test_device_fingers(tstate, y, x, DEV_LOGIC,
-					idx_enum[i], done_list, &done_list_len);
+				rc = test_logic_fingers(tstate, y, x, DEV_LOGIC,
+					idx_enum[i], done_pinw_list, &done_pinw_len,
+					l2_done_list, &l2_done_len);
 				if (rc) FAIL(rc);
 				fdev_delete(tstate->model, y, x, DEV_LOGIC, idx_enum[i]);
 			}
