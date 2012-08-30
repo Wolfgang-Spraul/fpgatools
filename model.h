@@ -481,7 +481,13 @@ struct fpga_device
 #define SW_TO			0
 
 #define NO_SWITCH	-1
+// FIRST_SW must be high enough to be above switch indices or
+// connpt or str16.
+#define FIRST_SW	0x80000
 #define NO_CONN		-1
+
+typedef int connpt_t; // index into conn_point_names (not yet *2)
+#define CONNPT_STR16(tile, connpt)	((tile)->conn_point_names[(connpt)*2+1])
 
 struct fpga_tile
 {

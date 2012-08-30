@@ -734,7 +734,7 @@ static void printf_routing_2minors(uint8_t* bits, int row, int major,
 				if (u64_1 & (1ULL << i))
 					bit_str[i*2+1] = '1';
 			}
-			printf("r%i ma%i v64_%i mip%i %s\n",
+			printf("r%i ma%i v64_%02i mip%02i %s\n",
 				row, major, y, even_minor, bit_str);
 		}
 	}

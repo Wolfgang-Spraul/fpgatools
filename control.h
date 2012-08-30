@@ -63,11 +63,15 @@ void fpga_conn_dest(struct fpga_model* model, int y, int x,
 //
 
 typedef int swidx_t; // swidx_t is an index into the uint32_t switches array
-#define MAX_SW_DEPTH 64 // largest seen so far was 20
+// SW_SET_SIZE should be enough for both the largest number
+// of switches that can go from or to one specific connection
+// point (32), as well as the largest depth of a path inside
+// a switchbox (ca. 20).
+#define SW_SET_SIZE 64
 
 struct sw_set
 {
-	swidx_t sw[MAX_SW_DEPTH];
+	swidx_t sw[SW_SET_SIZE];
 	int len;
 };
 
@@ -78,6 +82,25 @@ swidx_t fpga_switch_next(struct fpga_model* model, int y, int x,
 	swidx_t last, int from_to);
 swidx_t fpga_switch_backtofirst(struct fpga_model* model, int y, int x,
 	swidx_t last, int from_to);
+
+int fpga_swset_fromto(struct fpga_model* model, int y, int x,
+	str16_t start_switch, int from_to, struct sw_set* set);
+// returns -1 if not found, otherwise index into the set
+int fpga_swset_contains(struct fpga_model* model, int y, int x,
+	const struct sw_set* set, int from_to, str16_t connpt);
+void fpga_swset_remove_connpt(struct fpga_model* model, int y, int x,
+	struct sw_set* set, int from_to, str16_t connpt);
+// removes all switches from set whose !from_to is equal to the
+// from_to in parents
+void fpga_swset_remove_loop(struct fpga_model* model, int y, int x,
+	struct sw_set* set, const struct sw_set* parents, int from_to);
+void fpga_swset_remove_sw(struct fpga_model* model, int y, int x,
+	struct sw_set* set, swidx_t sw);
+int fpga_swset_level_down(struct fpga_model* model, int y, int x,
+	struct sw_set* set, int from_to);
+void fpga_swset_print(struct fpga_model* model, int y, int x,
+	struct sw_set* set, int from_to);
+
 // When calling, same_len must contain the size of the
 // same_sw array. Upon return same_len returns how many
 // switches were found and writen to same_sw.
@@ -106,9 +129,10 @@ void fpga_switch_disable(struct fpga_model* model, int y, int x,
 const char* fmt_swset(struct fpga_model* model, int y, int x,
 	struct sw_set* set, int from_to);
 
-// MAX_PRIOR_PARENTS should be larger than the largest known
-// numer of switches in a tile, currently 3459 in a slx9 routing tile.
-#define MAX_PRIOR_PARENTS 4000
+// MAX_SWITCHBOX_SIZE can be used to allocate the block
+// list and should be larger than the largest known number
+// of switches in a tile, currently 3459 in a slx9 routing tile.
+#define MAX_SWITCHBOX_SIZE 4000
 
 struct sw_chain
 {
@@ -116,41 +140,40 @@ struct sw_chain
 	struct fpga_model* model;
 	int y;
 	int x;
-	// start_switch will be set to STRIDX_NO_ENTRY (0) after the first call
-	str16_t start_switch;
 	int from_to;
-	int max_chain_size;
+	int max_depth;
+	//
+	// block_list works as if all switches from or to the ones
+	// on the block list are blocked, that is the recursion will
+	// never step into a part of the tree that goes through a
+	// blocked from or to point.
+	// Every call to fpga_switch_chain(), even the last one that
+	// returns NO_SWITCH, may add switches to the block list.
+	//
+	swidx_t* block_list;
+	int block_list_len;
 
-	// return values:
+	// return value: set is carried forward through the
+	// enumeration and must only be read from.
 	struct sw_set set;
 
 	// internal:
 	int first_round;	
-	swidx_t* prior_parents;
-	int num_prior_parents;
+	swidx_t* internal_block_list;
 };
+
+int construct_sw_chain(struct sw_chain* chain, struct fpga_model* model,
+	int y, int x, str16_t start_switch, int from_to, int max_depth,
+	swidx_t* block_list, int block_list_len);
+void destruct_sw_chain(struct sw_chain* chain);
 
 // Returns 0 if another switchset is returned in chain, or
 // NO_SWITCH (-1) if there is no other switchset.
-// chain_size set to 0 when there are no more switches in the tree
+// set.len is 0 when there are no more switches in the tree
 int fpga_switch_chain(struct sw_chain* chain);
-
-// returns error code or 0 for no errors
-int fpga_switch_chains(struct sw_chain* chain, int max_sets,
-	struct sw_set* sets, int* num_sets);
 
 struct sw_conns
 {
-	// start and recurring values:
-   	struct fpga_model* model;
-	int y;
-	int x;
-	// start_switch will be set to STRIDX_NO_ENTRY (0) after first call
-	str16_t start_switch;
-	int from_to;
-	int max_switch_depth;
-
-	// return values:
 	struct sw_chain chain;
 	int connpt_dest_start;
 	int num_dests;
@@ -160,12 +183,17 @@ struct sw_conns
 	str16_t dest_str_i;
 };
 
+int construct_sw_conns(struct sw_conns* conns, struct fpga_model* model,
+	int y, int x, str16_t start_switch, int from_to, int max_depth);
+void destruct_sw_conns(struct sw_conns* conns);
+
 // Returns 0 if another connection is returned in conns, or
 // NO_CONN (-1) if there is no other connection.
 int fpga_switch_conns(struct sw_conns* conns);
 
 void printf_swchain(struct fpga_model* model, int y, int x,
-	str16_t sw, int from_to, int max_depth);
+	str16_t sw, int from_to, int max_depth, swidx_t* block_list,
+	int* block_list_len);
 void printf_swconns(struct fpga_model* model, int y, int x,
 	str16_t sw, int from_to, int max_depth);
 

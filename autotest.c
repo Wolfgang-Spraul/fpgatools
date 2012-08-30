@@ -110,7 +110,8 @@ static void cut_sw_from_end(struct fpga_net* net, int cut_o)
 	net->len = 2 + net->len-cut_o;
 }
 
-static int test_net(struct test_state* tstate, net_idx_t net_i)
+int test_net(struct test_state* tstate, net_idx_t net_i);
+int test_net(struct test_state* tstate, net_idx_t net_i)
 {
 	struct fpga_net* net;
 	struct fpga_net copy_net;
@@ -136,7 +137,8 @@ static int test_net(struct test_state* tstate, net_idx_t net_i)
 			net->el[2].y, net->el[2].x,
 			fpga_switch_str_i(tstate->model,
 				net->el[2].y, net->el[2].x,
-				net->el[2].idx, SW_TO), SW_TO, 1);
+				net->el[2].idx, SW_TO),
+				SW_TO, 1, 0, 0);
 		same_len = sizeof(same_sw)/sizeof(*same_sw);
 		rc = fpga_switch_same_fromto(tstate->model,
 			net->el[2].y, net->el[2].x,
@@ -154,7 +156,8 @@ fail:
 	return rc;
 }
 
-static int test_net2(struct test_state* tstate, net_idx_t net_i)
+int test_net2(struct test_state* tstate, net_idx_t net_i);
+int test_net2(struct test_state* tstate, net_idx_t net_i)
 {
 	struct fpga_net* net;
 	struct fpga_net copy_net;
@@ -174,7 +177,8 @@ static int test_net2(struct test_state* tstate, net_idx_t net_i)
 			net->el[i-1].y, net->el[i-1].x,
 			fpga_switch_str_i(tstate->model,
 				net->el[i-1].y, net->el[i-1].x,
-				net->el[i-1].idx, SW_FROM), SW_FROM, 1);
+				net->el[i-1].idx, SW_FROM),
+				SW_FROM, 1, 0, 0);
 		same_len = sizeof(same_sw)/sizeof(*same_sw);
 		rc = fpga_switch_same_fromto(tstate->model,
 			net->el[i-1].y, net->el[i-1].x,
@@ -193,8 +197,38 @@ fail:
 	return rc;
 }
 
+// goal: configure logic devices in all supported variations
+int test_logic_config(struct test_state* tstate);
+int test_logic_config(struct test_state* tstate)
+{
+	int a_to_d[] = { A6_LUT, B6_LUT, C6_LUT, D6_LUT };
+	int idx_enum[] = { DEV_LOGM, DEV_LOGX };
+	int y, x, i, j, k, rc;
+
+        y = 68;
+	x = 13;
+
+	for (i = 0; i < sizeof(idx_enum)/sizeof(*idx_enum); i++) {
+		for (j = 0; j < sizeof(a_to_d)/sizeof(*a_to_d); j++) {
+			for (k = '1'; k <= '6'; k++) {
+				rc = fdev_logic_set_lut(tstate->model, y, x,
+					idx_enum[i], a_to_d[j], pf("A%c", k), ZTERM);
+				if (rc) FAIL(rc);
+
+				rc = diff_printf(tstate);
+				if (rc) FAIL(rc);
+
+				fdev_delete(tstate->model, y, x, DEV_LOGIC, idx_enum[i]);
+			}
+		}
+	}
+	return 0;
+fail:
+	return rc;
+}
+
 static int test_device_fingers(struct test_state* tstate, int y, int x,
-	int type, int type_idx, int test_inpins, int test_outpins)
+	int type, int type_idx, swidx_t* block_list, int* block_list_len)
 {
 	struct fpga_device* dev;
 	struct switch_to_yx switch_to;
@@ -209,11 +243,6 @@ static int test_device_fingers(struct test_state* tstate, int y, int x,
 	dev = fdev_p(tstate->model, y, x, type, type_idx);
 	if (!dev) FAIL(EINVAL);
 	for (i = 0; i < dev->pinw_req_total; i++) {
-
-		if ((i < dev->pinw_req_in && !test_inpins)
-		    || (i >= dev->pinw_req_in && !test_outpins))
-			continue;
-		
 		from_to = (i < dev->pinw_req_in) ? SW_TO : SW_FROM;
 		switch_to.yx_req = YX_ROUTING_TILE;
 		switch_to.flags = SWTO_YX_DEF;
@@ -226,12 +255,10 @@ static int test_device_fingers(struct test_state* tstate, int y, int x,
 		if (rc) FAIL(rc);
 // printf_switch_to_result(&switch_to);
 
-		chain.model = tstate->model;
-		chain.y = switch_to.dest_y;
-		chain.x = switch_to.dest_x;
-		chain.start_switch = switch_to.dest_connpt;
-		chain.from_to = from_to;
-		chain.max_chain_size = 1;
+		rc = construct_sw_chain(&chain, tstate->model, switch_to.dest_y,
+			switch_to.dest_x, switch_to.dest_connpt, from_to,
+			/*max_depth*/ 1, block_list, *block_list_len);
+		if (rc) FAIL(rc);
 		while (fpga_switch_chain(&chain) != NO_SWITCH) {
 			rc = fpga_net_new(tstate->model, &net_idx);
 			if (rc) FAIL(rc);
@@ -251,28 +278,37 @@ static int test_device_fingers(struct test_state* tstate, int y, int x,
 			if (rc) FAIL(rc);
 
 // fprintf_net(stdout, tstate->model, net_idx);
+// printf("set %s\n", fmt_swset(tstate->model, switch_to.dest_y, switch_to.dest_x, &chain.set, from_to));
 
+#if 0
 			rc = diff_printf(tstate);
 			if (rc) FAIL(rc);
+#endif
 			fpga_net_delete(tstate->model, net_idx);
 		}
+		*block_list_len = chain.block_list_len;
+// printf("block_list_len now %i\n", *block_list_len);
+		destruct_sw_chain(&chain);
 	}
 	return 0;
 fail:
 	return rc;
 }
 
-static int test_all_logic_configs(struct test_state* tstate)
+// goal: use all switches in a routing switchbox
+int test_logic_routing_switches(struct test_state* tstate);
+int test_logic_routing_switches(struct test_state* tstate)
 {
 	int a_to_d[] = { A6_LUT, B6_LUT, C6_LUT, D6_LUT };
 	int idx_enum[] = { DEV_LOGM, DEV_LOGX };
 	int y, x, i, j, k, rc;
+	swidx_t done_list[MAX_SWITCHBOX_SIZE];
+	int done_list_len;
 
-// todo: goal: configure valid logic with as many possible in and out
-//       pins, for M and X device
         y = 68;
 	x = 13;
 
+	done_list_len = 0;
 	for (i = 0; i < sizeof(idx_enum)/sizeof(*idx_enum); i++) {
 		for (j = 0; j < sizeof(a_to_d)/sizeof(*a_to_d); j++) {
 			for (k = '1'; k <= '6'; k++) {
@@ -281,12 +317,17 @@ static int test_all_logic_configs(struct test_state* tstate)
 				if (rc) FAIL(rc);
 
 				rc = test_device_fingers(tstate, y, x, DEV_LOGIC,
-					idx_enum[i], /*in*/ 1, /*out*/ k=='1');
+					idx_enum[i], done_list, &done_list_len);
 				if (rc) FAIL(rc);
 				fdev_delete(tstate->model, y, x, DEV_LOGIC, idx_enum[i]);
 			}
 		}
 	}
+#if 0
+for (i = 0; i < done_list_len; i++) {
+	printf("done %i %s\n", i, fpga_switch_print(tstate->model, 68, 12, done_list[i]));
+}
+#endif
 	return 0;
 fail:
 	return rc;
@@ -330,18 +371,37 @@ int main(int argc, char** argv)
 	rc = diff_start(&tstate, "and");
 	if (rc) FAIL(rc);
 
-	// test_logic_config
-	// test_logic_routing_switches
+#if 0
+	rc = test_logic_config(&tstate);
+	if (rc) FAIL(rc);
+#endif
+
+#if 1
+	rc = test_logic_routing_switches(&tstate);
+	if (rc) FAIL(rc);
+#endif
+	
 	// test_iob_config
 	// test_iologic_routing_switches
 
 #if 0
-	rc = test_all_logic_configs(&tstate);
-	if (rc) FAIL(rc);
+// test_swchain:
+//	printf_swchain(&model, 69, 13, strarray_find(&model.str, "BIOI_INNER_IBUF0"), SW_FROM, SW_SET_SIZE);
+	{
+		swidx_t done_list[MAX_SWITCHBOX_SIZE];
+		int done_list_len = 0;
+		printf_swchain(&model, 68, 12, strarray_find(&model.str, "LOGICIN_B29"),
+			SW_TO, SW_SET_SIZE, done_list, &done_list_len);
+#if 0
+		printf_swchain(&model, 68, 12, strarray_find(&model.str, "NR1E0"),
+			SW_FROM, SW_SET_SIZE, done_list, &done_list_len);
+		printf_swchain(&model, 68, 12, strarray_find(&model.str, "NN2E0"),
+			SW_FROM, SW_SET_SIZE, done_list, &done_list_len);
+		printf_swchain(&model, 68, 12, strarray_find(&model.str, "SE2E2"),
+			SW_FROM, SW_SET_SIZE, done_list, &done_list_len);
 #endif
-
-	printf_swchain(&model, 69, 13, strarray_find(&model.str, "BIOI_INNER_IBUF0"), SW_FROM, MAX_SW_DEPTH);
-//	printf_swchain(&model, 68, 12, strarray_find(&model.str, "NR1E0"), SW_FROM, MAX_SW_DEPTH);
+	}
+#endif
 	
 #if 0
 	// configure P46
@@ -439,11 +499,14 @@ int main(int argc, char** argv)
 	switch_to.from_to = SW_FROM;
 	switch_to.max_switch_depth = 1;
 	{
+		note: update to constructor
 		struct sw_chain c = {
 			.model = &model, .y = switch_to.dest_y,
 			.x = switch_to.dest_x+1,
 			.start_switch = logic_dev->pinw[LOGIC_IN_D3],
-			.from_to = SW_TO, .max_chain_size = MAX_SW_DEPTH };
+			.from_to = SW_TO,
+			.max_depth = SW_SET_SIZE,
+			.block_list = 0 };
 		if (fpga_switch_chain(&c) == NO_CONN) FAIL(EINVAL);
 		if (c.set.len == 0) { HERE(); FAIL(EINVAL); }
 		switch_to.target_connpt = fpga_switch_str_i(&model,
@@ -457,11 +520,14 @@ int main(int argc, char** argv)
 	if (rc) FAIL(rc);
 
 	{
+		note: update to constructor
 		struct sw_chain c = {
 			.model = &model, .y = switch_to.dest_y,
 			.x = switch_to.dest_x,
 			.start_switch = switch_to.dest_connpt,
-			.from_to = SW_FROM, .max_chain_size = MAX_SW_DEPTH };
+			.from_to = SW_FROM,
+			.max_depth = SW_SET_SIZE,
+			.block_list = 0 };
 		if (fpga_switch_chain(&c) == NO_CONN) FAIL(EINVAL);
 		if (c.set.len == 0) { HERE(); FAIL(EINVAL); }
 		rc = fpga_net_add_switches(&model, P46_net, c.y, c.x, &c.set);
