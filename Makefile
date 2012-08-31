@@ -8,7 +8,7 @@
 
 PREFIX ?= /usr/local
 
-.PHONY:	all clean install uninstall
+.PHONY:	all test clean install uninstall
 .SECONDARY:
 
 # -fno-omit-frame-pointer and -ggdb add almost nothing to execution
@@ -25,6 +25,20 @@ MODEL_OBJ = model_main.o model_tiles.o model_devices.o model_ports.o model_conns
 
 all: new_fp fp2bit bit2fp draw_svg_tiles \
 	autotest hstrrep sort_seq merge_seq pair2net
+
+test: test_logic_cfg test_routing_sw
+
+test_logic_cfg: autotest.out/autotest_logic_cfg.diff_to_gold
+
+test_routing_sw: autotest.out/autotest_routing_sw.diff_to_gold
+
+autotest_%.diff_to_gold: autotest_%.log
+	@diff -U 0 -I "^O #NODIFF" autotest.gold/autotest_$(*F).log $< > $@ || true
+	@if test -s $@; then echo "Test failed: $(*F), diff follows"; cat $@; else echo "Test succeeded: $(*F)"; fi;
+
+autotest_%.log: autotest fp2bit bit2fp
+	@mkdir -p $(@D)
+	./autotest --test=$(*F) 2>&1 >$@
 
 autotest: autotest.o $(MODEL_OBJ) floorplan.o control.o helper.o model.h
 
@@ -131,6 +145,9 @@ compare.%: xc6slx9_empty.%
 	@cat $<|awk '{if ($$1=="sw") printf "%s %s %s %s %s\n",$$2,$$3,$$4,$$5,$$6}'|sort >$@
 
 clean:
+	rm -f $(foreach test,$(TESTS),"autotest.out/autotest_$(test).diff_to_gold")
+	rm -f $(foreach test,$(TESTS),"autotest.out/autotest_$(test).log")
+	rmdir --ignore-fail-on-non-empty autotest.out
 	rm -f draw_svg_tiles draw_svg_tiles.o \
 		new_fp new_fp.o \
 		helper.o $(MODEL_OBJ) hstrrep hstrrep.o \

@@ -13,8 +13,8 @@
 
 time_t g_start_time;
 #define TIME()		(time(0)-g_start_time)
-#define TIMESTAMP()	printf("O timestamp %lld\n", (long long) TIME())
-#define MEMUSAGE()	printf("O memusage %i\n", get_vm_mb());
+#define TIMESTAMP()	printf("O #NODIFF timestamp %lld\n", (long long) TIME())
+#define MEMUSAGE()	printf("O #NODIFF memusage %i\n", get_vm_mb());
 #define TIME_AND_MEM()	TIMESTAMP(); MEMUSAGE()
 
 #define AUTOTEST_TMP_DIR	"autotest.tmp"

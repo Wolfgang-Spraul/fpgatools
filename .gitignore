@@ -30,3 +30,4 @@ bit2fp
 bit2fp.o
 parts.o
 autotest.tmp/
+autotest.out/
