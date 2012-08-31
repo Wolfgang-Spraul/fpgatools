@@ -12,5 +12,5 @@ fi
 
 echo "fp:" > ${2%.*}.diff
 cat ${2%.*}.fp_diff | sed -e '/^--- /d;/^+++ /d;/^@@ /d' >> ${2%.*}.diff
-echo "b2f:" >> ${2%.*}.diff
+echo "bit:" >> ${2%.*}.diff
 cat ${2%.*}.b2f_diff | sed -e '/^--- /d;/^+++ /d;/^@@ /d' >> ${2%.*}.diff
