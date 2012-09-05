@@ -1299,6 +1299,7 @@ static int add_switches(struct set_of_switches* dest,
 	return 0;
 }
 
+// todo: should try to rewrite this using groups...
 static int build_dirwire_switches(struct set_of_switches* dest,
 	enum wire_type src_wire)
 {
@@ -1331,6 +1332,23 @@ xout:
 	return rc;
 }
 
+// See this as an array of groups of 4 wires, the order inside
+// the groups is significant as well. It's how the wire structure
+// is expressed best - several places build their logic on this,
+// search for logicin_g4.
+// todo: not sure this is deal. vcc goes to 0/1 and 6/7, and logicio_extra
+// seems to have groups also corresponding to 0/1/6/7 and 2-5
+static int logicin_g4[] = {
+	/* g00 mip16-3 */ M_B6, X_A6, M_C1, X_AX, /* g01 mip18-3 */ M_AI, X_B1, M_D3, X_C3,
+	/* g02 mip12-3 */ M_C3, X_D3, M_B2, M_WE, /* g03 mip14-3 */ M_AX, X_C2, M_A6, X_B6,
+	/* g04 mip16-2 */ M_B5, X_A5, M_BX, X_D2, /* g05 mip18-2 */ M_A2, M_BI, M_D4, X_C4,
+	/* g06 mip12-2 */ M_C4, X_D4, X_A1, X_CE, /* g07 mip14-2 */ M_D1, X_BX, M_A5, X_B5,
+	/* g08 mip16-1 */ M_B4, X_A4, X_CX, X_D1, /* g09 mip18-1 */ M_A1, M_CE, M_D5, X_C5,
+	/* g10 mip12-1 */ M_C5, X_D5, M_CI, X_A2, /* g11 mip14-1 */ M_CX, M_D2, M_A4, X_B4,
+	/* g12 mip16-0 */ M_B3, X_A3, M_C2, M_DX, /* g13 mip18-0 */ X_B2, FAN_B, M_D6, X_C6,
+	/* g14 mip12-0 */ M_C6, X_D6, M_B1, M_DI, /* g15 mip14-0 */ X_C1, X_DX, M_A3, X_B3,
+};
+
 static int add_logicio_extra(struct fpga_model* model,
 	int y, int x, int routing_io)
 {
@@ -1354,7 +1372,7 @@ static int add_logicio_extra(struct fpga_model* model,
 		/* group 14 */ M_A3, M_C6, X_B3, X_D6,
 		/* group 15 */ M_A4, M_C5, X_B4, X_D5,
 	};
-	// 16 groups of 5. Order of groups in sync with in_w.
+	// 16 groups of 5. Order of groups in sync with dest_w.
 	// Each dest_w group can only have 1 bidir wire, which is
 	// flagged there. The flag in src_w signals whether that one
 	// bidir line in dest_w is to be driven as bidir or not.
@@ -1429,11 +1447,18 @@ xout:
 	return rc;
 }
 
+// switch device:
+//  - position of 2-bit selector, either 2 bits in 1 minor (mi20), or 1+1
+//    bits in 2 minors (mip0-18)
+//  - array of 4 pointers to wire groups, each containing up to 6 wires
+
+
 static int add_logicout_switches(struct fpga_model* model,
 	int y, int x, int routing_io)
 {
 	// 8 groups of 3. The order inside the group does not matter,
 	// but the order of the groups does.
+// TODO: these out_wires[] groups also matter in bit positions, fix positions!
 	static int out_wires[] = {
 		/* group 0 */ M_A,    M_CMUX, X_AQ,
 		/* group 1 */ M_AQ,   X_A,    X_CMUX,
@@ -1441,22 +1466,8 @@ static int add_logicout_switches(struct fpga_model* model,
 		/* group 3 */ M_B,    M_DMUX, X_BQ,
 		/* group 4 */ M_AMUX, M_C,    X_CQ,
 		/* group 5 */ M_CQ,   X_AMUX, X_C,
-		/* group 6 */ M_BMUX, M_D,    X_DQ,
-		/* group 7 */ M_DQ,   X_BMUX, X_D
-	};
-	// Those are the logicout wires going back into logicin, for
-	// each group of out wires. Again the order inside the groups
-	// does not matter, but the group order must match the out wire
-	// group order.
-	static int logicin_wires[] = {
-		/* group 0 */ M_AI, M_B6, M_C1, M_D3, X_A6, X_AX, X_B1, X_C3,
-		/* group 1 */ M_A6, M_AX, M_B2, M_C3, M_WE, X_B6, X_C2, X_D3,
-		/* group 2 */ M_A2, M_B5, M_BI, M_BX, M_D4, X_A5, X_C4, X_D2,
-		/* group 3 */ M_A5, M_C4, M_D1, X_A1, X_B5, X_BX, X_CE, X_D4,
-		/* group 4 */ M_A1, M_B4, M_CE, M_D5, X_A4, X_C5, X_CX, X_D1,
-		/* group 5 */ M_A4, M_C5, M_CI, M_CX, M_D2, X_A2, X_B4, X_D5,
-		/* group 6 */ M_A3, M_B1, M_C6, M_DI, X_B3, X_C1, X_D6, X_DX,
-		/* group 7 */ M_B3, M_C2, M_D6, M_DX, X_A3, X_B2, X_C6, FAN_B
+		/* group 6 */ M_DQ,   X_BMUX, X_D,
+		/* group 7 */ M_BMUX, M_D,    X_DQ,
 	};
 	enum wire_type wire;
 	char from_str[32], to_str[32];
@@ -1511,10 +1522,10 @@ static int add_logicout_switches(struct fpga_model* model,
 			
 		// back to logicin
 		for (j = 0; j < 8; j++) {
-			if (logicin_wires[(i/3)*8 + j] == FAN_B)
+			if (logicin_g4[(i/3)*8 + j] == FAN_B)
 				strcpy(to_str, "FAN_B");
 			else
-				strcpy(to_str, logicin_s(logicin_wires[(i/3)*8 + j], routing_io));
+				strcpy(to_str, logicin_s(logicin_g4[(i/3)*8 + j], routing_io));
 			rc = add_switch(model, y, x, from_str, to_str,
 				0 /* bidir */);
 			if (rc) goto xout;
@@ -1532,6 +1543,13 @@ static int add_logicin_switch(struct fpga_model* model, int y, int x,
 	char from_str[32], to_str[32];
 	int rc;
 
+	if (dirwire == W_NW2 || dirwire == W_NL1) {
+		dirwire_num++;
+		if (dirwire_num > 3)
+			dirwire_num = 0;
+	}
+	if (dirwire_num == -1)
+		dirwire_num = 3;
 	if (dirwire_num == 0 && logicin_num & LWF_SOUTH0)
 		snprintf(from_str, sizeof(from_str), "%sE_S0",
 			wire_base(dirwire));
@@ -1555,121 +1573,104 @@ xout:
 	return rc;
 }
 
-// This function adds the switches for all dirwires in the
-// quarter belonging to dirwire. So dirwire should only be
-// one of W_NN2, W_EE2, W_SS2 or W_WW2 - the rest is handled
-// inside the function.
-static int add_logicin_switch_quart(struct fpga_model* model, int y, int x,
-	enum wire_type dirwire, int dirwire_num,
-	int logicin_num)
-{
-	enum wire_type len1;
-	int rc;
-
-	rc = add_logicin_switch(model, y, x, dirwire, dirwire_num,
-		logicin_num);
-	if (rc) goto xout;
-	len1 = W_COUNTER_CLOCKWISE(W_TO_LEN1(dirwire));
-	rc = add_logicin_switch(model, y, x, len1,
-		dirwire_num, logicin_num);
-	if (rc) goto xout;
-
-	if (dirwire == W_WW2) {
-		int nw_num = dirwire_num+1;
-		if (nw_num > 3)
-			nw_num = 0;
-		rc = add_logicin_switch(model, y, x, W_NW2, nw_num,
-			logicin_num);
-		if (rc) goto xout;
-		rc = add_logicin_switch(model, y, x, W_NL1, nw_num,
-			logicin_num);
-		if (rc) goto xout;
-	} else {
-		rc = add_logicin_switch(model, y, x, W_CLOCKWISE(dirwire),
-			dirwire_num, logicin_num);
-		if (rc) goto xout;
-		len1 = rotate_wire(len1, 3);
-		rc = add_logicin_switch(model, y, x, len1,
-			dirwire_num, logicin_num);
-		if (rc) goto xout;
-	}
-	return 0;
-xout:
-	return rc;
-}
-
-static int loop_and_rotate_over_wires(struct fpga_model* model, int y, int x,
-	int* wires, int num_wires, int early_decrement)
-{
-	int i, rc;
-
-	//
-	// We loop over the wires times 4 because each wire will
-	// be processed at NN, EE, SS and WW.
-	//
-	// i/4        position in the wire array
-	// 3-(i/4)%4  num of wire 0:3 for current element in the wire array
-	// i%4        NN (0) - EE (1) - SS (2) - WW (3)
-	//
-
-	for (i = 0; i < num_wires*4; i++) {
-		rc = add_logicin_switch_quart(model, y, x, FIRST_LEN2+(i%4)*2,
-			3-((i+early_decrement)/4)%4, wires[i/4]);
-		if (rc) goto xout;
-	}
-	return 0;
-xout:
-	return rc;
-}
+static enum wire_type dirwire_g4[] = {
+	W_NN2, W_NE2, W_WR1, W_EL1,
+	W_EE2, W_SE2, W_NR1, W_SL1,
+	W_SS2, W_SW2, W_ER1, W_WL1,
+	W_WW2, W_NW2, W_SR1, W_NL1
+};
 
 static int add_logicin_switches(struct fpga_model* model, int y, int x)
 {
-	int rc;
-	{ static int decrement_at_NN[] =
-		{ M_DI | LWF_SOUTH0, M_CI, X_CE, M_WE,
-		  M_B1 | LWF_SOUTH0, X_A2, X_A1, M_B2,
-		  M_C6 | LWF_SOUTH0, M_C5, M_C4, M_C3,
-		  X_D6 | LWF_SOUTH0, X_D5, X_D4, X_D3 };
+	int logicin_wire, i, j, k, l, rc;
 
-	rc = loop_and_rotate_over_wires(model, y, x, decrement_at_NN,
-		sizeof(decrement_at_NN)/sizeof(decrement_at_NN[0]),
-		0 /* early_decrement */);
-	if (rc) goto xout; }
+	//
+	// There are probably ways to merge all 4 loops into one
+	// nicely by regrouping better. For now we have 4 loops
+	// that differ like this:
+	//
+	// 1) g4 groups: 2 6 10 14
+	//    LWF_SOUTH0 for i == 3 (group 14)
+	//    decrement at NN (=never), k > 3
+	//
+	// 2) g4 groups: 15 3 7 11
+	//    LWF_SOUTH0 for i == 0 (group 15)
+	//    decrement at EE, k > 0
+	//
+	// 3) g4 groups: 1 5 9 13
+	//    LWF_NORTH3 for i == 0 (group 1)
+	//    decrement at SS, k > 1
+	//
+	// 4) g4 groups: 0 4 8 12
+	//    LWF_NORTH3 for i == 0 (group 0)
+	//    decrement at WW, k > 2
+	//
 
-	{ static int decrement_at_EE[] =
-		{ M_CX, X_BX, M_AX, X_DX | LWF_SOUTH0,
-		  M_D2, M_D1, X_C2, X_C1 | LWF_SOUTH0,
-		  M_A4, M_A5, M_A6, M_A3 | LWF_SOUTH0,
-		  X_B4, X_B5, X_B6, X_B3 | LWF_SOUTH0 };
+	// i = logicin groups (the destinations of our switches)
+	for (i = 0; i < 4; i++) { // we want: 2, 6, 10, 14
+		// j = each destination logicin wire
+		for (j = 0; j < 4; j++) { 
+			logicin_wire = logicin_g4[((2+i*4)%16)*4 + j];
+			if (i == 3)
+				logicin_wire |= LWF_SOUTH0;
+			for (k = 0; k < 4; k++) { // k = dirwire groups/quarts
+				for (l = 0; l < 4; l++) { // l = each dirwire in a group/quart
+					rc = add_logicin_switch(model, y, x, dirwire_g4[k*4+l], k > 3 ? i-1 : i, logicin_wire);
+					if (rc) FAIL(rc);
+				}
+			}
+		}
+	}
 
-	rc = loop_and_rotate_over_wires(model, y, x, decrement_at_EE,
-		sizeof(decrement_at_EE)/sizeof(decrement_at_EE[0]),
-		3 /* early_decrement */);
-	if (rc) goto xout; }
+	// i = logicin groups (the destinations of our switches)
+	for (i = 0; i < 4; i++) { // we want: 15, 3, 7, 11
+		// j = each destination logicin wire
+		for (j = 0; j < 4; j++) { 
+			logicin_wire = logicin_g4[((15+i*4)%16)*4 + j];
+			if (i == 0)
+				logicin_wire |= LWF_SOUTH0;
+			for (k = 0; k < 4; k++) { // k = dirwire groups/quarts
+				for (l = 0; l < 4; l++) { // l = each dirwire in a group/quart
+					rc = add_logicin_switch(model, y, x, dirwire_g4[k*4+l], k > 0 ? i-1 : i, logicin_wire);
+					if (rc) FAIL(rc);
+				}
+			}
+		}
+	}
 
-	{ static int decrement_at_SS[] =
-		{ FAN_B, M_CE, M_BI, M_AI | LWF_NORTH3,
-		   X_B2, M_A1, M_A2, X_B1 | LWF_NORTH3,
-		   X_C6, X_C5, X_C4, X_C3 | LWF_NORTH3,
-		   M_D6, M_D5, M_D4, M_D3 | LWF_NORTH3 };
+	// i = logicin groups (the destinations of our switches)
+	for (i = 0; i < 4; i++) { // we want: 1, 5, 9, 13
+		// j = each destination logicin wire
+		for (j = 0; j < 4; j++) { 
+			logicin_wire = logicin_g4[((1+i*4)%16)*4 + j];
+			if (i == 0)
+				logicin_wire |= LWF_NORTH3;
+			for (k = 0; k < 4; k++) { // k = dirwire groups/quarts
+				for (l = 0; l < 4; l++) { // l = each dirwire in a group/quart
+					rc = add_logicin_switch(model, y, x, dirwire_g4[k*4+l], k > 1 ? i-1 : i, logicin_wire);
+					if (rc) FAIL(rc);
+				}
+			}
+		}
+	}
 
-	rc = loop_and_rotate_over_wires(model, y, x, decrement_at_SS,
-		sizeof(decrement_at_SS)/sizeof(decrement_at_SS[0]),
-		2 /* early_decrement */);
-	if (rc) goto xout; }
-
-	{ static int decrement_at_WW[] =
-		{ M_DX, X_CX, M_BX, X_AX | LWF_NORTH3,
-		  M_C2, X_D1, X_D2, M_C1 | LWF_NORTH3,
-		  X_A3, X_A4, X_A5, X_A6 | LWF_NORTH3,
-		  M_B3, M_B4, M_B5, M_B6 | LWF_NORTH3 };
-
-	rc = loop_and_rotate_over_wires(model, y, x, decrement_at_WW,
-		sizeof(decrement_at_WW)/sizeof(decrement_at_WW[0]),
-		1 /* early_decrement */);
-	if (rc) goto xout; }
+	// i = logicin groups (the destinations of our switches)
+	for (i = 0; i < 4; i++) { // we want: 0, 4, 8, 12
+		// j = each destination logicin wire
+		for (j = 0; j < 4; j++) { 
+			logicin_wire = logicin_g4[((0+i*4)%16)*4 + j];
+			if (i == 0)
+				logicin_wire |= LWF_NORTH3;
+			for (k = 0; k < 4; k++) { // k = dirwire groups/quarts
+				for (l = 0; l < 4; l++) { // l = each dirwire in a group/quart
+					rc = add_logicin_switch(model, y, x, dirwire_g4[k*4+l], k > 2 ? i-1 : i, logicin_wire);
+					if (rc) FAIL(rc);
+				}
+			}
+		}
+	}
 	return 0;
-xout:
+fail:
 	return rc;
 }
 
@@ -1695,17 +1696,15 @@ static int init_routing_tile(struct fpga_model* model, int y, int x)
 	if (rc) FAIL(rc);
 
 	// VCC
- 	{ int vcc_dest[] = {
-		X_A3, X_A4, X_A5, X_A6, X_B3, X_B4, X_B5, X_B6,
-		X_C3, X_C4, X_C5, X_C6, X_D3, X_D4, X_D5, X_D6,
-		M_A3, M_A4, M_A5, M_A6, M_B3, M_B4, M_B5, M_B6,
-		M_C3, M_C4, M_C5, M_C6, M_D3, M_D4, M_D5, M_D6 };
-
-	for (i = 0; i < sizeof(vcc_dest)/sizeof(vcc_dest[0]); i++) {
+	for (i = 0; i < sizeof(logicin_g4)/sizeof(logicin_g4[0])/2; i++) {
+		// VCC goes to the first 2 wires of even groups, and
+		// last 2 wires of odd groups. In the array, it goes to:
+		// 0 1 .. 6 7 8 9 .. 14 15 16 17 ..
 		rc = add_switch(model, y, x, "VCC_WIRE",
-			logicin_s(vcc_dest[i], routing_io), 0 /* bidir */);
+			logicin_s(logicin_g4[i + ((i+2)/4)*4],
+				routing_io), 0 /* bidir */);
 		if (rc) FAIL(rc);
-	}}
+	}
 
 	// KEEP1
 	for (i = X_A1; i <= M_WE; i++) {
