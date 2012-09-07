@@ -163,7 +163,7 @@ compare.%: xc6slx9_empty.%
 clean:
 	rm -f $(foreach test,$(TESTS),"autotest.out/autotest_$(test).diff_to_gold")
 	rm -f $(foreach test,$(TESTS),"autotest.out/autotest_$(test).log")
-	rmdir --ignore-fail-on-non-empty autotest.out
+	rmdir --ignore-fail-on-non-empty autotest.out || exit 0
 	rm -f draw_svg_tiles draw_svg_tiles.o \
 		new_fp new_fp.o \
 		helper.o $(MODEL_OBJ) hstrrep hstrrep.o \
