@@ -636,7 +636,7 @@ int main(int argc, char** argv)
 		P46_dev_idx, IOB_OUT_I);
 	if (rc) FAIL(rc);
 	rc = fpga_net_add_port(&model, P46_net, /*y*/ 68, /*x*/ 13,
-		logic_dev_idx, LOGIC_IN_D3);
+		logic_dev_idx, LI_D3);
 	if (rc) FAIL(rc);
 
 	switch_to.yx_req = YX_DEV_ILOGIC;
@@ -691,7 +691,7 @@ int main(int argc, char** argv)
 		struct sw_chain c = {
 			.model = &model, .y = switch_to.dest_y,
 			.x = switch_to.dest_x+1,
-			.start_switch = logic_dev->pinw[LOGIC_IN_D3],
+			.start_switch = logic_dev->pinw[LI_D3],
 			.from_to = SW_TO,
 			.max_depth = SW_SET_SIZE,
 			.block_list = 0 };

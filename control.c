@@ -312,6 +312,28 @@ const char* fdev_pinw_idx2str(int devtype, pinw_idx_t idx)
 	return 0;
 }
 
+const char* fdev_logic_pinstr(pinw_idx_t idx, int ld1_type)
+{
+ 	enum { NUM_BUFS = 16, BUF_SIZE = 16 };
+	static char buf[NUM_BUFS][BUF_SIZE];
+	static int last_buf = 0;
+
+	last_buf = (last_buf+1)%NUM_BUFS;
+	if (ld1_type == LOGIC_M)
+		snprintf(buf[last_buf], sizeof(*buf), "%s%s",
+			(idx & LD1) ? "M_" : "X_",
+			logic_pinw_str[idx&(~LD1)]);
+	else if (ld1_type == LOGIC_L)
+		snprintf(buf[last_buf], sizeof(*buf), "%s%s",
+			(idx & LD1) ? "L_" : "XX_",
+			logic_pinw_str[idx&(~LD1)]);
+	else {
+		HERE();
+		buf[last_buf][0] = 0;
+	}
+	return buf[last_buf];
+}
+
 static int reset_required_pins(struct fpga_device* dev)
 {
 	int rc;
@@ -453,13 +475,13 @@ int fdev_set_required_pins(struct fpga_model* model, int y, int x, int type,
 	if (rc) FAIL(rc);
 	if (type == DEV_LOGIC) {
 		if (dev->u.logic.A_used)
-			add_req_outpin(dev, LOGIC_OUT_A);
+			add_req_outpin(dev, LO_A);
 		if (dev->u.logic.B_used)
-			add_req_outpin(dev, LOGIC_OUT_B);
+			add_req_outpin(dev, LO_B);
 		if (dev->u.logic.C_used)
-			add_req_outpin(dev, LOGIC_OUT_C);
+			add_req_outpin(dev, LO_C);
 		if (dev->u.logic.D_used)
-			add_req_outpin(dev, LOGIC_OUT_D);
+			add_req_outpin(dev, LO_D);
 		for (i = 0; i < sizeof(dev->u.logic.luts)
 			/sizeof(dev->u.logic.luts[0]); i++) {
 			if (!dev->u.logic.luts[i]) continue;
@@ -468,7 +490,7 @@ int fdev_set_required_pins(struct fpga_model* model, int y, int x, int type,
 				// i/2 because luts order is A5-A6 B5-B6, etc.
 				if (digits[j])
 					add_req_inpin(dev,
-						LOGIC_IN_A1+(i/2)*6+j);
+						LI_A1+(i/2)*6+j);
 			}
 		}
 	}

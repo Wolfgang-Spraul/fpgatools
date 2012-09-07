@@ -874,62 +874,7 @@ xout:
 	return rc;
 }
 
-// The wires are ordered clockwise. Order is important for
-// wire_to_NESW4().
-enum wire_type
-{
-	FIRST_LEN1 = 1,
-	W_NL1 = FIRST_LEN1,
-	W_NR1,
-	W_EL1,
-	W_ER1,
-	W_SL1,
-	W_SR1,
-	W_WL1,
-	W_WR1,
-	LAST_LEN1 = W_WR1,
-
-	FIRST_LEN2,
-	W_NN2 = FIRST_LEN2,
-	W_NE2,
-	W_EE2,
-	W_SE2,
-	W_SS2,
-	W_SW2,
-	W_WW2,
-	W_NW2,
-	LAST_LEN2 = W_NW2,
-
-	FIRST_LEN4,
-	W_NN4 = FIRST_LEN4,
-	W_NE4,
-	W_EE4,
-	W_SE4,
-	W_SS4,
-	W_SW4,
-	W_WW4,
-	W_NW4,
-	LAST_LEN4 = W_NW4
-};
-
-#define W_CLOCKWISE(w)			rotate_wire((w), 1)
-#define W_CLOCKWISE_2(w)		rotate_wire((w), 2)
-#define W_COUNTER_CLOCKWISE(w)		rotate_wire((w), -1)
-#define W_COUNTER_CLOCKWISE_2(w)	rotate_wire((w), -2)
-
-#define W_IS_LEN1(w)			((w) >= FIRST_LEN1 && (w) <= LAST_LEN1)
-#define W_IS_LEN2(w)			((w) >= FIRST_LEN2 && (w) <= LAST_LEN2)
-#define W_IS_LEN4(w)			((w) >= FIRST_LEN4 && (w) <= LAST_LEN4)
-
-#define W_TO_LEN1(w)			wire_to_len(w, FIRST_LEN1)
-#define W_TO_LEN2(w)			wire_to_len(w, FIRST_LEN2)
-#define W_TO_LEN4(w)			wire_to_len(w, FIRST_LEN4)
-
-static const char* wire_base(enum wire_type w);
-static enum wire_type rotate_wire(enum wire_type cur, int off);
-static enum wire_type wire_to_len(enum wire_type w, int first_len);
-
-static const char* wire_base(enum wire_type w)
+const char* wire_base(enum wire_type w)
 {
 	switch (w) {
 		case W_NL1: return "NL1";
@@ -1683,6 +1628,12 @@ static int init_routing_tile(struct fpga_model* model, int y, int x)
 	const char* gfan_s, *gclk_s;
 
 	tile = YX_TILE(model, y, x);
+	if (model->first_routing_y == -1
+	    && tile->type != IO_ROUTING && tile->type != ROUTING_IO_L
+	    && tile->type != ROUTING_BRK && tile->type != BRAM_ROUTING_BRK) {
+		model->first_routing_y = y;
+		model->first_routing_x = x;
+	}
 	routing_io = (tile->type == IO_ROUTING || tile->type == ROUTING_IO_L);
 	gfan_s = routing_io ? "INT_IOI_GFAN%i" : "GFAN%i";
 

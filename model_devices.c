@@ -463,52 +463,52 @@ static int init_logic(struct fpga_model* model, int y, int x, int idx)
 		for (j = 0; j < 6; j++) {
 			rc = add_connpt_name(model, y, x, pf("%s%c%i", pre, 'A'+i, j+1),
 				/*dup_warn*/ 1,
-				&tile->devs[idx].pinw[LOGIC_IN_A1+i*6+j], 0);
+				&tile->devs[idx].pinw[LI_A1+i*6+j], 0);
 			if (rc) FAIL(rc);
 		}
 		rc = add_connpt_name(model, y, x, pf("%s%cX", pre, 'A'+i),
 			/*dup_warn*/ 1,
-			&tile->devs[idx].pinw[LOGIC_IN_AX+i], 0);
+			&tile->devs[idx].pinw[LI_AX+i], 0);
 		if (rc) FAIL(rc);
 		if (tile->devs[idx].subtype == LOGIC_M) {
 			rc = add_connpt_name(model, y, x, pf("%s%cI", pre, 'A'+i),
 				/*dup_warn*/ 1,
-				&tile->devs[idx].pinw[LOGIC_IN_AI+i], 0);
+				&tile->devs[idx].pinw[LI_AI+i], 0);
 			if (rc) FAIL(rc);
 		} else
-			tile->devs[idx].pinw[LOGIC_IN_AI+i] = STRIDX_NO_ENTRY;
+			tile->devs[idx].pinw[LI_AI+i] = STRIDX_NO_ENTRY;
 		rc = add_connpt_name(model, y, x, pf("%s%c", pre, 'A'+i),
 			/*dup_warn*/ 1,
-			&tile->devs[idx].pinw[LOGIC_OUT_A+i], 0);
+			&tile->devs[idx].pinw[LO_A+i], 0);
 		if (rc) FAIL(rc);
 		rc = add_connpt_name(model, y, x, pf("%s%cMUX", pre, 'A'+i),
 			/*dup_warn*/ 1,
-			&tile->devs[idx].pinw[LOGIC_OUT_AMUX+i], 0);
+			&tile->devs[idx].pinw[LO_AMUX+i], 0);
 		if (rc) FAIL(rc);
 		rc = add_connpt_name(model, y, x, pf("%s%cQ", pre, 'A'+i),
 			/*dup_warn*/ 1,
-			&tile->devs[idx].pinw[LOGIC_OUT_AQ+i], 0);
+			&tile->devs[idx].pinw[LO_AQ+i], 0);
 		if (rc) FAIL(rc);
 	}
 	rc = add_connpt_name(model, y, x, pf("%sCLK", pre),
 		/*dup_warn*/ 1,
-		&tile->devs[idx].pinw[LOGIC_IN_CLK], 0);
+		&tile->devs[idx].pinw[LI_CLK], 0);
 	if (rc) FAIL(rc);
 	rc = add_connpt_name(model, y, x, pf("%sCE", pre),
 		/*dup_warn*/ 1,
-		&tile->devs[idx].pinw[LOGIC_IN_CE], 0);
+		&tile->devs[idx].pinw[LI_CE], 0);
 	if (rc) FAIL(rc);
 	rc = add_connpt_name(model, y, x, pf("%sSR", pre),
 		/*dup_warn*/ 1,
-		&tile->devs[idx].pinw[LOGIC_IN_SR], 0);
+		&tile->devs[idx].pinw[LI_SR], 0);
 	if (rc) FAIL(rc);
 	if (tile->devs[idx].subtype == LOGIC_M) {
 		rc = add_connpt_name(model, y, x, pf("%sWE", pre),
 			/*dup_warn*/ 1,
-			&tile->devs[idx].pinw[LOGIC_IN_WE], 0);
+			&tile->devs[idx].pinw[LI_WE], 0);
 		if (rc) FAIL(rc);
 	} else
-		tile->devs[idx].pinw[LOGIC_IN_WE] = STRIDX_NO_ENTRY;
+		tile->devs[idx].pinw[LI_WE] = STRIDX_NO_ENTRY;
 	if (tile->devs[idx].subtype != LOGIC_X
 	    && ((is_atx(X_ROUTING_NO_IO, model, x-1)
 		 && is_aty(Y_INNER_BOTTOM, model, y+1))
@@ -516,22 +516,22 @@ static int init_logic(struct fpga_model* model, int y, int x, int idx)
 		    && is_aty(Y_BOT_INNER_IO, model, y+1)))) {
 		rc = add_connpt_name(model, y, x, pf("%sCIN", pre),
 			/*dup_warn*/ 1,
-			&tile->devs[idx].pinw[LOGIC_IN_CIN], 0);
+			&tile->devs[idx].pinw[LI_CIN], 0);
 		if (rc) FAIL(rc);
 	} else
-		tile->devs[idx].pinw[LOGIC_IN_CIN] = STRIDX_NO_ENTRY;
+		tile->devs[idx].pinw[LI_CIN] = STRIDX_NO_ENTRY;
 	if (tile->devs[idx].subtype == LOGIC_M) {
 		rc = add_connpt_name(model, y, x, "M_COUT",
 			/*dup_warn*/ 1,
-			&tile->devs[idx].pinw[LOGIC_OUT_COUT], 0);
+			&tile->devs[idx].pinw[LO_COUT], 0);
 		if (rc) FAIL(rc);
 	} else if (tile->devs[idx].subtype == LOGIC_L) {
 		rc = add_connpt_name(model, y, x, "XL_COUT",
 			/*dup_warn*/ 1,
-			&tile->devs[idx].pinw[LOGIC_OUT_COUT], 0);
+			&tile->devs[idx].pinw[LO_COUT], 0);
 		if (rc) FAIL(rc);
 	} else 
-		tile->devs[idx].pinw[LOGIC_OUT_COUT] = STRIDX_NO_ENTRY;
+		tile->devs[idx].pinw[LO_COUT] = STRIDX_NO_ENTRY;
 
 	return 0;
 fail:

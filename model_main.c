@@ -23,6 +23,8 @@ int fpga_build_model(struct fpga_model* model, int fpga_rows,
 	strncpy(model->cfg_right_wiring, right_wiring,
 		sizeof(model->cfg_right_wiring)-1);
 	strarray_init(&model->str, STRIDX_64K);
+	model->first_routing_y = -1;
+	model->first_routing_x = -1;
 
 	// The order of tiles, then devices, then ports, then
 	// connections and finally switches is important so

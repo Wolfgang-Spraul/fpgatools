@@ -38,6 +38,9 @@ dev_type_idx_t fdev_typeidx(struct fpga_model* model, int y, int x,
 pinw_idx_t fdev_pinw_str2idx(int devtype, const char* str, int len);
 // returns 0 when idx not found for the given devtype
 const char* fdev_pinw_idx2str(int devtype, pinw_idx_t idx);
+// ld1_type can be LOGIC_M or LOGIC_L to specify whether
+// we are in a XM or XL column.
+const char* fdev_logic_pinstr(pinw_idx_t idx, int ld1_type);
 
 int fdev_logic_set_lut(struct fpga_model* model, int y, int x, int type_idx,
 	int which_lut, const char* lut_str, int lut_len);

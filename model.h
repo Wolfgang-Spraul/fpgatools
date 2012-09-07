@@ -72,6 +72,8 @@ struct fpga_model
 	// 'majors' in the bitstream.
 	int x_major[512];
 
+	int first_routing_y, first_routing_x;
+
 	struct fpga_tile* tiles;
 	struct hashed_strarray str;
 
@@ -347,31 +349,37 @@ typedef int dev_type_idx_t;
 // data can safely be initialized to 0 meaning unconfigured.
 
 enum { LOGIC_M = 1, LOGIC_L, LOGIC_X };
+
+// LD1 stands for logic device 1 and can be OR'ed to the LI_A1
+// or LO_A values to indicate the second logic device in a tile,
+// either an M or L device.
+#define LD1	0x100
+
 // All LOGICIN_IN A..D sequences must be exactly sequential as
 // here to match initialization in model_devices.c:init_logic()
 // and control.c:fdev_set_required_pins().
 enum { // input:
-	LOGIC_IN_A1 = 0,
-	LOGIC_IN_A2, LOGIC_IN_A3, LOGIC_IN_A4, LOGIC_IN_A5, LOGIC_IN_A6,
-	LOGIC_IN_B1, LOGIC_IN_B2, LOGIC_IN_B3, LOGIC_IN_B4, LOGIC_IN_B5,
-	LOGIC_IN_B6,
-	LOGIC_IN_C1, LOGIC_IN_C2, LOGIC_IN_C3, LOGIC_IN_C4, LOGIC_IN_C5,
-	LOGIC_IN_C6,
-	LOGIC_IN_D1, LOGIC_IN_D2, LOGIC_IN_D3, LOGIC_IN_D4, LOGIC_IN_D5,
-	LOGIC_IN_D6,
-	LOGIC_IN_AX, LOGIC_IN_BX, LOGIC_IN_CX, LOGIC_IN_DX,
-	LOGIC_IN_CLK, LOGIC_IN_CE, LOGIC_IN_SR,
+	LI_A1 = 0,
+	LI_A2, LI_A3, LI_A4, LI_A5, LI_A6,
+	LI_B1, LI_B2, LI_B3, LI_B4, LI_B5,
+	LI_B6,
+	LI_C1, LI_C2, LI_C3, LI_C4, LI_C5,
+	LI_C6,
+	LI_D1, LI_D2, LI_D3, LI_D4, LI_D5,
+	LI_D6,
+	LI_AX, LI_BX, LI_CX, LI_DX,
+	LI_CLK, LI_CE, LI_SR,
 	// only for L and M:
-	LOGIC_IN_CIN, // only some L and M devs have this
+	LI_CIN, // only some L and M devs have this
 	// only for M:
-	LOGIC_IN_WE, LOGIC_IN_AI, LOGIC_IN_BI, LOGIC_IN_CI, LOGIC_IN_DI,
+	LI_WE, LI_AI, LI_BI, LI_CI, LI_DI,
 	// output:
-	LOGIC_OUT_A, LOGIC_OUT_B, LOGIC_OUT_C, LOGIC_OUT_D,
-	LOGIC_OUT_AMUX, LOGIC_OUT_BMUX, LOGIC_OUT_CMUX, LOGIC_OUT_DMUX,
-	LOGIC_OUT_AQ, LOGIC_OUT_BQ, LOGIC_OUT_CQ, LOGIC_OUT_DQ,
-	LOGIC_OUT_COUT }; // only some L and M devs have this
-#define LOGIC_LAST_INPUT_PINW	LOGIC_IN_DI
-#define LOGIC_LAST_OUTPUT_PINW	LOGIC_OUT_COUT
+	LO_A, LO_B, LO_C, LO_D,
+	LO_AMUX, LO_BMUX, LO_CMUX, LO_DMUX,
+	LO_AQ, LO_BQ, LO_CQ, LO_DQ,
+	LO_COUT }; // only some L and M devs have this
+#define LOGIC_LAST_INPUT_PINW	LI_DI
+#define LOGIC_LAST_OUTPUT_PINW	LO_COUT
 #define LOGIC_PINW_STR \
 	{ "A1", "A2", "A3", "A4", "A5", "A6", \
 	  "B1", "B2", "B3", "B4", "B5", "B6", \
@@ -629,6 +637,8 @@ struct seed_data
 
 void seed_strx(struct fpga_model* model, struct seed_data* data);
 
+#define MAX_WIRENAME_LEN 64
+
 // The LWF flags are OR'ed into the logic_wire enum
 #define LWF_SOUTH0		0x0100
 #define LWF_NORTH3		0x0200
@@ -636,6 +646,10 @@ void seed_strx(struct fpga_model* model, struct seed_data* data);
 #define LWF_FAN_B		0x0800
 #define LWF_WIRE_MASK		0x00FF // namespace for the enums
 
+// ordered to match the LOGICIN_B?? enumeration
+// todo: both enums logicin_wire and logicout_wire are not really
+//       ideal for supporting L_ and XX_ variants, maybe use pinwires
+//       and LD1 instead?
 enum logicin_wire {
     /*  0 */	X_A1 = 0,
 		      X_A2, X_A3, X_A4, X_A5, X_A6, X_AX,
@@ -649,6 +663,7 @@ enum logicin_wire {
     /* 62 */	M_WE
 };
 
+// ordered to match the LOGICOUT_B?? enumeration
 enum logicout_wire {
     /*  0 */	X_A = 0,
 		     X_AMUX, X_AQ, X_B, X_BMUX, X_BQ,
@@ -680,3 +695,58 @@ enum extra_wires {
 	LOGICIN_S44,
 	LOGICIN_S62
 };
+
+// The wires are ordered clockwise. Order is important for
+// wire_to_NESW4().
+enum wire_type
+{
+	FIRST_LEN1 = 1,
+	W_NL1 = FIRST_LEN1,
+	W_NR1,
+	W_EL1,
+	W_ER1,
+	W_SL1,
+	W_SR1,
+	W_WL1,
+	W_WR1,
+	LAST_LEN1 = W_WR1,
+
+	FIRST_LEN2,
+	W_NN2 = FIRST_LEN2,
+	W_NE2,
+	W_EE2,
+	W_SE2,
+	W_SS2,
+	W_SW2,
+	W_WW2,
+	W_NW2,
+	LAST_LEN2 = W_NW2,
+
+	FIRST_LEN4,
+	W_NN4 = FIRST_LEN4,
+	W_NE4,
+	W_EE4,
+	W_SE4,
+	W_SS4,
+	W_SW4,
+	W_WW4,
+	W_NW4,
+	LAST_LEN4 = W_NW4
+};
+
+#define W_CLOCKWISE(w)			rotate_wire((w), 1)
+#define W_CLOCKWISE_2(w)		rotate_wire((w), 2)
+#define W_COUNTER_CLOCKWISE(w)		rotate_wire((w), -1)
+#define W_COUNTER_CLOCKWISE_2(w)	rotate_wire((w), -2)
+
+#define W_IS_LEN1(w)			((w) >= FIRST_LEN1 && (w) <= LAST_LEN1)
+#define W_IS_LEN2(w)			((w) >= FIRST_LEN2 && (w) <= LAST_LEN2)
+#define W_IS_LEN4(w)			((w) >= FIRST_LEN4 && (w) <= LAST_LEN4)
+
+#define W_TO_LEN1(w)			wire_to_len(w, FIRST_LEN1)
+#define W_TO_LEN2(w)			wire_to_len(w, FIRST_LEN2)
+#define W_TO_LEN4(w)			wire_to_len(w, FIRST_LEN4)
+
+const char* wire_base(enum wire_type w);
+enum wire_type rotate_wire(enum wire_type cur, int off);
+enum wire_type wire_to_len(enum wire_type w, int first_len);
