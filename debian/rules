@@ -19,6 +19,10 @@ override_dh_installchangelogs:
 		awk -f debian/changelog.upstream.awk
 	dh_installchangelogs debian/changelog.upstream
 
+# Remove auto test for fast develop
+# will include auto_test in the end
+override_dh_auto_test:
+
 opt_optimize = CFLAGS="-g -O2"
 opt_no_act =
 opt_quiet =
