@@ -188,7 +188,7 @@ clean:
 
 install:	all
 		mkdir -p $(DESTDIR)/$(PREFIX)/bin/
-		install -m 755 new_fp  $(DESTDIR)/$(PREFIX)/bin/
+		install -m 755 fp2bit  $(DESTDIR)/$(PREFIX)/bin/
 		install -m 755 bit2fp $(DESTDIR)/$(PREFIX)/bin/
 uninstall:
-		rm -f $(DESTDIR)/$(PREFIX)/bin/{new_fp,bit2fp}
+		rm -f $(DESTDIR)/$(PREFIX)/bin/{fp2bit,bit2fp}
