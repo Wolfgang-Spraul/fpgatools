@@ -8,6 +8,22 @@
 
 PREFIX ?= /usr/local
 
+# ----- Verbosity control -----------------------------------------------------
+
+CPP := $(CPP)   # make sure changing CC won't affect CPP
+
+CC_normal	:= $(CC)
+
+CC_quiet	= @echo "  CC       " $@ && $(CC_normal)
+
+ifeq ($(V),1)
+    CC		= $(CC_normal)
+else
+    CC		= $(CC_quiet)
+endif
+
+# ----- Rules -----------------------------------------------------------------
+
 .PHONY:	all test clean install uninstall
 .SECONDARY:
 
