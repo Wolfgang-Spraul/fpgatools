@@ -1,4 +1,4 @@
-fpgatools (0.0+201209) unstable; urgency=low
+fpgatools (0.0+201209-1) unstable; urgency=low
 
   * New snapshot, taken from commit 6de2097
   * Initial release. (Closes: #686949)
