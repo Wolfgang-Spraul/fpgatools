@@ -17,3 +17,27 @@ Description: tools for create fpga bitstream
  text-based file formats
  no documentation - read the sources
  automatic test suite
+
+Package: libfpga
+Architecture: any
+Section: libs
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: libs for fpgatools
+ small independent command line utilities, no GUI
+ plain C, no C++
+ simple Makefiles
+ text-based file formats
+ no documentation - read the sources
+ automatic test suite
+
+Package: libfpga-doc
+Architecture: any
+Section: doc
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: documents and example for fpgatools
+ small independent command line utilities, no GUI
+ plain C, no C++
+ simple Makefiles
+ text-based file formats
+ no documentation - read the sources
+ automatic test suite

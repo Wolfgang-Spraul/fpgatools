@@ -13,13 +13,17 @@ PREFIX ?= /usr/local
 CPP := $(CPP)   # make sure changing CC won't affect CPP
 
 CC_normal	:= $(CC)
+AR_normal	:= $(AR) rsc
 
 CC_quiet	= @echo "  CC       " $@ && $(CC_normal)
+AR_quiet	= @echo "  AR       " $@ && $(AR_normal)
 
 ifeq ($(V),1)
     CC		= $(CC_normal)
+    AR		= $(AR_normal)
 else
     CC		= $(CC_quiet)
+    AR		= $(AR_quiet)
 endif
 
 # ----- Rules -----------------------------------------------------------------
@@ -37,7 +41,15 @@ CFLAGS += -Wall -Wshadow -Wmissing-prototypes -Wmissing-declarations \
 CFLAGS += `pkg-config libxml-2.0 --cflags`
 LDLIBS += `pkg-config libxml-2.0 --libs`
 
-MODEL_OBJ = model_main.o model_tiles.o model_devices.o model_ports.o model_conns.o model_switches.o model_helper.o
+LIBFPGA_BIT_OBJS       = bit_frames.o bit_regs.o
+LIBFPGA_MODEL_OBJS     = model_main.o model_tiles.o model_devices.o \
+	model_ports.o model_conns.o model_switches.o model_helper.o
+LIBFPGA_FLOORPLAN_OBJS = floorplan.o
+LIBFPGA_CONTROL_OBJS   = control.o
+LIBFPGA_CORES_OBJS     = parts.o helper.o
+
+#- libfpga-test       autotest suite
+#- libfpga-design     larger design elements on top of libfpga-control
 
 all: new_fp fp2bit bit2fp draw_svg_tiles \
 	autotest hstrrep sort_seq merge_seq pair2net
@@ -56,21 +68,23 @@ autotest_%.log: autotest fp2bit bit2fp
 	@mkdir -p $(@D)
 	./autotest --test=$(*F) 2>&1 >$@
 
-autotest: autotest.o $(MODEL_OBJ) floorplan.o control.o helper.o model.h
+autotest: autotest.o model.h libfpga-model.a libfpga-floorplan.a \
+	libfpga-control.a libfpga-cores.a
 
 autotest.o: model.h floorplan.h control.h
 
-new_fp: new_fp.o $(MODEL_OBJ) floorplan.o helper.o control.o
+new_fp: new_fp.o libfpga-model.a libfpga-floorplan.a libfpga-cores.a \
+	libfpga-control.a
 
 new_fp.o: new_fp.c floorplan.h model.h helper.h control.h
 
-fp2bit: fp2bit.o $(MODEL_OBJ) floorplan.o control.o bit_regs.o bit_frames.o \
-		helper.o parts.o
+fp2bit: fp2bit.o libfpga-model.a libfpga-bit.a libfpga-floorplan.a \
+	libfpga-control.a libfpga-cores.a
 
 fp2bit.o: fp2bit.c model.h floorplan.h bit.h helper.h
 
-bit2fp: bit2fp.o $(MODEL_OBJ) floorplan.o control.o bit_regs.o \
-		bit_frames.o helper.o parts.o
+bit2fp: bit2fp.o libfpga-model.a libfpga-bit.a libfpga-floorplan.a \
+	libfpga-control.a libfpga-cores.a
 
 bit2fp.o: bit2fp.c model.h floorplan.h bit.h helper.h
 
@@ -84,23 +98,24 @@ parts.o: parts.c parts.h
 
 control.o: control.c control.h model.h
 
-draw_svg_tiles: draw_svg_tiles.o $(MODEL_OBJ) helper.o control.o
+draw_svg_tiles: draw_svg_tiles.o libfpga-model.a libfpga-cores.a \
+	libfpga-control.a
 
 draw_svg_tiles.o: draw_svg_tiles.c model.h helper.h
 
-pair2net: pair2net.o helper.o
+pair2net: pair2net.o libfpga-cores.a
 
 pair2net.o: pair2net.c helper.h
 
-sort_seq: sort_seq.o helper.o
+sort_seq: sort_seq.o libfpga-cores.a
 
 sort_seq.o: sort_seq.c helper.h
 
-merge_seq: merge_seq.o helper.o
+merge_seq: merge_seq.o libfpga-cores.a
 
 merge_seq.o: merge_seq.c helper.h
 
-hstrrep: hstrrep.o helper.o
+hstrrep: hstrrep.o libfpga-cores.a
 
 helper.o: helper.c helper.h
 
@@ -117,6 +132,21 @@ model_conns.o: model_conns.c model.h
 model_switches.o: model_switches.c model.h
 
 model_helper.o: model_helper.c model.h
+
+libfpga-cores.a: $(LIBFPGA_CORES_OBJS)
+	$(AR) $@ $^
+
+libfpga-bit.a: $(LIBFPGA_BIT_OBJS)
+	$(AR) $@ $^
+
+libfpga-model.a: $(LIBFPGA_MODEL_OBJS)
+	$(AR) $@ $^
+
+libfpga-floorplan.a: $(LIBFPGA_FLOORPLAN_OBJS)
+	$(AR) $@ $^
+
+libfpga-control.a: $(LIBFPGA_CONTROL_OBJS)
+	$(AR) $@ $^
 
 xc6slx9_empty.fp: new_fp
 	./new_fp > $@
@@ -163,17 +193,19 @@ compare.%: xc6slx9_empty.%
 clean:
 	rm -f $(foreach test,$(TESTS),"autotest.out/autotest_$(test).diff_to_gold")
 	rm -f $(foreach test,$(TESTS),"autotest.out/autotest_$(test).log")
-	rmdir --ignore-fail-on-non-empty autotest.out
-	rm -f draw_svg_tiles draw_svg_tiles.o \
+	rmdir --ignore-fail-on-non-empty autotest.out || exit 0
+	rm -f $(LIBFPGA_BIT_OBJS) $(LIBFPGA_MODEL_OBJS) $(LIBFPGA_FLOORPLAN_OBJS) \
+		$(LIBFPGA_CONTROL_OBJS) $(LIBFPGA_CORES_OBJS) \
+		draw_svg_tiles draw_svg_tiles.o \
 		new_fp new_fp.o \
-		helper.o $(MODEL_OBJ) hstrrep hstrrep.o \
+		hstrrep hstrrep.o \
 		sort_seq sort_seq.o \
 		merge_seq merge_seq.o \
-		autotest autotest.o control.o floorplan.o \
+		autotest autotest.o \
 		fp2bit fp2bit.o \
 		bit2fp bit2fp.o \
-		bit_regs.o bit_frames.o parts.o \
 		pair2net pair2net.o \
+		libfpga-bit.a libfpga-control.a libfpga-cores.a libfpga-floorplan.a libfpga-model.a \
 		xc6slx9_empty.fp xc6slx9.svg \
 		xc6slx9_empty.tiles xc6slx9_empty.devs xc6slx9_empty.conns \
 		xc6slx9_empty.ports xc6slx9_empty.sw xc6slx9_empty.cnets \
@@ -188,7 +220,7 @@ clean:
 
 install:	all
 		mkdir -p $(DESTDIR)/$(PREFIX)/bin/
-		install -m 755 new_fp  $(DESTDIR)/$(PREFIX)/bin/
+		install -m 755 fp2bit  $(DESTDIR)/$(PREFIX)/bin/
 		install -m 755 bit2fp $(DESTDIR)/$(PREFIX)/bin/
 uninstall:
-		rm -f $(DESTDIR)/$(PREFIX)/bin/{new_fp,bit2fp}
+		rm -f $(DESTDIR)/$(PREFIX)/bin/{fp2bit,bit2fp}
