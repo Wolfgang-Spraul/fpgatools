@@ -338,6 +338,10 @@ typedef int dev_type_idx_t;
 #define NO_DEV -1
 #define FPGA_DEV(model, y, x, dev_idx)	(&YX_TILE(model, y, x)->devs[dev_idx])
 
+//
+// logic device
+//
+
 // M and L device is always at type index 0, X device
 // is always at type index 1.
 #define DEV_LOGM 0
@@ -394,20 +398,40 @@ enum { // input:
 	  "AQ", "BQ", "CQ", "DQ", \
 	  "COUT" }
 
-// offsets into fpgadev_logic:luts[], also hardcoded in
-// control.c:fdev_set_required_pins(), where we assume
-// that div2 will lead to A-D
-enum { A5_LUT = 0, A6_LUT, B5_LUT, B6_LUT,
-	C5_LUT, C6_LUT, D5_LUT, D6_LUT, NUM_LUTS };
-#define FP_LUT_STR \
-	{ "A5_lut", "A6_lut", "B5_lut", "B6_lut", \
-	  "C5_lut", "C6_lut", "D5_lut", "D6_lut" }
+enum { LUT_A = 0, LUT_B, LUT_C, LUT_D }; // offset into a2d[]
+enum { FF_SRINIT0 = 1, FF_SRINIT1 };
+enum { MUX_O6 = 1, MUX_O5, MUX_5Q, MUX_X, MUX_F7, MUX_CY, MUX_XOR };
+enum { FF_OR2L = 1, FF_AND2L, FF_LATCH, FF_FF };
+enum { CLKINV_B = 1, CLKINV_CLK };
+enum { SYNCATTR_SYNC = 1, SYNCATTR_ASYNC };
+enum { WEMUX_WE = 1, WEMUX_CE };
+
+#define MAX_LUT_LEN 2048
+
+struct fpgadev_logic_a2d
+{
+	int used;
+	char* lut6;
+	char* lut5;
+	int ff_mux;	// O6, O5, X, F7, CY, XOR
+	int ff_srinit;	// SRINIT0, SRINIT1 
+	int out_mux;	// O6, O5, 5Q, F7, CY, XOR
+	int ff;		// OR2L, AND2L, LATCH, FF
+};
 
 struct fpgadev_logic
 {
-	int A_used, B_used, C_used, D_used;
-	char* luts[NUM_LUTS];
+	struct fpgadev_logic_a2d a2d[4];
+	int clk_inv;	// CLKINV_B, CLKINV_CLK
+	int sync_attr;	// SYNCATTR_SYNC, SYNCATTR_ASYNC
+	int ce_used;
+	int sr_used;
+	int we_mux;	// WEMUX_WE, WEMUX_CE
 };
+
+//
+// iob device
+//
 
 enum { IOBM = 1, IOBS };
 typedef char IOSTANDARD[32];
@@ -445,6 +469,10 @@ struct fpgadev_iob
 	int in_term;
 	int out_term;
 };
+
+//
+// fpga_device
+//
 
 typedef int pinw_idx_t; // index into pinw array
 

@@ -23,6 +23,7 @@ struct test_state
 {
 	int cmdline_skip;
 	char cmdline_diff_exec[1024];
+	int dry_run;
 
 	struct fpga_model* model;
 	// test filenames are: tmp_dir/autotest_<base_name>_<diff_counter>.???
@@ -38,16 +39,18 @@ static int dump_file(const char* path)
 
 	printf("\n");
 	printf("O begin dump %s\n", path);
-	f = fopen(path, "r");
-	EXIT(!f);
-	while (fgets(line, sizeof(line), f)) {
-		if (!strncmp(line, "--- ", 4)
-		    || !strncmp(line, "+++ ", 4)
-		    || !strncmp(line, "@@ ", 3))
-			continue;
-		printf(line);
+	if (!(f = fopen(path, "r")))
+		printf("#E error opening %s\n", path);
+	else {
+		while (fgets(line, sizeof(line), f)) {
+			if (!strncmp(line, "--- ", 4)
+			    || !strncmp(line, "+++ ", 4)
+			    || !strncmp(line, "@@ ", 3))
+				continue;
+			printf(line);
+		}
+		fclose(f);
 	}
-	fclose(f);
 	printf("O end dump %s\n", path);
 	return 0;
 }
@@ -66,9 +69,12 @@ static int diff_printf(struct test_state* tstate)
 	FILE* dest_f = 0;
 	int rc;
 
+	if (tstate->dry_run) {
+		printf("O Dry run, skipping diff %i.\n", tstate->next_diff_counter++);
+		return 0;
+	}
 	if (tstate->cmdline_skip >= tstate->next_diff_counter) {
-		printf("O Skipping diff %i.\n", tstate->next_diff_counter);
-		tstate->next_diff_counter++;
+		printf("O Skipping diff %i.\n", tstate->next_diff_counter++);
 		return 0;
 	}
 
@@ -101,6 +107,8 @@ static int diff_printf(struct test_state* tstate)
 	if (rc) {
 		printf("#E %s:%i system call '%s' failed with code %i, "
 			"check %s.log\n", __FILE__, __LINE__, tmp, rc, path);
+		// ENOENT comes back when pressing ctrl-c
+		if (rc == ENOENT) EXIT(rc);
 // todo: report the error up so we can avoid adding a switch to the block list etc.
 	}
 
@@ -118,7 +126,6 @@ fail:
 // goal: configure logic devices in all supported variations
 static int test_logic_config(struct test_state* tstate)
 {
-	int a_to_d[] = { A6_LUT, B6_LUT, C6_LUT, D6_LUT };
 	int idx_enum[] = { DEV_LOGM, DEV_LOGX };
 	int y, x, i, j, k, rc;
 
@@ -126,17 +133,53 @@ static int test_logic_config(struct test_state* tstate)
 	x = 13;
 
 	for (i = 0; i < sizeof(idx_enum)/sizeof(*idx_enum); i++) {
-		for (j = 0; j < sizeof(a_to_d)/sizeof(*a_to_d); j++) {
+		for (j = LUT_A; j <= LUT_D; j++) {
+
+			// A1..A6 to A..D
 			for (k = '1'; k <= '6'; k++) {
 				rc = fdev_logic_set_lut(tstate->model, y, x,
-					idx_enum[i], a_to_d[j], pf("A%c", k), ZTERM);
+					idx_enum[i], j, 6, pf("A%c", k), ZTERM);
+				if (rc) FAIL(rc);
+				rc = fdev_set_required_pins(tstate->model, y, x,
+					DEV_LOGIC, idx_enum[i]);
 				if (rc) FAIL(rc);
 
+				if (tstate->dry_run)
+					fdev_print_required_pins(tstate->model,
+						y, x, DEV_LOGIC, idx_enum[i]);
 				rc = diff_printf(tstate);
 				if (rc) FAIL(rc);
-
 				fdev_delete(tstate->model, y, x, DEV_LOGIC, idx_enum[i]);
 			}
+
+			// A1 to O6 to FF to AQ
+			rc = fdev_logic_set_lut(tstate->model, y, x,
+				idx_enum[i], j, 6, "A1", ZTERM);
+			if (rc) FAIL(rc);
+			rc = fdev_logic_FF(tstate->model, y, x, idx_enum[i],
+				j, MUX_O6, FF_SRINIT0);
+			if (rc) FAIL(rc);
+			rc = fdev_logic_sync(tstate->model, y, x, idx_enum[i],
+				SYNCATTR_ASYNC);
+			if (rc) FAIL(rc);
+			rc = fdev_logic_clk(tstate->model, y, x, idx_enum[i],
+				CLKINV_B);
+			if (rc) FAIL(rc);
+			rc = fdev_logic_ceused(tstate->model, y, x, idx_enum[i]);
+			if (rc) FAIL(rc);
+			rc = fdev_logic_srused(tstate->model, y, x, idx_enum[i]);
+			if (rc) FAIL(rc);
+
+			rc = fdev_set_required_pins(tstate->model, y, x,
+				DEV_LOGIC, idx_enum[i]);
+			if (rc) FAIL(rc);
+
+			if (tstate->dry_run)
+				fdev_print_required_pins(tstate->model,
+					y, x, DEV_LOGIC, idx_enum[i]);
+			rc = diff_printf(tstate);
+			if (rc) FAIL(rc);
+			fdev_delete(tstate->model, y, x, DEV_LOGIC, idx_enum[i]);
 		}
 	}
 	return 0;
@@ -269,6 +312,10 @@ static int test_logic_net_l2(struct test_state* tstate, int y, int x,
 					if (m < *l2_done_len)
 						continue;
 					l2_done_list[(*l2_done_len)++] = set_l2.sw[l];
+					if (tstate->dry_run)
+						printf("l2_done_list %s at %i\n", fpga_switch_print(tstate->model,
+							switch_to.dest_y, switch_to.dest_x, l2_done_list[(*l2_done_len)-1]),
+							(*l2_done_len)-1);
 
 					// we did the l1 switches in an earlier round, but have to
 					// redo them before every l2 switch to make a clean diff
@@ -305,7 +352,7 @@ static int test_logic_net_l1(struct test_state* tstate, int y, int x,
 
 	rc = fdev_set_required_pins(tstate->model, y, x, type, type_idx);
 	if (rc) FAIL(rc);
-	if (dbg)
+	if (tstate->dry_run)
 		fdev_print_required_pins(tstate->model, y, x, type, type_idx);
 
 	dev = fdev_p(tstate->model, y, x, type, type_idx);
@@ -320,7 +367,7 @@ static int test_logic_net_l1(struct test_state* tstate, int y, int x,
 		if (j < *done_pinw_len)
 			continue;
 		done_pinw_list[(*done_pinw_len)++] = dev->pinw[dev->pinw_req_for_cfg[i]];
-	
+
 		from_to = (i < dev->pinw_req_in) ? SW_TO : SW_FROM;
 		switch_to.yx_req = YX_ROUTING_TILE;
 		switch_to.flags = SWTO_YX_DEF;
@@ -331,7 +378,7 @@ static int test_logic_net_l1(struct test_state* tstate, int y, int x,
 		switch_to.from_to = from_to;
 		rc = fpga_switch_to_yx(&switch_to);
 		if (rc) FAIL(rc);
-		if (dbg)
+		if (tstate->dry_run)
 			printf_switch_to_result(&switch_to);
 
 		rc = fpga_swset_fromto(tstate->model, switch_to.dest_y,
@@ -356,7 +403,7 @@ static int test_logic_net_l1(struct test_state* tstate, int y, int x,
 				set_l1.sw[j], NO_SWITCH);
 			if (rc) FAIL(rc);
 			done_sw_list[(*done_sw_len)++] = set_l1.sw[j];
-			if (dbg)
+			if (tstate->dry_run)
 				printf("done_list %s at %i\n", fpga_switch_print(tstate->model,
 					switch_to.dest_y, switch_to.dest_x, set_l1.sw[j]),
 					(*done_sw_len)-1);
@@ -368,11 +415,10 @@ fail:
 }
 
 // goal: use all switches in a routing switchbox
-static int test_logic_routing_switches(struct test_state* tstate)
+static int test_logic_switches(struct test_state* tstate)
 {
-	int a_to_d[] = { A6_LUT, B6_LUT, C6_LUT, D6_LUT };
 	int idx_enum[] = { DEV_LOGM, DEV_LOGX };
-	int y, x, i, j, k, rc;
+	int y, x, i, j, k, r, rc;
 	swidx_t done_sw_list[MAX_SWITCHBOX_SIZE];
 	int done_sw_len;
 	str16_t done_pinw_list[2000];
@@ -381,38 +427,68 @@ static int test_logic_routing_switches(struct test_state* tstate)
         y = 68;
 	x = 13;
 
-	// first make one round over all configs with single-level nets only.
-	done_pinw_len = 0;
 	done_sw_len = 0;
-	for (i = 0; i < sizeof(idx_enum)/sizeof(*idx_enum); i++) {
-		for (j = 0; j < sizeof(a_to_d)/sizeof(*a_to_d); j++) {
-			for (k = '1'; k <= '6'; k++) {
+	for (r = 0; r <= 1; r++) {
+		// two rounds:
+		// r == 0: round over all configs with single-level nets only
+		// r == 1: second round with two-level nets
+
+		done_pinw_len = 0; // reset done pinwires for each round
+
+		for (i = 0; i < sizeof(idx_enum)/sizeof(*idx_enum); i++) {
+			for (j = LUT_A; j <= LUT_D; j++) {
+	
+				// A1-A6 to A (same for lut B-D)
+				for (k = '1'; k <= '6'; k++) {
+					rc = fdev_logic_set_lut(tstate->model, y, x,
+						idx_enum[i], j, 6, pf("A%c", k), ZTERM);
+					if (rc) FAIL(rc);
+					rc = fdev_logic_out_used(tstate->model, y, x,
+						idx_enum[i], j);
+					if (rc) FAIL(rc);
+	
+					if (!r)
+						rc = test_logic_net_l1(tstate, y, x, DEV_LOGIC,
+							idx_enum[i], done_pinw_list, &done_pinw_len,
+							done_sw_list, &done_sw_len);
+					else
+						rc = test_logic_net_l2(tstate, y, x, DEV_LOGIC,
+							idx_enum[i], done_pinw_list, &done_pinw_len,
+							done_sw_list, &done_sw_len);
+					if (rc) FAIL(rc);
+					fdev_delete(tstate->model, y, x, DEV_LOGIC, idx_enum[i]);
+				}
+	
+				// A1->O6->FF->AQ (same for lut B-D)
 				rc = fdev_logic_set_lut(tstate->model, y, x,
-					idx_enum[i], a_to_d[j], pf("A%c", k), ZTERM);
+					idx_enum[i], j, 6, "A1", ZTERM);
 				if (rc) FAIL(rc);
-
-				rc = test_logic_net_l1(tstate, y, x, DEV_LOGIC,
-					idx_enum[i], done_pinw_list, &done_pinw_len,
-					done_sw_list, &done_sw_len);
+				rc = fdev_logic_FF(tstate->model, y, x, idx_enum[i],
+					j, MUX_O6, FF_SRINIT0);
 				if (rc) FAIL(rc);
-				fdev_delete(tstate->model, y, x, DEV_LOGIC, idx_enum[i]);
-			}
-		}
-
-	}
-
-	// second round with two-level nets
-	done_pinw_len = 0; // reset done pinwires
-	for (i = 0; i < sizeof(idx_enum)/sizeof(*idx_enum); i++) {
-		for (j = 0; j < sizeof(a_to_d)/sizeof(*a_to_d); j++) {
-			for (k = '1'; k <= '6'; k++) {
-				rc = fdev_logic_set_lut(tstate->model, y, x,
-					idx_enum[i], a_to_d[j], pf("A%c", k), ZTERM);
+				rc = fdev_logic_sync(tstate->model, y, x, idx_enum[i],
+					SYNCATTR_ASYNC);
 				if (rc) FAIL(rc);
-
-				rc = test_logic_net_l2(tstate, y, x, DEV_LOGIC,
-					idx_enum[i], done_pinw_list, &done_pinw_len,
-					done_sw_list, &done_sw_len);
+				rc = fdev_logic_clk(tstate->model, y, x, idx_enum[i],
+					CLKINV_B);
+				if (rc) FAIL(rc);
+				rc = fdev_logic_ceused(tstate->model, y, x, idx_enum[i]);
+				if (rc) FAIL(rc);
+				rc = fdev_logic_srused(tstate->model, y, x, idx_enum[i]);
+				if (rc) FAIL(rc);
+	
+				rc = fdev_set_required_pins(tstate->model, y, x,
+					DEV_LOGIC, idx_enum[i]);
+				if (rc) FAIL(rc);
+	
+				if (!r)
+					rc = test_logic_net_l1(tstate, y, x, DEV_LOGIC,
+						idx_enum[i], done_pinw_list, &done_pinw_len,
+						done_sw_list, &done_sw_len);
+				else
+					rc = test_logic_net_l2(tstate, y, x, DEV_LOGIC,
+						idx_enum[i], done_pinw_list, &done_pinw_len,
+						done_sw_list, &done_sw_len);
 				if (rc) FAIL(rc);
 				fdev_delete(tstate->model, y, x, DEV_LOGIC, idx_enum[i]);
 			}
@@ -431,7 +507,8 @@ static void printf_help(const char* argv_0, const char** available_tests)
 		"fpgatools automatic test suite\n"
 		"\n"
 		"Usage: %s [--test=<name>] [--diff=<diff executable>] [--skip=<num>]\n"
-		"Default diff executable: " DEFAULT_DIFF_EXEC "\n", argv_0);
+		"       %*s [--dry-run]\n"
+		"Default diff executable: " DEFAULT_DIFF_EXEC "\n", argv_0, (int) strlen(argv_0), "");
 
 	if (available_tests) {
 		int i = 0;
@@ -452,7 +529,7 @@ int main(int argc, char** argv)
 	char param[1024], cmdline_test[1024];
 	int i, param_skip, rc;
 	const char* available_tests[] =
-		{ "logic_cfg", "routing_sw", 0 };
+		{ "logic_cfg", "logic_sw", 0 };
 
 	// flush after every line is better for the autotest
 	// output, tee, etc.
@@ -472,6 +549,7 @@ int main(int argc, char** argv)
 	tstate.cmdline_skip = -1;
 	tstate.cmdline_diff_exec[0] = 0;
 	cmdline_test[0] = 0;
+	tstate.dry_run = -1;
 	for (i = 1; i < argc; i++) {
 		memset(param, 0, sizeof(param));
 		if (sscanf(argv[i], "--test=%1023c", param) == 1) {
@@ -499,6 +577,10 @@ int main(int argc, char** argv)
 			tstate.cmdline_skip = param_skip;
 			continue;
 		}
+		if (!strcmp(argv[i], "--dry-run")) {
+			tstate.dry_run = 1;
+			continue;
+		}
 		printf_help(argv[0], available_tests);
 		return EINVAL;
 	}
@@ -520,6 +602,8 @@ int main(int argc, char** argv)
 		strcpy(tstate.cmdline_diff_exec, DEFAULT_DIFF_EXEC);
 	if (tstate.cmdline_skip == -1)
 		tstate.cmdline_skip = 0;
+	if (tstate.dry_run == -1)
+		tstate.dry_run = 0;
 
 	//
 	// test
@@ -532,6 +616,7 @@ int main(int argc, char** argv)
 	printf("O Test: %s\n", cmdline_test);
 	printf("O Diff: %s\n", tstate.cmdline_diff_exec);
 	printf("O Skip: %i\n", tstate.cmdline_skip);
+	printf("O Dry run: %i\n", tstate.dry_run);
 	printf("\n");
 	printf("O Time measured in seconds from 0.\n");
 	g_start_time = time(0);
@@ -556,13 +641,13 @@ int main(int argc, char** argv)
 		rc = test_logic_config(&tstate);
 		if (rc) FAIL(rc);
 	}
-	if (!strcmp(cmdline_test, "routing_sw")) {
-		rc = test_logic_routing_switches(&tstate);
+	if (!strcmp(cmdline_test, "logic_sw")) {
+		rc = test_logic_switches(&tstate);
 		if (rc) FAIL(rc);
 	}
 
-	// test_iob_config
-	// test_iologic_routing_switches
+	// iob_sw: test_iob_switches
+	// test_iologic_switches
 
 #if 0
 // test_swchain:

@@ -359,6 +359,11 @@ void fdev_print_required_pins(struct fpga_model* model, int y, int x,
 	dev = fdev_p(model, y, x, type, type_idx);
 	if (!dev) { HERE(); return; }
 
+	// We don't want to reset or write the required pins in this
+	// function because it is mainly used for debugging purposes
+	// and the caller should not suddenly be working with old
+	// required pins when the print() function is not called.
+
 	printf("y%02i x%02i %s %i inpin", y, x, fdev_type2str(type), type_idx);
 	if (!dev->pinw_req_in)
 		printf(" -\n");
@@ -397,13 +402,11 @@ static void add_req_outpin(struct fpga_device* dev, pinw_idx_t pinw_i)
 	dev->pinw_req_total++;
 }
 
-#define MAX_LUT_LEN	512
-
 int fdev_logic_set_lut(struct fpga_model* model, int y, int x, int type_idx,
-	int which_lut, const char* lut_str, int lut_len)
+	int lut_a2d, int lut_5or6, const char* lut_str, int lut_len)
 {
 	struct fpga_device* dev;
-	char** luts;
+	char** lut_ptr;
 	int rc;
 
 	dev = fdev_p(model, y, x, DEV_LOGIC, type_idx);
@@ -411,38 +414,125 @@ int fdev_logic_set_lut(struct fpga_model* model, int y, int x, int type_idx,
 	rc = reset_required_pins(dev);
 	if (rc) FAIL(rc);
 
-	luts = dev->u.logic.luts;
-	if (!luts[which_lut]) {
-		luts[which_lut] = malloc(MAX_LUT_LEN);
-		if (!luts[which_lut]) {
-			OUT_OF_MEM();
-			return -1;
-		}
+	lut_ptr = (lut_5or6 == 5)
+		? &dev->u.logic.a2d[lut_a2d].lut5
+		: &dev->u.logic.a2d[lut_a2d].lut6;
+	if (*lut_ptr == 0) {
+		*lut_ptr = malloc(MAX_LUT_LEN);
+		if (!(*lut_ptr)) FAIL(ENOMEM);
 	}
 	if (lut_len == ZTERM) lut_len = strlen(lut_str);
-	memcpy(luts[which_lut], lut_str, lut_len);
-	luts[which_lut][lut_len] = 0;
+	memcpy(*lut_ptr, lut_str, lut_len);
+	(*lut_ptr)[lut_len] = 0;
 
-	switch (which_lut) {
-		case A5_LUT:
-		case A6_LUT:
-			dev->u.logic.A_used = 1;
-			break;
-		case B5_LUT:
-		case B6_LUT:
-			dev->u.logic.B_used = 1;
-			break;
-		case C5_LUT:
-		case C6_LUT:
-			dev->u.logic.C_used = 1;
-			break;
-		case D5_LUT:
-		case D6_LUT:
-			dev->u.logic.D_used = 1;
-			break;
-		default: FAIL(EINVAL);
-	}
+	dev->instantiated = 1;
+	return 0;
+fail:
+	return rc;
+}
 
+int fdev_logic_out_used(struct fpga_model* model, int y, int x, int type_idx,
+	int lut_a2d)
+{
+	struct fpga_device* dev;
+	int rc;
+
+	dev = fdev_p(model, y, x, DEV_LOGIC, type_idx);
+	if (!dev) FAIL(EINVAL);
+	rc = reset_required_pins(dev);
+	if (rc) FAIL(rc);
+
+	dev->u.logic.a2d[lut_a2d].used = 1;
+	dev->instantiated = 1;
+	return 0;
+fail:
+	return rc;
+}
+
+int fdev_logic_FF(struct fpga_model* model, int y, int x, int type_idx,
+	int lut_a2d, int ff_mux, int srinit)
+{
+	struct fpga_device* dev;
+	int rc;
+
+	dev = fdev_p(model, y, x, DEV_LOGIC, type_idx);
+	if (!dev) FAIL(EINVAL);
+	rc = reset_required_pins(dev);
+	if (rc) FAIL(rc);
+
+	dev->u.logic.a2d[lut_a2d].ff = FF_FF;
+	dev->u.logic.a2d[lut_a2d].ff_mux = ff_mux;
+	dev->u.logic.a2d[lut_a2d].ff_srinit = srinit;
+	dev->instantiated = 1;
+	return 0;
+fail:
+	return rc;
+}
+
+int fdev_logic_clk(struct fpga_model* model, int y, int x, int type_idx,
+	int clk)
+{
+	struct fpga_device* dev;
+	int rc;
+
+	dev = fdev_p(model, y, x, DEV_LOGIC, type_idx);
+	if (!dev) FAIL(EINVAL);
+	rc = reset_required_pins(dev);
+	if (rc) FAIL(rc);
+
+	dev->u.logic.clk_inv = clk;
+	dev->instantiated = 1;
+	return 0;
+fail:
+	return rc;
+}
+
+int fdev_logic_sync(struct fpga_model* model, int y, int x, int type_idx,
+	int sync_attr)
+{
+	struct fpga_device* dev;
+	int rc;
+
+	dev = fdev_p(model, y, x, DEV_LOGIC, type_idx);
+	if (!dev) FAIL(EINVAL);
+	rc = reset_required_pins(dev);
+	if (rc) FAIL(rc);
+
+	dev->u.logic.sync_attr = sync_attr;
+	dev->instantiated = 1;
+	return 0;
+fail:
+	return rc;
+}
+
+int fdev_logic_ceused(struct fpga_model* model, int y, int x, int type_idx)
+{
+	struct fpga_device* dev;
+	int rc;
+
+	dev = fdev_p(model, y, x, DEV_LOGIC, type_idx);
+	if (!dev) FAIL(EINVAL);
+	rc = reset_required_pins(dev);
+	if (rc) FAIL(rc);
+
+	dev->u.logic.ce_used = 1;
+	dev->instantiated = 1;
+	return 0;
+fail:
+	return rc;
+}
+
+int fdev_logic_srused(struct fpga_model* model, int y, int x, int type_idx)
+{
+	struct fpga_device* dev;
+	int rc;
+
+	dev = fdev_p(model, y, x, DEV_LOGIC, type_idx);
+	if (!dev) FAIL(EINVAL);
+	rc = reset_required_pins(dev);
+	if (rc) FAIL(rc);
+
+	dev->u.logic.sr_used = 1;
 	dev->instantiated = 1;
 	return 0;
 fail:
@@ -474,23 +564,38 @@ int fdev_set_required_pins(struct fpga_model* model, int y, int x, int type,
 	rc = reset_required_pins(dev);
 	if (rc) FAIL(rc);
 	if (type == DEV_LOGIC) {
-		if (dev->u.logic.A_used)
-			add_req_outpin(dev, LO_A);
-		if (dev->u.logic.B_used)
-			add_req_outpin(dev, LO_B);
-		if (dev->u.logic.C_used)
-			add_req_outpin(dev, LO_C);
-		if (dev->u.logic.D_used)
-			add_req_outpin(dev, LO_D);
-		for (i = 0; i < sizeof(dev->u.logic.luts)
-			/sizeof(dev->u.logic.luts[0]); i++) {
-			if (!dev->u.logic.luts[i]) continue;
-			scan_lut_digits(dev->u.logic.luts[i], digits);
-			for (j = 0; j < 6; j++) {
-				// i/2 because luts order is A5-A6 B5-B6, etc.
-				if (digits[j])
-					add_req_inpin(dev,
-						LI_A1+(i/2)*6+j);
+		if (dev->u.logic.clk_inv)
+			add_req_inpin(dev, LI_CLK);
+		if (dev->u.logic.ce_used)
+			add_req_inpin(dev, LI_CE);
+		if (dev->u.logic.sr_used)
+			add_req_inpin(dev, LI_SR);
+		for (i = LUT_A; i <= LUT_D; i++) {
+			if (dev->u.logic.a2d[i].used) {
+				// LO_A..LO_D are in sequence
+				add_req_outpin(dev, LO_A+i);
+			}
+			if (dev->u.logic.a2d[i].ff) {
+				// LO_AQ..LO_DQ are in sequence
+				add_req_outpin(dev, LO_AQ+i);
+			}
+			if (dev->u.logic.a2d[i].ff_mux == MUX_X) {
+				// LI_AX..LI_DX are in sequence
+				add_req_inpin(dev, LI_AX+i);
+			}
+			if (dev->u.logic.a2d[i].lut6) {
+				scan_lut_digits(dev->u.logic.a2d[i].lut6, digits);
+				for (j = 0; j < 6; j++) {
+					if (!digits[j]) continue;
+					add_req_inpin(dev, LI_A1+i*6+j);
+				}
+			}
+			if (dev->u.logic.a2d[i].lut5) {
+				scan_lut_digits(dev->u.logic.a2d[i].lut5, digits);
+				for (j = 0; j < 6; j++) {
+					if (!digits[j]) continue;
+					add_req_inpin(dev, LI_A1+i*6+j);
+				}
 			}
 		}
 	}
@@ -512,10 +617,11 @@ void fdev_delete(struct fpga_model* model, int y, int x, int type, int type_idx)
 	dev->pinw_req_total = 0;
 	dev->pinw_req_in = 0;
 	if (dev->type == DEV_LOGIC) {
-		for (i = 0; i < sizeof(dev->u.logic.luts)
-			/sizeof(dev->u.logic.luts[0]); i++) {
-			free(dev->u.logic.luts[i]);
-			dev->u.logic.luts[i] = 0;
+		for (i = LUT_A; i <= LUT_D; i++) {
+			free(dev->u.logic.a2d[i].lut6);
+			dev->u.logic.a2d[i].lut6 = 0;
+			free(dev->u.logic.a2d[i].lut5);
+			dev->u.logic.a2d[i].lut5 = 0;
 		}
 	}
 	dev->instantiated = 0;

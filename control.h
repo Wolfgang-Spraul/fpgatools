@@ -42,8 +42,24 @@ const char* fdev_pinw_idx2str(int devtype, pinw_idx_t idx);
 // we are in a XM or XL column.
 const char* fdev_logic_pinstr(pinw_idx_t idx, int ld1_type);
 
+// lut_a2d is LUT_A to LUT_D value, lut_5or6 is int 5 or int 6.
 int fdev_logic_set_lut(struct fpga_model* model, int y, int x, int type_idx,
-	int which_lut, const char* lut_str, int lut_len);
+	int lut_a2d, int lut_5or6, const char* lut_str, int lut_len);
+int fdev_logic_out_used(struct fpga_model* model, int y, int x, int type_idx,
+	int lut_a2d);
+// ff_mux is MUX_O6 or MUX_X
+// srinit is FF_SRINIT0 or FF_SRINIT1
+int fdev_logic_FF(struct fpga_model* model, int y, int x, int type_idx,
+	int lut_a2d, int ff_mux, int srinit);
+// clk is CLKINV_B or CLKINV_CLK
+int fdev_logic_clk(struct fpga_model* model, int y, int x, int type_idx,
+	int clk);
+// sync is SYNCATTR_SYNC or SYNCATTR_ASYNC
+int fdev_logic_sync(struct fpga_model* model, int y, int x, int type_idx,
+	int sync_attr);
+int fdev_logic_ceused(struct fpga_model* model, int y, int x, int type_idx);
+int fdev_logic_srused(struct fpga_model* model, int y, int x, int type_idx);
+
 int fdev_set_required_pins(struct fpga_model* model, int y, int x, int type,
 	int type_idx);
 void fdev_print_required_pins(struct fpga_model* model, int y, int x,

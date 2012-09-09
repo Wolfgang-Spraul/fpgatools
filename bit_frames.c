@@ -193,7 +193,7 @@ static int extract_logic(struct fpga_model* model, struct fpga_bits* bits)
 				  lut_str = lut2bool(u64, 64, &logic_base, /*flip_b0*/ 1); }
 				if (*lut_str) {
 					rc = fdev_logic_set_lut(model, y, x, DEV_LOGM,
-						A6_LUT, lut_str, ZTERM);
+						LUT_A, 6, lut_str, ZTERM);
 					if (rc) FAIL(rc);
 					*(uint32_t*)(u8_p+24*FRAME_SIZE+byte_off+4) = 0;
 					*(uint32_t*)(u8_p+25*FRAME_SIZE+byte_off+4) = 0;
@@ -207,7 +207,7 @@ static int extract_logic(struct fpga_model* model, struct fpga_bits* bits)
 				  lut_str = lut2bool(u64, 64, &logic_base, /*flip_b0*/ 1); }
 				if (*lut_str) {
 					rc = fdev_logic_set_lut(model, y, x, DEV_LOGM,
-						B6_LUT, lut_str, ZTERM);
+						LUT_B, 6, lut_str, ZTERM);
 					if (rc) FAIL(rc);
 					*(uint32_t*)(u8_p+21*FRAME_SIZE+byte_off+4) = 0;
 					*(uint32_t*)(u8_p+22*FRAME_SIZE+byte_off+4) = 0;
@@ -221,7 +221,7 @@ static int extract_logic(struct fpga_model* model, struct fpga_bits* bits)
 				  lut_str = lut2bool(u64, 64, &logic_base, /*flip_b0*/ 1); }
 				if (*lut_str) {
 					rc = fdev_logic_set_lut(model, y, x, DEV_LOGM,
-						C6_LUT, lut_str, ZTERM);
+						LUT_C, 6, lut_str, ZTERM);
 					if (rc) FAIL(rc);
 					*(uint32_t*)(u8_p+24*FRAME_SIZE+byte_off) = 0;
 					*(uint32_t*)(u8_p+25*FRAME_SIZE+byte_off) = 0;
@@ -235,7 +235,7 @@ static int extract_logic(struct fpga_model* model, struct fpga_bits* bits)
 				  lut_str = lut2bool(u64, 64, &logic_base, /*flip_b0*/ 1); }
 				if (*lut_str) {
 					rc = fdev_logic_set_lut(model, y, x, DEV_LOGM,
-						D6_LUT, lut_str, ZTERM);
+						LUT_D, 6, lut_str, ZTERM);
 					if (rc) FAIL(rc);
 					*(uint32_t*)(u8_p+21*FRAME_SIZE+byte_off) = 0;
 					*(uint32_t*)(u8_p+22*FRAME_SIZE+byte_off) = 0;
@@ -271,7 +271,7 @@ static int extract_logic(struct fpga_model* model, struct fpga_bits* bits)
 				  lut_str = lut2bool(u64, 64, &logic_base, /*flip_b0*/ 0); }
 				if (*lut_str) {
 					rc = fdev_logic_set_lut(model, y, x, DEV_LOGX,
-						A6_LUT, lut_str, ZTERM);
+						LUT_A, 6, lut_str, ZTERM);
 					if (rc) FAIL(rc);
 					*(uint32_t*)(u8_p+27*FRAME_SIZE+byte_off+4) = 0;
 					*(uint32_t*)(u8_p+28*FRAME_SIZE+byte_off+4) = 0;
@@ -282,7 +282,7 @@ static int extract_logic(struct fpga_model* model, struct fpga_bits* bits)
 				  lut_str = lut2bool(u64, 64, &logic_base, /*flip_b0*/ 0); }
 				if (*lut_str) {
 					rc = fdev_logic_set_lut(model, y, x, DEV_LOGX,
-						B6_LUT, lut_str, ZTERM);
+						LUT_B, 6, lut_str, ZTERM);
 					*(uint32_t*)(u8_p+29*FRAME_SIZE+byte_off+4) = 0;
 					*(uint32_t*)(u8_p+30*FRAME_SIZE+byte_off+4) = 0;
 				}
@@ -292,7 +292,7 @@ static int extract_logic(struct fpga_model* model, struct fpga_bits* bits)
 				  lut_str = lut2bool(u64, 64, &logic_base, /*flip_b0*/ 0); }
 				if (*lut_str) {
 					rc = fdev_logic_set_lut(model, y, x, DEV_LOGX,
-						C6_LUT, lut_str, ZTERM);
+						LUT_C, 6, lut_str, ZTERM);
 					*(uint32_t*)(u8_p+27*FRAME_SIZE+byte_off) = 0;
 					*(uint32_t*)(u8_p+28*FRAME_SIZE+byte_off) = 0;
 				}
@@ -302,7 +302,7 @@ static int extract_logic(struct fpga_model* model, struct fpga_bits* bits)
 				  lut_str = lut2bool(u64, 64, &logic_base, /*flip_b0*/ 0); }
 				if (*lut_str) {
 					rc = fdev_logic_set_lut(model, y, x, DEV_LOGX,
-						D6_LUT, lut_str, ZTERM);
+						LUT_D, 6, lut_str, ZTERM);
 					*(uint32_t*)(u8_p+29*FRAME_SIZE+byte_off) = 0;
 					*(uint32_t*)(u8_p+30*FRAME_SIZE+byte_off) = 0;
 				}

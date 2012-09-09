@@ -287,14 +287,13 @@ inst_2:
 	return 2;
 }
 
-static const char* s_fplut_str[] = FP_LUT_STR;
-
 static int printf_LOGIC(FILE* f, struct fpga_model* model,
 	int y, int x, int config_only)
 {
 	struct fpga_tile* tile;
+	struct fpgadev_logic* cfg;
 	char pref[256];
-	int type_count, i, j;
+	int type_count, i, j, rc;
 
 	tile = YX_TILE(model, y, x);
 	type_count = 0;
@@ -323,71 +322,253 @@ static int printf_LOGIC(FILE* f, struct fpga_model* model,
 				default: EXIT(1);
 			}
 		}
-		if (tile->devs[i].u.logic.A_used)
-			fprintf(f, "%s A_used\n", pref);
-		if (tile->devs[i].u.logic.B_used)
-			fprintf(f, "%s B_used\n", pref);
-		if (tile->devs[i].u.logic.C_used)
-			fprintf(f, "%s C_used\n", pref);
-		if (tile->devs[i].u.logic.D_used)
-			fprintf(f, "%s D_used\n", pref);
-		{
-			for (j = 0; j < sizeof(tile->devs[i].u.logic.luts)
-				/ sizeof(tile->devs[i].u.logic.luts[0]); j++) {
-				if (tile->devs[i].u.logic.luts[j]
-				    && tile->devs[i].u.logic.luts[j][0])
-					fprintf(f, "%s %s %s\n", pref,
-						s_fplut_str[j],
-						tile->devs[i].u.logic.luts[j]);
+		cfg = &tile->devs[i].u.logic;
+		for (j = LUT_A; j <= LUT_D; j++) {
+			if (cfg->a2d[j].used)
+				fprintf(f, "%s %c_used\n", pref, 'A'+j);
+			if (cfg->a2d[j].lut6 && cfg->a2d[j].lut6[0])
+				fprintf(f, "%s %c6_lut %s\n", pref, 'A'+j,
+					cfg->a2d[j].lut6);
+			if (cfg->a2d[j].lut5 && cfg->a2d[j].lut5[0])
+				fprintf(f, "%s %c5_lut %s\n", pref, 'A'+j,
+					cfg->a2d[j].lut5);
+
+			switch (cfg->a2d[j].ff_mux) {
+				case MUX_O6:
+					fprintf(f, "%s %c_ffmux O6\n", pref, 'A'+j);
+					break;
+				case MUX_O5:
+					fprintf(f, "%s %c_ffmux O5\n", pref, 'A'+j);
+					break;
+				case MUX_X:
+					fprintf(f, "%s %c_ffmux X\n", pref, 'A'+j);
+					break;
+				case MUX_F7:
+					fprintf(f, "%s %c_ffmux F7\n", pref, 'A'+j);
+					break;
+				case MUX_CY:
+					fprintf(f, "%s %c_ffmux CY\n", pref, 'A'+j);
+					break;
+				case MUX_XOR:
+					fprintf(f, "%s %c_ffmux XOR\n", pref, 'A'+j);
+					break;
+				case 0: break; default: FAIL(EINVAL);
 			}
+			switch (cfg->a2d[j].ff_srinit) {
+				case FF_SRINIT0:
+					fprintf(f, "%s %c_ffsrinit 0\n", pref, 'A'+j);
+					break;
+				case FF_SRINIT1:
+					fprintf(f, "%s %c_ffsrinit 1\n", pref, 'A'+j);
+					break;
+				case 0: break; default: FAIL(EINVAL);
+			}
+			switch (cfg->a2d[j].out_mux) {
+				case MUX_O6:
+					fprintf(f, "%s %c_outmux O6\n", pref, 'A'+j);
+					break;
+				case MUX_O5:
+					fprintf(f, "%s %c_outmux O5\n", pref, 'A'+j);
+					break;
+				case MUX_5Q:
+					fprintf(f, "%s %c_outmux 5Q\n", pref, 'A'+j);
+					break;
+				case MUX_F7:
+					fprintf(f, "%s %c_outmux F7\n", pref, 'A'+j);
+					break;
+				case MUX_CY:
+					fprintf(f, "%s %c_outmux CY\n", pref, 'A'+j);
+					break;
+				case MUX_XOR:
+					fprintf(f, "%s %c_outmux XOR\n", pref, 'A'+j);
+					break;
+				case 0: break; default: FAIL(EINVAL);
+			}
+			switch (cfg->a2d[j].ff) {
+				case FF_OR2L:
+					fprintf(f, "%s %c_ff OR2L\n", pref, 'A'+j);
+					break;
+				case FF_AND2L:
+					fprintf(f, "%s %c_ff AND2L\n", pref, 'A'+j);
+					break;
+				case FF_LATCH:
+					fprintf(f, "%s %c_ff LATCH\n", pref, 'A'+j);
+					break;
+				case FF_FF:
+					fprintf(f, "%s %c_ff FF\n", pref, 'A'+j);
+					break;
+				case 0: break; default: FAIL(EINVAL);
+			}
+		}
+		switch (cfg->clk_inv) {
+			case CLKINV_B:
+				fprintf(f, "%s clk CLK_B\n", pref);
+				break;
+			case CLKINV_CLK:
+				fprintf(f, "%s clk CLK\n", pref);
+				break;
+			case 0: break; default: FAIL(EINVAL);
+		}
+		switch (cfg->sync_attr) {
+			case SYNCATTR_SYNC:
+				fprintf(f, "%s sync SYNC\n", pref);
+				break;
+			case SYNCATTR_ASYNC:
+				fprintf(f, "%s sync ASYNC\n", pref);
+				break;
+			case 0: break; default: FAIL(EINVAL);
+		}
+		if (cfg->ce_used)
+			fprintf(f, "%s ce_used\n", pref);
+		if (cfg->sr_used)
+			fprintf(f, "%s sr_used\n", pref);
+		switch (cfg->we_mux) {
+			case WEMUX_WE:
+				fprintf(f, "%s wemux WE\n", pref);
+				break;
+			case WEMUX_CE:
+				fprintf(f, "%s wemux CE\n", pref);
+				break;
+			case 0: break; default: FAIL(EINVAL);
 		}
 	}
 	return 0;
+fail:
+	return rc;
 }
 
 static int read_LOGIC_attr(struct fpga_model* model, int y, int x, int type_idx,
 	const char* w1, int w1_len, const char* w2, int w2_len)
 {
 	struct fpga_device* dev;
+	char cmp_str[128];
 	int i, rc;
 
 	dev = fdev_p(model, y, x, DEV_LOGIC, type_idx);
 	if (!dev) { HERE(); return 0; }
 
 	// First the one-word attributes.
-	if (!str_cmp(w1, w1_len, "A_used", ZTERM)) {
-		dev->u.logic.A_used = 1;
+	for (i = LUT_A; i <= LUT_D; i++) {
+		snprintf(cmp_str, sizeof(cmp_str), "%c_used", 'A'+i);
+		if (!str_cmp(w1, w1_len, cmp_str, ZTERM)) {
+			dev->u.logic.a2d[i].used = 1;
+			goto inst_1;
+		}
+	}
+	if (!str_cmp(w1, w1_len, "ce_used", ZTERM)) {
+		dev->u.logic.ce_used = 1;
 		goto inst_1;
 	}
-	if (!str_cmp(w1, w1_len, "B_used", ZTERM)) {
-		dev->u.logic.B_used = 1;
+	if (!str_cmp(w1, w1_len, "sr_used", ZTERM)) {
+		dev->u.logic.sr_used = 1;
 		goto inst_1;
 	}
-	if (!str_cmp(w1, w1_len, "C_used", ZTERM)) {
-		dev->u.logic.C_used = 1;
-		goto inst_1;
-	}
-	if (!str_cmp(w1, w1_len, "D_used", ZTERM)) {
-		dev->u.logic.D_used = 1;
-		goto inst_1;
-	}
+
 	// The remaining attributes all require 2 words.
 	if (w2_len < 1) return 0;
 	if (!str_cmp(w1, w1_len, "type", ZTERM))
 		return 2; // no reason for instantiation
-	for (i = 0; i < sizeof(dev->u.logic.luts)/sizeof(dev->u.logic.luts[0]); i++) {
-		if (!str_cmp(w1, w1_len, s_fplut_str[i], ZTERM)) {
-			rc = fdev_logic_set_lut(model, y, x, type_idx, i, w2, w2_len);
+
+	for (i = LUT_A; i <= LUT_D; i++) {
+		snprintf(cmp_str, sizeof(cmp_str), "%c6_lut", 'A'+i);
+		if (!str_cmp(w1, w1_len, cmp_str, ZTERM)) {
+			rc = fdev_logic_set_lut(model, y, x, type_idx, i, 6, w2, w2_len);
 			if (rc) return 0;
 			goto inst_2;
 		}
+		snprintf(cmp_str, sizeof(cmp_str), "%c5_lut", 'A'+i);
+		if (!str_cmp(w1, w1_len, cmp_str, ZTERM)) {
+			rc = fdev_logic_set_lut(model, y, x, type_idx, i, 5, w2, w2_len);
+			if (rc) return 0;
+			goto inst_2;
+		}
+		snprintf(cmp_str, sizeof(cmp_str), "%c_ffmux", 'A'+i);
+		if (!str_cmp(w1, w1_len, cmp_str, ZTERM)) {
+			if (!str_cmp(w2, w2_len, "O6", ZTERM))
+				dev->u.logic.a2d[i].ff_mux = MUX_O6;
+			else if (!str_cmp(w2, w2_len, "O5", ZTERM))
+				dev->u.logic.a2d[i].ff_mux = MUX_O5;
+			else if (!str_cmp(w2, w2_len, "X", ZTERM))
+				dev->u.logic.a2d[i].ff_mux = MUX_X;
+			else if (!str_cmp(w2, w2_len, "F7", ZTERM))
+				dev->u.logic.a2d[i].ff_mux = MUX_F7;
+			else if (!str_cmp(w2, w2_len, "CY", ZTERM))
+				dev->u.logic.a2d[i].ff_mux = MUX_CY;
+			else if (!str_cmp(w2, w2_len, "XOR", ZTERM))
+				dev->u.logic.a2d[i].ff_mux = MUX_XOR;
+			else return 0;
+			goto inst_2;
+		}
+		snprintf(cmp_str, sizeof(cmp_str), "%c_ffsrinit", 'A'+i);
+		if (!str_cmp(w1, w1_len, cmp_str, ZTERM)) {
+			if (!str_cmp(w2, w2_len, "0", ZTERM))
+				dev->u.logic.a2d[i].ff_srinit = FF_SRINIT0;
+			else if (!str_cmp(w2, w2_len, "1", ZTERM))
+				dev->u.logic.a2d[i].ff_srinit = FF_SRINIT1;
+			else return 0;
+			goto inst_2;
+		}
+		snprintf(cmp_str, sizeof(cmp_str), "%c_outmux", 'A'+i);
+		if (!str_cmp(w1, w1_len, cmp_str, ZTERM)) {
+			if (!str_cmp(w2, w2_len, "O6", ZTERM))
+				dev->u.logic.a2d[i].out_mux = MUX_O6;
+			if (!str_cmp(w2, w2_len, "O5", ZTERM))
+				dev->u.logic.a2d[i].out_mux = MUX_O5;
+			if (!str_cmp(w2, w2_len, "5Q", ZTERM))
+				dev->u.logic.a2d[i].out_mux = MUX_5Q;
+			if (!str_cmp(w2, w2_len, "F7", ZTERM))
+				dev->u.logic.a2d[i].out_mux = MUX_F7;
+			if (!str_cmp(w2, w2_len, "CY", ZTERM))
+				dev->u.logic.a2d[i].out_mux = MUX_CY;
+			if (!str_cmp(w2, w2_len, "XOR", ZTERM))
+				dev->u.logic.a2d[i].out_mux = MUX_XOR;
+			else return 0;
+			goto inst_2;
+		}
+		snprintf(cmp_str, sizeof(cmp_str), "%c_ff", 'A'+i);
+		if (!str_cmp(w1, w1_len, cmp_str, ZTERM)) {
+			if (!str_cmp(w2, w2_len, "OR2L", ZTERM))
+				dev->u.logic.a2d[i].ff = FF_OR2L;
+			if (!str_cmp(w2, w2_len, "AND2L", ZTERM))
+				dev->u.logic.a2d[i].ff = FF_AND2L;
+			if (!str_cmp(w2, w2_len, "LATCH", ZTERM))
+				dev->u.logic.a2d[i].ff = FF_LATCH;
+			if (!str_cmp(w2, w2_len, "FF", ZTERM))
+				dev->u.logic.a2d[i].ff = FF_FF;
+			else return 0;
+			goto inst_2;
+		}
+	}
+	if (!str_cmp(w1, w1_len, "clk", ZTERM)) {
+		if (!str_cmp(w2, w2_len, "CLK_B", ZTERM))
+			dev->u.logic.clk_inv = CLKINV_B;
+		else if (!str_cmp(w2, w2_len, "CLK", ZTERM))
+			dev->u.logic.clk_inv = CLKINV_CLK;
+		else return 0;
+		goto inst_2;
+	}
+	if (!str_cmp(w1, w1_len, "sync", ZTERM)) {
+		if (!str_cmp(w2, w2_len, "SYNC", ZTERM))
+			dev->u.logic.sync_attr = SYNCATTR_SYNC;
+		else if (!str_cmp(w2, w2_len, "ASYNC", ZTERM))
+			dev->u.logic.sync_attr = SYNCATTR_ASYNC;
+		else return 0;
+		goto inst_2;
+	}
+	if (!str_cmp(w1, w1_len, "wemux", ZTERM)) {
+		if (!str_cmp(w2, w2_len, "WE", ZTERM))
+			dev->u.logic.we_mux = WEMUX_WE;
+		else if (!str_cmp(w2, w2_len, "CE", ZTERM))
+			dev->u.logic.we_mux = WEMUX_CE;
+		else return 0;
+		goto inst_2;
 	}
 	return 0;
 inst_1:
 	dev->instantiated = 1;
 	return 1;
 inst_2:
-	dev->instantiated = 2;
+	dev->instantiated = 1;
 	return 2;
 }
 
