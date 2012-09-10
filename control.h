@@ -60,6 +60,9 @@ int fdev_logic_sync(struct fpga_model* model, int y, int x, int type_idx,
 int fdev_logic_ceused(struct fpga_model* model, int y, int x, int type_idx);
 int fdev_logic_srused(struct fpga_model* model, int y, int x, int type_idx);
 
+int fdev_iob_input(struct fpga_model* model, int y, int x, int type_idx);
+int fdev_iob_output(struct fpga_model* model, int y, int x, int type_idx);
+
 int fdev_set_required_pins(struct fpga_model* model, int y, int x, int type,
 	int type_idx);
 void fdev_print_required_pins(struct fpga_model* model, int y, int x,
@@ -211,6 +214,7 @@ void destruct_sw_conns(struct sw_conns* conns);
 // NO_CONN (-1) if there is no other connection.
 int fpga_switch_conns(struct sw_conns* conns);
 
+// max_depth can be -1 for internal maximum (SW_SET_SIZE)
 void printf_swchain(struct fpga_model* model, int y, int x,
 	str16_t sw, int from_to, int max_depth, swidx_t* block_list,
 	int* block_list_len);
@@ -286,10 +290,8 @@ int fpga_net_enum(struct fpga_model* model, net_idx_t last, net_idx_t* next);
 struct fpga_net* fpga_net_get(struct fpga_model* model, net_idx_t net_i);
 int fpga_net_add_port(struct fpga_model* model, net_idx_t net_i,
 	int y, int x, dev_idx_t dev_idx, pinw_idx_t pinw_idx);
-int fpga_net_add_switch(struct fpga_model* model, net_idx_t net_i,
-	int y, int x, swidx_t one_sw);
-int fpga_net_add_switches(struct fpga_model* model, net_idx_t net_i,
-	int y, int x, const struct sw_set* set);
+int fpga_net_add_sw(struct fpga_model* model, net_idx_t net_i,
+	int y, int x, const swidx_t* switches, int num_sw);
 void fpga_net_free_all(struct fpga_model* model);
 
 void fprintf_net(FILE* f, struct fpga_model* model, net_idx_t net_i);

@@ -847,7 +847,7 @@ static void read_net_line(struct fpga_model* model, const char* line, int start)
 		if (fpga_switch_is_used(model, y_coord, x_coord, sw.sw[0]))
 			HERE();
 		sw.len = 1;
-		if (fpga_net_add_switches(model, net_idx, y_coord, x_coord, &sw))
+		if (fpga_net_add_sw(model, net_idx, y_coord, x_coord, sw.sw, sw.len))
 			HERE();
 		return;
 	}

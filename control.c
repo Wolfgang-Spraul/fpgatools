@@ -539,6 +539,46 @@ fail:
 	return rc;
 }
 
+int fdev_iob_input(struct fpga_model* model, int y, int x, int type_idx)
+{
+	struct fpga_device* dev;
+	int rc;
+
+	dev = fdev_p(model, y, x, DEV_IOB, type_idx);
+	if (!dev) FAIL(EINVAL);
+	rc = reset_required_pins(dev);
+	if (rc) FAIL(rc);
+
+	strcpy(dev->u.iob.istandard, IO_LVCMOS33);
+	dev->u.iob.bypass_mux = BYPASS_MUX_I;
+	dev->u.iob.I_mux = IMUX_I;
+	dev->instantiated = 1;
+	return 0;
+fail:
+	return rc;
+}
+
+int fdev_iob_output(struct fpga_model* model, int y, int x, int type_idx)
+{
+	struct fpga_device* dev;
+	int rc;
+
+	dev = fdev_p(model, y, x, DEV_IOB, type_idx);
+	if (!dev) FAIL(EINVAL);
+	rc = reset_required_pins(dev);
+	if (rc) FAIL(rc);
+
+	strcpy(dev->u.iob.ostandard, IO_LVCMOS33);
+	dev->u.iob.drive_strength = 12;
+	dev->u.iob.O_used = 1;
+	dev->u.iob.slew = SLEW_SLOW;
+	dev->u.iob.suspend = SUSP_3STATE;
+	dev->instantiated = 1;
+	return 0;
+fail:
+	return rc;
+}
+
 static void scan_lut_digits(const char* s, int* digits)
 {
 	int i;
@@ -598,6 +638,13 @@ int fdev_set_required_pins(struct fpga_model* model, int y, int x, int type,
 				}
 			}
 		}
+		return 0;
+	}
+	if (type == DEV_IOB) {
+		if (dev->u.iob.I_mux)
+			add_req_outpin(dev, IOB_OUT_I);
+		if (dev->u.iob.O_used)
+			add_req_inpin(dev, IOB_IN_O);
 	}
 	return 0;
 fail:
@@ -1062,7 +1109,7 @@ int construct_sw_chain(struct sw_chain* chain, struct fpga_model* model,
 	chain->y = y;
 	chain->x = x;
 	chain->from_to = from_to;
-	chain->max_depth = max_depth;
+	chain->max_depth = (max_depth < 0) ? SW_SET_SIZE : max_depth;
 	if (block_list) {
 		chain->block_list = block_list;
 		chain->block_list_len = block_list_len;
@@ -1525,17 +1572,8 @@ fail:
 	return rc;
 }
 
-int fpga_net_add_switch(struct fpga_model* model, net_idx_t net_i,
-	int y, int x, swidx_t one_sw)
-{
-	struct sw_set set;
-	set.sw[0] = one_sw;
-	set.len = 1;
-	return fpga_net_add_switches(model, net_i, y, x, &set);
-}
-
-int fpga_net_add_switches(struct fpga_model* model, net_idx_t net_i,
-	int y, int x, const struct sw_set* set)
+int fpga_net_add_sw(struct fpga_model* model, net_idx_t net_i,
+	int y, int x, const swidx_t* switches, int num_sw)
 {
 	struct fpga_net* net;
 	int i, rc;
@@ -1544,16 +1582,16 @@ int fpga_net_add_switches(struct fpga_model* model, net_idx_t net_i,
 	if (rc) FAIL(rc);
 
 	net = &model->nets[net_i-1];
-	if (net->len+set->len > MAX_NET_LEN)
+	if (net->len+num_sw > MAX_NET_LEN)
 		FAIL(EINVAL);
-	for (i = 0; i < set->len; i++) {
+	for (i = 0; i < num_sw; i++) {
 		net->el[net->len].y = y;
 		net->el[net->len].x = x;
-		if (OUT_OF_U16(set->sw[i])) FAIL(EINVAL);
-		if (fpga_switch_is_used(model, y, x, set->sw[i]))
+		if (OUT_OF_U16(switches[i])) FAIL(EINVAL);
+		if (fpga_switch_is_used(model, y, x, switches[i]))
 			HERE();
-		fpga_switch_enable(model, y, x, set->sw[i]);
-		net->el[net->len].idx = set->sw[i];
+		fpga_switch_enable(model, y, x, switches[i]);
+		net->el[net->len].idx = switches[i];
 		net->len++;
 	}
 	return 0;

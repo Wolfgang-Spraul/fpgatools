@@ -641,7 +641,8 @@ int extract_model(struct fpga_model* model, struct fpga_bits* bits)
 	for (i = 0; i < es.num_sw_yx; i++) {
 		rc = fpga_net_new(model, &net_idx);
 		if (rc) FAIL(rc);
-		rc = fpga_net_add_switch(model, net_idx, es.sw_yx[i].y, es.sw_yx[i].x, es.sw_yx[i].idx);
+		rc = fpga_net_add_sw(model, net_idx, es.sw_yx[i].y,
+			es.sw_yx[i].x, &es.sw_yx[i].idx, 1);
 		if (rc) FAIL(rc);
 	}
 	return 0;
