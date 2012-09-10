@@ -1,14 +1,16 @@
-Design Principles
-
-- small independent command line utilities, no GUI
-- plain C, no C++
-- simple Makefiles
-- text-based file formats
-- automatic test suite
-- public domain software
-
 Introduction
- todo
+ fpgatools is a toolchain to program flexible programmable gate arrays
+ (FPGAs). The only supported chip at this time is the xc6slx9, a cheap
+ (ca. 10 USD) but powerful 45nm-generation chip with about 2400 LUTs,
+ block ram and multiply-accumulate devices.
+ The principles of fpgatools are:
+
+ *) reach the maximum physical performance of the chip
+ *) fast development cycles
+ *) independent toolchain that only depends on other free software
+ *) lightweight C implementation without GUI
+ *) supported platform: Linux
+ *) license: public domain
 
 FAQ
  todo
@@ -37,6 +39,15 @@ fpgatools Development Utilities
 - merge_seq          merges a pre-sorted text file into wire sequences
 - pair2net           reads the first two words per line and builds nets
 - hstrrep            high-speed hashed array based search and replace util
+
+Design Principles
+
+- small independent command line utilities, no GUI
+- plain C, no C++
+- simple Makefiles
+- text-based file formats
+- automatic test suite
+- public domain software
 
 TODO (as of 2012-08, expected time to delivery: months to years
       completion status overall: 1%)
