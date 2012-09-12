@@ -334,6 +334,54 @@ const char* fdev_logic_pinstr(pinw_idx_t idx, int ld1_type)
 	return buf[last_buf];
 }
 
+str16_t fdev_logic_pinstr_i(struct fpga_model* model, pinw_idx_t idx, int ld1_type)
+{
+	int str_i;
+
+	str_i = strarray_find(&model->str, fdev_logic_pinstr(idx, ld1_type));
+	if (OUT_OF_U16(str_i))
+		{ HERE(); return STRIDX_NO_ENTRY; }
+	return str_i;
+}
+
+int fdev_logic_inbit(pinw_idx_t idx, int ld1_type)
+{
+	if (idx & LD1) {
+		idx &= ~LD1;
+		if (idx >= LI_A1 && idx <= LI_C6)
+			return M_A1 + (idx/6)*8+idx%6;
+		if (idx >= LI_D1 && idx <= LI_D6)
+			return M_D1 + (idx-LI_D1);
+		switch (idx) {
+			case LI_AX: return M_AX;
+			case LI_BX: return M_BX;
+			case LI_CE: return M_CE;
+			case LI_CX: return M_CX;
+			case LI_DX: return M_DX;
+			case LI_AI: return M_AI;
+			case LI_BI: return M_BI;
+			case LI_CI: return M_CI;
+			case LI_DI: return M_DI;
+			case LI_WE: return M_WE;
+		}
+		HERE();
+		return -1;
+	}
+	if (idx >= LI_A1 && idx <= LI_C6)
+		return X_A1 + (idx/6)*7+idx%6;
+	else if (idx >= LI_D1 && idx <= LI_D6)
+		return X_D1 + (idx-LI_D1);
+	else switch (idx) {
+		case LI_AX: return X_AX;
+		case LI_BX: return X_BX;
+		case LI_CE: return X_CE;
+		case LI_CX: return X_CX;
+		case LI_DX: return X_DX;
+	}
+	HERE();
+	return -1;
+}
+
 static int reset_required_pins(struct fpga_device* dev)
 {
 	int rc;
@@ -1453,7 +1501,7 @@ fail:
 	return rc;
 }
 
-void printf_switch_to_result(struct switch_to_yx* p)
+void printf_switch_to_yx_result(struct switch_to_yx* p)
 {
 	printf("switch_to_yx() from y%02i x%02i connpt %s (%s)\n",
 		p->y, p->x, strarray_lookup(&p->model->str, p->start_switch),
@@ -1463,6 +1511,46 @@ void printf_switch_to_result(struct switch_to_yx* p)
 		p->dest_y, p->dest_x,
 		strarray_lookup(&p->model->str, p->dest_connpt),
 		fmt_swset(p->model, p->y, p->x, &p->set, p->from_to));
+}
+
+int fpga_switch_to_rel(struct switch_to_rel* p)
+{
+	struct sw_conns conns;
+	int rc;
+
+	rc = construct_sw_conns(&conns, p->model, p->start_y, p->start_x,
+		p->start_switch, p->from_to, SW_SET_SIZE);
+	if (rc) FAIL(rc);
+	p->set.len = 0;
+	while (fpga_switch_conns(&conns) != NO_CONN) {
+		if (conns.dest_y != p->start_y + p->rel_y
+		    || conns.dest_x != p->start_x + p->rel_x)
+			continue;
+		if (p->target_connpt != STRIDX_NO_ENTRY
+		    && conns.dest_str_i != p->target_connpt)
+			continue;
+		p->set = conns.chain.set;
+		p->dest_y = conns.dest_y;
+		p->dest_x = conns.dest_x;
+		p->dest_connpt = conns.dest_str_i;
+		break;
+	}
+	destruct_sw_conns(&conns);
+	return 0;
+fail:
+	return rc;
+}
+
+void printf_switch_to_rel_result(struct switch_to_rel* p)
+{
+	printf("switch_to_rel() from y%02i x%02i connpt %s (%s)\n",
+		p->start_y, p->start_x, strarray_lookup(&p->model->str, p->start_switch),
+		p->from_to == SW_FROM ? "SW_FROM" : "SW_TO");
+	printf(" %s y%02i x%02i %s via %s\n",
+		p->from_to == SW_FROM ? "to" : "from",
+		p->dest_y, p->dest_x,
+		strarray_lookup(&p->model->str, p->dest_connpt),
+		fmt_swset(p->model, p->start_y, p->start_x, &p->set, p->from_to));
 }
 
 #define NET_ALLOC_INCREMENT 64
@@ -1551,7 +1639,8 @@ struct fpga_net* fpga_net_get(struct fpga_model* model, net_idx_t net_i)
 }
 
 int fpga_net_add_port(struct fpga_model* model, net_idx_t net_i,
-	int y, int x, dev_idx_t dev_idx, pinw_idx_t pinw_idx)
+	int y, int x, enum fpgadev_type type, dev_type_idx_t type_idx,
+	pinw_idx_t pinw_idx)
 {
 	struct fpga_net* net;
 	int rc;
@@ -1565,7 +1654,8 @@ int fpga_net_add_port(struct fpga_model* model, net_idx_t net_i,
 	net->el[net->len].y = y;
 	net->el[net->len].x = x;
 	net->el[net->len].idx = pinw_idx | NET_IDX_IS_PINW;
-	net->el[net->len].dev_idx = dev_idx;
+	net->el[net->len].dev_idx = fpga_dev_idx(model, y, x, type, type_idx);
+	if (net->el[net->len].dev_idx == NO_DEV) FAIL(EINVAL);
 	net->len++;
 	return 0;
 fail:
@@ -1593,6 +1683,45 @@ int fpga_net_add_sw(struct fpga_model* model, net_idx_t net_i,
 		fpga_switch_enable(model, y, x, switches[i]);
 		net->el[net->len].idx = switches[i];
 		net->len++;
+	}
+	return 0;
+fail:
+	return rc;
+}
+
+int fpga_net_remove_sw(struct fpga_model* model, net_idx_t net_i,
+	int y, int x, const swidx_t* switches, int num_sw)
+{
+	struct fpga_net* net;
+	int i, j, rc;
+
+	if (net_i > model->highest_used_net)
+		FAIL(EINVAL);
+	net = &model->nets[net_i-1];
+	if (!net->len) {
+		HERE();
+		return 0;
+	}
+	for (i = 0; i < num_sw; i++) {
+		for (j = 0; j < net->len; j++) {
+			if (net->el[j].y == y
+			    && net->el[j].x == x
+			    && net->el[j].idx == switches[i])
+				break;
+		}
+		if (j >= net->len) {
+			// for now we expect the 'to-be-removed'
+			// switches to be in the net
+			HERE();
+			continue;
+		}
+		if (!fpga_switch_is_used(model, y, x, switches[i]))
+			HERE();
+		fpga_switch_disable(model, y, x, switches[i]);
+		if (net->len > j+1)
+			memmove(&net->el[j], &net->el[j+1],
+				(net->len-j-1)*sizeof(net->el[0]));
+		net->len--;
 	}
 	return 0;
 fail:

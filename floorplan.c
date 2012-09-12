@@ -775,7 +775,6 @@ static void read_net_line(struct fpga_model* model, const char* line, int start)
 	enum fpgadev_type dev_type;
 	char buf[1024];
 	net_idx_t net_idx;
-	dev_idx_t dev_idx;
 	pinw_idx_t pinw_idx;
 	int sw_is_bidir;
 
@@ -872,14 +871,12 @@ static void read_net_line(struct fpga_model* model, const char* line, int start)
 		{ HERE(); return; }
 	dev_type = fdev_str2type(&line[dev_str_beg], dev_str_end-dev_str_beg);
 	if (dev_type == DEV_NONE) { HERE(); return; }
-	dev_idx = fpga_dev_idx(model, y_coord, x_coord, dev_type,
-		to_i(&line[dev_type_idx_str_beg],
-			dev_type_idx_str_end-dev_type_idx_str_beg));
-	if (dev_idx == NO_DEV) { HERE(); return; }
 	pinw_idx = fdev_pinw_str2idx(dev_type, &line[pin_name_beg],
 		pin_name_end-pin_name_beg);
 	if (pinw_idx == PINW_NO_IDX) { HERE(); return; }
-	if (fpga_net_add_port(model, net_idx, y_coord, x_coord, dev_idx, pinw_idx))
+	if (fpga_net_add_port(model, net_idx, y_coord, x_coord, dev_type,
+		to_i(&line[dev_type_idx_str_beg], dev_type_idx_str_end
+			-dev_type_idx_str_beg), pinw_idx))
 		HERE();
 }
 

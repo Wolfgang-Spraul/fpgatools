@@ -38,9 +38,13 @@ dev_type_idx_t fdev_typeidx(struct fpga_model* model, int y, int x,
 pinw_idx_t fdev_pinw_str2idx(int devtype, const char* str, int len);
 // returns 0 when idx not found for the given devtype
 const char* fdev_pinw_idx2str(int devtype, pinw_idx_t idx);
+
 // ld1_type can be LOGIC_M or LOGIC_L to specify whether
-// we are in a XM or XL column.
+// we are in a XM or XL column. You can |LD1 to idx for
+// the second logic device (L or M).
 const char* fdev_logic_pinstr(pinw_idx_t idx, int ld1_type);
+str16_t fdev_logic_pinstr_i(struct fpga_model* model, pinw_idx_t idx, int ld1_type);
+int fdev_logic_inbit(pinw_idx_t idx, int ld1_type);
 
 // lut_a2d is LUT_A to LUT_D value, lut_5or6 is int 5 or int 6.
 int fdev_logic_set_lut(struct fpga_model* model, int y, int x, int type_idx,
@@ -247,7 +251,30 @@ struct switch_to_yx
 };
 
 int fpga_switch_to_yx(struct switch_to_yx* p);
-void printf_switch_to_result(struct switch_to_yx* p);
+void printf_switch_to_yx_result(struct switch_to_yx* p);
+
+struct switch_to_rel
+{
+	// input:
+	struct fpga_model* model;
+	int start_y;
+	int start_x;
+	str16_t start_switch;
+	int from_to;
+	int rel_y;
+	int rel_x;
+	str16_t target_connpt; // can be STRIDX_NO_ENTRY
+
+	// output:
+	struct sw_set set;
+	int dest_y;
+	int dest_x;
+	str16_t dest_connpt;
+};
+
+// if no switches are found, the returned set.len will be 0.
+int fpga_switch_to_rel(struct switch_to_rel* p);
+void printf_switch_to_rel_result(struct switch_to_rel* p);
 
 //
 // nets
@@ -289,8 +316,10 @@ void fpga_net_delete(struct fpga_model* model, net_idx_t net_idx);
 int fpga_net_enum(struct fpga_model* model, net_idx_t last, net_idx_t* next);
 struct fpga_net* fpga_net_get(struct fpga_model* model, net_idx_t net_i);
 int fpga_net_add_port(struct fpga_model* model, net_idx_t net_i,
-	int y, int x, dev_idx_t dev_idx, pinw_idx_t pinw_idx);
+	int y, int x, enum fpgadev_type type, dev_type_idx_t type_idx, pinw_idx_t pinw_idx);
 int fpga_net_add_sw(struct fpga_model* model, net_idx_t net_i,
+	int y, int x, const swidx_t* switches, int num_sw);
+int fpga_net_remove_sw(struct fpga_model* model, net_idx_t net_i,
 	int y, int x, const swidx_t* switches, int num_sw);
 void fpga_net_free_all(struct fpga_model* model);
 
