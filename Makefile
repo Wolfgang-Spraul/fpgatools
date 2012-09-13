@@ -62,7 +62,7 @@ OBJS	+= $(LIBFPGA_BIT_OBJS) $(LIBFPGA_MODEL_OBJS) $(LIBFPGA_FLOORPLAN_OBJS) \
 DYNAMIC_LIBS = libfpga-model.so libfpga-bit.so libfpga-floorplan.so \
 	libfpga-control.so libfpga-cores.so
 
-DYNAMIC_HEADS = control.h floorplan.h helper.h model.h parts.h
+DYNAMIC_HEADS = bit.h control.h floorplan.h helper.h model.h parts.h
 #- libfpga-test       autotest suite
 #- libfpga-design     larger design elements on top of libfpga-control
 
