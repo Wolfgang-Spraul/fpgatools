@@ -62,6 +62,7 @@ OBJS	+= $(LIBFPGA_BIT_OBJS) $(LIBFPGA_MODEL_OBJS) $(LIBFPGA_FLOORPLAN_OBJS) \
 DYNAMIC_LIBS = libfpga-model.so libfpga-bit.so libfpga-floorplan.so \
 	libfpga-control.so libfpga-cores.so
 
+DYNAMIC_HEADS = control.h floorplan.h helper.h model.h parts.h
 #- libfpga-test       autotest suite
 #- libfpga-design     larger design elements on top of libfpga-control
 
@@ -170,18 +171,9 @@ clean:
 	rm -f $(foreach test,$(TESTS),"autotest.out/autotest_$(test).diff_to_gold")
 	rm -f $(foreach test,$(TESTS),"autotest.out/autotest_$(test).log")
 	rmdir --ignore-fail-on-non-empty autotest.out || exit 0
-	rm -f $(LIBFPGA_BIT_OBJS) $(LIBFPGA_MODEL_OBJS) $(LIBFPGA_FLOORPLAN_OBJS) \
-		$(LIBFPGA_CONTROL_OBJS) $(LIBFPGA_CORES_OBJS) \
-		draw_svg_tiles draw_svg_tiles.o \
-		new_fp new_fp.o \
-		hstrrep hstrrep.o \
-		sort_seq sort_seq.o \
-		merge_seq merge_seq.o \
-		autotest autotest.o \
-		fp2bit fp2bit.o \
-		bit2fp bit2fp.o \
-		pair2net pair2net.o \
-		libfpga-bit.a libfpga-control.a libfpga-cores.a libfpga-floorplan.a libfpga-model.a \
+	rm -rf build-libs
+	rm -f $(OBJS) *.d *.so \
+		draw_svg_tiles new_fp hstrrep sort_seq merge_seq autotest fp2bit bit2fp pair2net \
 		xc6slx9.fp xc6slx9.svg \
 		xc6slx9.tiles xc6slx9.devs xc6slx9.conns \
 		xc6slx9.ports xc6slx9.sw xc6slx9.cnets xc6slx9.swbits \
@@ -195,8 +187,13 @@ clean:
 
 install:	all
 		mkdir -p $(DESTDIR)/$(PREFIX)/bin/
+		mkdir -p $(DESTDIR)/$(PREFIX)/lib/
 		install -m 755 fp2bit  $(DESTDIR)/$(PREFIX)/bin/
 		install -m 755 bit2fp $(DESTDIR)/$(PREFIX)/bin/
+		install -m 755 $(DYNAMIC_LIBS)  $(DESTDIR)/$(PREFIX)/lib/
+		mkdir -p $(DESTDIR)/$(PREFIX)/include/
+		install -m 644 $(DYNAMIC_HEADS) $(DESTDIR)/$(PREFIX)/include/
+
 uninstall:
 		rm -f $(DESTDIR)/$(PREFIX)/bin/{fp2bit,bit2fp}
 
