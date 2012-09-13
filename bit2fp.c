@@ -13,7 +13,7 @@ int main(int argc, char** argv)
 {
 	struct fpga_model model;
 	int bit_header, bit_regs, fp_header, pull_model, file_arg, flags;
-	int dump_routing_mips, rc = -1;
+	int print_swbits, rc = -1;
 	struct fpga_config config;
 
 	// parameters
@@ -22,7 +22,7 @@ int main(int argc, char** argv)
 			"\n"
 			"%s - bitstream to floorplan\n"
 			"Usage: %s [--bit-header] [--bit-regs] [--no-model] [--no-fp-header]\n"
-			"       %*s [--dump-routing-mips] <bitstream_file>\n"
+			"       %*s [--printf-swbits] <bitstream_file>\n"
 			"\n", argv[0], argv[0], (int) strlen(argv[0]), "");
 		goto fail;
 	}
@@ -31,7 +31,7 @@ int main(int argc, char** argv)
 	pull_model = 1;
 	fp_header = 1;
 	file_arg = 1;
-	dump_routing_mips = 0;
+	print_swbits = 0;
 	while (file_arg < argc
 	       && !strncmp(argv[file_arg], "--", 2)) {
 		if (!strcmp(argv[file_arg], "--bit-header"))
@@ -42,8 +42,8 @@ int main(int argc, char** argv)
 			pull_model = 0;
 		else if (!strcmp(argv[file_arg], "--no-fp-header"))
 			fp_header = 0;
-		else if (!strcmp(argv[file_arg], "--dump-routing-mips"))
-			dump_routing_mips = 1;
+		else if (!strcmp(argv[file_arg], "--printf-swbits"))
+			print_swbits = 1;
 		else break;
 		file_arg++;
 	}
@@ -52,8 +52,8 @@ int main(int argc, char** argv)
 	if ((rc = fpga_build_model(&model, XC6SLX9_ROWS, XC6SLX9_COLUMNS,
 			XC6SLX9_LEFT_WIRING, XC6SLX9_RIGHT_WIRING))) FAIL(rc);
 
-	if (dump_routing_mips) {
-		rc = printf_routing_mips(&model);
+	if (print_swbits) {
+		rc = printf_swbits(&model);
 		if (rc) FAIL(rc);
 		return 0;
 	}

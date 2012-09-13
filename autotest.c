@@ -500,7 +500,9 @@ fail:
 	return rc;
 }
 
-static int test_routing_sw_from_south(struct test_state* tstate,
+int test_routing_sw_from_iob(struct test_state* tstate,
+	swidx_t* done_list, int* done_list_len);
+int test_routing_sw_from_iob(struct test_state* tstate,
 	swidx_t* done_list, int* done_list_len)
 {
 	struct switch_to_yx switch_to;
@@ -577,7 +579,7 @@ fail:
 	return rc;
 }
 
-static int test_routing_sw_from_north(struct test_state* tstate,
+static int test_routing_sw_from_logic(struct test_state* tstate,
 	swidx_t* done_list, int* done_list_len)
 {
 	struct fpga_device* dev;
@@ -585,79 +587,85 @@ static int test_routing_sw_from_north(struct test_state* tstate,
 	struct sw_conns conns;
 	const char* str;
 	net_idx_t net;
-	int y, x, i, rc;
+	int y, x, rel_y, i, rc;
 
         y = 67;
 	x = 13;
-	for (i = '1'; i <= '6'; i++) {
-		rc = fdev_logic_set_lut(tstate->model, y, x,
-			DEV_LOGM, LUT_A, 6, pf("A%c", i), ZTERM);
-		if (rc) FAIL(rc);
-		rc = fdev_set_required_pins(tstate->model, y, x,
-			DEV_LOGIC, DEV_LOGM);
-		if (rc) FAIL(rc);
-	
-		if (tstate->dry_run)
-			fdev_print_required_pins(tstate->model,
-				y, x, DEV_LOGIC, DEV_LOGM);
-		dev = fdev_p(tstate->model, y, x, DEV_LOGIC, DEV_LOGM);
-		if (!dev) FAIL(EINVAL);
-		if (!dev->pinw_req_in) FAIL(EINVAL);
-	
-		rc = fpga_net_new(tstate->model, &net);
-		if (rc) FAIL(rc);
-		rc = fpga_net_add_port(tstate->model, net, y, x,
-			DEV_LOGIC, DEV_LOGM, dev->pinw_req_for_cfg[0]);
-		if (rc) FAIL(rc);
-	
-		swto.model = tstate->model;
-		swto.start_y = y;
-		swto.start_x = x;
-		swto.start_switch = fdev_logic_pinstr_i(tstate->model,
-			dev->pinw_req_for_cfg[0]|LD1, LOGIC_M);
-		swto.from_to = SW_TO;
-		swto.rel_y = 0;
-		swto.rel_x = -1;
-		swto.target_connpt = STRIDX_NO_ENTRY;
-		rc = fpga_switch_to_rel(&swto);
-		if (rc) FAIL(rc);
-		if (!swto.set.len) FAIL(EINVAL);
-		if (tstate->dry_run)
-			printf_switch_to_rel_result(&swto);
-		rc = fpga_net_add_sw(tstate->model, net, swto.start_y,
-			swto.start_x, swto.set.sw, swto.set.len);
-		if (rc) FAIL(rc);
-	
-		rc = construct_sw_conns(&conns, tstate->model, swto.dest_y, swto.dest_x,
-			swto.dest_connpt, SW_TO, /*max_depth*/ 1);
-		if (rc) FAIL(rc);
-			
-		while (fpga_switch_conns(&conns) != NO_CONN) {
-			if (conns.dest_x != swto.dest_x
-			    || conns.dest_y != swto.dest_y+1)
-				continue;
-			str = strarray_lookup(&tstate->model->str, conns.dest_str_i);
-			if (!str) { HERE(); continue; }
-			if (strlen(str) < 5
-			    || str[2] != '1' || str[3] != 'B')
-				continue;
-			rc = fpga_net_add_sw(tstate->model, net, swto.dest_y,
-				swto.dest_x, conns.chain.set.sw, conns.chain.set.len);
+
+	// We loop over this twice, once with rel_y==-1 and then with rel_y==+1
+	// That way we come into the routing switchbox over the nr1/nl1 wires
+	// from below, or sr1/sl1 wires from above.
+	for (rel_y = -1; rel_y <= 1; rel_y += 2) {
+		for (i = '1'; i <= '6'; i++) {
+			rc = fdev_logic_set_lut(tstate->model, y, x,
+				DEV_LOGM, LUT_A, 6, pf("A%c", i), ZTERM);
 			if (rc) FAIL(rc);
+			rc = fdev_set_required_pins(tstate->model, y, x,
+				DEV_LOGIC, DEV_LOGM);
+			if (rc) FAIL(rc);
+		
 			if (tstate->dry_run)
-				fprintf_net(stdout, tstate->model, net);
-	
-			rc = test_switches(tstate, conns.dest_y, conns.dest_x,
-				conns.dest_str_i, net, done_list, done_list_len);
+				fdev_print_required_pins(tstate->model,
+					y, x, DEV_LOGIC, DEV_LOGM);
+			dev = fdev_p(tstate->model, y, x, DEV_LOGIC, DEV_LOGM);
+			if (!dev) FAIL(EINVAL);
+			if (!dev->pinw_req_in) FAIL(EINVAL);
+		
+			rc = fpga_net_new(tstate->model, &net);
 			if (rc) FAIL(rc);
-	
-			rc = fpga_net_remove_sw(tstate->model, net, swto.dest_y,
-				swto.dest_x, conns.chain.set.sw, conns.chain.set.len);
+			rc = fpga_net_add_port(tstate->model, net, y, x,
+				DEV_LOGIC, DEV_LOGM, dev->pinw_req_for_cfg[0]);
 			if (rc) FAIL(rc);
+		
+			swto.model = tstate->model;
+			swto.start_y = y;
+			swto.start_x = x;
+			swto.start_switch = fdev_logic_pinstr_i(tstate->model,
+				dev->pinw_req_for_cfg[0]|LD1, LOGIC_M);
+			swto.from_to = SW_TO;
+			swto.rel_y = 0;
+			swto.rel_x = -1;
+			swto.target_connpt = STRIDX_NO_ENTRY;
+			rc = fpga_switch_to_rel(&swto);
+			if (rc) FAIL(rc);
+			if (!swto.set.len) FAIL(EINVAL);
+			if (tstate->dry_run)
+				printf_switch_to_rel_result(&swto);
+			rc = fpga_net_add_sw(tstate->model, net, swto.start_y,
+				swto.start_x, swto.set.sw, swto.set.len);
+			if (rc) FAIL(rc);
+		
+			rc = construct_sw_conns(&conns, tstate->model, swto.dest_y, swto.dest_x,
+				swto.dest_connpt, SW_TO, /*max_depth*/ 1);
+			if (rc) FAIL(rc);
+				
+			while (fpga_switch_conns(&conns) != NO_CONN) {
+				if (conns.dest_x != swto.dest_x
+				    || conns.dest_y != swto.dest_y+rel_y)
+					continue;
+				str = strarray_lookup(&tstate->model->str, conns.dest_str_i);
+				if (!str) { HERE(); continue; }
+				if (strlen(str) < 5
+				    || str[2] != '1' || str[3] != 'B')
+					continue;
+				rc = fpga_net_add_sw(tstate->model, net, swto.dest_y,
+					swto.dest_x, conns.chain.set.sw, conns.chain.set.len);
+				if (rc) FAIL(rc);
+				if (tstate->dry_run)
+					fprintf_net(stdout, tstate->model, net);
+		
+				rc = test_switches(tstate, conns.dest_y, conns.dest_x,
+					conns.dest_str_i, net, done_list, done_list_len);
+				if (rc) FAIL(rc);
+		
+				rc = fpga_net_remove_sw(tstate->model, net, swto.dest_y,
+					swto.dest_x, conns.chain.set.sw, conns.chain.set.len);
+				if (rc) FAIL(rc);
+			}
+			destruct_sw_conns(&conns);
+			fdev_delete(tstate->model, y, x, DEV_LOGIC, DEV_LOGM);
+			fpga_net_delete(tstate->model, net);
 		}
-		destruct_sw_conns(&conns);
-		fdev_delete(tstate->model, y, x, DEV_LOGIC, DEV_LOGM);
-		fpga_net_delete(tstate->model, net);
 	}
 	return 0;
 fail:
@@ -744,9 +752,7 @@ static int test_routing_switches(struct test_state* tstate)
 		}
 	}
 	done_sw_len = 0;
-	rc = test_routing_sw_from_south(tstate, done_sw_list, &done_sw_len);
-	if (rc) FAIL(rc);
-	rc = test_routing_sw_from_north(tstate, done_sw_list, &done_sw_len);
+	rc = test_routing_sw_from_logic(tstate, done_sw_list, &done_sw_len);
 	if (rc) FAIL(rc);
 	return 0;
 fail:

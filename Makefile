@@ -148,22 +148,25 @@ libfpga-floorplan.a: $(LIBFPGA_FLOORPLAN_OBJS)
 libfpga-control.a: $(LIBFPGA_CONTROL_OBJS)
 	$(AR) $@ $^
 
-xc6slx9_empty.fp: new_fp
+xc6slx9.fp: new_fp
 	./new_fp > $@
 
 xc6slx9.svg: draw_svg_tiles
 	./draw_svg_tiles | xmllint --pretty 1 - > $@
 
-compare_all: compare.tiles compare.devs compare.conns compare.ports compare.sw
+compare_all: compare_tiles compare_devs compare_conns \
+	compare_ports compare_sw compare_swbits
 
-compare.%: xc6slx9_empty.%
-	@comm -1 -2 $< compare_other.$* > compare_$*_matching.txt
+compare_gold: compare.gold/xc6slx9.swbits
+
+compare_%: xc6slx9.%
+	@comm -1 -2 $< compare.gold/$< > compare_$*_matching.txt
 	@echo Matching lines - compare_$*_matching.txt:
 	@cat compare_$*_matching.txt | wc -l
-	@diff -u compare_other.$* $< > compare_$*_diff.txt || true
+	@diff -u compare.gold/$< $< > compare_$*_diff.txt || true
 	@echo Missing lines - compare_$*_diff.txt
-	@cat compare_$*_diff.txt | grep ^-y | wc -l
-	@cat compare_$*_diff.txt | grep ^+y > compare_$*_extra.txt || true
+	@cat compare_$*_diff.txt | grep ^-[^-] | wc -l
+	@cat compare_$*_diff.txt | grep ^+[^+] > compare_$*_extra.txt || true
 	@if test -s compare_$*_extra.txt; then echo Extra lines - compare_$*_extra.txt: ; cat compare_$*_extra.txt; fi;
 
 %.tiles: %.fp
@@ -190,6 +193,9 @@ compare.%: xc6slx9_empty.%
 %.sw: %.fp
 	@cat $<|awk '{if ($$1=="sw") printf "%s %s %s %s %s\n",$$2,$$3,$$4,$$5,$$6}'|sort >$@
 
+%.swbits: bit2fp
+	./bit2fp --printf-swbits | sort > $@
+
 clean:
 	rm -f $(foreach test,$(TESTS),"autotest.out/autotest_$(test).diff_to_gold")
 	rm -f $(foreach test,$(TESTS),"autotest.out/autotest_$(test).log")
@@ -206,17 +212,16 @@ clean:
 		bit2fp bit2fp.o \
 		pair2net pair2net.o \
 		libfpga-bit.a libfpga-control.a libfpga-cores.a libfpga-floorplan.a libfpga-model.a \
-		xc6slx9_empty.fp xc6slx9.svg \
-		xc6slx9_empty.tiles xc6slx9_empty.devs xc6slx9_empty.conns \
-		xc6slx9_empty.ports xc6slx9_empty.sw xc6slx9_empty.cnets \
-		compare_other.tiles compare_other.devs compare_other.conns compare_other.ports \
-		compare_other.sw compare_other.cnets \
+		xc6slx9.fp xc6slx9.svg \
+		xc6slx9.tiles xc6slx9.devs xc6slx9.conns \
+		xc6slx9.ports xc6slx9.sw xc6slx9.cnets xc6slx9.swbits \
 		compare_tiles_matching.txt compare_tiles_diff.txt compare_tiles_extra.txt \
 		compare_devs_matching.txt compare_devs_diff.txt compare_devs_extra.txt \
 		compare_conns_matching.txt compare_conns_diff.txt compare_conns_extra.txt \
 		compare_ports_matching.txt compare_ports_diff.txt compare_ports_extra.txt \
 		compare_sw_matching.txt compare_sw_diff.txt compare_sw_extra.txt \
-		compare_cnets_matching.txt compare_cnets_diff.txt compare_cnets_extra.txt
+		compare_cnets_matching.txt compare_cnets_diff.txt compare_cnets_extra.txt \
+		compare_swbits_matching.txt compare_swbits_diff.txt compare_swbits_extra.txt
 
 install:	all
 		mkdir -p $(DESTDIR)/$(PREFIX)/bin/

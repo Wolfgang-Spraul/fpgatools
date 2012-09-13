@@ -31,3 +31,4 @@ bit2fp.o
 parts.o
 autotest.tmp/
 autotest.out/
+compare.gold/

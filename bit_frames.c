@@ -73,19 +73,26 @@ static struct bit_pos s_default_bits[] = {
 	{ 0, 1, 23, 1039 },
 	{ 2, 0, 3, 66 }};
 
-// swpos_mip is relative to a tile, i.e. major (x) and
+// sw_bitpos is relative to a tile, i.e. major (x) and
 // row/v64_i (y) are defined outside.
-struct swpos_mip
+struct sw_bitpos
 {
-	int mip; // 0-18, even only
-	int two_bits_o; // 0-127, even only
+	// minors 0-19 are minor pairs, minor will be set
+	// to the even beginning of the pair, two_bits_o and
+	// one_bit_o are within 2*64 bits of the two minors.
+	// Even bit offsets are from the first minor, odd bit
+	// offsets from the second minor.
+	// minor 20 is a regular single 64-bit minor.
+
+	int minor; // 0,2,4,..18 for pairs, 20 for single-minor
+	int two_bits_o; // 0-126 for pairs (even only), 0-62 for single-minor
 	int two_bits_val; // 0-3
-	int one_bit_o; // 0-127, 1-6 bits up or down from two-bit val
+	int one_bit_o; // 1-6 positions up or down from two-bit pos
 	swidx_t uni_dir;
 	swidx_t rev_dir; // NO_SWITCH for unidirectional switches
 };
 
-struct swpos_yx
+struct sw_yxpos
 {
 	int y;
 	int x;
@@ -98,12 +105,12 @@ struct extract_state
 {
 	struct fpga_model* model;
 	struct fpga_bits* bits;
-	int num_mips;
-	struct swpos_mip mip[MAX_SWITCHBOX_SIZE];
+	int num_bit_pos;
+	struct sw_bitpos bit_pos[MAX_SWITCHBOX_SIZE];
 	// yx switches are fully extracted ones pointing into the
 	// model, stored here for later processing into nets.
-	int num_sw_yx;
-	struct swpos_yx sw_yx[MAX_YX_SWITCHES]; // needs to be dynamically alloced...
+	int num_yx_pos;
+	struct sw_yxpos yx_pos[MAX_YX_SWITCHES]; // needs to be dynamically alloced...
 };
 
 static int extract_iobs(struct fpga_model* model, struct fpga_bits* bits)
@@ -315,7 +322,7 @@ fail:
 }
 
 static int mip_is_set(struct extract_state* es, int y, int x,
-	struct swpos_mip* swpos, int* is_set)
+	struct sw_bitpos* swpos, int* is_set)
 {
 	int row_num, row_pos, start_in_frame, two_bits_val, rc;
 
@@ -329,15 +336,15 @@ static int mip_is_set(struct extract_state* es, int y, int x,
 		start_in_frame = row_pos*64;
 
 	two_bits_val = 
-		(get_bit(es->bits, row_num, es->model->x_major[x], swpos->mip,
+		(get_bit(es->bits, row_num, es->model->x_major[x], swpos->minor,
 			start_in_frame + swpos->two_bits_o/2) << 1)
-		| (get_bit(es->bits, row_num, es->model->x_major[x], swpos->mip+1,
+		| (get_bit(es->bits, row_num, es->model->x_major[x], swpos->minor+1,
 		    start_in_frame + swpos->two_bits_o/2) << 2);
 	if (two_bits_val != swpos->two_bits_val)
 		return 0;
 
 	if (!get_bit(es->bits, row_num, es->model->x_major[x],
-		swpos->mip + (swpos->one_bit_o&1),
+		swpos->minor + (swpos->one_bit_o&1),
 		start_in_frame + swpos->one_bit_o/2))
 		return 0;
 	*is_set = 1;
@@ -347,7 +354,7 @@ fail:
 }
 
 static int mip_clear_bits(struct extract_state* es, int y, int x,
-	struct swpos_mip* swpos)
+	struct sw_bitpos* swpos)
 {
 	int row_num, row_pos, start_in_frame, rc;
 
@@ -359,11 +366,11 @@ static int mip_clear_bits(struct extract_state* es, int y, int x,
 	else
 		start_in_frame = row_pos*64;
 
-	clear_bit(es->bits, row_num, es->model->x_major[x], swpos->mip,
+	clear_bit(es->bits, row_num, es->model->x_major[x], swpos->minor,
 		start_in_frame + swpos->two_bits_o/2);
-	clear_bit(es->bits, row_num, es->model->x_major[x], swpos->mip + 1,
+	clear_bit(es->bits, row_num, es->model->x_major[x], swpos->minor+ 1,
 		start_in_frame + swpos->two_bits_o/2);
-	clear_bit(es->bits, row_num, es->model->x_major[x], swpos->mip + (swpos->one_bit_o&1),
+	clear_bit(es->bits, row_num, es->model->x_major[x], swpos->minor + (swpos->one_bit_o&1),
 		start_in_frame + swpos->one_bit_o/2);
 
 	return 0;
@@ -379,27 +386,22 @@ static int extract_routing_switches(struct extract_state* es, int y, int x)
 	tile = YX_TILE(es->model, y, x);
 if (y != 68 || x != 12) return 0;
 
-	// build tile-relative model of all routing switches and
-	// store in the extract state
-	if (!es->num_mips) {
-	}
-
-	for (i = 0; i < es->num_mips; i++) {
-		rc = mip_is_set(es, y, x, &es->mip[i], &is_set);
+	for (i = 0; i < es->num_bit_pos; i++) {
+		rc = mip_is_set(es, y, x, &es->bit_pos[i], &is_set);
 		if (rc) FAIL(rc);
 		if (!is_set) continue;
 
-		if (tile->switches[es->mip[i].uni_dir] & SWITCH_BIDIRECTIONAL)
+		if (tile->switches[es->bit_pos[i].uni_dir] & SWITCH_BIDIRECTIONAL)
 			HERE();
-		if (tile->switches[es->mip[i].uni_dir] & SWITCH_USED)
+		if (tile->switches[es->bit_pos[i].uni_dir] & SWITCH_USED)
 			HERE();
-		if (es->num_sw_yx >= MAX_YX_SWITCHES)
+		if (es->num_yx_pos >= MAX_YX_SWITCHES)
 			{ FAIL(ENOTSUP); }
-		es->sw_yx[es->num_sw_yx].y = y;
-		es->sw_yx[es->num_sw_yx].x = x;
-		es->sw_yx[es->num_sw_yx].idx = es->mip[i].uni_dir;
-		es->num_sw_yx++;
-		rc = mip_clear_bits(es, y, x, &es->mip[i]);
+		es->yx_pos[es->num_yx_pos].y = y;
+		es->yx_pos[es->num_yx_pos].x = x;
+		es->yx_pos[es->num_yx_pos].idx = es->bit_pos[i].uni_dir;
+		es->num_yx_pos++;
+		rc = mip_clear_bits(es, y, x, &es->bit_pos[i]);
 		if (rc) FAIL(rc);
 	}
 	return 0;
@@ -484,7 +486,7 @@ static int mod4_calc(int a, int b)
 static int construct_extract_state(struct extract_state* es, struct fpga_model* model)
 {
 	char from_str[MAX_WIRENAME_LEN], to_str[MAX_WIRENAME_LEN];
-	int i, j, k, l, cur_mip, cur_two_bits_o, cur_two_bits_val, rc;
+	int i, j, k, l, cur_pair_start, cur_two_bits_o, cur_two_bits_val, rc;
 	int logicin_i;
 
 	memset(es, 0, sizeof(*es));
@@ -494,36 +496,36 @@ static int construct_extract_state(struct extract_state* es, struct fpga_model* 
 
 	// switches from logicout to dirwires (6*2*2*4*6=576 switches)
 	for (i = 0; i < DIRBEG_ROW; i++) {
-		cur_mip = (i/2)*2;
+		cur_pair_start = (i/2)*2;
 		for (j = 0; j <= 3; j++) { // 4 wires for each dirwire
 			for (k = 0; k <= 1; k++) { // two dirbeg rows
 				cur_two_bits_o = j*32 + k*16;
 				if (i%2) cur_two_bits_o += 14;
 				cur_two_bits_val = ((i%2)^k) ? 1 : 2;
 				for (l = 0; l < LOGOUT_ROW; l++) {
-					es->mip[es->num_mips].mip = cur_mip;
-					es->mip[es->num_mips].two_bits_o = cur_two_bits_o;
-					es->mip[es->num_mips].two_bits_val = cur_two_bits_val;
+					es->bit_pos[es->num_bit_pos].minor = cur_pair_start;
+					es->bit_pos[es->num_bit_pos].two_bits_o = cur_two_bits_o;
+					es->bit_pos[es->num_bit_pos].two_bits_val = cur_two_bits_val;
 
-					es->mip[es->num_mips].one_bit_o = j*32+k*16+2+l*2;
+					es->bit_pos[es->num_bit_pos].one_bit_o = j*32+k*16+2+l*2;
 					if (!((i%2)^k)) // right side (second minor)
-						es->mip[es->num_mips].one_bit_o++;
+						es->bit_pos[es->num_bit_pos].one_bit_o++;
 
 					snprintf(from_str, sizeof(from_str), "LOGICOUT%i", logicout_matrix[j*LOGOUT_ROW + (k?5-l:l)]);
 					snprintf(to_str, sizeof(to_str), "%sB%i",
 						wire_base(dirbeg_matrix[k*DIRBEG_ROW+i]), mod4_calc(dirbeg_matrix_topnum[k*DIRBEG_ROW+i], -j));
-					es->mip[es->num_mips].uni_dir = fpga_switch_lookup(es->model,
+					es->bit_pos[es->num_bit_pos].uni_dir = fpga_switch_lookup(es->model,
 						es->model->first_routing_y, es->model->first_routing_x,
 						strarray_find(&es->model->str, from_str),
 						strarray_find(&es->model->str, to_str));
-					if (es->mip[es->num_mips].uni_dir == NO_SWITCH) {
+					if (es->bit_pos[es->num_bit_pos].uni_dir == NO_SWITCH) {
 						fprintf(stderr, "#E routing switch %s -> %s not in model\n",
 							from_str, to_str);
 						FAIL(EINVAL);
 					}
 
-					es->mip[es->num_mips].rev_dir = NO_SWITCH;
-					es->num_mips++;
+					es->bit_pos[es->num_bit_pos].rev_dir = NO_SWITCH;
+					es->num_bit_pos++;
 				}
 			}
 		}
@@ -535,42 +537,42 @@ static int construct_extract_state(struct extract_state* es, struct fpga_model* 
 			for (k = 0; k <= 1; k++) { // two switch destinations
 
 				// VCC
-				es->mip[es->num_mips].mip = i;
-				es->mip[es->num_mips].two_bits_o = 32*j + (k?14:0);
-				es->mip[es->num_mips].two_bits_val = 3;
-				es->mip[es->num_mips].one_bit_o = 32*j+2;
+				es->bit_pos[es->num_bit_pos].minor = i;
+				es->bit_pos[es->num_bit_pos].two_bits_o = 32*j + (k?14:0);
+				es->bit_pos[es->num_bit_pos].two_bits_val = 3;
+				es->bit_pos[es->num_bit_pos].one_bit_o = 32*j+2;
 				logicin_i = j*2*LOGIN_ROW + i-12 + k;
 
 				if (i == 14 || i == 18) {
-					es->mip[es->num_mips].two_bits_o += 16;
-					es->mip[es->num_mips].one_bit_o += 16;
-					es->mip[es->num_mips].one_bit_o += !k;
+					es->bit_pos[es->num_bit_pos].two_bits_o += 16;
+					es->bit_pos[es->num_bit_pos].one_bit_o += 16;
+					es->bit_pos[es->num_bit_pos].one_bit_o += !k;
 					logicin_i += LOGIN_ROW;
 				} else
-					es->mip[es->num_mips].one_bit_o += k;
+					es->bit_pos[es->num_bit_pos].one_bit_o += k;
 				
 				snprintf(to_str, sizeof(to_str), "LOGICIN_B%i", logicin_matrix[logicin_i]);
-				es->mip[es->num_mips].uni_dir = fpga_switch_lookup(es->model,
+				es->bit_pos[es->num_bit_pos].uni_dir = fpga_switch_lookup(es->model,
 					es->model->first_routing_y, es->model->first_routing_x,
 					strarray_find(&es->model->str, "VCC_WIRE"),
 					strarray_find(&es->model->str, to_str));
-				if (es->mip[es->num_mips].uni_dir == NO_SWITCH) {
+				if (es->bit_pos[es->num_bit_pos].uni_dir == NO_SWITCH) {
 					fprintf(stderr, "#E routing switch VCC_WIRE -> %s not in model\n",
 						to_str);
 					FAIL(EINVAL);
 				}
-				es->mip[es->num_mips].rev_dir = NO_SWITCH;
-				es->mip[es->num_mips+1] = es->mip[es->num_mips];
-				es->num_mips++;
+				es->bit_pos[es->num_bit_pos].rev_dir = NO_SWITCH;
+				es->bit_pos[es->num_bit_pos+1] = es->bit_pos[es->num_bit_pos];
+				es->num_bit_pos++;
 
 				// GFAN
 				if (i == 14 || i == 18) {
-					es->mip[es->num_mips].two_bits_o -= 16;
-					es->mip[es->num_mips].one_bit_o -= 16;
+					es->bit_pos[es->num_bit_pos].two_bits_o -= 16;
+					es->bit_pos[es->num_bit_pos].one_bit_o -= 16;
 					logicin_i -= LOGIN_ROW;
 				} else { // 12 or 16
-					es->mip[es->num_mips].two_bits_o += 16;
-					es->mip[es->num_mips].one_bit_o += 16;
+					es->bit_pos[es->num_bit_pos].two_bits_o += 16;
+					es->bit_pos[es->num_bit_pos].one_bit_o += 16;
 					logicin_i += LOGIN_ROW;
 				}
 				snprintf(from_str, sizeof(from_str), "GFAN%i", j<2?1:0);
@@ -578,11 +580,11 @@ static int construct_extract_state(struct extract_state* es, struct fpga_model* 
 					strcpy(to_str, "FAN_B");
 				else
 					snprintf(to_str, sizeof(to_str), "LOGICIN_B%i", logicin_matrix[logicin_i]);
-				es->mip[es->num_mips].uni_dir = fpga_switch_lookup(es->model,
+				es->bit_pos[es->num_bit_pos].uni_dir = fpga_switch_lookup(es->model,
 					es->model->first_routing_y, es->model->first_routing_x,
 					strarray_find(&es->model->str, from_str),
 					strarray_find(&es->model->str, to_str));
-				if (es->mip[es->num_mips].uni_dir == NO_SWITCH) {
+				if (es->bit_pos[es->num_bit_pos].uni_dir == NO_SWITCH) {
 					fprintf(stderr, "#E routing switch %s -> %s not in model\n",
 						from_str, to_str);
 					FAIL(EINVAL);
@@ -593,18 +595,18 @@ static int construct_extract_state(struct extract_state* es, struct fpga_model* 
 				    || logicin_matrix[logicin_i] == 35
 				    || logicin_matrix[logicin_i] == 51
 				    || logicin_matrix[logicin_i] == 53) {
-					es->mip[es->num_mips].rev_dir = fpga_switch_lookup(es->model,
+					es->bit_pos[es->num_bit_pos].rev_dir = fpga_switch_lookup(es->model,
 						es->model->first_routing_y, es->model->first_routing_x,
 						strarray_find(&es->model->str, to_str),
 						strarray_find(&es->model->str, from_str));
-					if (es->mip[es->num_mips].rev_dir == NO_SWITCH) {
+					if (es->bit_pos[es->num_bit_pos].rev_dir == NO_SWITCH) {
 						fprintf(stderr, "#E rev routing switch %s -> %s not in model\n",
 							to_str, from_str);
 						FAIL(EINVAL);
 					}
 				} else
-					es->mip[es->num_mips].rev_dir = NO_SWITCH;
-				es->num_mips++;
+					es->bit_pos[es->num_bit_pos].rev_dir = NO_SWITCH;
+				es->num_bit_pos++;
 			}
 		}
 	}
@@ -638,11 +640,11 @@ int extract_model(struct fpga_model* model, struct fpga_bits* bits)
 	// turn switches into nets
 	if (model->nets)
 		HERE(); // should be empty here
-	for (i = 0; i < es.num_sw_yx; i++) {
+	for (i = 0; i < es.num_yx_pos; i++) {
 		rc = fpga_net_new(model, &net_idx);
 		if (rc) FAIL(rc);
-		rc = fpga_net_add_sw(model, net_idx, es.sw_yx[i].y,
-			es.sw_yx[i].x, &es.sw_yx[i].idx, 1);
+		rc = fpga_net_add_sw(model, net_idx, es.yx_pos[i].y,
+			es.yx_pos[i].x, &es.yx_pos[i].idx, 1);
 		if (rc) FAIL(rc);
 	}
 	return 0;
@@ -650,7 +652,7 @@ fail:
 	return rc;
 }
 
-int printf_routing_mips(struct fpga_model* model)
+int printf_swbits(struct fpga_model* model)
 {
 	struct extract_state es;
 	char bit_str[129];
@@ -659,19 +661,19 @@ int printf_routing_mips(struct fpga_model* model)
 	rc = construct_extract_state(&es, model);
 	if (rc) FAIL(rc);
 	bit_str[128] = 0;
-	for (i = 0; i < es.num_mips; i++) {
+	for (i = 0; i < es.num_bit_pos; i++) {
 		for (j = 0; j < 128; j++)
 			bit_str[j] = '0';
-		if (es.mip[i].two_bits_val & 2)
-			bit_str[es.mip[i].two_bits_o] = '1';
-		if (es.mip[i].two_bits_val & 1)
-			bit_str[es.mip[i].two_bits_o+1] = '1';
-		bit_str[es.mip[i].one_bit_o] = '1';
-		printf("mip%02i %s %s %s %s\n", es.mip[i].mip,
-			fpga_switch_str(model, model->first_routing_y, model->first_routing_x, es.mip[i].uni_dir, SW_TO),
+		if (es.bit_pos[i].two_bits_val & 2)
+			bit_str[es.bit_pos[i].two_bits_o] = '1';
+		if (es.bit_pos[i].two_bits_val & 1)
+			bit_str[es.bit_pos[i].two_bits_o+1] = '1';
+		bit_str[es.bit_pos[i].one_bit_o] = '1';
+		printf("mi%02i %s %s %s %s\n", es.bit_pos[i].minor,
+			fpga_switch_str(model, model->first_routing_y, model->first_routing_x, es.bit_pos[i].uni_dir, SW_TO),
 			bit_str,
-			fpga_switch_str(model, model->first_routing_y, model->first_routing_x, es.mip[i].uni_dir, SW_FROM),
-			es.mip[i].rev_dir != NO_SWITCH ? "<->" : "->");
+			fpga_switch_str(model, model->first_routing_y, model->first_routing_x, es.bit_pos[i].uni_dir, SW_FROM),
+			es.bit_pos[i].rev_dir != NO_SWITCH ? "<->" : "->");
 	}
 	return 0;
 fail:

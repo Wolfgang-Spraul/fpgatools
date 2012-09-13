@@ -92,5 +92,5 @@ void free_config(struct fpga_config* cfg);
 int write_bitfile(FILE* f, struct fpga_model* model);
 
 int extract_model(struct fpga_model* model, struct fpga_bits* bits);
-int printf_routing_mips(struct fpga_model* model);
+int printf_swbits(struct fpga_model* model);
 int write_model(struct fpga_bits* bits, struct fpga_model* model);
