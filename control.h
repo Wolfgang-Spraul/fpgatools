@@ -44,7 +44,8 @@ const char* fdev_pinw_idx2str(int devtype, pinw_idx_t idx);
 // the second logic device (L or M).
 const char* fdev_logic_pinstr(pinw_idx_t idx, int ld1_type);
 str16_t fdev_logic_pinstr_i(struct fpga_model* model, pinw_idx_t idx, int ld1_type);
-int fdev_logic_inbit(pinw_idx_t idx, int ld1_type);
+int fdev_logic_inbit(pinw_idx_t idx);
+int fdev_logic_outbit(pinw_idx_t idx);
 
 // lut_a2d is LUT_A to LUT_D value, lut_5or6 is int 5 or int 6.
 int fdev_logic_set_lut(struct fpga_model* model, int y, int x, int type_idx,
@@ -324,3 +325,6 @@ int fpga_net_remove_sw(struct fpga_model* model, net_idx_t net_i,
 void fpga_net_free_all(struct fpga_model* model);
 
 void fprintf_net(FILE* f, struct fpga_model* model, net_idx_t net_i);
+
+const char* fpga_wirestr(struct fpga_model* model, enum extra_wires wire);
+str16_t fpga_wirestr_i(struct fpga_model* model, enum extra_wires wire);

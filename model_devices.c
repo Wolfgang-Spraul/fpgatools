@@ -453,11 +453,11 @@ static int init_logic(struct fpga_model* model, int y, int x, int idx)
 			? "XX_" : "X_";
 	} else FAIL(EINVAL);
 
-	tile->devs[idx].pinw = calloc((LOGIC_LAST_OUTPUT_PINW+1)
+	tile->devs[idx].pinw = calloc((LO_LAST+1)
 		*sizeof(tile->devs[idx].pinw[0]), /*elsize*/ 1);
 	if (!tile->devs[idx].pinw) FAIL(ENOMEM);
-	tile->devs[idx].num_pinw_total = LOGIC_LAST_OUTPUT_PINW+1;
-	tile->devs[idx].num_pinw_in = LOGIC_LAST_INPUT_PINW+1;
+	tile->devs[idx].num_pinw_total = LO_LAST+1;
+	tile->devs[idx].num_pinw_in = LI_LAST+1;
 
 	for (i = 0; i < 4; i++) { // 'A' to 'D'
 		for (j = 0; j < 6; j++) {

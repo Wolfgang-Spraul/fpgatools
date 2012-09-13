@@ -321,11 +321,12 @@ fail:
 	return rc;
 }
 
-static int mip_is_set(struct extract_state* es, int y, int x,
+static int bitpos_is_set(struct extract_state* es, int y, int x,
 	struct sw_bitpos* swpos, int* is_set)
 {
 	int row_num, row_pos, start_in_frame, two_bits_val, rc;
 
+// TODO: does not support minor20 correctly
 	*is_set = 0;
 	is_in_row(es->model, y, &row_num, &row_pos);
 	if (row_num == -1 || row_pos == -1
@@ -353,11 +354,12 @@ fail:
 	return rc;
 }
 
-static int mip_clear_bits(struct extract_state* es, int y, int x,
+static int bitpos_clear_bits(struct extract_state* es, int y, int x,
 	struct sw_bitpos* swpos)
 {
 	int row_num, row_pos, start_in_frame, rc;
 
+// TODO: does not support minor20 correctly
 	is_in_row(es->model, y, &row_num, &row_pos);
 	if (row_num == -1 || row_pos == -1
 	    || row_pos == HCLK_POS) FAIL(EINVAL);
@@ -387,7 +389,7 @@ static int extract_routing_switches(struct extract_state* es, int y, int x)
 if (y != 68 || x != 12) return 0;
 
 	for (i = 0; i < es->num_bit_pos; i++) {
-		rc = mip_is_set(es, y, x, &es->bit_pos[i], &is_set);
+		rc = bitpos_is_set(es, y, x, &es->bit_pos[i], &is_set);
 		if (rc) FAIL(rc);
 		if (!is_set) continue;
 
@@ -401,7 +403,7 @@ if (y != 68 || x != 12) return 0;
 		es->yx_pos[es->num_yx_pos].x = x;
 		es->yx_pos[es->num_yx_pos].idx = es->bit_pos[i].uni_dir;
 		es->num_yx_pos++;
-		rc = mip_clear_bits(es, y, x, &es->bit_pos[i]);
+		rc = bitpos_clear_bits(es, y, x, &es->bit_pos[i]);
 		if (rc) FAIL(rc);
 	}
 	return 0;
@@ -483,6 +485,31 @@ static int mod4_calc(int a, int b)
 	return (unsigned int) (a+b)%4;
 }
 
+struct sw_mip_src
+{
+	int m0_sw_to;
+	int m0_two_bits_o;
+	int m0_two_bits_val;
+	int m0_one_bit_start;
+
+	int m1_sw_to;
+	int m1_two_bits_o;
+	int m1_two_bits_val;
+	int m1_one_bit_start;
+
+	int src_wire[6];
+};
+
+struct sw_mi20_src
+{
+	int sw_to;
+	int two_bits_o;
+	int two_bits_val;
+	int one_bit_start;
+
+	int src_wire[6];
+};
+
 static int construct_extract_state(struct extract_state* es, struct fpga_model* model)
 {
 	char from_str[MAX_WIRENAME_LEN], to_str[MAX_WIRENAME_LEN];
@@ -494,6 +521,35 @@ static int construct_extract_state(struct extract_state* es, struct fpga_model* 
 	if (model->first_routing_y == -1)
 		FAIL(EINVAL);
 
+	// mip 10
+	{ const struct sw_mip_src src[] = {
+		{DW + ((W_EL1*4+2) | DIR_BEG), 0, 2, 3, DW + ((W_NR1*4+3) | DIR_BEG), 14, 1, 2,
+			{LW + (LO_BMUX|LD1), LW + (LO_DQ|LD1), LW + (LO_D|LD1),
+			 LW + LO_BMUX,	     LW + LO_DQ,       LW + LO_D}}};
+
+	for (i = 0; i < sizeof(src)/sizeof(*src); i++) {
+		for (j = 0; j < sizeof(src[0].src_wire)/sizeof(src[0].src_wire[0]); j++) {
+			if (src[i].src_wire[j] == UNDEF) continue;
+
+			es->bit_pos[es->num_bit_pos].minor = 20;
+			es->bit_pos[es->num_bit_pos].two_bits_o = src[i].m0_two_bits_o;
+			es->bit_pos[es->num_bit_pos].two_bits_val = src[i].m0_two_bits_val;
+			es->bit_pos[es->num_bit_pos].one_bit_o = src[i].m0_one_bit_start + j*2;
+			es->bit_pos[es->num_bit_pos].uni_dir = fpga_switch_lookup(es->model,
+				es->model->first_routing_y, es->model->first_routing_x,
+				fpga_wirestr_i(es->model, src[i].src_wire[j]),
+				fpga_wirestr_i(es->model, src[i].m0_sw_to));
+			if (es->bit_pos[es->num_bit_pos].uni_dir == NO_SWITCH) {
+				fprintf(stderr, "#E routing switch %s -> %s not in model\n",
+					fpga_wirestr(es->model, src[i].src_wire[j]),
+					fpga_wirestr(es->model, src[i].m0_sw_to));
+				FAIL(EINVAL);
+			}
+			es->bit_pos[es->num_bit_pos].rev_dir = NO_SWITCH;
+			es->num_bit_pos++;
+		}
+	}}
+#if 0
 	// switches from logicout to dirwires (6*2*2*4*6=576 switches)
 	for (i = 0; i < DIRBEG_ROW; i++) {
 		cur_pair_start = (i/2)*2;
@@ -530,7 +586,8 @@ static int construct_extract_state(struct extract_state* es, struct fpga_model* 
 			}
 		}
 	}
-
+#endif
+#if 0
 	// VCC (32 switches) and GFAN (32 switches +4 bidir)
 	for (i = 12; i <= 18; i+=2) { // mip12/14/16/18
 		for (j = 0; j <= 3; j++) { // 4 rows
@@ -610,6 +667,64 @@ static int construct_extract_state(struct extract_state* es, struct fpga_model* 
 			}
 		}
 	}
+
+	// minor 20 switches (SR, CLK, GFAN = 113 switches (4 bidir added on other side))
+	{ const struct sw_mi20_src src[] = {
+		{SR1, 6, 3, 0, {GCLK11, GCLK10, GCLK13, GCLK12, GCLK9, GCLK8}},
+		{SR1, 6, 2, 0, {DW+W_WR1*4+2, DW+W_NR1*4+2,
+			VCC_WIRE, GND_WIRE, DW+W_ER1*4+2, DW+W_SR1*4+2}},
+		{SR1, 6, 1, 0, {FAN_B, LW+(LI_DI|LD1), LW+(LI_BX|LD1),
+			LW+LI_BX, GCLK15, GCLK14}},
+
+		{SR0, 8, 3, 10, {GCLK8, GCLK9, GCLK10, GCLK13, GCLK12, GCLK11}},
+		{SR0, 8, 2, 10, {GCLK14, GCLK15, LW+(LI_DI|LD1), LW+(LI_BX|LD1),
+			LW+LI_BX, FAN_B}},
+		{SR0, 8, 1, 10, {DW+W_SR1*4+2, DW+W_ER1*4+2, DW+W_NR1*4+2,
+			VCC_WIRE, UNDEF, DW+W_WR1*4+2}},
+
+		{CLK0, 16, 3, 18, {GCLK0, GCLK1, GCLK2, GCLK5, GCLK4, GCLK3}},
+		{CLK0, 16, 2, 18, {GCLK6, GCLK7, GCLK8, GCLK11, GCLK10, GCLK9}},
+		{CLK0, 16, 1, 18, {GCLK12, GCLK13, GCLK14, LW+(LI_BX|LD1), LW+(LI_CI|LD1), GCLK15}},
+		{CLK0, 16, 0, 18, {DW+W_NR1*4+2, DW+W_WR1*4+2,
+			DW+W_SR1*4+1, VCC_WIRE, UNDEF, DW+W_ER1*4+1}},
+
+		{CLK1, 46, 3, 40, {GCLK3, GCLK2, GCLK5, GCLK4, GCLK1, GCLK0}},
+		{CLK1, 46, 2, 40, {GCLK15, GCLK14, LW+(LI_BX|LD1), LW+(LI_CI|LD1), GCLK13, GCLK12}},
+		{CLK1, 46, 1, 40, {GCLK9, GCLK8, GCLK11, GCLK10, GCLK7, GCLK6}},
+		{CLK1, 46, 0, 40, {DW+W_ER1*4+1, DW+W_SR1*4+1, VCC_WIRE,
+			UNDEF, DW+W_WR1*4+2, DW+W_NR1*4+2}},
+
+		{GFAN0, 54, 3, 48, {GCLK3, GCLK4, GCLK5, GCLK2, GCLK1, GCLK0}},
+		{GFAN0, 54, 2, 48, {DW+W_WR1*4+1, GND_WIRE, VCC_WIRE, DW+W_NR1*4+1, DW+W_ER1*4+1, DW+W_SR1*4+1}},
+		{GFAN0, 54, 1, 48, {LW+(LI_CE|LD1), UNDEF, UNDEF, LW+(LI_CI|LD1), GCLK7, GCLK6}},
+
+		{GFAN1, 56, 3, 58, {GCLK0, GCLK1, GCLK4, GCLK5, GCLK2, GCLK3}},
+		{GFAN1, 56, 2, 58, {GCLK6, GCLK7, LW+(LI_AX|LD1), LW+LI_AX, UNDEF, UNDEF}},
+		{GFAN1, 56, 1, 58, {DW+W_SR1*4+1, DW+W_ER1*4+1, GND_WIRE, VCC_WIRE, DW+W_NR1*4+1, DW+W_WR1*4+1}}};
+
+	for (i = 0; i < sizeof(src)/sizeof(*src); i++) {
+		for (j = 0; j < sizeof(src[0].src_wire)/sizeof(src[0].src_wire[0]); j++) {
+			if (src[i].src_wire[j] == UNDEF) continue;
+
+			es->bit_pos[es->num_bit_pos].minor = 20;
+			es->bit_pos[es->num_bit_pos].two_bits_o = src[i].two_bits_o;
+			es->bit_pos[es->num_bit_pos].two_bits_val = src[i].two_bits_val;
+			es->bit_pos[es->num_bit_pos].one_bit_o = src[i].one_bit_start + j;
+			es->bit_pos[es->num_bit_pos].uni_dir = fpga_switch_lookup(es->model,
+				es->model->first_routing_y, es->model->first_routing_x,
+				fpga_wirestr_i(es->model, src[i].src_wire[j]),
+				fpga_wirestr_i(es->model, src[i].sw_to));
+			if (es->bit_pos[es->num_bit_pos].uni_dir == NO_SWITCH) {
+				fprintf(stderr, "#E routing switch %s -> %s not in model\n",
+					fpga_wirestr(es->model, src[i].src_wire[j]),
+					fpga_wirestr(es->model, src[i].sw_to));
+				FAIL(EINVAL);
+			}
+			es->bit_pos[es->num_bit_pos].rev_dir = NO_SWITCH;
+			es->num_bit_pos++;
+		}
+	}}
+#endif
 	return 0;
 fail:
 	return rc;
@@ -656,14 +771,17 @@ int printf_swbits(struct fpga_model* model)
 {
 	struct extract_state es;
 	char bit_str[129];
-	int i, j, rc;
+	int i, j, width, rc;
 
 	rc = construct_extract_state(&es, model);
 	if (rc) FAIL(rc);
-	bit_str[128] = 0;
 	for (i = 0; i < es.num_bit_pos; i++) {
-		for (j = 0; j < 128; j++)
+
+		width = (es.bit_pos[i].minor == 20) ? 64 : 128;
+		for (j = 0; j < width; j++)
 			bit_str[j] = '0';
+		bit_str[j] = 0;
+
 		if (es.bit_pos[i].two_bits_val & 2)
 			bit_str[es.bit_pos[i].two_bits_o] = '1';
 		if (es.bit_pos[i].two_bits_val & 1)

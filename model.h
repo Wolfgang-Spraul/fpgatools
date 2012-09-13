@@ -362,8 +362,11 @@ enum { LOGIC_M = 1, LOGIC_L, LOGIC_X };
 // All LOGICIN_IN A..D sequences must be exactly sequential as
 // here to match initialization in model_devices.c:init_logic()
 // and control.c:fdev_set_required_pins().
-enum { // input:
-	LI_A1 = 0,
+enum {
+	// input:
+	LI_FIRST = 0,
+
+	LI_A1 = LI_FIRST,
 	LI_A2, LI_A3, LI_A4, LI_A5, LI_A6,
 	LI_B1, LI_B2, LI_B3, LI_B4, LI_B5,
 	LI_B6,
@@ -377,13 +380,18 @@ enum { // input:
 	LI_CIN, // only some L and M devs have this
 	// only for M:
 	LI_WE, LI_AI, LI_BI, LI_CI, LI_DI,
+
+	LI_LAST = LI_DI,
+
 	// output:
-	LO_A, LO_B, LO_C, LO_D,
+	LO_FIRST,
+
+	LO_A = LO_FIRST, LO_B, LO_C, LO_D,
 	LO_AMUX, LO_BMUX, LO_CMUX, LO_DMUX,
 	LO_AQ, LO_BQ, LO_CQ, LO_DQ,
-	LO_COUT }; // only some L and M devs have this
-#define LOGIC_LAST_INPUT_PINW	LI_DI
-#define LOGIC_LAST_OUTPUT_PINW	LO_COUT
+	LO_COUT, // only some L and M devs have this
+
+	LO_LAST = LO_COUT };
 #define LOGIC_PINW_STR \
 	{ "A1", "A2", "A3", "A4", "A5", "A6", \
 	  "B1", "B2", "B3", "B4", "B5", "B6", \
@@ -703,27 +711,6 @@ enum logicout_wire {
 const char* logicin_str(enum logicin_wire w);
 const char* logicout_str(enum logicout_wire w);
 
-// The extra wires must not overlap with logicin_wire or logicout_wire
-// namespaces so that they can be combined with either of them.
-enum extra_wires {
-	UNDEF = 100,
-	FAN_B,
-	GFAN0,
-	GFAN1,
-	LOGICIN20,
-	LOGICIN21,
-	LOGICIN44,
-	LOGICIN52,
-	LOGICIN_N21,
-	LOGICIN_N28,
-	LOGICIN_N52,
-	LOGICIN_N60,
-	LOGICIN_S20,
-	LOGICIN_S36,
-	LOGICIN_S44,
-	LOGICIN_S62
-};
-
 // The wires are ordered clockwise. Order is important for
 // wire_to_NESW4().
 enum wire_type
@@ -778,3 +765,51 @@ enum wire_type
 const char* wire_base(enum wire_type w);
 enum wire_type rotate_wire(enum wire_type cur, int off);
 enum wire_type wire_to_len(enum wire_type w, int first_len);
+
+// Those two flags can be OR'ed into the DW..DW_LAST range.
+// DIR_BEG signals a 'B' line - the default is 'E' endpoint.
+// DIR_S0N3 turns 0 into _S0 and 3 into _N3.
+#define DIR_BEG 0x100
+#define DIR_S0N3 0x200
+
+// The extra wires must not overlap with logicin_wire or logicout_wire
+// namespaces so that they can be combined with either of them.
+enum extra_wires {
+	UNDEF = 100,
+	FAN_B,
+	GFAN0,
+	GFAN1,
+	CLK0,
+	CLK1,
+	SR0,
+	SR1,
+	LOGICIN20,
+	LOGICIN21,
+	LOGICIN44,
+	LOGICIN52,
+	LOGICIN_N21,
+	LOGICIN_N28,
+	LOGICIN_N52,
+	LOGICIN_N60,
+	LOGICIN_S20,
+	LOGICIN_S36,
+	LOGICIN_S44,
+	LOGICIN_S62,
+	VCC_WIRE = 150,
+	GND_WIRE,
+	GCLK0 = 200, GCLK1, GCLK2, GCLK3, GCLK4, GCLK5, GCLK6, GCLK7,
+	GCLK8, GCLK9, GCLK10, GCLK11, GCLK12, GCLK13, GCLK14, GCLK15,
+
+	// direction wires
+	DW = 500,
+	// dirwires can be encoded times-4, for example
+	// NL1E2 = DW + W_NL1*4 + 2
+	// DIR_BEG and DIR_S0N3 can be OR'ed into this range.
+	DW_LAST = 1499,
+	
+	// logic wires
+	LW,
+	// logic wires are encoded here as LOGIC_BEG+LI_A1. LD1 (0x100)
+	// can be OR'ed to the LI or LO value.
+	LW_LAST = 1999
+};
