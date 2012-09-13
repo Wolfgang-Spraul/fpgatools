@@ -44,10 +44,7 @@ CFLAGS += -Wall -Wshadow -Wmissing-prototypes -Wmissing-declarations \
 	-Wno-format-zero-length -Ofast
 CFLAGS += `pkg-config libxml-2.0 --cflags`
 LDLIBS += `pkg-config libxml-2.0 --libs`
-
-OBJS 	= autotest.o bit2fp.o draw_svg_tiles.o fp2bit.o hstrrep.o \
-	merge_seq.o new_fp.o pair2net.o sort_seq.o
-
+LDFLAGS += -Wl,-rpath,$(CURDIR)
 
 LIBFPGA_BIT_OBJS       = bit_frames.o bit_regs.o
 LIBFPGA_MODEL_OBJS     = model_main.o model_tiles.o model_devices.o \
@@ -56,8 +53,14 @@ LIBFPGA_FLOORPLAN_OBJS = floorplan.o
 LIBFPGA_CONTROL_OBJS   = control.o
 LIBFPGA_CORES_OBJS     = parts.o helper.o
 
+OBJS 	= autotest.o bit2fp.o draw_svg_tiles.o fp2bit.o hstrrep.o \
+	merge_seq.o new_fp.o pair2net.o sort_seq.o
+
 OBJS	+= $(LIBFPGA_BIT_OBJS) $(LIBFPGA_MODEL_OBJS) $(LIBFPGA_FLOORPLAN_OBJS) \
 	$(LIBFPGA_CONTROL_OBJS) $(LIBFPGA_CORES_OBJS)
+
+DYNAMIC_LIBS = libfpga-model.so libfpga-bit.so libfpga-floorplan.so \
+	libfpga-control.so libfpga-cores.so
 
 #- libfpga-test       autotest suite
 #- libfpga-design     larger design elements on top of libfpga-control
@@ -79,41 +82,41 @@ autotest_%.log: autotest fp2bit bit2fp
 	@mkdir -p $(@D)
 	./autotest --test=$(*F) 2>&1 >$@
 
-autotest: autotest.o model.h libfpga-model.a libfpga-floorplan.a \
-	libfpga-control.a libfpga-cores.a
+autotest: autotest.o $(DYNAMIC_LIBS)
 
-fp2bit: fp2bit.o libfpga-model.a libfpga-bit.a libfpga-floorplan.a \
-	libfpga-control.a libfpga-cores.a
+fp2bit: fp2bit.o $(DYNAMIC_LIBS)
 
-bit2fp: bit2fp.o libfpga-model.a libfpga-bit.a libfpga-floorplan.a \
-	libfpga-control.a libfpga-cores.a
+bit2fp: bit2fp.o $(DYNAMIC_LIBS)
 
-new_fp: new_fp.o libfpga-model.a libfpga-floorplan.a libfpga-cores.a \
-	libfpga-control.a
+new_fp: new_fp.o $(DYNAMIC_LIBS)
 
-draw_svg_tiles: draw_svg_tiles.o libfpga-model.a libfpga-cores.a \
-	libfpga-control.a
+draw_svg_tiles: draw_svg_tiles.o $(DYNAMIC_LIBS)
 
-pair2net: pair2net.o libfpga-cores.a
+pair2net: pair2net.o $(DYNAMIC_LIBS)
 
-sort_seq: sort_seq.o libfpga-cores.a
+sort_seq: sort_seq.o $(DYNAMIC_LIBS)
 
-merge_seq: merge_seq.o libfpga-cores.a
+merge_seq: merge_seq.o $(DYNAMIC_LIBS)
 
-hstrrep: hstrrep.o libfpga-cores.a
+hstrrep: hstrrep.o $(DYNAMIC_LIBS)
 
-libfpga-cores.a: $(LIBFPGA_CORES_OBJS)
+libfpga-cores.so: $(addprefix build-libs/,$(LIBFPGA_CORES_OBJS))
 
-libfpga-bit.a: $(LIBFPGA_BIT_OBJS)
+libfpga-bit.so: $(addprefix build-libs/,$(LIBFPGA_BIT_OBJS))
 
-libfpga-model.a: $(LIBFPGA_MODEL_OBJS)
+libfpga-model.so: $(addprefix build-libs/,$(LIBFPGA_MODEL_OBJS))
 
-libfpga-floorplan.a: $(LIBFPGA_FLOORPLAN_OBJS)
+libfpga-floorplan.so: $(addprefix build-libs/,$(LIBFPGA_FLOORPLAN_OBJS))
 
-libfpga-control.a: $(LIBFPGA_CONTROL_OBJS)
+libfpga-control.so: $(addprefix build-libs/,$(LIBFPGA_CONTROL_OBJS))
 
-%.a:
-	$(AR) $@ $^
+%.so:
+	$(CC) -shared -Wl,-soname,$@ -o $@ $^
+
+build-libs/%.o:	%.c
+	@mkdir -p build-libs
+	$(CC) $(CFLAGS) -fPIC -o $@ -c $<
+	$(MKDEP)
 
 xc6slx9.fp: new_fp
 	./new_fp > $@
