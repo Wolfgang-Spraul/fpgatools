@@ -1,2 +1,2 @@
-usr/lib/libfpga-*.a
-usr/include/
+usr/lib/libfpga-*.so
+usr/include/*.h
