@@ -14,16 +14,20 @@ CPP := $(CPP)   # make sure changing CC won't affect CPP
 
 CC_normal	:= $(CC)
 AR_normal	:= $(AR) rsc
+DEPEND_normal	:= $(CPP) $(CFLAGS) -D__OPTIMIZE__ -MM -MG
 
 CC_quiet	= @echo "  CC       " $@ && $(CC_normal)
 AR_quiet	= @echo "  AR       " $@ && $(AR_normal)
+DEPEND_quiet	= @$(DEPEND_normal)
 
 ifeq ($(V),1)
     CC		= $(CC_normal)
     AR		= $(AR_normal)
+    DEPEND	= $(DEPEND_normal)
 else
     CC		= $(CC_quiet)
     AR		= $(AR_quiet)
+    DEPEND	= $(DEPEND_quiet)
 endif
 
 # ----- Rules -----------------------------------------------------------------
@@ -41,12 +45,19 @@ CFLAGS += -Wall -Wshadow -Wmissing-prototypes -Wmissing-declarations \
 CFLAGS += `pkg-config libxml-2.0 --cflags`
 LDLIBS += `pkg-config libxml-2.0 --libs`
 
+OBJS 	= autotest.o bit2fp.o draw_svg_tiles.o fp2bit.o hstrrep.o \
+	merge_seq.o new_fp.o pair2net.o sort_seq.o
+
+
 LIBFPGA_BIT_OBJS       = bit_frames.o bit_regs.o
 LIBFPGA_MODEL_OBJS     = model_main.o model_tiles.o model_devices.o \
 	model_ports.o model_conns.o model_switches.o model_helper.o
 LIBFPGA_FLOORPLAN_OBJS = floorplan.o
 LIBFPGA_CONTROL_OBJS   = control.o
 LIBFPGA_CORES_OBJS     = parts.o helper.o
+
+OBJS	+= $(LIBFPGA_BIT_OBJS) $(LIBFPGA_MODEL_OBJS) $(LIBFPGA_FLOORPLAN_OBJS) \
+	$(LIBFPGA_CONTROL_OBJS) $(LIBFPGA_CORES_OBJS)
 
 #- libfpga-test       autotest suite
 #- libfpga-design     larger design elements on top of libfpga-control
@@ -71,81 +82,37 @@ autotest_%.log: autotest fp2bit bit2fp
 autotest: autotest.o model.h libfpga-model.a libfpga-floorplan.a \
 	libfpga-control.a libfpga-cores.a
 
-autotest.o: model.h floorplan.h control.h
-
-new_fp: new_fp.o libfpga-model.a libfpga-floorplan.a libfpga-cores.a \
-	libfpga-control.a
-
-new_fp.o: new_fp.c floorplan.h model.h helper.h control.h
-
 fp2bit: fp2bit.o libfpga-model.a libfpga-bit.a libfpga-floorplan.a \
 	libfpga-control.a libfpga-cores.a
-
-fp2bit.o: fp2bit.c model.h floorplan.h bit.h helper.h
 
 bit2fp: bit2fp.o libfpga-model.a libfpga-bit.a libfpga-floorplan.a \
 	libfpga-control.a libfpga-cores.a
 
-bit2fp.o: bit2fp.c model.h floorplan.h bit.h helper.h
-
-floorplan.o: floorplan.c floorplan.h model.h control.h
-
-bit_regs.o: bit_regs.c bit.h model.h
-
-bit_frames.o: bit_frames.c bit.h model.h
-
-parts.o: parts.c parts.h
-
-control.o: control.c control.h model.h
+new_fp: new_fp.o libfpga-model.a libfpga-floorplan.a libfpga-cores.a \
+	libfpga-control.a
 
 draw_svg_tiles: draw_svg_tiles.o libfpga-model.a libfpga-cores.a \
 	libfpga-control.a
 
-draw_svg_tiles.o: draw_svg_tiles.c model.h helper.h
-
 pair2net: pair2net.o libfpga-cores.a
-
-pair2net.o: pair2net.c helper.h
 
 sort_seq: sort_seq.o libfpga-cores.a
 
-sort_seq.o: sort_seq.c helper.h
-
 merge_seq: merge_seq.o libfpga-cores.a
-
-merge_seq.o: merge_seq.c helper.h
 
 hstrrep: hstrrep.o libfpga-cores.a
 
-helper.o: helper.c helper.h
-
-model_main.o: model_main.c model.h
-
-model_tiles.o: model_tiles.c model.h
-
-model_devices.o: model_devices.c model.h
-
-model_ports.o: model_ports.c model.h
-
-model_conns.o: model_conns.c model.h
-
-model_switches.o: model_switches.c model.h
-
-model_helper.o: model_helper.c model.h
-
 libfpga-cores.a: $(LIBFPGA_CORES_OBJS)
-	$(AR) $@ $^
 
 libfpga-bit.a: $(LIBFPGA_BIT_OBJS)
-	$(AR) $@ $^
 
 libfpga-model.a: $(LIBFPGA_MODEL_OBJS)
-	$(AR) $@ $^
 
 libfpga-floorplan.a: $(LIBFPGA_FLOORPLAN_OBJS)
-	$(AR) $@ $^
 
 libfpga-control.a: $(LIBFPGA_CONTROL_OBJS)
+
+%.a:
 	$(AR) $@ $^
 
 xc6slx9.fp: new_fp
@@ -229,3 +196,22 @@ install:	all
 		install -m 755 bit2fp $(DESTDIR)/$(PREFIX)/bin/
 uninstall:
 		rm -f $(DESTDIR)/$(PREFIX)/bin/{fp2bit,bit2fp}
+
+
+# ----- Dependencies ----------------------------------------------------------
+
+MKDEP =									\
+	$(DEPEND) $< |							\
+	  sed 								\
+	    -e 's|^$(basename $(notdir $<)).o:|$@:|'			\
+	    -e '/^\(.*:\)\? */{p;s///;s/ *\\\?$$/ /;s/  */:\n/g;H;}'	\
+	    -e '$${g;p;}'						\
+	    -e d >$(basename $@).d;					\
+	  [ "$${PIPESTATUS[*]}" = "0 0" ] ||				\
+	  { rm -f $(basename $@).d; exit 1; }
+
+%.o:	%.c
+	$(CC) $(CFLAGS) -o $@ -c $<
+	$(MKDEP)
+
+-include $(OBJS:.o=.d)
