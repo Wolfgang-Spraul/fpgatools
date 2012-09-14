@@ -1865,21 +1865,19 @@ const char* fpga_wirestr(struct fpga_model* model, enum extra_wires wire)
 		snprintf(buf[last_buf], sizeof(buf[0]), "GCLK%i", wire-GCLK0);
 	else if (wire >= DW && wire <= DW_LAST) {
 		char beg_end;
-		int s0n3_flag;
+		int flags;
 
 		wire -= DW;
-		beg_end = (wire & DIR_BEG) ? 'B' : 'E';
-		s0n3_flag = wire & DIR_S0N3;
-		wire &= ~(DIR_BEG|DIR_S0N3);
-		if (s0n3_flag) {
-			if (wire%4 == 0) {
-				snprintf(buf[last_buf], sizeof(buf[0]),
-					"%s%c_S0", wire_base(wire/4), beg_end);
-			} else if (wire%4 == 3) {
-				snprintf(buf[last_buf], sizeof(buf[0]),
-					"%s%c_N3", wire_base(wire/4), beg_end);
-			} else HERE();
-		} else
+		flags = wire & DIR_FLAGS;
+		wire &= ~DIR_FLAGS;
+		beg_end = (flags & DIR_BEG) ? 'B' : 'E';
+		if (flags & DIR_S0 && wire%4 == 0)
+			snprintf(buf[last_buf], sizeof(buf[0]),
+				"%s%c_S0", wire_base(wire/4), beg_end);
+		else if (flags & DIR_N3 && wire%4 == 3)
+			snprintf(buf[last_buf], sizeof(buf[0]),
+				"%s%c_N3", wire_base(wire/4), beg_end);
+		else
 			snprintf(buf[last_buf], sizeof(buf[0]),
 				"%s%c%i", wire_base(wire/4), beg_end, wire%4);
 

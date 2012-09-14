@@ -487,6 +487,8 @@ static int mod4_calc(int a, int b)
 
 struct sw_mip_src
 {
+	int minor;
+
 	int m0_sw_to;
 	int m0_two_bits_o;
 	int m0_two_bits_val;
@@ -510,28 +512,15 @@ struct sw_mi20_src
 	int src_wire[6];
 };
 
-static int construct_extract_state(struct extract_state* es, struct fpga_model* model)
+static int src_to_bitpos(struct extract_state* es, const struct sw_mip_src* src, int src_len)
 {
-	char from_str[MAX_WIRENAME_LEN], to_str[MAX_WIRENAME_LEN];
-	int i, j, k, l, cur_pair_start, cur_two_bits_o, cur_two_bits_val, rc;
-	int logicin_i;
+	int i, j, rc;
 
-	memset(es, 0, sizeof(*es));
-	es->model = model;
-	if (model->first_routing_y == -1)
-		FAIL(EINVAL);
-
-	// mip 10
-	{ const struct sw_mip_src src[] = {
-		{DW + ((W_EL1*4+2) | DIR_BEG), 0, 2, 3, DW + ((W_NR1*4+3) | DIR_BEG), 14, 1, 2,
-			{LW + (LO_BMUX|LD1), LW + (LO_DQ|LD1), LW + (LO_D|LD1),
-			 LW + LO_BMUX,	     LW + LO_DQ,       LW + LO_D}}};
-
-	for (i = 0; i < sizeof(src)/sizeof(*src); i++) {
-		for (j = 0; j < sizeof(src[0].src_wire)/sizeof(src[0].src_wire[0]); j++) {
+	for (i = 0; i < src_len; i++) {
+		for (j = 0; j < sizeof(src->src_wire)/sizeof(src->src_wire[0]); j++) {
 			if (src[i].src_wire[j] == UNDEF) continue;
 
-			es->bit_pos[es->num_bit_pos].minor = 20;
+			es->bit_pos[es->num_bit_pos].minor = src[i].minor;
 			es->bit_pos[es->num_bit_pos].two_bits_o = src[i].m0_two_bits_o;
 			es->bit_pos[es->num_bit_pos].two_bits_val = src[i].m0_two_bits_val;
 			es->bit_pos[es->num_bit_pos].one_bit_o = src[i].m0_one_bit_start + j*2;
@@ -547,8 +536,245 @@ static int construct_extract_state(struct extract_state* es, struct fpga_model* 
 			}
 			es->bit_pos[es->num_bit_pos].rev_dir = NO_SWITCH;
 			es->num_bit_pos++;
+
+			es->bit_pos[es->num_bit_pos].minor = src[i].minor;
+			es->bit_pos[es->num_bit_pos].two_bits_o = src[i].m1_two_bits_o;
+			es->bit_pos[es->num_bit_pos].two_bits_val = src[i].m1_two_bits_val;
+			es->bit_pos[es->num_bit_pos].one_bit_o = src[i].m1_one_bit_start + j*2;
+			es->bit_pos[es->num_bit_pos].uni_dir = fpga_switch_lookup(es->model,
+				es->model->first_routing_y, es->model->first_routing_x,
+				fpga_wirestr_i(es->model, src[i].src_wire[j]),
+				fpga_wirestr_i(es->model, src[i].m1_sw_to));
+			if (es->bit_pos[es->num_bit_pos].uni_dir == NO_SWITCH) {
+				fprintf(stderr, "#E routing switch %s -> %s not in model\n",
+					fpga_wirestr(es->model, src[i].src_wire[j]),
+					fpga_wirestr(es->model, src[i].m1_sw_to));
+				FAIL(EINVAL);
+			}
+			es->bit_pos[es->num_bit_pos].rev_dir = NO_SWITCH;
+			es->num_bit_pos++;
 		}
-	}}
+	}
+	return 0;
+fail:
+	return rc;
+}
+
+static int wire_decrement(int wire)
+{
+	int _wire, flags;
+
+	if (wire >= DW && wire <= DW_LAST) {
+		_wire = wire - DW;
+		flags = _wire & DIR_FLAGS;
+		_wire &= ~DIR_FLAGS;
+
+		if (_wire%4 == 0)
+			return DW + ((_wire + 3) | flags);
+		return DW + ((_wire - 1) | flags);
+	}
+	if (wire >= LW && wire <= LW_LAST) {
+		_wire = wire - LW;
+		flags = _wire & LD1;
+		_wire &= ~LD1;
+
+		if (_wire == LO_A)
+			return LW + (LO_D|flags);
+		if (_wire == LO_AMUX)
+			return LW + (LO_DMUX|flags);
+		if (_wire == LO_AQ)
+			return LW + (LO_DQ|flags);
+		if ((_wire >= LO_B && _wire <= LO_D)
+		    || (_wire >= LO_BMUX && _wire <= LO_DMUX)
+		    || (_wire >= LO_BQ && _wire <= LO_DQ))
+			return LW + ((_wire-1)|flags);
+	}
+	HERE();
+	return wire;
+}
+
+static int construct_extract_state(struct extract_state* es, struct fpga_model* model)
+{
+	char from_str[MAX_WIRENAME_LEN], to_str[MAX_WIRENAME_LEN];
+	int i, j, k, l, cur_pair_start, cur_two_bits_o, cur_two_bits_val, rc;
+	int logicin_i;
+
+	memset(es, 0, sizeof(*es));
+	es->model = model;
+	if (model->first_routing_y == -1)
+		FAIL(EINVAL);
+
+#if 0
+	// mip 0-10 (6*288=1728 switches)
+	{ struct sw_mip_src src[] = {
+		{0, DW + ((W_WW4*4+3) | DIR_BEG), 0, 2, 3,
+		    DW + ((W_NW4*4+3) | DIR_BEG), 14, 1, 2,
+			{LW + (LO_BMUX|LD1), LW + (LO_DQ|LD1), LW + (LO_D|LD1),
+			 LW + LO_BMUX, LW + LO_DQ, LW + LO_D}},
+		{0, DW + ((W_WW4*4+3) | DIR_BEG), 0, 1, 3,
+		    DW + ((W_NW4*4+3) | DIR_BEG), 14, 2, 2,
+			{DW + ((W_SW2*4+2)|DIR_N3), DW + ((W_SS2*4+2)|DIR_N3), DW + ((W_WW2*4+2)|DIR_N3),
+			 DW + W_NE2*4+3, DW + W_NN2*4+3, DW + W_NW2*4+3}},
+		{0, DW + ((W_WW4*4+3) | DIR_BEG), 0, 0, 3,
+		    DW + ((W_NW4*4+3) | DIR_BEG), 14, 0, 2,
+			{DW + ((W_SW4*4+2)|DIR_N3), DW + ((W_SS4*4+2)|DIR_N3), DW + W_NE4*4+3,
+			 DW + W_NN4*4+3, DW + W_NW4*4+3, DW + W_WW4*4+3}},
+		{0, DW + ((W_SS4*4+3) | DIR_BEG), 16, 2, 18,
+		    DW + ((W_SW4*4+3) | DIR_BEG), 30, 1, 19,
+			{DW + W_SW2*4+3, DW + W_WW2*4+3, DW + ((W_NW2*4+0)|DIR_S0),
+			 DW + W_SS2*4+3, DW + W_SE2*4+3, DW + W_EE2*4+3}},
+		{0, DW + ((W_SS4*4+3) | DIR_BEG), 16, 1, 18,
+		    DW + ((W_SW4*4+3) | DIR_BEG), 30, 2, 19,
+			{LW + LO_D, LW + LO_DQ, LW + LO_BMUX,
+			 LW + (LO_D|LD1), LW + (LO_DQ|LD1), LW + (LO_BMUX|LD1)}},
+		{0, DW + ((W_SS4*4+3) | DIR_BEG), 16, 0, 18,
+		    DW + ((W_SW4*4+3) | DIR_BEG), 30, 0, 19,
+			{DW + W_SW4*4+3, DW + W_SS4*4+3, DW + ((W_WW4*4+0)|DIR_S0),
+			 DW + ((W_NW4*4+0)|DIR_S0), DW + W_SE4*4+3, DW + W_EE4*4+3}},
+
+		{2, DW + ((W_NN4*4+3) | DIR_BEG), 0, 2, 3,
+		    DW + ((W_NE4*4+3) | DIR_BEG), 14, 1, 2,
+			{LW + (LO_BMUX|LD1), LW + (LO_DQ|LD1), LW + (LO_D|LD1),
+			 LW + LO_BMUX, LW + LO_DQ, LW + LO_D}},
+		{2, DW + ((W_NN4*4+3) | DIR_BEG), 0, 1, 3,
+		    DW + ((W_NE4*4+3) | DIR_BEG), 14, 2, 2,
+			{DW + W_EE2*4+3, DW + W_SE2*4+3, DW + ((W_WW2*4+2)|DIR_N3),
+			 DW + W_NE2*4+3, DW + W_NN2*4+3, DW + W_NW2*4+3}},
+		{2, DW + ((W_NN4*4+3) | DIR_BEG), 0, 0, 3,
+		    DW + ((W_NE4*4+3) | DIR_BEG), 14, 0, 2,
+			{DW + W_EE4*4+3, DW + W_SE4*4+3, DW + W_NE4*4+3,
+			 DW + W_NN4*4+3, DW + W_NW4*4+3, DW + W_WW4*4+3}},
+		{2, DW + ((W_EE4*4+3) | DIR_BEG), 16, 2, 18,
+		    DW + ((W_SE4*4+3) | DIR_BEG), 30, 1, 19,
+			{DW + W_SW2*4+3, DW + W_NN2*4+3, DW + W_NE2*4+3,
+			 DW + W_SS2*4+3, DW + W_SE2*4+3, DW + W_EE2*4+3}},
+		{2, DW + ((W_EE4*4+3) | DIR_BEG), 16, 1, 18,
+		    DW + ((W_SE4*4+3) | DIR_BEG), 30, 2, 19,
+			{LW + LO_D, LW + LO_DQ, LW + LO_BMUX,
+			 LW + (LO_D|LD1), LW + (LO_DQ|LD1), LW + (LO_BMUX|LD1)}},
+		{2, DW + ((W_EE4*4+3) | DIR_BEG), 16, 0, 18,
+		    DW + ((W_SE4*4+3) | DIR_BEG), 30, 0, 19,
+			{DW + W_SW4*4+3, DW + W_SS4*4+3, DW + W_NN4*4+3,
+			 DW + W_NE4*4+3, DW + W_SE4*4+3, DW + W_EE4*4+3}},
+
+		{4, DW + ((W_NW2*4+3) | DIR_BEG), 0, 2, 3,
+		    DW + ((W_NN2*4+3) | DIR_BEG), 14, 1, 2,
+			{LW + (LO_BMUX|LD1), LW + (LO_DQ|LD1), LW + (LO_D|LD1),
+			 LW + LO_BMUX, LW + LO_DQ, LW + LO_D}},
+		{4, DW + ((W_NW2*4+3) | DIR_BEG), 0, 1, 3,
+		    DW + ((W_NN2*4+3) | DIR_BEG), 14, 2, 2,
+			{DW + W_NE2*4+3, DW + W_NN2*4+3, DW + ((W_WL1*4+2)|DIR_N3),
+			 DW + W_WR1*4+3, DW + W_NR1*4+3, DW + W_NL1*4+3}},
+		{4, DW + ((W_NW2*4+3) | DIR_BEG), 0, 0, 3,
+		    DW + ((W_NN2*4+3) | DIR_BEG), 14, 0, 2,
+			{DW + W_NW4*4+3, DW + W_WW4*4+3, DW + W_NE4*4+3,
+			 DW + W_NN4*4+3, DW + ((W_WW2*4+2)|DIR_N3), DW + W_NW2*4+3}},
+		{4, DW + ((W_WW2*4+3) | DIR_BEG), 16, 2, 18,
+		    DW + ((W_SW2*4+3) | DIR_BEG), 30, 1, 19,
+			{DW + W_SR1*4+3, DW + W_SL1*4+3, DW + ((W_WR1*4+0)|DIR_S0),
+			 DW + W_WL1*4+3, DW + W_SW2*4+3, DW + W_SS2*4+3}},
+		{4, DW + ((W_WW2*4+3) | DIR_BEG), 16, 1, 18,
+		    DW + ((W_SW2*4+3) | DIR_BEG), 30, 2, 19,
+			{LW + LO_D, LW + LO_DQ, LW + LO_BMUX,
+			 LW + (LO_D|LD1), LW + (LO_DQ|LD1), LW + (LO_BMUX|LD1)}},
+		{4, DW + ((W_WW2*4+3) | DIR_BEG), 16, 0, 18,
+		    DW + ((W_SW2*4+3) | DIR_BEG), 30, 0, 19,
+			{DW + W_WW2*4+3, DW + ((W_NW2*4+0)|DIR_S0), DW + W_SW4*4+3,
+			 DW + W_SS4*4+3, DW + ((W_WW4*4+0)|DIR_S0), DW + ((W_NW4*4+0)|DIR_S0)}},
+
+		{6, DW + ((W_NE2*4+3) | DIR_BEG), 0, 2, 3,
+		    DW + ((W_EE2*4+3) | DIR_BEG), 14, 1, 2,
+			{LW + (LO_BMUX|LD1), LW + (LO_DQ|LD1), LW + (LO_D|LD1),
+			 LW + LO_BMUX, LW + LO_DQ, LW + LO_D}},
+		{6, DW + ((W_NE2*4+3) | DIR_BEG), 0, 1, 3,
+		    DW + ((W_EE2*4+3) | DIR_BEG), 14, 2, 2,
+			{DW + W_NE2*4+3, DW + W_NN2*4+3, DW + W_EL1*4+3,
+			 DW + W_ER1*4+3, DW + W_NR1*4+3, DW + W_NL1*4+3}},
+		{6, DW + ((W_NE2*4+3) | DIR_BEG), 0, 0, 3,
+		    DW + ((W_EE2*4+3) | DIR_BEG), 14, 0, 2,
+			{DW + W_EE4*4+3, DW + W_SE4*4+3, DW + W_NE4*4+3,
+			 DW + W_NN4*4+3, DW + W_EE2*4+3, DW + W_SE2*4+3}},
+		{6, DW + ((W_SS2*4+3) | DIR_BEG), 16, 2, 18,
+		    DW + ((W_SE2*4+3) | DIR_BEG), 30, 1, 19,
+			{DW + W_SR1*4+3, DW + W_SL1*4+3, DW + W_ER1*4+3,
+			 DW + W_EL1*4+3, DW + W_SW2*4+3, DW + W_SS2*4+3}},
+		{6, DW + ((W_SS2*4+3) | DIR_BEG), 16, 1, 18,
+		    DW + ((W_SE2*4+3) | DIR_BEG), 30, 2, 19,
+			{LW + LO_D, LW + LO_DQ, LW + LO_BMUX,
+			 LW + (LO_D|LD1), LW + (LO_DQ|LD1), LW + (LO_BMUX|LD1)}},
+		{6, DW + ((W_SS2*4+3) | DIR_BEG), 16, 0, 18,
+		    DW + ((W_SE2*4+3) | DIR_BEG), 30, 0, 19,
+			{DW + W_SE2*4+3, DW + W_EE2*4+3, DW + W_SW4*4+3,
+			 DW + W_SS4*4+3, DW + W_SE4*4+3, DW + W_EE4*4+3}},
+
+		{8, DW + ((W_WR1*4+0) | DIR_BEG), 0, 2, 3,
+		    DW + ((W_NL1*4+2) | DIR_BEG), 14, 1, 2,
+			{LW + (LO_BMUX|LD1), LW + (LO_DQ|LD1), LW + (LO_D|LD1),
+			 LW + LO_BMUX, LW + LO_DQ, LW + LO_D}},
+		{8, DW + ((W_WR1*4+0) | DIR_BEG), 0, 1, 3,
+		    DW + ((W_NL1*4+2) | DIR_BEG), 14, 2, 2,
+			{DW + W_NE2*4+3, DW + W_NN2*4+3, DW + ((W_WL1*4+2)|DIR_N3),
+			 DW + W_WR1*4+3, DW + W_NR1*4+3, DW + W_NL1*4+3}},
+		{8, DW + ((W_WR1*4+0) | DIR_BEG), 0, 0, 3,
+		    DW + ((W_NL1*4+2) | DIR_BEG), 14, 0, 2,
+			{DW + W_NW4*4+3, DW + W_WW4*4+3, DW + W_NE4*4+3,
+			 DW + W_NN4*4+3, DW + ((W_WW2*4+2)|DIR_N3), DW + W_NW2*4+3}},
+		{8, DW + ((W_SR1*4+0) | DIR_BEG), 16, 2, 18,
+		    DW + ((W_WL1*4+2) | DIR_BEG), 30, 1, 19,
+			{DW + W_SR1*4+3, DW + W_SL1*4+3, DW + ((W_WR1*4+0)|DIR_S0),
+			 DW + W_WL1*4+3, DW + W_SW2*4+3, DW + W_SS2*4+3}},
+		{8, DW + ((W_SR1*4+0) | DIR_BEG), 16, 1, 18,
+		    DW + ((W_WL1*4+2) | DIR_BEG), 30, 2, 19,
+			{LW + LO_D, LW + LO_DQ, LW + LO_BMUX,
+			 LW + (LO_D|LD1), LW + (LO_DQ|LD1), LW + (LO_BMUX|LD1)}},
+		{8, DW + ((W_SR1*4+0) | DIR_BEG), 16, 0, 18,
+		    DW + ((W_WL1*4+2) | DIR_BEG), 30, 0, 19,
+			{DW + W_WW2*4+3, DW + ((W_NW2*4+0)|DIR_S0), DW + W_SW4*4+3,
+			 DW + W_SS4*4+3, DW + ((W_WW4*4+0)|DIR_S0), DW + ((W_NW4*4+0)|DIR_S0)}},
+
+		{10, DW + ((W_EL1*4+2) | DIR_BEG), 0, 2, 3,
+		     DW + ((W_NR1*4+3) | DIR_BEG), 14, 1, 2,
+			{LW + (LO_BMUX|LD1), LW + (LO_DQ|LD1), LW + (LO_D|LD1),
+			 LW + LO_BMUX,	     LW + LO_DQ,       LW + LO_D}},
+		{10, DW + ((W_EL1*4+2) | DIR_BEG), 0, 1, 3,
+		     DW + ((W_NR1*4+3) | DIR_BEG), 14, 2, 2,
+			{DW + W_NE2*4+3, DW + W_NN2*4+3, DW + W_EL1*4+3,
+			 DW + W_ER1*4+3, DW + W_NR1*4+3, DW + W_NL1*4+3}},
+		{10, DW + ((W_EL1*4+2) | DIR_BEG), 0, 0, 3,
+		     DW + ((W_NR1*4+3) | DIR_BEG), 14, 0, 2,
+			{DW + W_EE4*4+3, DW + W_SE4*4+3, DW + W_NE4*4+3,
+			 DW + W_NN4*4+3, DW + W_EE2*4+3, DW + W_SE2*4+3}},
+		{10, DW + ((W_SL1*4+3) | DIR_BEG), 16, 2, 18,
+		     DW + ((W_ER1*4+0) | DIR_BEG), 30, 1, 19,
+			{DW + W_SR1*4+3, DW + W_SL1*4+3, DW + W_ER1*4+3,
+			 DW + W_EL1*4+3, DW + W_SW2*4+3, DW + W_SS2*4+3}},
+		{10, DW + ((W_SL1*4+3) | DIR_BEG), 16, 1, 18,
+		     DW + ((W_ER1*4+0) | DIR_BEG), 30, 2, 19,
+			{LW + LO_D,       LW + LO_DQ,       LW + LO_BMUX,
+			 LW + (LO_D|LD1), LW + (LO_DQ|LD1), LW + (LO_BMUX|LD1)}},
+		{10, DW + ((W_SL1*4+3) | DIR_BEG), 16, 0, 18,
+		     DW + ((W_ER1*4+0) | DIR_BEG), 30, 0, 19,
+			{DW + W_SE2*4+3, DW + W_EE2*4+3, DW + W_SW4*4+3,
+			 DW + W_SS4*4+3, DW + W_SE4*4+3, DW + W_EE4*4+3}}};
+
+		for (i = 0;; i++) {
+			rc = src_to_bitpos(es, src, sizeof(src)/sizeof(*src));
+			if (rc) FAIL(rc);
+			if (i >= 3) break;
+			for (j = 0; j < sizeof(src)/sizeof(*src); j++) {
+				src[j].m0_sw_to = wire_decrement(src[j].m0_sw_to);
+				src[j].m0_two_bits_o += 32;
+				src[j].m0_one_bit_start += 32;
+				src[j].m1_sw_to = wire_decrement(src[j].m1_sw_to);
+				src[j].m1_two_bits_o += 32;
+				src[j].m1_one_bit_start += 32;
+				for (k = 0; k < sizeof(src[0].src_wire)/sizeof(src[0].src_wire[0]); k++)
+					src[j].src_wire[k] = wire_decrement(src[j].src_wire[k]);
+			}
+		}
+	}
+#endif
+// todo: 12
 #if 0
 	// switches from logicout to dirwires (6*2*2*4*6=576 switches)
 	for (i = 0; i < DIRBEG_ROW; i++) {

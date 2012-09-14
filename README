@@ -65,6 +65,10 @@ TODO (as of 2012-08, expected time to delivery: months to years
 * many more cases in model of switches and inter-tile connections
 * write standard design elements for libfpga-stdlib library
 * support lm32 or openrisc core, either via libfpga or iverilog backend
+* several places might benefit from a bison parser:
+  - switchbox description into bit parser/generator (bit_frames.c)
+  - inter-tile wire connections (model_conns.c)
+  - configure devices and route wires
 * ipv6 or vnc in hardware?
 * iverilog fpga backend
 

@@ -766,11 +766,15 @@ const char* wire_base(enum wire_type w);
 enum wire_type rotate_wire(enum wire_type cur, int off);
 enum wire_type wire_to_len(enum wire_type w, int first_len);
 
-// Those two flags can be OR'ed into the DW..DW_LAST range.
+// These three flags can be OR'ed into the DW..DW_LAST range.
 // DIR_BEG signals a 'B' line - the default is 'E' endpoint.
-// DIR_S0N3 turns 0 into _S0 and 3 into _N3.
-#define DIR_BEG 0x100
-#define DIR_S0N3 0x200
+// DIR_S0 turns 0 into _S0
+// DIR_N3 turns 3 into _N3.
+// First flag must be higher than LAST_LEN4 (25) * 4 + 3 = 103
+#define DIR_BEG 0x80
+#define DIR_S0	0x100
+#define DIR_N3	0x200
+#define DIR_FLAGS (DIR_BEG|DIR_S0|DIR_N3)
 
 // The extra wires must not overlap with logicin_wire or logicout_wire
 // namespaces so that they can be combined with either of them.
