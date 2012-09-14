@@ -14,16 +14,20 @@ CPP := $(CPP)   # make sure changing CC won't affect CPP
 
 CC_normal	:= $(CC)
 AR_normal	:= $(AR) rsc
+DEPEND_normal	:= $(CPP) $(CFLAGS) -D__OPTIMIZE__ -MM -MG
 
 CC_quiet	= @echo "  CC       " $@ && $(CC_normal)
 AR_quiet	= @echo "  AR       " $@ && $(AR_normal)
+DEPEND_quiet	= @$(DEPEND_normal)
 
 ifeq ($(V),1)
     CC		= $(CC_normal)
     AR		= $(AR_normal)
+    DEPEND	= $(DEPEND_normal)
 else
     CC		= $(CC_quiet)
     AR		= $(AR_quiet)
+    DEPEND	= $(DEPEND_quiet)
 endif
 
 # ----- Rules -----------------------------------------------------------------
@@ -40,6 +44,7 @@ CFLAGS += -Wall -Wshadow -Wmissing-prototypes -Wmissing-declarations \
 	-Wno-format-zero-length -Ofast
 CFLAGS += `pkg-config libxml-2.0 --cflags`
 LDLIBS += `pkg-config libxml-2.0 --libs`
+LDFLAGS += -Wl,-rpath,$(CURDIR)
 
 LIBFPGA_BIT_OBJS       = bit_frames.o bit_regs.o
 LIBFPGA_MODEL_OBJS     = model_main.o model_tiles.o model_devices.o \
@@ -48,6 +53,16 @@ LIBFPGA_FLOORPLAN_OBJS = floorplan.o
 LIBFPGA_CONTROL_OBJS   = control.o
 LIBFPGA_CORES_OBJS     = parts.o helper.o
 
+OBJS 	= autotest.o bit2fp.o draw_svg_tiles.o fp2bit.o hstrrep.o \
+	merge_seq.o new_fp.o pair2net.o sort_seq.o
+
+OBJS	+= $(LIBFPGA_BIT_OBJS) $(LIBFPGA_MODEL_OBJS) $(LIBFPGA_FLOORPLAN_OBJS) \
+	$(LIBFPGA_CONTROL_OBJS) $(LIBFPGA_CORES_OBJS)
+
+DYNAMIC_LIBS = libfpga-model.so libfpga-bit.so libfpga-floorplan.so \
+	libfpga-control.so libfpga-cores.so
+
+DYNAMIC_HEADS = bit.h control.h floorplan.h helper.h model.h parts.h
 #- libfpga-test       autotest suite
 #- libfpga-design     larger design elements on top of libfpga-control
 
@@ -68,85 +83,41 @@ autotest_%.log: autotest fp2bit bit2fp
 	@mkdir -p $(@D)
 	./autotest --test=$(*F) 2>&1 >$@
 
-autotest: autotest.o model.h libfpga-model.a libfpga-floorplan.a \
-	libfpga-control.a libfpga-cores.a
+autotest: autotest.o $(DYNAMIC_LIBS)
 
-autotest.o: model.h floorplan.h control.h
+fp2bit: fp2bit.o $(DYNAMIC_LIBS)
 
-new_fp: new_fp.o libfpga-model.a libfpga-floorplan.a libfpga-cores.a \
-	libfpga-control.a
+bit2fp: bit2fp.o $(DYNAMIC_LIBS)
 
-new_fp.o: new_fp.c floorplan.h model.h helper.h control.h
+new_fp: new_fp.o $(DYNAMIC_LIBS)
 
-fp2bit: fp2bit.o libfpga-model.a libfpga-bit.a libfpga-floorplan.a \
-	libfpga-control.a libfpga-cores.a
+draw_svg_tiles: draw_svg_tiles.o $(DYNAMIC_LIBS)
 
-fp2bit.o: fp2bit.c model.h floorplan.h bit.h helper.h
+pair2net: pair2net.o $(DYNAMIC_LIBS)
 
-bit2fp: bit2fp.o libfpga-model.a libfpga-bit.a libfpga-floorplan.a \
-	libfpga-control.a libfpga-cores.a
+sort_seq: sort_seq.o $(DYNAMIC_LIBS)
 
-bit2fp.o: bit2fp.c model.h floorplan.h bit.h helper.h
+merge_seq: merge_seq.o $(DYNAMIC_LIBS)
 
-floorplan.o: floorplan.c floorplan.h model.h control.h
+hstrrep: hstrrep.o $(DYNAMIC_LIBS)
 
-bit_regs.o: bit_regs.c bit.h model.h
+libfpga-cores.so: $(addprefix build-libs/,$(LIBFPGA_CORES_OBJS))
 
-bit_frames.o: bit_frames.c bit.h model.h
+libfpga-bit.so: $(addprefix build-libs/,$(LIBFPGA_BIT_OBJS))
 
-parts.o: parts.c parts.h
+libfpga-model.so: $(addprefix build-libs/,$(LIBFPGA_MODEL_OBJS))
 
-control.o: control.c control.h model.h
+libfpga-floorplan.so: $(addprefix build-libs/,$(LIBFPGA_FLOORPLAN_OBJS))
 
-draw_svg_tiles: draw_svg_tiles.o libfpga-model.a libfpga-cores.a \
-	libfpga-control.a
+libfpga-control.so: $(addprefix build-libs/,$(LIBFPGA_CONTROL_OBJS))
 
-draw_svg_tiles.o: draw_svg_tiles.c model.h helper.h
+%.so:
+	$(CC) -shared -Wl,-soname,$@ -o $@ $^
 
-pair2net: pair2net.o libfpga-cores.a
-
-pair2net.o: pair2net.c helper.h
-
-sort_seq: sort_seq.o libfpga-cores.a
-
-sort_seq.o: sort_seq.c helper.h
-
-merge_seq: merge_seq.o libfpga-cores.a
-
-merge_seq.o: merge_seq.c helper.h
-
-hstrrep: hstrrep.o libfpga-cores.a
-
-helper.o: helper.c helper.h
-
-model_main.o: model_main.c model.h
-
-model_tiles.o: model_tiles.c model.h
-
-model_devices.o: model_devices.c model.h
-
-model_ports.o: model_ports.c model.h
-
-model_conns.o: model_conns.c model.h
-
-model_switches.o: model_switches.c model.h
-
-model_helper.o: model_helper.c model.h
-
-libfpga-cores.a: $(LIBFPGA_CORES_OBJS)
-	$(AR) $@ $^
-
-libfpga-bit.a: $(LIBFPGA_BIT_OBJS)
-	$(AR) $@ $^
-
-libfpga-model.a: $(LIBFPGA_MODEL_OBJS)
-	$(AR) $@ $^
-
-libfpga-floorplan.a: $(LIBFPGA_FLOORPLAN_OBJS)
-	$(AR) $@ $^
-
-libfpga-control.a: $(LIBFPGA_CONTROL_OBJS)
-	$(AR) $@ $^
+build-libs/%.o:	%.c
+	@mkdir -p build-libs
+	$(CC) $(CFLAGS) -fPIC -o $@ -c $<
+	$(MKDEP)
 
 xc6slx9.fp: new_fp
 	./new_fp > $@
@@ -200,18 +171,9 @@ clean:
 	rm -f $(foreach test,$(TESTS),"autotest.out/autotest_$(test).diff_to_gold")
 	rm -f $(foreach test,$(TESTS),"autotest.out/autotest_$(test).log")
 	rmdir --ignore-fail-on-non-empty autotest.out || exit 0
-	rm -f $(LIBFPGA_BIT_OBJS) $(LIBFPGA_MODEL_OBJS) $(LIBFPGA_FLOORPLAN_OBJS) \
-		$(LIBFPGA_CONTROL_OBJS) $(LIBFPGA_CORES_OBJS) \
-		draw_svg_tiles draw_svg_tiles.o \
-		new_fp new_fp.o \
-		hstrrep hstrrep.o \
-		sort_seq sort_seq.o \
-		merge_seq merge_seq.o \
-		autotest autotest.o \
-		fp2bit fp2bit.o \
-		bit2fp bit2fp.o \
-		pair2net pair2net.o \
-		libfpga-bit.a libfpga-control.a libfpga-cores.a libfpga-floorplan.a libfpga-model.a \
+	rm -rf build-libs
+	rm -f $(OBJS) *.d *.so \
+		draw_svg_tiles new_fp hstrrep sort_seq merge_seq autotest fp2bit bit2fp pair2net \
 		xc6slx9.fp xc6slx9.svg \
 		xc6slx9.tiles xc6slx9.devs xc6slx9.conns \
 		xc6slx9.ports xc6slx9.sw xc6slx9.cnets xc6slx9.swbits \
@@ -225,7 +187,31 @@ clean:
 
 install:	all
 		mkdir -p $(DESTDIR)/$(PREFIX)/bin/
+		mkdir -p $(DESTDIR)/$(PREFIX)/lib/
 		install -m 755 fp2bit  $(DESTDIR)/$(PREFIX)/bin/
 		install -m 755 bit2fp $(DESTDIR)/$(PREFIX)/bin/
+		install -m 755 $(DYNAMIC_LIBS)  $(DESTDIR)/$(PREFIX)/lib/
+		mkdir -p $(DESTDIR)/$(PREFIX)/include/
+		install -m 644 $(DYNAMIC_HEADS) $(DESTDIR)/$(PREFIX)/include/
+
 uninstall:
 		rm -f $(DESTDIR)/$(PREFIX)/bin/{fp2bit,bit2fp}
+
+
+# ----- Dependencies ----------------------------------------------------------
+
+MKDEP =									\
+	$(DEPEND) $< |							\
+	  sed 								\
+	    -e 's|^$(basename $(notdir $<)).o:|$@:|'			\
+	    -e '/^\(.*:\)\? */{p;s///;s/ *\\\?$$/ /;s/  */:\n/g;H;}'	\
+	    -e '$${g;p;}'						\
+	    -e d >$(basename $@).d;					\
+	  [ "$${PIPESTATUS[*]}" = "0 0" ] ||				\
+	  { rm -f $(basename $@).d; exit 1; }
+
+%.o:	%.c
+	$(CC) $(CFLAGS) -o $@ -c $<
+	$(MKDEP)
+
+-include $(OBJS:.o=.d)
