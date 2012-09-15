@@ -779,7 +779,12 @@ enum wire_type wire_to_len(enum wire_type w, int first_len);
 // The extra wires must not overlap with logicin_wire or logicout_wire
 // namespaces so that they can be combined with either of them.
 enum extra_wires {
-	UNDEF = 100,
+	// NO_WIRE is not compatible with the old X_A1/M_A1 system, but
+	// compatible with the new LW + LI_A1 system.
+	NO_WIRE = 0,
+
+	UNDEF = 100, // use UNDEF with old system, can be removed after
+		     // old system is gone
 	FAN_B,
 	GFAN0,
 	GFAN1,

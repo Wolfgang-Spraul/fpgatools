@@ -749,6 +749,11 @@ int to_i(const char* s, int len)
 	return num;
 }
 
+int mod4_calc(int a, int b)
+{
+	return (unsigned int) (a+b)%4;
+}
+
 void printf_wrap(FILE* f, char* line, int prefix_len,
 	const char* fmt, ...)
 {

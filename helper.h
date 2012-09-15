@@ -98,6 +98,7 @@ int str_cmp(const char* a, int a_len, const char* b, int b_len);
 // all_digits() returns 0 if len == 0
 int all_digits(const char* a, int len);
 int to_i(const char* s, int len);
+int mod4_calc(int a, int b);
 
 void printf_wrap(FILE* f, char* line, int prefix_len,
 	const char* fmt, ...);
