@@ -26,8 +26,6 @@ int fpga_build_model(struct fpga_model* model, int fpga_rows,
 	strarray_init(&model->str, STRIDX_64K);
 	rc = get_xc6_routing_bitpos(&model->sw_bitpos, &model->num_bitpos);
 	if (rc) FAIL(rc);
-	model->first_routing_y = -1;
-	model->first_routing_x = -1;
 
 	// The order of tiles, then devices, then ports, then
 	// connections and finally switches is important so

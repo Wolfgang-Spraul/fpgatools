@@ -74,7 +74,6 @@ struct fpga_model
 
 	struct xc6_routing_bitpos* sw_bitpos;
 	int num_bitpos;
-	int first_routing_y, first_routing_x;
 
 	struct fpga_tile* tiles;
 	struct hashed_strarray str;
@@ -824,3 +823,8 @@ enum extra_wires {
 	// can be OR'ed to the LI or LO value.
 	LW_LAST = 1999
 };
+
+const char* fpga_wirestr(struct fpga_model* model, enum extra_wires wire);
+str16_t fpga_wirestr_i(struct fpga_model* model, enum extra_wires wire);
+int fdev_logic_inbit(pinw_idx_t idx);
+int fdev_logic_outbit(pinw_idx_t idx);

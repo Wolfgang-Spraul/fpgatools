@@ -439,17 +439,12 @@ fail:
 	return rc;
 }
 
-static int construct_extract_state(struct extract_state* es, struct fpga_model* model)
+static int construct_extract_state(struct extract_state* es,
+	struct fpga_model* model)
 {
-	int rc;
-
 	memset(es, 0, sizeof(*es));
 	es->model = model;
-	if (model->first_routing_y == -1)
-		FAIL(EINVAL);
 	return 0;
-fail:
-	return rc;
 }
 
 int extract_model(struct fpga_model* model, struct fpga_bits* bits)
