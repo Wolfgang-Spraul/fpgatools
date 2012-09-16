@@ -46,3 +46,28 @@ enum major_type get_major_type(int idcode, int major);
 
 int get_num_iobs(int idcode);
 const char* get_iob_sitename(int idcode, int idx);
+
+// The routing bitpos is relative to a tile, i.e. major (x)
+// and row/v64_i (y) are defined outside.
+struct xc6_routing_bitpos
+{
+	// from and to are enum extra_wires values from model.h
+	int from;
+	int to;
+	int bidir;
+
+	// minors 0-19 are minor pairs, minor will be set
+	// to the even beginning of the pair, two_bits_o and
+	// one_bit_o are within 2*64 bits of the two minors.
+	// Even bit offsets are from the first minor, odd bit
+	// offsets from the second minor.
+	// minor 20 is a regular single 64-bit minor.
+
+	int minor; // 0,2,4,..18 for pairs, 20 for single-minor
+	int two_bits_o; // 0-126 for pairs (even only), 0-62 for single-minor
+	int two_bits_val; // 0-3
+	int one_bit_o; // 1-6 positions up or down from two-bit pos
+};
+
+int get_xc6_routing_bitpos(struct xc6_routing_bitpos** bitpos, int* num_bitpos);
+void free_xc6_routing_bitpos(struct xc6_routing_bitpos* bitpos);

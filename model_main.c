@@ -7,6 +7,7 @@
 
 #include <stdarg.h>
 #include "model.h"
+#include "parts.h"
 
 static int s_high_speed_replicate = 1;
 
@@ -23,6 +24,8 @@ int fpga_build_model(struct fpga_model* model, int fpga_rows,
 	strncpy(model->cfg_right_wiring, right_wiring,
 		sizeof(model->cfg_right_wiring)-1);
 	strarray_init(&model->str, STRIDX_64K);
+	rc = get_xc6_routing_bitpos(&model->sw_bitpos, &model->num_bitpos);
+	if (rc) FAIL(rc);
 	model->first_routing_y = -1;
 	model->first_routing_x = -1;
 
@@ -63,6 +66,7 @@ void fpga_free_model(struct fpga_model* model)
 	free(model->tmp_str);
 	strarray_free(&model->str);
 	free(model->tiles);
+	free_xc6_routing_bitpos(model->sw_bitpos);
 	memset(model, 0, sizeof(*model));
 }
 

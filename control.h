@@ -134,6 +134,7 @@ void fpga_swset_print(struct fpga_model* model, int y, int x,
 // switches were found and writen to same_sw.
 int fpga_switch_same_fromto(struct fpga_model* model, int y, int x,
 	swidx_t sw, int from_to, swidx_t* same_sw, int *same_len);
+// fpga_switch_lookup() returns NO_SWITCH if switch not found.
 swidx_t fpga_switch_lookup(struct fpga_model* model, int y, int x,
 	str16_t from_str_i, str16_t to_str_i);
 

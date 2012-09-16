@@ -72,6 +72,8 @@ struct fpga_model
 	// 'majors' in the bitstream.
 	int x_major[512];
 
+	struct xc6_routing_bitpos* sw_bitpos;
+	int num_bitpos;
 	int first_routing_y, first_routing_x;
 
 	struct fpga_tile* tiles;
