@@ -385,7 +385,6 @@ static int extract_routing_switches(struct extract_state* es, int y, int x)
 	int i, is_set, rc;
 
 	tile = YX_TILE(es->model, y, x);
-if (y != 68 || x != 12) return 0;
 
 	for (i = 0; i < es->model->num_bitpos; i++) {
 		rc = bitpos_is_set(es, y, x, &es->model->sw_bitpos[i], &is_set);
@@ -420,8 +419,6 @@ static int extract_switches(struct extract_state* es)
 {
 	int x, y, rc;
 
-	// go through all tiles, look for one with switches
-	// go through each switch, lookup device, is_enabled() -> enable
 	for (x = 0; x < es->model->x_width; x++) {
 		for (y = 0; y < es->model->y_height; y++) {
 			if (is_atx(X_ROUTING_COL, es->model, x)
@@ -473,9 +470,9 @@ int extract_model(struct fpga_model* model, struct fpga_bits* bits)
 	if (model->nets)
 		HERE(); // should be empty here
 	for (i = 0; i < es.num_yx_pos; i++) {
-		rc = fpga_net_new(model, &net_idx);
+		rc = fnet_new(model, &net_idx);
 		if (rc) FAIL(rc);
-		rc = fpga_net_add_sw(model, net_idx, es.yx_pos[i].y,
+		rc = fnet_add_sw(model, net_idx, es.yx_pos[i].y,
 			es.yx_pos[i].x, &es.yx_pos[i].idx, 1);
 		if (rc) FAIL(rc);
 	}
@@ -486,12 +483,9 @@ fail:
 
 int printf_swbits(struct fpga_model* model)
 {
-	struct extract_state es;
 	char bit_str[129];
-	int i, j, width, rc;
+	int i, j, width;
 
-	rc = construct_extract_state(&es, model);
-	if (rc) FAIL(rc);
 	for (i = 0; i < model->num_bitpos; i++) {
 
 		width = (model->sw_bitpos[i].minor == 20) ? 64 : 128;
@@ -511,14 +505,40 @@ int printf_swbits(struct fpga_model* model)
 			model->sw_bitpos[i].bidir ? "<->" : "->");
 	}
 	return 0;
-fail:
-	return rc;
+}
+
+static int write_switches(struct fpga_bits* bits, struct fpga_model* model)
+{
+	int x, y, i;
+	struct fpga_tile* tile;
+
+	for (x = 0; x < model->x_width; x++) {
+		for (y = 0; y < model->y_height; y++) {
+			if (!is_atx(X_ROUTING_COL, model, x)
+			    || y < TOP_IO_TILES
+			    || y >= model->y_height-BOT_IO_TILES
+			    || is_aty(Y_ROW_HORIZ_AXSYMM|Y_CHIP_HORIZ_REGS,
+					model, y))
+				continue;
+			tile = YX_TILE(model, y, x);
+			// go through enabled switches, lookup in sw_bitpos
+			// and set bits
+			for (i = 0; i < tile->num_switches; i++) {
+			}
+		}
+	}
+	return 0;
 }
 
 int write_model(struct fpga_bits* bits, struct fpga_model* model)
 {
-	int i;
+	int i, rc;
+
 	for (i = 0; i < sizeof(s_default_bits)/sizeof(s_default_bits[0]); i++)
 		set_bitp(bits, &s_default_bits[i]);
+	rc = write_switches(bits, model);
+	if (rc) FAIL(rc);
 	return 0;
+fail:
+	return rc;
 }

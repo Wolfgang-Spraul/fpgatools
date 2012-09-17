@@ -310,18 +310,18 @@ struct fpga_net
 typedef int net_idx_t; // net indices are 1-based
 #define NO_NET 0
 
-int fpga_net_new(struct fpga_model* model, net_idx_t* new_idx);
-void fpga_net_delete(struct fpga_model* model, net_idx_t net_idx);
+int fnet_new(struct fpga_model* model, net_idx_t* new_idx);
+void fnet_delete(struct fpga_model* model, net_idx_t net_idx);
 // start a new enumeration by calling with last==NO_NET
-int fpga_net_enum(struct fpga_model* model, net_idx_t last, net_idx_t* next);
-struct fpga_net* fpga_net_get(struct fpga_model* model, net_idx_t net_i);
-int fpga_net_add_port(struct fpga_model* model, net_idx_t net_i,
+int fnet_enum(struct fpga_model* model, net_idx_t last, net_idx_t* next);
+struct fpga_net* fnet_get(struct fpga_model* model, net_idx_t net_i);
+int fnet_add_port(struct fpga_model* model, net_idx_t net_i,
 	int y, int x, enum fpgadev_type type, dev_type_idx_t type_idx, pinw_idx_t pinw_idx);
-int fpga_net_add_sw(struct fpga_model* model, net_idx_t net_i,
+int fnet_add_sw(struct fpga_model* model, net_idx_t net_i,
 	int y, int x, const swidx_t* switches, int num_sw);
-int fpga_net_remove_sw(struct fpga_model* model, net_idx_t net_i,
+int fnet_remove_sw(struct fpga_model* model, net_idx_t net_i,
 	int y, int x, const swidx_t* switches, int num_sw);
-void fpga_net_free_all(struct fpga_model* model);
+void fnet_free_all(struct fpga_model* model);
 
 void fprintf_net(FILE* f, struct fpga_model* model, net_idx_t net_i);
 

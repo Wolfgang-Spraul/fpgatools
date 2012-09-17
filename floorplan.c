@@ -728,7 +728,7 @@ int printf_nets(FILE* f, struct fpga_model* model)
 	int rc;
 
 	net_i = NO_NET;
-	while (!(rc = fpga_net_enum(model, net_i, &net_i)) && net_i != NO_NET)
+	while (!(rc = fnet_enum(model, net_i, &net_i)) && net_i != NO_NET)
 		fprintf_net(f, model, net_i);
 	if (rc) FAIL(rc);
 	return 0;
@@ -846,7 +846,7 @@ static void read_net_line(struct fpga_model* model, const char* line, int start)
 		if (fpga_switch_is_used(model, y_coord, x_coord, sw.sw[0]))
 			HERE();
 		sw.len = 1;
-		if (fpga_net_add_sw(model, net_idx, y_coord, x_coord, sw.sw, sw.len))
+		if (fnet_add_sw(model, net_idx, y_coord, x_coord, sw.sw, sw.len))
 			HERE();
 		return;
 	}
@@ -874,7 +874,7 @@ static void read_net_line(struct fpga_model* model, const char* line, int start)
 	pinw_idx = fdev_pinw_str2idx(dev_type, &line[pin_name_beg],
 		pin_name_end-pin_name_beg);
 	if (pinw_idx == PINW_NO_IDX) { HERE(); return; }
-	if (fpga_net_add_port(model, net_idx, y_coord, x_coord, dev_type,
+	if (fnet_add_port(model, net_idx, y_coord, x_coord, dev_type,
 		to_i(&line[dev_type_idx_str_beg], dev_type_idx_str_end
 			-dev_type_idx_str_beg), pinw_idx))
 		HERE();

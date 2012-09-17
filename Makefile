@@ -66,8 +66,8 @@ DYNAMIC_HEADS = bit.h control.h floorplan.h helper.h model.h parts.h
 #- libfpga-test       autotest suite
 #- libfpga-design     larger design elements on top of libfpga-control
 
-all: new_fp fp2bit bit2fp draw_svg_tiles \
-	autotest hstrrep sort_seq merge_seq pair2net
+all: new_fp fp2bit bit2fp draw_svg_tiles autotest hstrrep \
+	sort_seq merge_seq pair2net hello_world
 
 test: test_logic_cfg test_routing_sw
 
@@ -84,6 +84,8 @@ autotest_%.log: autotest fp2bit bit2fp
 	./autotest --test=$(*F) 2>&1 >$@
 
 autotest: autotest.o $(DYNAMIC_LIBS)
+
+hello_world: hello_world.o $(DYNAMIC_LIBS)
 
 fp2bit: fp2bit.o $(DYNAMIC_LIBS)
 

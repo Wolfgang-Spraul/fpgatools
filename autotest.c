@@ -196,16 +196,16 @@ static int test_logic_net(struct test_state* tstate, int logic_y, int logic_x,
 	int dbg, rc;
 
 	dbg = 0;
-	rc = fpga_net_new(tstate->model, &net_idx);
+	rc = fnet_new(tstate->model, &net_idx);
 	if (rc) FAIL(rc);
 
 	// add port
-	rc = fpga_net_add_port(tstate->model, net_idx, logic_y, logic_x,
+	rc = fnet_add_port(tstate->model, net_idx, logic_y, logic_x,
 		DEV_LOGIC, type_idx, port);
 	if (rc) FAIL(rc);
 
 	// add (one) switch in logic tile
-	rc = fpga_net_add_sw(tstate->model, net_idx,
+	rc = fnet_add_sw(tstate->model, net_idx,
 		logic_y, logic_x, logic_switch_set->sw, logic_switch_set->len);
 	if (rc) FAIL(rc);
 
@@ -215,7 +215,7 @@ static int test_logic_net(struct test_state* tstate, int logic_y, int logic_x,
 	routing_switches.sw[routing_switches.len++] = routing_sw1;
 	if (routing_sw2 != NO_SWITCH)
 		routing_switches.sw[routing_switches.len++] = routing_sw2;
-	rc = fpga_net_add_sw(tstate->model, net_idx,
+	rc = fnet_add_sw(tstate->model, net_idx,
 		routing_y, routing_x, routing_switches.sw, routing_switches.len);
 	if (rc) FAIL(rc);
 
@@ -230,7 +230,7 @@ static int test_logic_net(struct test_state* tstate, int logic_y, int logic_x,
 	rc = diff_printf(tstate);
 	if (rc) FAIL(rc);
 
-	fpga_net_delete(tstate->model, net_idx);
+	fnet_delete(tstate->model, net_idx);
 	return 0;
 fail:
 	return rc;
@@ -439,7 +439,7 @@ static int test_switches(struct test_state* tstate, int y, int x,
 			if (rc) FAIL(rc);
 
 			// add len-4 wire
-			rc = fpga_net_add_sw(tstate->model, net, y, x,
+			rc = fnet_add_sw(tstate->model, net, y, x,
 				&sw_set.sw[i], 1);
 			if (rc) FAIL(rc);
 
@@ -477,7 +477,7 @@ static int test_switches(struct test_state* tstate, int y, int x,
 				if (rc) FAIL(rc);
 
 				// add len-4 target
-				rc = fpga_net_add_sw(tstate->model, net, y, x,
+				rc = fnet_add_sw(tstate->model, net, y, x,
 					&w4_set.sw[j], 1);
 				if (rc) FAIL(rc);
 
@@ -486,11 +486,11 @@ static int test_switches(struct test_state* tstate, int y, int x,
 				rc = diff_printf(tstate);
 				if (rc) FAIL(rc);
 
-				rc = fpga_net_remove_sw(tstate->model, net, y, x,
+				rc = fnet_remove_sw(tstate->model, net, y, x,
 					&w4_set.sw[j], 1);
 				if (rc) FAIL(rc);
 			}
-			rc = fpga_net_remove_sw(tstate->model, net, y, x,
+			rc = fnet_remove_sw(tstate->model, net, y, x,
 				&sw_set.sw[i], 1);
 			if (rc) FAIL(rc);
 		}
@@ -517,9 +517,9 @@ int test_routing_sw_from_iob(struct test_state* tstate,
 	iob_dev = fdev_p(tstate->model, iob_y, iob_x, DEV_IOB, iob_type_idx);
 	if (!iob_dev) FAIL(EINVAL);
 
-	rc = fpga_net_new(tstate->model, &net);
+	rc = fnet_new(tstate->model, &net);
 	if (rc) FAIL(rc);
-	rc = fpga_net_add_port(tstate->model, net, iob_y, iob_x,
+	rc = fnet_add_port(tstate->model, net, iob_y, iob_x,
 		DEV_IOB, iob_type_idx, IOB_IN_O);
 	if (rc) FAIL(rc);
 
@@ -534,7 +534,7 @@ int test_routing_sw_from_iob(struct test_state* tstate,
 	if (rc) FAIL(rc);
 	if (tstate->dry_run)
 		printf_switch_to_yx_result(&switch_to);
-	rc = fpga_net_add_sw(tstate->model, net, switch_to.y,
+	rc = fnet_add_sw(tstate->model, net, switch_to.y,
 		switch_to.x, switch_to.set.sw, switch_to.set.len);
 	if (rc) FAIL(rc);
 
@@ -547,7 +547,7 @@ int test_routing_sw_from_iob(struct test_state* tstate,
 	switch_to.from_to = SW_TO;
 	rc = fpga_switch_to_yx(&switch_to);
 	if (rc) FAIL(rc);
-	rc = fpga_net_add_sw(tstate->model, net, switch_to.y,
+	rc = fnet_add_sw(tstate->model, net, switch_to.y,
 		switch_to.x, switch_to.set.sw, switch_to.set.len);
 	if (rc) FAIL(rc);
 	if (tstate->dry_run)
@@ -564,7 +564,7 @@ int test_routing_sw_from_iob(struct test_state* tstate,
 	if (rc) FAIL(rc);
 	if (tstate->dry_run)
 		printf_switch_to_yx_result(&switch_to);
-	rc = fpga_net_add_sw(tstate->model, net, switch_to.y,
+	rc = fnet_add_sw(tstate->model, net, switch_to.y,
 		switch_to.x, switch_to.set.sw, switch_to.set.len);
 	if (rc) FAIL(rc);
 
@@ -573,7 +573,7 @@ int test_routing_sw_from_iob(struct test_state* tstate,
 	if (rc) FAIL(rc);
 
 	fdev_delete(tstate->model, iob_y, iob_x, DEV_IOB, iob_type_idx);
-	fpga_net_delete(tstate->model, net);
+	fnet_delete(tstate->model, net);
 	return 0;
 fail:
 	return rc;
@@ -611,9 +611,9 @@ static int test_routing_sw_from_logic(struct test_state* tstate,
 			if (!dev) FAIL(EINVAL);
 			if (!dev->pinw_req_in) FAIL(EINVAL);
 		
-			rc = fpga_net_new(tstate->model, &net);
+			rc = fnet_new(tstate->model, &net);
 			if (rc) FAIL(rc);
-			rc = fpga_net_add_port(tstate->model, net, y, x,
+			rc = fnet_add_port(tstate->model, net, y, x,
 				DEV_LOGIC, DEV_LOGM, dev->pinw_req_for_cfg[0]);
 			if (rc) FAIL(rc);
 		
@@ -631,7 +631,7 @@ static int test_routing_sw_from_logic(struct test_state* tstate,
 			if (!swto.set.len) FAIL(EINVAL);
 			if (tstate->dry_run)
 				printf_switch_to_rel_result(&swto);
-			rc = fpga_net_add_sw(tstate->model, net, swto.start_y,
+			rc = fnet_add_sw(tstate->model, net, swto.start_y,
 				swto.start_x, swto.set.sw, swto.set.len);
 			if (rc) FAIL(rc);
 		
@@ -648,7 +648,7 @@ static int test_routing_sw_from_logic(struct test_state* tstate,
 				if (strlen(str) < 5
 				    || str[2] != '1' || str[3] != 'B')
 					continue;
-				rc = fpga_net_add_sw(tstate->model, net, swto.dest_y,
+				rc = fnet_add_sw(tstate->model, net, swto.dest_y,
 					swto.dest_x, conns.chain.set.sw, conns.chain.set.len);
 				if (rc) FAIL(rc);
 				if (tstate->dry_run)
@@ -658,13 +658,13 @@ static int test_routing_sw_from_logic(struct test_state* tstate,
 					conns.dest_str_i, net, done_list, done_list_len);
 				if (rc) FAIL(rc);
 		
-				rc = fpga_net_remove_sw(tstate->model, net, swto.dest_y,
+				rc = fnet_remove_sw(tstate->model, net, swto.dest_y,
 					swto.dest_x, conns.chain.set.sw, conns.chain.set.len);
 				if (rc) FAIL(rc);
 			}
 			destruct_sw_conns(&conns);
 			fdev_delete(tstate->model, y, x, DEV_LOGIC, DEV_LOGM);
-			fpga_net_delete(tstate->model, net);
+			fnet_delete(tstate->model, net);
 		}
 	}
 	return 0;
@@ -802,22 +802,22 @@ static int test_iologic_switches2(struct test_state* tstate, int iob_y, int iob_
 					&chain.set, from_to));
 	
 			// new net
-			rc = fpga_net_new(tstate->model, &net_idx);
+			rc = fnet_new(tstate->model, &net_idx);
 			if (rc) FAIL(rc);
 	
 			// add iob port
-			rc = fpga_net_add_port(tstate->model, net_idx, iob_y, iob_x,
+			rc = fnet_add_port(tstate->model, net_idx, iob_y, iob_x,
 				DEV_IOB, iob_type_idx, IOB_IN_O);
 			if (rc) FAIL(rc);
 	
 			// add switch in iob tile
-			rc = fpga_net_add_sw(tstate->model, net_idx, switch_to.y,
+			rc = fnet_add_sw(tstate->model, net_idx, switch_to.y,
 				switch_to.x, switch_to.set.sw, switch_to.set.len);
 			if (rc) FAIL(rc);
 	
 			// add all but last switch in set
 			if (chain.set.len > 1) {
-				rc = fpga_net_add_sw(tstate->model, net_idx, switch_to.dest_y,
+				rc = fnet_add_sw(tstate->model, net_idx, switch_to.dest_y,
 					switch_to.dest_x, chain.set.sw, chain.set.len-1);
 				if (rc) FAIL(rc);
 			}
@@ -825,14 +825,14 @@ static int test_iologic_switches2(struct test_state* tstate, int iob_y, int iob_
 			if (rc) FAIL(rc);
 	
 			// add last switch
-			rc = fpga_net_add_sw(tstate->model, net_idx, switch_to.dest_y,
+			rc = fnet_add_sw(tstate->model, net_idx, switch_to.dest_y,
 				switch_to.dest_x, &chain.set.sw[chain.set.len-1], 1);
 			if (rc) FAIL(rc);
 	
 			rc = diff_printf(tstate);
 			if (rc) FAIL(rc);
 	
-			fpga_net_delete(tstate->model, net_idx);
+			fnet_delete(tstate->model, net_idx);
 		}
 		destruct_sw_chain(&chain);
 	}
@@ -1032,12 +1032,12 @@ int main(int argc, char** argv)
 	net_idx_t P46_net;
 
 	// configure net from P46.I to logic.D3
-	rc = fpga_net_new(&model, &P46_net);
+	rc = fnet_new(&model, &P46_net);
 	if (rc) FAIL(rc);
-	rc = fpga_net_add_port(&model, P46_net, P46_y, P46_x,
+	rc = fnet_add_port(&model, P46_net, P46_y, P46_x,
 		P46_dev_idx, IOB_OUT_I);
 	if (rc) FAIL(rc);
-	rc = fpga_net_add_port(&model, P46_net, /*y*/ 68, /*x*/ 13,
+	rc = fnet_add_port(&model, P46_net, /*y*/ 68, /*x*/ 13,
 		logic_dev_idx, LI_D3);
 	if (rc) FAIL(rc);
 
@@ -1050,7 +1050,7 @@ int main(int argc, char** argv)
 	switch_to.from_to = SW_FROM;
 	rc = fpga_switch_to_yx(&switch_to);
 	if (rc) FAIL(rc);
-	rc = fpga_net_add_switches(&model, P46_net, switch_to.y,
+	rc = fnet_add_switches(&model, P46_net, switch_to.y,
 		switch_to.x, &switch_to.set);
 	if (rc) FAIL(rc);
 
@@ -1063,7 +1063,7 @@ int main(int argc, char** argv)
 	switch_to.from_to = SW_FROM;
 	rc = fpga_switch_to_yx(&switch_to);
 	if (rc) FAIL(rc);
-	rc = fpga_net_add_switches(&model, P46_net, switch_to.y,
+	rc = fnet_add_switches(&model, P46_net, switch_to.y,
 		switch_to.x, &switch_to.set);
 	if (rc) FAIL(rc);
 
@@ -1076,7 +1076,7 @@ int main(int argc, char** argv)
 	switch_to.from_to = SW_FROM;
 	rc = fpga_switch_to_yx(&switch_to);
 	if (rc) FAIL(rc);
-	rc = fpga_net_add_switches(&model, P46_net, switch_to.y,
+	rc = fnet_add_switches(&model, P46_net, switch_to.y,
 		switch_to.x, &switch_to.set);
 	if (rc) FAIL(rc);
 
@@ -1105,7 +1105,7 @@ int main(int argc, char** argv)
 	}
 	rc = fpga_switch_to_yx(&switch_to);
 	if (rc) FAIL(rc);
-	rc = fpga_net_add_switches(&model, P46_net, switch_to.y,
+	rc = fnet_add_switches(&model, P46_net, switch_to.y,
 		switch_to.x, &switch_to.set);
 	if (rc) FAIL(rc);
 
@@ -1120,7 +1120,7 @@ int main(int argc, char** argv)
 			.block_list = 0 };
 		if (fpga_switch_chain(&c) == NO_CONN) FAIL(EINVAL);
 		if (c.set.len == 0) { HERE(); FAIL(EINVAL); }
-		rc = fpga_net_add_switches(&model, P46_net, c.y, c.x, &c.set);
+		rc = fnet_add_switches(&model, P46_net, c.y, c.x, &c.set);
 		if (rc) FAIL(rc);
 	}
 #endif

@@ -1517,7 +1517,7 @@ void printf_switch_to_rel_result(struct switch_to_rel* p)
 
 #define NET_ALLOC_INCREMENT 64
 
-static int fpga_net_useidx(struct fpga_model* model, net_idx_t new_idx)
+static int fnet_useidx(struct fpga_model* model, net_idx_t new_idx)
 {
 	void* new_ptr;
 	int new_array_size, rc;
@@ -1543,18 +1543,18 @@ fail:
 	return rc;
 }
 
-int fpga_net_new(struct fpga_model* model, net_idx_t* new_idx)
+int fnet_new(struct fpga_model* model, net_idx_t* new_idx)
 {
 	int rc;
 
 	// highest_used_net is initialized to NO_NET which becomes 1
-	rc = fpga_net_useidx(model, model->highest_used_net+1);
+	rc = fnet_useidx(model, model->highest_used_net+1);
 	if (rc) return rc;
 	*new_idx = model->highest_used_net;
 	return 0;
 }
 
-void fpga_net_delete(struct fpga_model* model, net_idx_t net_idx)
+void fnet_delete(struct fpga_model* model, net_idx_t net_idx)
 {
 	struct fpga_net* net;
 	int i;
@@ -1574,7 +1574,7 @@ void fpga_net_delete(struct fpga_model* model, net_idx_t net_idx)
 		model->highest_used_net--;
 }
 
-int fpga_net_enum(struct fpga_model* model, net_idx_t last, net_idx_t* next)
+int fnet_enum(struct fpga_model* model, net_idx_t last, net_idx_t* next)
 {
 	int i;
 
@@ -1589,7 +1589,7 @@ int fpga_net_enum(struct fpga_model* model, net_idx_t last, net_idx_t* next)
 	return 0;
 }
 
-struct fpga_net* fpga_net_get(struct fpga_model* model, net_idx_t net_i)
+struct fpga_net* fnet_get(struct fpga_model* model, net_idx_t net_i)
 {
 	if (net_i <= NO_NET
 	    || net_i > model->highest_used_net) {
@@ -1600,14 +1600,14 @@ struct fpga_net* fpga_net_get(struct fpga_model* model, net_idx_t net_i)
 	return &model->nets[net_i-1];
 }
 
-int fpga_net_add_port(struct fpga_model* model, net_idx_t net_i,
+int fnet_add_port(struct fpga_model* model, net_idx_t net_i,
 	int y, int x, enum fpgadev_type type, dev_type_idx_t type_idx,
 	pinw_idx_t pinw_idx)
 {
 	struct fpga_net* net;
 	int rc;
 
-	rc = fpga_net_useidx(model, net_i);
+	rc = fnet_useidx(model, net_i);
 	if (rc) FAIL(rc);
 	
 	net = &model->nets[net_i-1];
@@ -1624,13 +1624,13 @@ fail:
 	return rc;
 }
 
-int fpga_net_add_sw(struct fpga_model* model, net_idx_t net_i,
+int fnet_add_sw(struct fpga_model* model, net_idx_t net_i,
 	int y, int x, const swidx_t* switches, int num_sw)
 {
 	struct fpga_net* net;
 	int i, rc;
 
-	rc = fpga_net_useidx(model, net_i);
+	rc = fnet_useidx(model, net_i);
 	if (rc) FAIL(rc);
 
 	net = &model->nets[net_i-1];
@@ -1651,7 +1651,7 @@ fail:
 	return rc;
 }
 
-int fpga_net_remove_sw(struct fpga_model* model, net_idx_t net_i,
+int fnet_remove_sw(struct fpga_model* model, net_idx_t net_i,
 	int y, int x, const swidx_t* switches, int num_sw)
 {
 	struct fpga_net* net;
@@ -1690,7 +1690,7 @@ fail:
 	return rc;
 }
 
-void fpga_net_free_all(struct fpga_model* model)
+void fnet_free_all(struct fpga_model* model)
 {
 	free(model->nets);
 	model->nets = 0;
@@ -1736,7 +1736,7 @@ void fprintf_net(FILE* f, struct fpga_model* model, net_idx_t net_i)
 	struct fpga_net* net;
 	int i;
 
-	net = fpga_net_get(model, net_i);
+	net = fnet_get(model, net_i);
 	if (!net) { HERE(); return; }
 	for (i = 0; i < net->len; i++) {
 		if (net->el[i].idx & NET_IDX_IS_PINW) {
