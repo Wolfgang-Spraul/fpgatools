@@ -8,6 +8,13 @@ Introduction
  *) reach the maximum physical performance of the chip
  *) fast development cycles
  *) independent toolchain that only depends on other free software
+ *) bootstrap on chip, i.e. program the fpga from a softcore running
+    on the same fpga
+ *) complete package including all tools to get started such as jtag,
+    debugging, parts data and designs for prototyping hardware
+ *) work towards a design flow that includes later manufacturing
+    in different ASIC processes, include information about ASIC
+    processes, libraries, GDS generation, etc.
  *) lightweight C implementation without GUI
  *) supported platform: Linux
  *) license: public domain

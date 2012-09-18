@@ -83,6 +83,11 @@ int fpga_connpt_find(struct fpga_model* model, int y, int x,
 void fpga_conn_dest(struct fpga_model* model, int y, int x,
 	int connpt_dest_idx, int* dest_y, int* dest_x, str16_t* str_i);
 
+// Searches a connection in search_y/search_x that connects to
+// target_y/target_x/target_pt.
+int fpga_find_conn(struct fpga_model* model, int search_y, int search_x,
+	str16_t* pt, int target_y, int target_x, str16_t target_pt);
+
 //
 // switches
 //
@@ -316,7 +321,8 @@ void fnet_delete(struct fpga_model* model, net_idx_t net_idx);
 int fnet_enum(struct fpga_model* model, net_idx_t last, net_idx_t* next);
 struct fpga_net* fnet_get(struct fpga_model* model, net_idx_t net_i);
 int fnet_add_port(struct fpga_model* model, net_idx_t net_i,
-	int y, int x, enum fpgadev_type type, dev_type_idx_t type_idx, pinw_idx_t pinw_idx);
+	int y, int x, enum fpgadev_type type, dev_type_idx_t type_idx,
+	pinw_idx_t pinw_idx);
 int fnet_add_sw(struct fpga_model* model, net_idx_t net_i,
 	int y, int x, const swidx_t* switches, int num_sw);
 int fnet_remove_sw(struct fpga_model* model, net_idx_t net_i,
@@ -324,4 +330,3 @@ int fnet_remove_sw(struct fpga_model* model, net_idx_t net_i,
 void fnet_free_all(struct fpga_model* model);
 
 void fprintf_net(FILE* f, struct fpga_model* model, net_idx_t net_i);
-
