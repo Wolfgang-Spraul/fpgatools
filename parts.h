@@ -46,6 +46,8 @@ enum major_type get_major_type(int idcode, int major);
 
 int get_num_iobs(int idcode);
 const char* get_iob_sitename(int idcode, int idx);
+// returns -1 if sitename not found
+int find_iob_sitename(int idcode, const char* name);
 
 // The routing bitpos is relative to a tile, i.e. major (x)
 // and row/v64_i (y) are defined outside.

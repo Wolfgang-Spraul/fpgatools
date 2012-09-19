@@ -108,50 +108,50 @@ static const struct iob_site xc6slx9_iob_right[] =
 	{ 68, {"P75",    "P74"}},
 };
 
+const char* fpga_enum_iob(struct fpga_model* model, int enum_idx,
+	int* y, int* x, dev_type_idx_t* type_idx)
+{
+	if (enum_idx < 0) { HERE(); return 0; }
+
+	if (enum_idx < sizeof(xc6slx9_iob_top)/sizeof(xc6slx9_iob_top[0])*4) {
+		*y = TOP_OUTER_ROW;
+		*x = xc6slx9_iob_top[enum_idx/4].xy;
+		*type_idx = enum_idx%4;
+		return xc6slx9_iob_top[enum_idx/4].name[enum_idx%4];
+	}
+	enum_idx -= sizeof(xc6slx9_iob_top)/sizeof(xc6slx9_iob_top[0])*4;
+	if (enum_idx < sizeof(xc6slx9_iob_bottom)/sizeof(xc6slx9_iob_bottom[0])*4) {
+		*y = model->y_height - BOT_OUTER_ROW;
+		*x = xc6slx9_iob_bottom[enum_idx/4].xy;
+		*type_idx = enum_idx%4;
+		return xc6slx9_iob_bottom[enum_idx/4].name[enum_idx%4];
+	}
+	enum_idx -= sizeof(xc6slx9_iob_bottom)/sizeof(xc6slx9_iob_bottom[0])*4;
+	if (enum_idx < sizeof(xc6slx9_iob_left)/sizeof(xc6slx9_iob_left[0])*2) {
+		*y = xc6slx9_iob_left[enum_idx/2].xy;
+		*x = LEFT_OUTER_COL;
+		*type_idx = enum_idx%2;
+		return xc6slx9_iob_left[enum_idx/2].name[enum_idx%2];
+	}
+	enum_idx -= sizeof(xc6slx9_iob_left)/sizeof(xc6slx9_iob_left[0])*2;
+	if (enum_idx < sizeof(xc6slx9_iob_right)/sizeof(xc6slx9_iob_right[0])*2) {
+		*y = xc6slx9_iob_right[enum_idx/2].xy;
+		*x = model->x_width-RIGHT_OUTER_O;
+		*type_idx = enum_idx%2;
+		return xc6slx9_iob_right[enum_idx/2].name[enum_idx%2];
+	}
+	return 0;
+}
+
 int fpga_find_iob(struct fpga_model* model, const char* sitename,
 	int* y, int* x, dev_type_idx_t* idx)
 {
-	int i, j;
+	const char* name;
+	int i;
 
-	for (i = 0; i < sizeof(xc6slx9_iob_top)/sizeof(xc6slx9_iob_top[0]); i++) {
-		for (j = 0; j < 4; j++) {
-			if (!strcmp(xc6slx9_iob_top[i].name[j], sitename)) {
-				*y = TOP_OUTER_ROW;
-				*x = xc6slx9_iob_top[i].xy;
-				*idx = j;
-				return 0;
-			}
-		}
-	}
-	for (i = 0; i < sizeof(xc6slx9_iob_bottom)/sizeof(xc6slx9_iob_bottom[0]); i++) {
-		for (j = 0; j < 4; j++) {
-			if (!strcmp(xc6slx9_iob_bottom[i].name[j], sitename)) {
-				*y = model->y_height-BOT_OUTER_ROW;
-				*x = xc6slx9_iob_bottom[i].xy;
-				*idx = j;
-				return 0;
-			}
-		}
-	}
-	for (i = 0; i < sizeof(xc6slx9_iob_left)/sizeof(xc6slx9_iob_left[0]); i++) {
-		for (j = 0; j < 2; j++) {
-			if (!strcmp(xc6slx9_iob_left[i].name[j], sitename)) {
-				*y = xc6slx9_iob_left[i].xy;
-				*x = LEFT_OUTER_COL;
-				*idx = j;
-				return 0;
-			}
-		}
-	}
-	for (i = 0; i < sizeof(xc6slx9_iob_right)/sizeof(xc6slx9_iob_right[0]); i++) {
-		for (j = 0; j < 2; j++) {
-			if (!strcmp(xc6slx9_iob_right[i].name[j], sitename)) {
-				*y = xc6slx9_iob_right[i].xy;
-				*x = model->x_width-RIGHT_OUTER_O;
-				*idx = j;
-				return 0;
-			}
-		}
+	for (i = 0; (name = fpga_enum_iob(model, i, y, x, idx)); i++) {
+		if (!strcmp(name, sitename))
+			return 0;
 	}
 	return -1;
 }

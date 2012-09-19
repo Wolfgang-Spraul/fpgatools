@@ -71,6 +71,23 @@ const char* get_iob_sitename(int idcode, int idx)
 	return iob_xc6slx9_sitenames[idx];
 }
 
+int find_iob_sitename(int idcode, const char* name)
+{
+	int i;
+
+	if ((idcode & IDCODE_MASK) != XC6SLX9) {
+		HERE();
+		return -1;
+	}
+	for (i = 0; i < sizeof(iob_xc6slx9_sitenames)
+			/sizeof(iob_xc6slx9_sitenames[0]); i++) {
+		if (iob_xc6slx9_sitenames[i]
+		    && !strcmp(iob_xc6slx9_sitenames[i], name))
+			return i;
+	}
+	return -1;
+}
+
 int get_major_minors(int idcode, int major)
 {
 	static const int minors_per_major[] = // for slx9

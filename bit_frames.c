@@ -92,6 +92,41 @@ struct extract_state
 	struct sw_yxpos yx_pos[MAX_YX_SWITCHES]; // needs to be dynamically alloced...
 };
 
+static int write_iobs(struct fpga_bits* bits, struct fpga_model* model)
+{
+	int i, y, x, type_idx, part_idx, dev_idx, rc;
+	struct fpga_device* dev;
+	uint32_t* u32_p;
+	const char* name;
+
+	for (i = 0; (name = fpga_enum_iob(model, i, &y, &x, &type_idx)); i++) {
+		dev_idx = fpga_dev_idx(model, y, x, DEV_IOB, type_idx);
+		if (dev_idx == NO_DEV) FAIL(EINVAL);
+		dev = FPGA_DEV(model, y, x, dev_idx);
+		if (!dev->instantiated)
+			continue;
+
+		part_idx = find_iob_sitename(XC6SLX9, name);
+		if (part_idx == -1) {
+			HERE();
+			continue;
+		}
+
+		u32_p = (uint32_t*)
+			&bits->d[IOB_DATA_START + part_idx*IOB_ENTRY_LEN];
+		if (dev->u.iob.O_used) {
+			u32_p[0] = 0x00000180;
+			u32_p[1] = 0x06001100;
+		} else if (dev->u.iob.I_mux == IMUX_I) {
+			u32_p[0] = 0x00000107;
+			u32_p[1] = 0x0B002400;
+		}
+	}
+	return 0;
+fail:
+	return rc;
+}
+
 static int extract_iobs(struct fpga_model* model, struct fpga_bits* bits)
 {
 	int i, num_iobs, iob_y, iob_x, iob_idx, dev_idx, rc;
@@ -609,6 +644,44 @@ fail:
 	return rc;
 }
 
+static int write_logic(struct fpga_bits* bits, struct fpga_model* model)
+{
+	int dev_idx, row, row_pos, rc;
+	int x, y, byte_off;
+	struct fpga_device* dev;
+	uint8_t* u8_p;
+
+	for (x = LEFT_SIDE_WIDTH; x < model->x_width-RIGHT_SIDE_WIDTH; x++) {
+		if (!is_atx(X_FABRIC_LOGIC_COL|X_CENTER_LOGIC_COL, model, x))
+			continue;
+		for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
+			if (!has_device_type(model, y, x, DEV_LOGIC, LOGIC_M))
+				continue;
+			row = which_row(y, model);
+			row_pos = pos_in_row(y, model);
+			if (row == -1 || row_pos == -1 || row_pos == 8) {
+				HERE();
+				continue;
+			}
+			if (row_pos > 8) row_pos--;
+			u8_p = get_first_minor(bits, row, model->x_major[x]);
+			byte_off = row_pos * 8;
+			if (row_pos >= 8) byte_off += HCLK_BYTES;
+
+			// X device
+			dev_idx = fpga_dev_idx(model, y, x, DEV_LOGIC, DEV_LOGX);
+			if (dev_idx == NO_DEV) FAIL(EINVAL);
+			dev = FPGA_DEV(model, y, x, dev_idx);
+			if (!dev->instantiated)
+				continue;
+printf("y%02i x%02i major %i byte_off %i\n", y, x, model->x_major[x], byte_off);
+		}
+	}
+	return 0;
+fail:
+	return rc;
+}
+
 int write_model(struct fpga_bits* bits, struct fpga_model* model)
 {
 	int i, rc;
@@ -616,6 +689,10 @@ int write_model(struct fpga_bits* bits, struct fpga_model* model)
 	for (i = 0; i < sizeof(s_default_bits)/sizeof(s_default_bits[0]); i++)
 		set_bitp(bits, &s_default_bits[i]);
 	rc = write_switches(bits, model);
+	if (rc) FAIL(rc);
+	rc = write_iobs(bits, model);
+	if (rc) FAIL(rc);
+	rc = write_logic(bits, model);
 	if (rc) FAIL(rc);
 	return 0;
 fail:
