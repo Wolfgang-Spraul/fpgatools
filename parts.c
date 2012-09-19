@@ -220,6 +220,21 @@ static int wire_decrement(int wire)
 	return wire;
 }
 
+static enum extra_wires clean_S0N3(enum extra_wires wire)
+{
+	int flags;
+
+	if (wire < DW || wire > DW_LAST) return wire;
+	wire -= DW;
+	flags = wire & DIR_FLAGS;
+	wire &= ~DIR_FLAGS;
+	if (flags & DIR_S0 && wire%4 != 0)
+		flags &= ~DIR_S0;
+	if (flags & DIR_N3 && wire%4 != 3)
+		flags &= ~DIR_N3;
+	return DW + (wire | flags);
+}
+
 static int src_to_bitpos(struct xc6_routing_bitpos* bitpos, int* cur_el, int max_el,
 	const struct sw_mip_src* src, int src_len)
 {
@@ -232,8 +247,8 @@ static int src_to_bitpos(struct xc6_routing_bitpos* bitpos, int* cur_el, int max
 			bidir = bidir_check(src[i].m0_sw_to, src[i].from_w[j]);
 			if (bidir != -1) {
 				if (*cur_el >= max_el) FAIL(EINVAL);
-				bitpos[*cur_el].from = src[i].from_w[j];
-				bitpos[*cur_el].to = src[i].m0_sw_to;
+				bitpos[*cur_el].from = clean_S0N3(src[i].from_w[j]);
+				bitpos[*cur_el].to = clean_S0N3(src[i].m0_sw_to);
 				bitpos[*cur_el].bidir = bidir;
 				bitpos[*cur_el].minor = src[i].minor;
 				bitpos[*cur_el].two_bits_o = src[i].m0_two_bits_o;
@@ -245,8 +260,8 @@ static int src_to_bitpos(struct xc6_routing_bitpos* bitpos, int* cur_el, int max
 			bidir = bidir_check(src[i].m1_sw_to, src[i].from_w[j]);
 			if (bidir != -1) {
 				if (*cur_el >= max_el) FAIL(EINVAL);
-				bitpos[*cur_el].from = src[i].from_w[j];
-				bitpos[*cur_el].to = src[i].m1_sw_to;
+				bitpos[*cur_el].from = clean_S0N3(src[i].from_w[j]);
+				bitpos[*cur_el].to = clean_S0N3(src[i].m1_sw_to);
 				bitpos[*cur_el].bidir = bidir;
 				bitpos[*cur_el].minor = src[i].minor;
 				bitpos[*cur_el].two_bits_o = src[i].m1_two_bits_o;

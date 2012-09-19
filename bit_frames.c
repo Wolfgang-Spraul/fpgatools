@@ -378,6 +378,43 @@ fail:
 	return rc;
 }
 
+static int bitpos_set_bits(struct fpga_bits* bits, struct fpga_model* model,
+	int y, int x, struct xc6_routing_bitpos* swpos)
+{
+	int row_num, row_pos, start_in_frame, rc;
+
+	is_in_row(model, y, &row_num, &row_pos);
+	if (row_num == -1 || row_pos == -1
+	    || row_pos == HCLK_POS) FAIL(EINVAL);
+	if (row_pos > HCLK_POS)
+		start_in_frame = (row_pos-1)*64 + 16;
+	else
+		start_in_frame = row_pos*64;
+
+	if (swpos->minor == 20) {
+		if (swpos->two_bits_val & 0x02)
+			set_bit(bits, row_num, model->x_major[x], swpos->minor,
+				start_in_frame + swpos->two_bits_o);
+		if (swpos->two_bits_val & 0x01)
+			set_bit(bits, row_num, model->x_major[x], swpos->minor,
+				start_in_frame + swpos->two_bits_o+1);
+		set_bit(bits, row_num, model->x_major[x], swpos->minor,
+			start_in_frame + swpos->one_bit_o);
+	} else {
+		if (swpos->two_bits_val & 0x02)
+			set_bit(bits, row_num, model->x_major[x], swpos->minor,
+				start_in_frame + swpos->two_bits_o/2);
+		if (swpos->two_bits_val & 0x01)
+			set_bit(bits, row_num, model->x_major[x], swpos->minor + 1,
+				start_in_frame + swpos->two_bits_o/2);
+		set_bit(bits, row_num, model->x_major[x], swpos->minor + (swpos->one_bit_o&1),
+			start_in_frame + swpos->one_bit_o/2);
+	}
+	return 0;
+fail:
+	return rc;
+}
+
 static int extract_routing_switches(struct extract_state* es, int y, int x)
 {
 	struct fpga_tile* tile;
@@ -392,8 +429,8 @@ static int extract_routing_switches(struct extract_state* es, int y, int x)
 		if (!is_set) continue;
 
 		sw_idx = fpga_switch_lookup(es->model, y, x,
-			fpga_wirestr_i(es->model, es->model->sw_bitpos[i].from),
-			fpga_wirestr_i(es->model, es->model->sw_bitpos[i].to));
+			fpga_wire2str_i(es->model, es->model->sw_bitpos[i].from),
+			fpga_wire2str_i(es->model, es->model->sw_bitpos[i].to));
 		if (sw_idx == NO_SWITCH) FAIL(EINVAL);
 		// todo: es->model->sw_bitpos[i].bidir handling
 
@@ -499,18 +536,50 @@ int printf_swbits(struct fpga_model* model)
 			bit_str[model->sw_bitpos[i].two_bits_o+1] = '1';
 		bit_str[model->sw_bitpos[i].one_bit_o] = '1';
 		printf("mi%02i %s %s %s %s\n", model->sw_bitpos[i].minor,
-			fpga_wirestr(model, model->sw_bitpos[i].to),
+			fpga_wire2str(model->sw_bitpos[i].to),
 			bit_str,
-			fpga_wirestr(model, model->sw_bitpos[i].from),
+			fpga_wire2str(model->sw_bitpos[i].from),
 			model->sw_bitpos[i].bidir ? "<->" : "->");
 	}
 	return 0;
 }
 
+static int find_bitpos(struct fpga_model* model, int y, int x, swidx_t sw)
+{
+	enum extra_wires from_w, to_w;
+	const char* from_str, *to_str;
+	int i;
+
+	from_str = fpga_switch_str(model, y, x, sw, SW_FROM);
+	to_str = fpga_switch_str(model, y, x, sw, SW_TO);
+	from_w = fpga_str2wire(from_str);
+	to_w = fpga_str2wire(to_str);
+
+	if (from_w == NO_WIRE || to_w == NO_WIRE) {
+		HERE();
+		return -1;
+	}
+	for (i = 0; i < model->num_bitpos; i++) {
+		if (model->sw_bitpos[i].from == from_w
+		    && model->sw_bitpos[i].to == to_w)
+			return i;
+		if (model->sw_bitpos[i].bidir
+		    && model->sw_bitpos[i].to == from_w
+		    && model->sw_bitpos[i].from == to_w) {
+			if (!fpga_switch_is_bidir(model, y, x, sw))
+				HERE();
+			return i;
+		}
+	}
+	fprintf(stderr, "#E switch %s (%i) to %s (%i) not in model\n",
+		from_str, from_w, to_str, to_w);
+	return -1;
+}
+
 static int write_switches(struct fpga_bits* bits, struct fpga_model* model)
 {
-	int x, y, i;
 	struct fpga_tile* tile;
+	int x, y, i, bit_pos, rc;
 
 	for (x = 0; x < model->x_width; x++) {
 		for (y = 0; y < model->y_height; y++) {
@@ -524,10 +593,20 @@ static int write_switches(struct fpga_bits* bits, struct fpga_model* model)
 			// go through enabled switches, lookup in sw_bitpos
 			// and set bits
 			for (i = 0; i < tile->num_switches; i++) {
+				if (!(tile->switches[i] & SWITCH_USED))
+					continue;
+				bit_pos = find_bitpos(model, y, x, i);
+				if (bit_pos == -1)
+					continue;
+				rc = bitpos_set_bits(bits, model, y, x,
+					&model->sw_bitpos[bit_pos]);
+				if (rc) FAIL(rc);
 			}
 		}
 	}
 	return 0;
+fail:
+	return rc;
 }
 
 int write_model(struct fpga_bits* bits, struct fpga_model* model)

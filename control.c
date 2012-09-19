@@ -728,6 +728,31 @@ void fpga_conn_dest(struct fpga_model* model, int y, int x,
 	*str_i = tile->conn_point_dests[connpt_dest_idx*3+2];
 }
 
+int fpga_find_conn(struct fpga_model* model, int search_y, int search_x,
+	str16_t* pt, int target_y, int target_x, str16_t target_pt)
+{
+	struct fpga_tile* tile;
+	int i, j, dests_end;
+
+	tile = YX_TILE(model, search_y, search_x);
+	for (i = 0; i < tile->num_conn_point_names; i++) {
+		dests_end = (i < tile->num_conn_point_names-1)
+			? tile->conn_point_names[(i+1)*2]
+			: tile->num_conn_point_dests;
+		for (j = tile->conn_point_names[i*2]; j < dests_end; j++) {
+			if (tile->conn_point_dests[j*3] == target_x
+			    && tile->conn_point_dests[j*3+1] == target_y
+			    && tile->conn_point_dests[j*3+2] == target_pt) {
+				*pt = tile->conn_point_names[i*2+1];
+				return 0;
+			}
+		}
+	}
+	*pt = STRIDX_NO_ENTRY;
+	return 0;
+
+}
+
 swidx_t fpga_switch_first(struct fpga_model* model, int y, int x,
 	str16_t name_i, int from_to)
 {
@@ -892,6 +917,17 @@ void fpga_swset_print(struct fpga_model* model, int y, int x,
 		printf("swset %i %s\n", i, fpga_switch_print(model,
 			y, x, set->sw[i]));
 	}
+}
+
+int fpga_swset_is_used(struct fpga_model* model, int y, int x,
+	swidx_t* sw, int len)
+{
+	int i;
+	for (i = 0; i < len; i++) {
+		if (fpga_switch_is_used(model, y, x, sw[i]))
+			return 1;
+	}
+	return 0;
 }
 
 int fpga_switch_same_fromto(struct fpga_model* model, int y, int x,
@@ -1181,7 +1217,7 @@ int fpga_switch_chain(struct sw_chain* ch)
 {
 	swidx_t idx;
 	struct fpga_tile* tile;
-	int child_from_to, loop_detect, block_detect, i;
+	int child_from_to, level_down, i;
 
 	if (!ch->set.len)
 		{ HERE(); goto internal_error; }
@@ -1193,7 +1229,8 @@ int fpga_switch_chain(struct sw_chain* ch)
 			if (idx == NO_SWITCH)
 				break;
 			ch->set.sw[ch->set.len-1] = idx;
-			if (switch_list_contains(ch->model, ch->y, ch->x,
+			if (!fpga_switch_is_used(ch->model, ch->y, ch->x, idx)
+			    && switch_list_contains(ch->model, ch->y, ch->x,
 				ch->block_list, ch->block_list_len, idx)
 					== NO_SWITCH)
 				return 0;
@@ -1229,8 +1266,14 @@ int fpga_switch_chain(struct sw_chain* ch)
 			ch->model, ch->y, ch->x, idx));
 #endif
 		if (idx != NO_SWITCH) {
-			// If we have the same from-switch already among the
-			// parents, don't enter into a loop.
+			// There are four reasons why we don't want to
+			// go down one level:
+			// 1) switch is used
+			// 2) switch loop back to parent of chain
+			// 3) switch is blocked
+			// 4) max depth reached
+			level_down = 1;
+
 			child_from_to = SW_I(tile->switches[ch->set.sw[
 				ch->set.len-1]], !ch->from_to);
 #ifdef DBG_ENUM_SWITCH
@@ -1238,25 +1281,34 @@ int fpga_switch_chain(struct sw_chain* ch)
 				ch->model, ch->y, ch->x,
 				child_from_to));
 #endif
-			loop_detect = 0;
-			for (i = 0; i < ch->set.len; i++) {
-				int parent_connpt = SW_I(tile->switches[
-					ch->set.sw[i]], ch->from_to);
+			if (fpga_switch_is_used(ch->model, ch->y, ch->x, idx))
+				level_down = 0;
+
+			if (level_down) {
+				// If we have the same from-switch already
+				// among the parents, don't enter into a loop.
+				for (i = 0; i < ch->set.len; i++) {
+					int parent_connpt = SW_I(tile->switches[
+						ch->set.sw[i]], ch->from_to);
 #ifdef DBG_ENUM_SWITCH
-				printf("  parent connpt %s%s\n", connpt_str(
-					ch->model, ch->y, ch->x,
-					parent_connpt), parent_connpt
-					== child_from_to ? " (match)" : "");
+					printf("  parent connpt %s%s\n", connpt_str(
+						ch->model, ch->y, ch->x,
+						parent_connpt), parent_connpt
+						== child_from_to ? " (match)" : "");
 #endif
-				if (parent_connpt == child_from_to) {
-					loop_detect = 1;
-					break;
+					if (parent_connpt == child_from_to) {
+						level_down = 0;
+						break;
+					}
 				}
 			}
-			block_detect = switch_list_contains(ch->model,
-				ch->y, ch->x, ch->block_list,
-				ch->block_list_len, idx) != NO_SWITCH;
-			if (!loop_detect && !block_detect) {
+			if (level_down) {
+				// only go down if not blocked
+				level_down = switch_list_contains(ch->model,
+					ch->y, ch->x, ch->block_list,
+					ch->block_list_len, idx) == NO_SWITCH;
+			}
+			if (level_down) {
 				if (ch->set.len >= SW_SET_SIZE)
 					{ HERE(); goto internal_error; }
 				if (ch->max_depth < 1
@@ -1294,6 +1346,8 @@ int fpga_switch_chain(struct sw_chain* ch)
 			idx = fpga_switch_next(ch->model, ch->y, ch->x,
 				ch->set.sw[ch->set.len-1], ch->from_to);
 			if (idx != NO_SWITCH) {
+				if (fpga_switch_is_used(ch->model, ch->y, ch->x, idx))
+					continue;
 #ifdef DBG_ENUM_SWITCH
 				printf(" found %s\n", fpga_switch_print(
 					ch->model, ch->y, ch->x, idx));
@@ -1731,7 +1785,7 @@ static void fprintf_inout_pin(FILE* f, struct fpga_model* model,
 	fprintf(f, buf);
 }
 
-void fprintf_net(FILE* f, struct fpga_model* model, net_idx_t net_i)
+void fnet_printf(FILE* f, struct fpga_model* model, net_idx_t net_i)
 {
 	struct fpga_net* net;
 	int i;
@@ -1749,4 +1803,219 @@ void fprintf_net(FILE* f, struct fpga_model* model, net_idx_t net_i)
 			fpga_switch_print(model, net->el[i].y,
 				net->el[i].x, net->el[i].idx));
 	}
+}
+
+int fnet_autoroute(struct fpga_model* model, net_idx_t net_i)
+{
+	struct fpga_net* net_p;
+	struct fpga_device* dev_p, *out_dev, *in_dev;
+	struct switch_to_yx switch_to;
+	struct sw_set logic_route_set, iologic_route_set;
+	struct switch_to_rel switch_to_rel;
+	int i, out_i, in_i, rc;
+
+	// todo: gnd and vcc nets are special and have no outpin
+	//       but lots of inpins
+
+	net_p = fnet_get(model, net_i);
+	if (!net_p) FAIL(EINVAL);
+	out_i = -1;
+	in_i = -1;
+	for (i = 0; i < net_p->len; i++) {
+		if (!(net_p->el[i].idx & NET_IDX_IS_PINW)) {
+			// net already routed?
+			FAIL(EINVAL);
+		}
+		dev_p = FPGA_DEV(model, net_p->el[i].y,
+			net_p->el[i].x, net_p->el[i].dev_idx);
+		if ((net_p->el[i].idx & NET_IDX_MASK) < dev_p->num_pinw_in) {
+			// todo: right now we only support 1 inpin
+			if (in_i != -1) FAIL(ENOTSUP);
+			in_i = i;
+			continue;
+		}
+		if (out_i != -1) FAIL(EINVAL); // at most 1 outpin
+		out_i = i;
+	}
+	// todo: vcc and gnd have no outpin?
+	if (out_i == -1 || in_i == -1)
+		FAIL(EINVAL);
+	out_dev = FPGA_DEV(model, net_p->el[out_i].y,
+			net_p->el[out_i].x, net_p->el[out_i].dev_idx);
+	in_dev = FPGA_DEV(model, net_p->el[in_i].y,
+			net_p->el[in_i].x, net_p->el[in_i].dev_idx);
+	if (out_dev->type == DEV_IOB) {
+		if (in_dev->type != DEV_LOGIC)
+			FAIL(ENOTSUP);
+
+		// switch to ilogic
+		switch_to.yx_req = YX_DEV_ILOGIC;
+		switch_to.flags = SWTO_YX_DEF;
+		switch_to.model = model;
+		switch_to.y = net_p->el[out_i].y;
+		switch_to.x = net_p->el[out_i].x;
+		switch_to.start_switch = out_dev->pinw[net_p->el[out_i].idx
+			& NET_IDX_MASK];
+		switch_to.from_to = SW_FROM;
+		rc = fpga_switch_to_yx(&switch_to);
+		if (rc) FAIL(rc);
+		rc = fnet_add_sw(model, net_i, switch_to.y, switch_to.x,
+			switch_to.set.sw, switch_to.set.len);
+		if (rc) FAIL(rc);
+
+		// switch to ilogic routing
+		switch_to.yx_req = YX_ROUTING_TILE;
+		switch_to.flags = SWTO_YX_DEF;
+		switch_to.model = model;
+		switch_to.y = switch_to.dest_y;
+		switch_to.x = switch_to.dest_x;
+		switch_to.start_switch = switch_to.dest_connpt;
+		switch_to.from_to = SW_FROM;
+		rc = fpga_switch_to_yx(&switch_to);
+		if (rc) FAIL(rc);
+		rc = fnet_add_sw(model, net_i, switch_to.y, switch_to.x,
+			switch_to.set.sw, switch_to.set.len);
+		if (rc) FAIL(rc);
+
+		// switch from logic tile to logic routing tile
+		switch_to_rel.model = model;
+		switch_to_rel.start_y = net_p->el[in_i].y;
+		switch_to_rel.start_x = net_p->el[in_i].x;
+		switch_to_rel.start_switch =
+			in_dev->pinw[net_p->el[in_i].idx & NET_IDX_MASK];
+		switch_to_rel.from_to = SW_TO;
+		switch_to_rel.rel_y = 0;
+		switch_to_rel.rel_x = -1;
+		switch_to_rel.target_connpt = STRIDX_NO_ENTRY;
+		rc = fpga_switch_to_rel(&switch_to_rel);
+		if (rc) FAIL(rc);
+		rc = fnet_add_sw(model, net_i, switch_to_rel.start_y,
+			switch_to_rel.start_x, switch_to_rel.set.sw,
+			switch_to_rel.set.len);
+		if (rc) FAIL(rc);
+
+		// route from ilogic routing to logic routing
+		rc = froute_direct(model, switch_to.dest_y, switch_to.dest_x,
+			switch_to.dest_connpt,
+			switch_to_rel.dest_y, switch_to_rel.dest_x,
+			switch_to_rel.dest_connpt,
+			&iologic_route_set, &logic_route_set);
+		if (rc) FAIL(rc);
+		if (!iologic_route_set.len || !logic_route_set.len) FAIL(EINVAL);
+		rc = fnet_add_sw(model, net_i, switch_to.dest_y, switch_to.dest_x,
+			iologic_route_set.sw, iologic_route_set.len);
+		if (rc) FAIL(rc);
+		rc = fnet_add_sw(model, net_i, net_p->el[in_i].y, net_p->el[in_i].x-1,
+			logic_route_set.sw, logic_route_set.len);
+		if (rc) FAIL(rc);
+
+		return 0;
+	}
+	if (out_dev->type == DEV_LOGIC) {
+		if (in_dev->type != DEV_IOB)
+			FAIL(ENOTSUP);
+
+		// switch from ologic to iob
+		switch_to.yx_req = YX_DEV_OLOGIC;
+		switch_to.flags = SWTO_YX_DEF;
+		switch_to.model = model;
+		switch_to.y = net_p->el[in_i].y;
+		switch_to.x = net_p->el[in_i].x;
+		switch_to.start_switch = in_dev->pinw[net_p->el[in_i].idx
+			& NET_IDX_MASK];
+		switch_to.from_to = SW_TO;
+		rc = fpga_switch_to_yx(&switch_to);
+		if (rc) FAIL(rc);
+		rc = fnet_add_sw(model, net_i, switch_to.y, switch_to.x,
+			switch_to.set.sw, switch_to.set.len);
+		if (rc) FAIL(rc);
+
+		// switches inside ologic to ologic routing
+		switch_to.yx_req = YX_ROUTING_TILE;
+		switch_to.flags = SWTO_YX_DEF;
+		switch_to.model = model;
+		switch_to.y = switch_to.dest_y;
+		switch_to.x = switch_to.dest_x;
+		switch_to.start_switch = switch_to.dest_connpt;
+		switch_to.from_to = SW_TO;
+		rc = fpga_switch_to_yx(&switch_to);
+		if (rc) FAIL(rc);
+		rc = fnet_add_sw(model, net_i, switch_to.y, switch_to.x,
+			switch_to.set.sw, switch_to.set.len);
+		if (rc) FAIL(rc);
+
+		// switch inside logic tile
+		switch_to_rel.model = model;
+		switch_to_rel.start_y = net_p->el[out_i].y;
+		switch_to_rel.start_x = net_p->el[out_i].x;
+		switch_to_rel.start_switch =
+			out_dev->pinw[net_p->el[out_i].idx & NET_IDX_MASK];
+		switch_to_rel.from_to = SW_FROM;
+		switch_to_rel.rel_y = 0;
+		switch_to_rel.rel_x = -1;
+		switch_to_rel.target_connpt = STRIDX_NO_ENTRY;
+		rc = fpga_switch_to_rel(&switch_to_rel);
+		if (rc) FAIL(rc);
+		rc = fnet_add_sw(model, net_i, switch_to_rel.start_y,
+			switch_to_rel.start_x, switch_to_rel.set.sw,
+			switch_to_rel.set.len);
+		if (rc) FAIL(rc);
+
+		// route from logic routing to ilogic routing
+		rc = froute_direct(model, switch_to_rel.dest_y,
+			switch_to_rel.dest_x, switch_to_rel.dest_connpt,
+			switch_to.dest_y, switch_to.dest_x, switch_to.dest_connpt,
+			&logic_route_set, &iologic_route_set);
+		if (rc) FAIL(rc);
+		if (!iologic_route_set.len || !logic_route_set.len) FAIL(EINVAL);
+		rc = fnet_add_sw(model, net_i, switch_to.dest_y, switch_to.dest_x,
+			iologic_route_set.sw, iologic_route_set.len);
+		if (rc) FAIL(rc);
+		rc = fnet_add_sw(model, net_i, switch_to_rel.dest_y,
+			switch_to_rel.dest_x, logic_route_set.sw,
+			logic_route_set.len);
+		if (rc) FAIL(rc);
+
+		return 0;
+	}
+	FAIL(ENOTSUP);
+fail:
+	return rc;
+}
+
+int froute_direct(struct fpga_model* model, int start_y, int start_x,
+	str16_t start_pt, int end_y, int end_x, str16_t end_pt,
+	struct sw_set* start_set, struct sw_set* end_set)
+{
+	struct sw_conns conns;
+	struct sw_set end_switches;
+	int i, rc;
+
+	rc = fpga_swset_fromto(model, end_y, end_x, end_pt, SW_TO, &end_switches);
+	if (rc) FAIL(rc);
+	if (!end_switches.len) FAIL(EINVAL);
+
+	rc = construct_sw_conns(&conns, model, start_y, start_x, start_pt,
+		SW_FROM, /*max_depth*/ 1);
+	if (rc) FAIL(rc);
+
+	while (fpga_switch_conns(&conns) != NO_CONN) {
+		if (conns.dest_y != end_y
+		    || conns.dest_x != end_x) continue;
+		for (i = 0; i < end_switches.len; i++) {
+			if (conns.dest_str_i == fpga_switch_str_i(model, end_y,
+			    end_x, end_switches.sw[i], SW_FROM)) {
+				*start_set = conns.chain.set;
+				end_set->len = 1;
+				end_set->sw[0] = end_switches.sw[i];
+				return 0;
+			}
+		}
+	}
+	destruct_sw_conns(&conns);
+	start_set->len = 0;
+	end_set->len = 0;
+	return 0;
+fail:
+	return rc;
 }

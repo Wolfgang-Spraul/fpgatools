@@ -729,7 +729,7 @@ int printf_nets(FILE* f, struct fpga_model* model)
 
 	net_i = NO_NET;
 	while (!(rc = fnet_enum(model, net_i, &net_i)) && net_i != NO_NET)
-		fprintf_net(f, model, net_i);
+		fnet_printf(f, model, net_i);
 	if (rc) FAIL(rc);
 	return 0;
 fail:

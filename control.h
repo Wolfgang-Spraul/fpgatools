@@ -131,6 +131,8 @@ int fpga_swset_level_down(struct fpga_model* model, int y, int x,
 	struct sw_set* set, int from_to);
 void fpga_swset_print(struct fpga_model* model, int y, int x,
 	struct sw_set* set, int from_to);
+int fpga_swset_is_used(struct fpga_model* model, int y, int x,
+	swidx_t* sw, int len);
 
 // When calling, same_len must contain the size of the
 // same_sw array. Upon return same_len returns how many
@@ -328,5 +330,14 @@ int fnet_add_sw(struct fpga_model* model, net_idx_t net_i,
 int fnet_remove_sw(struct fpga_model* model, net_idx_t net_i,
 	int y, int x, const swidx_t* switches, int num_sw);
 void fnet_free_all(struct fpga_model* model);
+void fnet_printf(FILE* f, struct fpga_model* model, net_idx_t net_i);
 
-void fprintf_net(FILE* f, struct fpga_model* model, net_idx_t net_i);
+int fnet_autoroute(struct fpga_model* model, net_idx_t net_i);
+
+//
+// routing
+//
+
+int froute_direct(struct fpga_model* model, int start_y, int start_x,
+	str16_t start_pt, int end_y, int end_x, str16_t end_pt,
+	struct sw_set* start_set, struct sw_set* end_set);

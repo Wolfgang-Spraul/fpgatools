@@ -908,6 +908,38 @@ const char* wire_base(enum wire_type w)
 	EXIT(1);
 }
 
+enum wire_type base2wire(const char* str)
+{
+	if (!strncmp(str, "NL1", 3)) return W_NL1;
+	if (!strncmp(str, "NR1", 3)) return W_NR1;
+	if (!strncmp(str, "EL1", 3)) return W_EL1;
+	if (!strncmp(str, "ER1", 3)) return W_ER1;
+	if (!strncmp(str, "SL1", 3)) return W_SL1;
+	if (!strncmp(str, "SR1", 3)) return W_SR1;
+	if (!strncmp(str, "WL1", 3)) return W_WL1;
+	if (!strncmp(str, "WR1", 3)) return W_WR1;
+
+	if (!strncmp(str, "NN2", 3)) return W_NN2;
+	if (!strncmp(str, "NE2", 3)) return W_NE2;
+	if (!strncmp(str, "EE2", 3)) return W_EE2;
+	if (!strncmp(str, "SE2", 3)) return W_SE2;
+	if (!strncmp(str, "SS2", 3)) return W_SS2;
+	if (!strncmp(str, "SW2", 3)) return W_SW2;
+	if (!strncmp(str, "WW2", 3)) return W_WW2;
+	if (!strncmp(str, "NW2", 3)) return W_NW2;
+
+	if (!strncmp(str, "NN4", 3)) return W_NN4;
+	if (!strncmp(str, "NE4", 3)) return W_NE4;
+	if (!strncmp(str, "EE4", 3)) return W_EE4;
+	if (!strncmp(str, "SE4", 3)) return W_SE4;
+	if (!strncmp(str, "SS4", 3)) return W_SS4;
+	if (!strncmp(str, "SW4", 3)) return W_SW4;
+	if (!strncmp(str, "WW4", 3)) return W_WW4;
+	if (!strncmp(str, "NW4", 3)) return W_NW4;
+
+	return 0;
+}
+
 static int rotate_num(int cur, int off, int first, int last)
 {
 	if (cur+off > last)
@@ -939,8 +971,8 @@ enum wire_type wire_to_len(enum wire_type w, int first_len)
 	EXIT(1);
 }
 
-static const char* routing_wirestr(struct fpga_model* model,
-	enum extra_wires wire, int routing_io, int gclk_brk)
+static const char* routing_wirestr(enum extra_wires wire,
+	int routing_io, int gclk_brk)
 {
 	if (routing_io) {
 		if (wire == GFAN0) return "INT_IOI_GFAN0";
@@ -969,7 +1001,7 @@ static const char* routing_wirestr(struct fpga_model* model,
 			default: ;
 		}
 	}
-	return fpga_wirestr(model, wire);
+	return fpga_wire2str(wire);
 }
 
 static int init_routing_tile(struct fpga_model* model, int y, int x)
@@ -997,7 +1029,7 @@ static int init_routing_tile(struct fpga_model* model, int y, int x)
 			pf("SR%i", i), 0 /* bidir */);
 		if (rc) FAIL(rc);
 		rc = add_switch(model, y, x,
-			"KEEP1_WIRE", routing_wirestr(model, GFAN0+i, routing_io, gclk_brk), 0 /* bidir */);
+			"KEEP1_WIRE", routing_wirestr(GFAN0+i, routing_io, gclk_brk), 0 /* bidir */);
 		if (rc) FAIL(rc);
 	}
 
@@ -1013,14 +1045,14 @@ static int init_routing_tile(struct fpga_model* model, int y, int x)
 				is_bidir = 0;
 		}
 		rc = add_switch(model, y, x,
-			routing_wirestr(model, from_wire, routing_io, gclk_brk),
-			routing_wirestr(model, to_wire, routing_io, gclk_brk),
+			routing_wirestr(from_wire, routing_io, gclk_brk),
+			routing_wirestr(to_wire, routing_io, gclk_brk),
 			is_bidir);
 		if (rc) FAIL(rc);
 		if (is_bidir) {
 			rc = add_switch(model, y, x,
-				routing_wirestr(model, to_wire, routing_io, gclk_brk),
-				routing_wirestr(model, from_wire, routing_io, gclk_brk),
+				routing_wirestr(to_wire, routing_io, gclk_brk),
+				routing_wirestr(from_wire, routing_io, gclk_brk),
 				/* bidir */ 1);
 			if (rc) FAIL(rc);
 		}

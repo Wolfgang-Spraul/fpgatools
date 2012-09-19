@@ -743,7 +743,7 @@ const char* logicout_str(enum logicout_wire w)
 	return 0;
 }
 
-const char* fpga_wirestr(struct fpga_model* model, enum extra_wires wire)
+const char* fpga_wire2str(enum extra_wires wire)
 {
  	enum { NUM_BUFS = 8, BUF_SIZE = 64 };
 	static char buf[NUM_BUFS][BUF_SIZE];
@@ -807,9 +807,184 @@ const char* fpga_wirestr(struct fpga_model* model, enum extra_wires wire)
 	return buf[last_buf];
 }
 
-str16_t fpga_wirestr_i(struct fpga_model* model, enum extra_wires wire)
+str16_t fpga_wire2str_i(struct fpga_model* model, enum extra_wires wire)
 {
-	return strarray_find(&model->str, fpga_wirestr(model, wire));
+	return strarray_find(&model->str, fpga_wire2str(wire));
+}
+
+enum extra_wires fpga_str2wire(const char* str)
+{
+	const char* _str;
+	enum wire_type wtype;
+	int len, num, flags;
+
+	_str = str;
+	if (!strncmp(_str, "INT_IOI_", 8))
+		_str = &_str[8];
+
+	if (!strncmp(_str, "GCLK", 4)) {
+		len = strlen(_str);
+		if (!strcmp(&_str[len-4], "_BRK"))
+			len -= 4;
+		if (len > 4) {
+			num = to_i(&_str[4], len-4);
+			if (num >= 0 && num <= 15)
+				return GCLK0 + num;
+		}
+	}
+	if (!strncmp(_str, "LOGICIN_B", 9)) {
+		len = strlen(&_str[9]);
+		if (len) {
+			switch (to_i(&_str[9], len)) {
+				case X_A1: return LW + LI_A1;
+				case X_A2: return LW + LI_A2;
+				case X_A3: return LW + LI_A3;
+				case X_A4: return LW + LI_A4;
+				case X_A5: return LW + LI_A5;
+				case X_A6: return LW + LI_A6;
+				case X_AX: return LW + LI_AX;
+				case X_B1: return LW + LI_B1;
+				case X_B2: return LW + LI_B2;
+				case X_B3: return LW + LI_B3;
+				case X_B4: return LW + LI_B4;
+				case X_B5: return LW + LI_B5;
+				case X_B6: return LW + LI_B6;
+				case X_BX: return LW + LI_BX;
+				case X_C1: return LW + LI_C1;
+				case X_C2: return LW + LI_C2;
+				case X_C3: return LW + LI_C3;
+				case X_C4: return LW + LI_C4;
+				case X_C5: return LW + LI_C5;
+				case X_C6: return LW + LI_C6;
+				case X_CE: return LW + LI_CE;
+				case X_CX: return LW + LI_CX;
+				case X_D1: return LW + LI_D1;
+				case X_D2: return LW + LI_D2;
+				case X_D3: return LW + LI_D3;
+				case X_D4: return LW + LI_D4;
+				case X_D5: return LW + LI_D5;
+				case X_D6: return LW + LI_D6;
+				case X_DX: return LW + LI_DX;
+				case M_A1: return LW + (LI_A1|LD1);
+				case M_A2: return LW + (LI_A2|LD1);
+				case M_A3: return LW + (LI_A3|LD1);
+				case M_A4: return LW + (LI_A4|LD1);
+				case M_A5: return LW + (LI_A5|LD1);
+				case M_A6: return LW + (LI_A6|LD1);
+				case M_AX: return LW + (LI_AX|LD1);
+				case M_AI: return LW + (LI_AI|LD1);
+				case M_B1: return LW + (LI_B1|LD1);
+				case M_B2: return LW + (LI_B2|LD1);
+				case M_B3: return LW + (LI_B3|LD1);
+				case M_B4: return LW + (LI_B4|LD1);
+				case M_B5: return LW + (LI_B5|LD1);
+				case M_B6: return LW + (LI_B6|LD1);
+				case M_BX: return LW + (LI_BX|LD1);
+				case M_BI: return LW + (LI_BI|LD1);
+				case M_C1: return LW + (LI_C1|LD1);
+				case M_C2: return LW + (LI_C2|LD1);
+				case M_C3: return LW + (LI_C3|LD1);
+				case M_C4: return LW + (LI_C4|LD1);
+				case M_C5: return LW + (LI_C5|LD1);
+				case M_C6: return LW + (LI_C6|LD1);
+				case M_CE: return LW + (LI_CE|LD1);
+				case M_CX: return LW + (LI_CX|LD1);
+				case M_CI: return LW + (LI_CI|LD1);
+				case M_D1: return LW + (LI_D1|LD1);
+				case M_D2: return LW + (LI_D2|LD1);
+				case M_D3: return LW + (LI_D3|LD1);
+				case M_D4: return LW + (LI_D4|LD1);
+				case M_D5: return LW + (LI_D5|LD1);
+				case M_D6: return LW + (LI_D6|LD1);
+				case M_DX: return LW + (LI_DX|LD1);
+				case M_DI: return LW + (LI_DI|LD1);
+				case M_WE: return LW + (LI_WE|LD1);
+			}
+		}
+	}
+	if (!strncmp(_str, "LOGICOUT", 8)) {
+		len = strlen(&_str[8]);
+		if (len) {
+			switch (to_i(&_str[8], len)) {
+				case M_A:	return LW + (LO_A|LD1);
+				case M_AMUX:	return LW + (LO_AMUX|LD1);
+				case M_AQ:	return LW + (LO_AQ|LD1);
+				case M_B:	return LW + (LO_B|LD1);
+				case M_BMUX:	return LW + (LO_BMUX|LD1);
+				case M_BQ:	return LW + (LO_BQ|LD1);
+				case M_C:	return LW + (LO_C|LD1);
+				case M_CMUX:	return LW + (LO_CMUX|LD1);
+				case M_CQ:	return LW + (LO_CQ|LD1);
+				case M_D:	return LW + (LO_D|LD1);
+				case M_DMUX:	return LW + (LO_DMUX|LD1);
+				case M_DQ:	return LW + (LO_DQ|LD1);
+				case X_A:	return LW + LO_A;
+				case X_AMUX:	return LW + LO_AMUX;
+				case X_AQ:	return LW + LO_AQ;
+				case X_B:	return LW + LO_B;
+				case X_BMUX:	return LW + LO_BMUX;
+				case X_BQ:	return LW + LO_BQ;
+				case X_C:	return LW + LO_C;
+				case X_CMUX:	return LW + LO_CMUX;
+				case X_CQ:	return LW + LO_CQ;
+				case X_D:	return LW + LO_D;
+				case X_DMUX:	return LW + LO_DMUX;
+				case X_DQ:	return LW + LO_DQ;
+			}
+		}
+	}
+	if ((wtype = base2wire(_str))) {
+		flags = 0;
+		if (_str[3] == 'B')
+			flags |= DIR_BEG;
+		if (_str[3] != 'B' && _str[3] != 'E')
+			HERE();
+		else {
+			if (!strcmp(&_str[4], "_S0")) {
+				num = 0;
+				flags |= DIR_S0;
+			} else if (!strcmp(&_str[4], "_N3")) {
+				num = 3;
+				flags |= DIR_N3;
+			} else switch (_str[4]) {
+				case '0': num = 0; break;
+				case '1': num = 1; break;
+				case '2': num = 2; break;
+				case '3': num = 3; break;
+				default:
+					HERE();
+					num = -1;
+					break;
+			}
+			if (num != -1)
+				return DW + ((wtype*4 + num)|flags);
+		}
+	}
+	if (!strcmp(_str, "GFAN0")) return GFAN0;
+	if (!strcmp(_str, "GFAN1")) return GFAN1;
+	if (!strcmp(_str, "CLK0")) return CLK0;
+	if (!strcmp(_str, "CLK1")) return CLK1;
+	if (!strcmp(_str, "SR0")) return SR0;
+	if (!strcmp(_str, "SR1")) return SR1;
+	if (!strcmp(_str, "GND_WIRE")) return GND_WIRE;
+	if (!strcmp(_str, "VCC_WIRE")) return VCC_WIRE;
+	if (!strcmp(_str, "FAN_B")) return FAN_B;
+	if (!strncmp(_str, "LOGICIN", 7)) {
+		if (!strcmp(&_str[7], "20")) return LOGICIN20;
+		if (!strcmp(&_str[7], "21")) return LOGICIN21;
+		if (!strcmp(&_str[7], "44")) return LOGICIN44;
+		if (!strcmp(&_str[7], "52")) return LOGICIN52;
+		if (!strcmp(&_str[7], "_N21")) return LOGICIN_N21;
+		if (!strcmp(&_str[7], "_N28")) return LOGICIN_N28;
+		if (!strcmp(&_str[7], "_N52")) return LOGICIN_N52;
+		if (!strcmp(&_str[7], "_N60")) return LOGICIN_N60;
+		if (!strcmp(&_str[7], "_S20")) return LOGICIN_S20;
+		if (!strcmp(&_str[7], "_S36")) return LOGICIN_S36;
+		if (!strcmp(&_str[7], "_S44")) return LOGICIN_S44;
+		if (!strcmp(&_str[7], "_S62")) return LOGICIN_S62;
+	}
+	HERE();
+	return NO_WIRE;
 }
 
 int fdev_logic_inbit(pinw_idx_t idx)

@@ -764,6 +764,7 @@ enum wire_type
 #define W_TO_LEN4(w)			wire_to_len(w, FIRST_LEN4)
 
 const char* wire_base(enum wire_type w);
+enum wire_type base2wire(const char* str);
 enum wire_type rotate_wire(enum wire_type cur, int off);
 enum wire_type wire_to_len(enum wire_type w, int first_len);
 
@@ -824,7 +825,8 @@ enum extra_wires {
 	LW_LAST = 1999
 };
 
-const char* fpga_wirestr(struct fpga_model* model, enum extra_wires wire);
-str16_t fpga_wirestr_i(struct fpga_model* model, enum extra_wires wire);
+const char* fpga_wire2str(enum extra_wires wire);
+str16_t fpga_wire2str_i(struct fpga_model* model, enum extra_wires wire);
+enum extra_wires fpga_str2wire(const char* str);
 int fdev_logic_inbit(pinw_idx_t idx);
 int fdev_logic_outbit(pinw_idx_t idx);
