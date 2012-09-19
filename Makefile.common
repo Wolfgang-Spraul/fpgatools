@@ -1,0 +1,54 @@
+#
+# Makefile - fpgatools
+# Author: Wolfgang Spraul
+#
+# This is free and unencumbered software released into the public domain.
+# For details see the UNLICENSE file at the root of the source tree.
+#
+
+PREFIX ?= /usr/local
+
+
+# -fno-omit-frame-pointer and -ggdb add almost nothing to execution
+# time right now, so we can leave them in all the time.
+CFLAGS_DBG = -fno-omit-frame-pointer -ggdb
+CFLAGS += $(CFLAGS_DBG)
+
+CFLAGS += -Wall -Wshadow -Wmissing-prototypes -Wmissing-declarations \
+	-Wno-format-zero-length -Ofast
+
+# ----- Verbosity control -----------------------------------------------------
+
+CPP := $(CPP)   # make sure changing CC won't affect CPP
+
+CC_normal	:= $(CC)
+AR_normal	:= $(AR) rsc
+DEPEND_normal	:= $(CPP) $(CFLAGS) -D__OPTIMIZE__ -MM -MG
+
+CC_quiet	= @echo "  CC       " $@ && $(CC_normal)
+AR_quiet	= @echo "  AR       " $@ && $(AR_normal)
+DEPEND_quiet	= @$(DEPEND_normal)
+
+ifeq ($(V),1)
+    CC		= $(CC_normal)
+    AR		= $(AR_normal)
+    DEPEND	= $(DEPEND_normal)
+else
+    CC		= $(CC_quiet)
+    AR		= $(AR_quiet)
+    DEPEND	= $(DEPEND_quiet)
+endif
+
+# ----- Dependencies ----------------------------------------------------------
+
+MKDEP =									\
+	$(DEPEND) $< |							\
+	  sed 								\
+	    -e 's|^$(basename $(notdir $<)).o:|$@:|'			\
+	    -e '/^\(.*:\)\? */{p;s///;s/ *\\\?$$/ /;s/  */:\n/g;H;}'	\
+	    -e '$${g;p;}'						\
+	    -e d >$(basename $@).d;					\
+	  [ "$${PIPESTATUS[*]}" = "0 0" ] ||				\
+	  { rm -f $(basename $@).d; exit 1; }
+
+-include $(OBJS:.o=.d)

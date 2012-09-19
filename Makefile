@@ -6,68 +6,35 @@
 # For details see the UNLICENSE file at the root of the source tree.
 #
 
-PREFIX ?= /usr/local
 
-# ----- Verbosity control -----------------------------------------------------
+CFLAGS  += `pkg-config libxml-2.0 --cflags`
+CFLAGS  += -I$(CURDIR)/libs
 
-CPP := $(CPP)   # make sure changing CC won't affect CPP
+LDLIBS  += `pkg-config libxml-2.0 --libs`
 
-CC_normal	:= $(CC)
-AR_normal	:= $(AR) rsc
-DEPEND_normal	:= $(CPP) $(CFLAGS) -D__OPTIMIZE__ -MM -MG
-
-CC_quiet	= @echo "  CC       " $@ && $(CC_normal)
-AR_quiet	= @echo "  AR       " $@ && $(AR_normal)
-DEPEND_quiet	= @$(DEPEND_normal)
-
-ifeq ($(V),1)
-    CC		= $(CC_normal)
-    AR		= $(AR_normal)
-    DEPEND	= $(DEPEND_normal)
-else
-    CC		= $(CC_quiet)
-    AR		= $(AR_quiet)
-    DEPEND	= $(DEPEND_quiet)
-endif
-
-# ----- Rules -----------------------------------------------------------------
-
-.PHONY:	all test clean install uninstall
-.SECONDARY:
-
-# -fno-omit-frame-pointer and -ggdb add almost nothing to execution
-# time right now, so we can leave them in all the time.
-CFLAGS_DBG = -fno-omit-frame-pointer -ggdb
-CFLAGS += $(CFLAGS_DBG)
-
-CFLAGS += -Wall -Wshadow -Wmissing-prototypes -Wmissing-declarations \
-	-Wno-format-zero-length -Ofast
-CFLAGS += `pkg-config libxml-2.0 --cflags`
-LDLIBS += `pkg-config libxml-2.0 --libs`
-LDFLAGS += -Wl,-rpath,$(CURDIR)
-
-LIBFPGA_BIT_OBJS       = bit_frames.o bit_regs.o
-LIBFPGA_MODEL_OBJS     = model_main.o model_tiles.o model_devices.o \
-	model_ports.o model_conns.o model_switches.o model_helper.o
-LIBFPGA_FLOORPLAN_OBJS = floorplan.o
-LIBFPGA_CONTROL_OBJS   = control.o
-LIBFPGA_CORES_OBJS     = parts.o helper.o
+LDFLAGS += -Wl,-rpath,$(CURDIR)/libs
 
 OBJS 	= autotest.o bit2fp.o draw_svg_tiles.o fp2bit.o hstrrep.o \
-	merge_seq.o new_fp.o pair2net.o sort_seq.o
+	merge_seq.o new_fp.o pair2net.o sort_seq.o hello_world.o
 
-OBJS	+= $(LIBFPGA_BIT_OBJS) $(LIBFPGA_MODEL_OBJS) $(LIBFPGA_FLOORPLAN_OBJS) \
-	$(LIBFPGA_CONTROL_OBJS) $(LIBFPGA_CORES_OBJS)
+DYNAMIC_LIBS = libs/libfpga-model.so libs/libfpga-bit.so \
+	libs/libfpga-floorplan.so libs/libfpga-control.so \
+	libs/libfpga-cores.so
 
-DYNAMIC_LIBS = libfpga-model.so libfpga-bit.so libfpga-floorplan.so \
-	libfpga-control.so libfpga-cores.so
-
-DYNAMIC_HEADS = bit.h control.h floorplan.h helper.h model.h parts.h
-#- libfpga-test       autotest suite
-#- libfpga-design     larger design elements on top of libfpga-control
+.PHONY:	all test clean install uninstall FAKE
+.SECONDARY:
 
 all: new_fp fp2bit bit2fp draw_svg_tiles autotest hstrrep \
 	sort_seq merge_seq pair2net hello_world
+
+include Makefile.common
+
+%.o:	%.c
+	$(CC) $(CFLAGS) -o $@ -c $<
+	$(MKDEP)
+
+libs/%.so: FAKE
+	@make -C libs $(notdir $@)
 
 test: test_logic_cfg test_routing_sw
 
@@ -102,24 +69,6 @@ sort_seq: sort_seq.o $(DYNAMIC_LIBS)
 merge_seq: merge_seq.o $(DYNAMIC_LIBS)
 
 hstrrep: hstrrep.o $(DYNAMIC_LIBS)
-
-libfpga-cores.so: $(addprefix build-libs/,$(LIBFPGA_CORES_OBJS))
-
-libfpga-bit.so: $(addprefix build-libs/,$(LIBFPGA_BIT_OBJS))
-
-libfpga-model.so: $(addprefix build-libs/,$(LIBFPGA_MODEL_OBJS))
-
-libfpga-floorplan.so: $(addprefix build-libs/,$(LIBFPGA_FLOORPLAN_OBJS))
-
-libfpga-control.so: $(addprefix build-libs/,$(LIBFPGA_CONTROL_OBJS))
-
-%.so:
-	$(CC) -shared -Wl,-soname,$@ -o $@ $^
-
-build-libs/%.o:	%.c
-	@mkdir -p build-libs
-	$(CC) $(CFLAGS) -fPIC -o $@ -c $<
-	$(MKDEP)
 
 xc6slx9.fp: new_fp
 	./new_fp > $@
@@ -170,13 +119,14 @@ compare_%: xc6slx9.%
 	./bit2fp --printf-swbits | sort > $@
 
 clean:
+	@make -C libs clean
+	rm -f $(OBJS) *.d
 	rm -f $(foreach test,$(TESTS),"autotest.out/autotest_$(test).diff_to_gold")
 	rm -f $(foreach test,$(TESTS),"autotest.out/autotest_$(test).log")
 	rmdir --ignore-fail-on-non-empty autotest.out || exit 0
-	rm -rf build-libs
-	rm -f $(OBJS) *.d *.so \
-		draw_svg_tiles new_fp hstrrep sort_seq merge_seq autotest fp2bit bit2fp pair2net \
-		xc6slx9.fp xc6slx9.svg \
+	rm -f 	draw_svg_tiles new_fp hstrrep sort_seq merge_seq autotest fp2bit bit2fp pair2net \
+		hello_world 
+	rm -f	xc6slx9.fp xc6slx9.svg \
 		xc6slx9.tiles xc6slx9.devs xc6slx9.conns \
 		xc6slx9.ports xc6slx9.sw xc6slx9.cnets xc6slx9.swbits \
 		compare_tiles_matching.txt compare_tiles_diff.txt compare_tiles_extra.txt \
@@ -188,32 +138,11 @@ clean:
 		compare_swbits_matching.txt compare_swbits_diff.txt compare_swbits_extra.txt
 
 install:	all
-		mkdir -p $(DESTDIR)/$(PREFIX)/bin/
-		mkdir -p $(DESTDIR)/$(PREFIX)/lib/
-		install -m 755 fp2bit  $(DESTDIR)/$(PREFIX)/bin/
-		install -m 755 bit2fp $(DESTDIR)/$(PREFIX)/bin/
-		install -m 755 $(DYNAMIC_LIBS)  $(DESTDIR)/$(PREFIX)/lib/
-		mkdir -p $(DESTDIR)/$(PREFIX)/include/
-		install -m 644 $(DYNAMIC_HEADS) $(DESTDIR)/$(PREFIX)/include/
+	@make -C libs install
+	mkdir -p $(DESTDIR)/$(PREFIX)/bin/
+	install -m 755 fp2bit  $(DESTDIR)/$(PREFIX)/bin/
+	install -m 755 bit2fp $(DESTDIR)/$(PREFIX)/bin/
 
 uninstall:
-		rm -f $(DESTDIR)/$(PREFIX)/bin/{fp2bit,bit2fp}
-
-
-# ----- Dependencies ----------------------------------------------------------
-
-MKDEP =									\
-	$(DEPEND) $< |							\
-	  sed 								\
-	    -e 's|^$(basename $(notdir $<)).o:|$@:|'			\
-	    -e '/^\(.*:\)\? */{p;s///;s/ *\\\?$$/ /;s/  */:\n/g;H;}'	\
-	    -e '$${g;p;}'						\
-	    -e d >$(basename $@).d;					\
-	  [ "$${PIPESTATUS[*]}" = "0 0" ] ||				\
-	  { rm -f $(basename $@).d; exit 1; }
-
-%.o:	%.c
-	$(CC) $(CFLAGS) -o $@ -c $<
-	$(MKDEP)
-
--include $(OBJS:.o=.d)
+	@make -C libs uninstall
+	rm -f $(DESTDIR)/$(PREFIX)/bin/{fp2bit,bit2fp}
