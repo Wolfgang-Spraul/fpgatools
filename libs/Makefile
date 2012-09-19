@@ -61,4 +61,4 @@ install: all
 
 uninstall:
 	for f in $(DYNAMIC_HEADS); do rm -f $(DESTDIR)/$(PREFIX)/include/$$f || exit 1; done
-	for f in $(DYNAMIC_LIBS); do rm -f $(DESTDIR)/$(PREFIX)/lib/$$f || exit 1; done
+	for f in $(DYNAMIC_LIBS); do rm -f $(DESTDIR)/$(PREFIX)/lib/$$f* || exit 1; done
