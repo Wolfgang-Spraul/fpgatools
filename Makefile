@@ -140,8 +140,10 @@ clean:
 install:	all
 	@make -C libs install
 	mkdir -p $(DESTDIR)/$(PREFIX)/bin/
-	install -m 755 fp2bit  $(DESTDIR)/$(PREFIX)/bin/
+	install -m 755 fp2bit $(DESTDIR)/$(PREFIX)/bin/
 	install -m 755 bit2fp $(DESTDIR)/$(PREFIX)/bin/
+	chrpath -d $(DESTDIR)/$(PREFIX)/bin/fp2bit
+	chrpath -d $(DESTDIR)/$(PREFIX)/bin/bit2fp
 
 uninstall:
 	@make -C libs uninstall

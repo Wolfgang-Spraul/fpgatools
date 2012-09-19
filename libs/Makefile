@@ -6,6 +6,7 @@
 # For details see the UNLICENSE file at the root of the source tree.
 #
 
+LIBS_VERSION = 0.0.0
 
 LIBFPGA_BIT_OBJS       = bit_frames.o bit_regs.o
 LIBFPGA_MODEL_OBJS     = model_main.o model_tiles.o model_devices.o \
@@ -52,8 +53,11 @@ clean:
 install: all
 	mkdir -p $(DESTDIR)/$(PREFIX)/lib/
 	mkdir -p $(DESTDIR)/$(PREFIX)/include/
-	install -m 644 $(DYNAMIC_LIBS)  $(DESTDIR)/$(PREFIX)/lib/
 	install -m 644 $(DYNAMIC_HEADS) $(DESTDIR)/$(PREFIX)/include/
+	for f in $(DYNAMIC_LIBS); do \
+		install -m 644 $$f $(DESTDIR)/$(PREFIX)/lib/$$f.$(LIBS_VERSION) && \
+		(cd $(DESTDIR)/$(PREFIX)/lib/ && ln -s $$f.$(LIBS_VERSION) $$f) \
+		|| exit 1; done
 
 uninstall:
 	for f in $(DYNAMIC_HEADS); do rm -f $(DESTDIR)/$(PREFIX)/include/$$f || exit 1; done
