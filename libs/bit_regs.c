@@ -86,7 +86,7 @@ static void dump_header(struct fpga_config* cfg)
 	}
 }
 
-static int dump_regs(struct fpga_config* cfg, int start, int end)
+static int dump_regs(struct fpga_config* cfg, int start, int end, int dump_crc)
 {
 	uint16_t u16;
 	int i, rc;
@@ -156,8 +156,10 @@ static int dump_regs(struct fpga_config* cfg, int start, int end)
 			continue;
 		}
 		if (cfg->reg[i].reg == CRC) {
-			// Don't print CRC cfg->reg[i].int_v for cleaner diff.
-			printf("T1 CRC\n");
+			if (dump_crc)
+				printf("T1 CRC 0x%X\n", cfg->reg[i].int_v);
+			else
+				printf("T1 CRC\n");
 			continue;
 		}
 		if (cfg->reg[i].reg == COR1) {
@@ -905,7 +907,7 @@ int dump_config(struct fpga_config* cfg, int flags)
 	if (flags & DUMP_HEADER_STR)
 		dump_header(cfg);
 	if (flags & DUMP_REGS) {
-		rc = dump_regs(cfg, /*start*/ 0, cfg->num_regs_before_bits);
+		rc = dump_regs(cfg, /*start*/ 0, cfg->num_regs_before_bits, flags & DUMP_CRC);
 		if (rc) FAIL(rc);
 	}
 	if (flags & DUMP_BITS) {
@@ -915,9 +917,11 @@ int dump_config(struct fpga_config* cfg, int flags)
 		if (rc) FAIL(rc);
 		printf_iob(cfg->bits.d, cfg->bits.len,
 			BRAM_DATA_START + BRAM_DATA_LEN, 896*2/8);
+		if (flags & DUMP_CRC)
+			printf("auto-crc 0x%X\n", cfg->auto_crc);
 	}
 	if (flags & DUMP_REGS) {
-		rc = dump_regs(cfg, cfg->num_regs_before_bits, cfg->num_regs);
+		rc = dump_regs(cfg, cfg->num_regs_before_bits, cfg->num_regs, flags & DUMP_CRC);
 		if (rc) FAIL(rc);
 	}
 	return 0;
@@ -1021,6 +1025,7 @@ static int read_bits(struct fpga_config* cfg, uint8_t* d, int len, int inpos, in
 	cfg->bits.len = (4*505 + 4*144) * 130 + 896*2;
 	cfg->bits.d = calloc(cfg->bits.len, 1 /* elsize */);
 	if (!cfg->bits.d) FAIL(ENOMEM);
+	cfg->auto_crc = 0;
 
 	FAR_block = -1;
 	FAR_row = -1;
@@ -1185,8 +1190,7 @@ static int read_bits(struct fpga_config* cfg, uint8_t* d, int len, int inpos, in
 			if (u16) FAIL(EINVAL);
 		}
 		src_off += 2*u32;
-		// two CRC words
-		u32 = __be32_to_cpu(*(uint32_t*)&d[src_off]);
+		cfg->auto_crc = __be32_to_cpu(*(uint32_t*)&d[src_off]);
 		src_off += 4;
 	}
 	rc = EINVAL;
@@ -1455,7 +1459,7 @@ static struct fpga_config_reg_rw s_defregs_before_bits[] =
 	{{ CMD,		.int_v = CMD_RCRC },
 	 { REG_NOOP },
 	 { FLR,		.int_v = 896 }, 
-	 { COR1,	.int_v = COR1_DEF }, 
+	 { COR1,	.int_v = COR1_DEF | COR1_CRC_BYPASS }, 
 	 { COR2,	.int_v = COR2_DEF }, 
 	 { IDCODE,	.int_v = XC6SLX9 }, 
 	 { MASK,	.int_v = MASK_DEF }, 
@@ -1498,7 +1502,7 @@ static struct fpga_config_reg_rw s_defregs_after_bits[] =
 	 { CMD,		.int_v = CMD_START },
 	 { MASK,	.int_v = MASK_DEF | MASK_SECURITY }, 
 	 { CTL,		.int_v = CTL_DEF }, 
-	 { CRC },
+	 { CRC,		.int_v = DEFAULT_AUTO_CRC },
 	 { CMD,		.int_v = CMD_DESYNC },
 	 { REG_NOOP }, { REG_NOOP }, { REG_NOOP }, { REG_NOOP },
 	 { REG_NOOP }, { REG_NOOP }, { REG_NOOP }, { REG_NOOP },
@@ -1665,7 +1669,8 @@ static int write_bits(FILE* f, struct fpga_model* model)
 	nwritten = fwrite(&u16, /*size*/ 1, sizeof(u16), f);
 	if (nwritten != sizeof(u16)) FAIL(errno);
 
-	u32 = 0; // todo: 32-bit auto-crc value
+	// todo: support real auto-crc calculation
+	u32 = DEFAULT_AUTO_CRC;
 	u32 = __cpu_to_be32(u32);
 	nwritten = fwrite(&u32, /*size*/ 1, sizeof(u32), f);
 	if (nwritten != sizeof(u32)) FAIL(errno);

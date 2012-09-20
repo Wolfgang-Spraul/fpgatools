@@ -17,6 +17,7 @@ enum fpga_config_reg {
 #define REG_NOOP -1 // pseudo register for noops
 
 #define COR1_DEF		0x3D00
+#define COR1_CRC_BYPASS		0x0010
 #define COR2_DEF		0x09EE
 
 #define MASK_DEF		0xCF
@@ -66,6 +67,9 @@ struct fpga_bits
 	int len;
 };
 
+// Use the default value together with COR1 CRC_BYPASS
+#define DEFAULT_AUTO_CRC	0x9876DEFC
+
 struct fpga_config
 {
 	char header_str[4][MAX_HEADER_STR_LEN];
@@ -78,6 +82,7 @@ struct fpga_config
 	int FLR_reg;
 
 	struct fpga_bits bits;
+	uint32_t auto_crc;
 };
 
 int read_bitfile(struct fpga_config* cfg, FILE* f);
@@ -85,6 +90,7 @@ int read_bitfile(struct fpga_config* cfg, FILE* f);
 #define DUMP_HEADER_STR		0x0001
 #define DUMP_REGS		0x0002
 #define DUMP_BITS		0x0004
+#define DUMP_CRC		0x0008
 int dump_config(struct fpga_config* cfg, int flags);
 
 void free_config(struct fpga_config* cfg);

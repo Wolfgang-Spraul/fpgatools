@@ -12,7 +12,7 @@
 int main(int argc, char** argv)
 {
 	struct fpga_model model;
-	int bit_header, bit_regs, fp_header, pull_model, file_arg, flags;
+	int bit_header, bit_regs, bit_crc, fp_header, pull_model, file_arg, flags;
 	int print_swbits, rc = -1;
 	struct fpga_config config;
 
@@ -21,13 +21,14 @@ int main(int argc, char** argv)
 		fprintf(stderr,
 			"\n"
 			"%s - bitstream to floorplan\n"
-			"Usage: %s [--bit-header] [--bit-regs] [--no-model] [--no-fp-header]\n"
-			"       %*s [--printf-swbits] <bitstream_file>\n"
+			"Usage: %s [--bit-header] [--bit-regs] [--bit-crc] [--no-model]\n"
+			"       %*s [--no-fp-header] [--printf-swbits] <bitstream_file>\n"
 			"\n", argv[0], argv[0], (int) strlen(argv[0]), "");
 		goto fail;
 	}
    	bit_header = 0;
 	bit_regs = 0;
+	bit_crc = 0;
 	pull_model = 1;
 	fp_header = 1;
 	file_arg = 1;
@@ -38,6 +39,8 @@ int main(int argc, char** argv)
 			bit_header = 1;
 		else if (!strcmp(argv[file_arg], "--bit-regs"))
 			bit_regs = 1;
+		else if (!strcmp(argv[file_arg], "--bit-crc"))
+			bit_crc = 1;
 		else if (!strcmp(argv[file_arg], "--no-model"))
 			pull_model = 0;
 		else if (!strcmp(argv[file_arg], "--no-fp-header"))
@@ -83,6 +86,7 @@ int main(int argc, char** argv)
    	flags = DUMP_BITS;
 	if (bit_header) flags |= DUMP_HEADER_STR;
 	if (bit_regs) flags |= DUMP_REGS;
+	if (bit_crc) flags |= DUMP_CRC;
 	if ((rc = dump_config(&config, flags))) FAIL(rc);
 	return EXIT_SUCCESS;
 fail:

@@ -351,9 +351,9 @@ static int bitpos_is_set(struct extract_state* es, int y, int x,
 
 	if (swpos->minor == 20) {
 		two_bits_val = ((get_bit(es->bits, row_num, es->model->x_major[x],
-			20, start_in_frame + swpos->two_bits_o) != 0) << 0)
+			20, start_in_frame + swpos->two_bits_o) != 0) << 1)
 			| ((get_bit(es->bits, row_num, es->model->x_major[x],
-			20, start_in_frame + swpos->two_bits_o+1) != 0) << 1);
+			20, start_in_frame + swpos->two_bits_o+1) != 0) << 0);
 		if (two_bits_val != swpos->two_bits_val)
 			return 0;
 
