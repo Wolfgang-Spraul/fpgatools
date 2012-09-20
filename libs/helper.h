@@ -57,6 +57,7 @@ typedef struct _cfg_atom
 int atom_found(char* bits, const cfg_atom_t* atom);
 void atom_remove(char* bits, const cfg_atom_t* atom);
 
+int parse_boolexpr(const char* expr, uint64_t* lut);
 void printf_lut6(const char* cfg);
 // bits is tested only for 32 and 64
 const char* lut2bool(const uint64_t lut, int bits,
@@ -77,6 +78,11 @@ uint16_t frame_get_u16(uint8_t* frame_d);
 uint32_t frame_get_u32(uint8_t* frame_d);
 uint64_t frame_get_u64(uint8_t* frame_d);
 
+void frame_set_u8(uint8_t* frame_d, uint8_t v);
+void frame_set_u16(uint8_t* frame_d, uint16_t v);
+void frame_set_u32(uint8_t* frame_d, uint32_t v);
+void frame_set_u64(uint8_t* frame_d, uint64_t v);
+
 // if row is negative, it's an absolute frame number and major and
 // minor are ignored
 int printf_frames(uint8_t* bits, int max_frames, int row, int major,
@@ -86,6 +92,7 @@ int clb_empty(uint8_t* maj_bits, int idx);
 void printf_extrabits(uint8_t* maj_bits, int start_minor, int num_minors,
 	int start_bit, int num_bits, int row, int major);
 uint64_t read_lut64(uint8_t* two_minors, int off_in_frame);
+void write_lut64(uint8_t* two_minors, int off_in_frame, uint64_t u64);
 
 int get_vm_mb(void);
 int get_random(void);

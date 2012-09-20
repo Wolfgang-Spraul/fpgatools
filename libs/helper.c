@@ -177,7 +177,7 @@ fail:
 	return -1;
 }
 
-static int parse_boolexpr(const char* expr, uint64_t* lut)
+int parse_boolexpr(const char* expr, uint64_t* lut)
 {
 	int i, j, result, vars[6];
 
@@ -533,6 +533,40 @@ uint64_t frame_get_u64(uint8_t* frame_d)
 	return (high_w << 32) | low_w;
 }
 
+void frame_set_u8(uint8_t* frame_d, uint8_t v)
+{
+	int i;
+	for (i = 0; i < 8; i++)
+		if (v & (1<<(7-i))) (*frame_d) |= 1<<i;
+}
+
+void frame_set_u16(uint8_t* frame_d, uint16_t v)
+{
+	uint16_t high_b, low_b;
+	high_b = v >> 8;
+	low_b = v & 0xFF;
+	frame_set_u8(frame_d, high_b);
+	frame_set_u8(frame_d+1, low_b);
+}
+
+void frame_set_u32(uint8_t* frame_d, uint32_t v)
+{
+	uint32_t high_w, low_w;
+	high_w = v >> 16;
+	low_w = v & 0xFFFF;
+	frame_set_u16(frame_d, low_w);
+	frame_set_u16(frame_d+2, high_w);
+}
+
+void frame_set_u64(uint8_t* frame_d, uint64_t v)
+{
+	uint32_t high_w, low_w;
+	low_w = v & 0xFFFFFFFF;
+	high_w = v >> 32;
+	frame_set_u32(frame_d, low_w);
+	frame_set_u32(frame_d+4, high_w);
+}
+
 int printf_frames(uint8_t* bits, int max_frames,
 	int row, int major, int minor, int print_empty)
 {
@@ -637,6 +671,22 @@ uint64_t read_lut64(uint8_t* two_minors, int off_in_frame)
 			lut64 |= 1LL << (j*4+3);
 	}
 	return lut64;
+}
+
+void write_lut64(uint8_t* two_minors, int off_in_frame, uint64_t u64)
+{
+	int i;
+
+	for (i = 0; i < 16; i++) {
+		if (u64 & (1LL << (i*4)))
+			frame_set_bit(two_minors, off_in_frame+i*2);
+		if (u64 & (1LL << (i*4+1)))
+			frame_set_bit(two_minors, off_in_frame+(i*2)+1);
+		if (u64 & (1LL << (i*4+2)))
+			frame_set_bit(two_minors + FRAME_SIZE, off_in_frame+i*2);
+		if (u64 & (1LL << (i*4+3)))
+			frame_set_bit(two_minors + FRAME_SIZE, off_in_frame+(i*2)+1);
+	}
 }
 
 int get_vm_mb(void)

@@ -350,10 +350,10 @@ static int bitpos_is_set(struct extract_state* es, int y, int x,
 		start_in_frame = row_pos*64;
 
 	if (swpos->minor == 20) {
-		two_bits_val = (get_bit(es->bits, row_num, es->model->x_major[x],
-			20, start_in_frame + swpos->two_bits_o) << 1)
-			| (get_bit(es->bits, row_num, es->model->x_major[x],
-			20, start_in_frame + swpos->two_bits_o+1) << 2);
+		two_bits_val = ((get_bit(es->bits, row_num, es->model->x_major[x],
+			20, start_in_frame + swpos->two_bits_o) != 0) << 0)
+			| ((get_bit(es->bits, row_num, es->model->x_major[x],
+			20, start_in_frame + swpos->two_bits_o+1) != 0) << 1);
 		if (two_bits_val != swpos->two_bits_val)
 			return 0;
 
@@ -362,10 +362,10 @@ static int bitpos_is_set(struct extract_state* es, int y, int x,
 			return 0;
 	} else {
 		two_bits_val = 
-			(get_bit(es->bits, row_num, es->model->x_major[x], swpos->minor,
-				start_in_frame + swpos->two_bits_o/2) << 1)
-			| (get_bit(es->bits, row_num, es->model->x_major[x], swpos->minor+1,
-			    start_in_frame + swpos->two_bits_o/2) << 2);
+			((get_bit(es->bits, row_num, es->model->x_major[x], swpos->minor,
+				start_in_frame + swpos->two_bits_o/2) != 0) << 1)
+			| ((get_bit(es->bits, row_num, es->model->x_major[x], swpos->minor+1,
+			    start_in_frame + swpos->two_bits_o/2) != 0) << 0);
 		if (two_bits_val != swpos->two_bits_val)
 			return 0;
 
@@ -646,17 +646,21 @@ fail:
 
 static int write_logic(struct fpga_bits* bits, struct fpga_model* model)
 {
-	int dev_idx, row, row_pos, rc;
+	int dev_idx, row, row_pos, xm_col, rc;
 	int x, y, byte_off;
 	struct fpga_device* dev;
+	uint64_t u64;
 	uint8_t* u8_p;
 
 	for (x = LEFT_SIDE_WIDTH; x < model->x_width-RIGHT_SIDE_WIDTH; x++) {
-		if (!is_atx(X_FABRIC_LOGIC_COL|X_CENTER_LOGIC_COL, model, x))
+		xm_col = is_atx(X_FABRIC_LOGIC_XM_COL, model, x);
+		if (!xm_col && !is_atx(X_FABRIC_LOGIC_XL_COL, model, x))
 			continue;
+
 		for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
-			if (!has_device_type(model, y, x, DEV_LOGIC, LOGIC_M))
+			if (!has_device(model, y, x, DEV_LOGIC))
 				continue;
+
 			row = which_row(y, model);
 			row_pos = pos_in_row(y, model);
 			if (row == -1 || row_pos == -1 || row_pos == 8) {
@@ -668,13 +672,59 @@ static int write_logic(struct fpga_bits* bits, struct fpga_model* model)
 			byte_off = row_pos * 8;
 			if (row_pos >= 8) byte_off += HCLK_BYTES;
 
-			// X device
-			dev_idx = fpga_dev_idx(model, y, x, DEV_LOGIC, DEV_LOGX);
-			if (dev_idx == NO_DEV) FAIL(EINVAL);
-			dev = FPGA_DEV(model, y, x, dev_idx);
-			if (!dev->instantiated)
-				continue;
-printf("y%02i x%02i major %i byte_off %i\n", y, x, model->x_major[x], byte_off);
+			if (xm_col) {
+				// X device
+				dev_idx = fpga_dev_idx(model, y, x, DEV_LOGIC, DEV_LOGX);
+				if (dev_idx == NO_DEV) FAIL(EINVAL);
+				dev = FPGA_DEV(model, y, x, dev_idx);
+				if (dev->instantiated) {
+					u64 = 0x000000B000600086ULL;
+					frame_set_u64(u8_p + 26*FRAME_SIZE + byte_off, u64);
+
+					if (dev->u.logic.a2d[LUT_A].lut6
+					    && dev->u.logic.a2d[LUT_A].lut6[0]) {
+						HERE(); // not supported
+					}
+					if (dev->u.logic.a2d[LUT_B].lut6
+					    && dev->u.logic.a2d[LUT_B].lut6[0]) {
+						HERE(); // not supported
+					}
+					if (dev->u.logic.a2d[LUT_C].lut6
+					    && dev->u.logic.a2d[LUT_C].lut6[0]) {
+						HERE(); // not supported
+					}
+					if (dev->u.logic.a2d[LUT_D].lut6
+					    && dev->u.logic.a2d[LUT_D].lut6[0]) {
+						rc = parse_boolexpr(dev->u.logic.a2d[LUT_D].lut6, &u64);
+						if (rc) FAIL(rc);
+						write_lut64(u8_p + 29*FRAME_SIZE, byte_off*8, u64);
+					}
+				}
+
+				// M device
+				dev_idx = fpga_dev_idx(model, y, x, DEV_LOGIC, DEV_LOGM);
+				if (dev_idx == NO_DEV) FAIL(EINVAL);
+				dev = FPGA_DEV(model, y, x, dev_idx);
+				if (dev->instantiated) {
+					HERE();
+				}
+			} else {
+				// X device
+				dev_idx = fpga_dev_idx(model, y, x, DEV_LOGIC, DEV_LOGX);
+				if (dev_idx == NO_DEV) FAIL(EINVAL);
+				dev = FPGA_DEV(model, y, x, dev_idx);
+				if (dev->instantiated) {
+					HERE();
+				}
+
+				// L device
+				dev_idx = fpga_dev_idx(model, y, x, DEV_LOGIC, DEV_LOGL);
+				if (dev_idx == NO_DEV) FAIL(EINVAL);
+				dev = FPGA_DEV(model, y, x, dev_idx);
+				if (dev->instantiated) {
+					HERE();
+				}
+			}
 		}
 	}
 	return 0;
