@@ -292,6 +292,7 @@ int is_atx(int check, struct fpga_model* model, int x);
 #define YX_DEV_ILOGIC		0x0008
 #define YX_DEV_OLOGIC		0x0010
 #define YX_DEV_LOGIC		0x0020
+#define YX_DEV_IOB		0x0040
 
 int is_atyx(int check, struct fpga_model* model, int y, int x);
 

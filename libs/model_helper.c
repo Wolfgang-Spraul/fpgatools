@@ -591,6 +591,7 @@ int is_atyx(int check, struct fpga_model* model, int y, int x)
 	if (check & YX_DEV_ILOGIC && has_device(model, y, x, DEV_ILOGIC)) return 1;
 	if (check & YX_DEV_OLOGIC && has_device(model, y, x, DEV_OLOGIC)) return 1;
 	if (check & YX_DEV_LOGIC && has_device(model, y, x, DEV_LOGIC)) return 1;
+	if (check & YX_DEV_IOB && has_device(model, y, x, DEV_IOB)) return 1;
 	return 0;
 }
 

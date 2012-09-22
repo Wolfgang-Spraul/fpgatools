@@ -611,31 +611,280 @@ static int find_bitpos(struct fpga_model* model, int y, int x, swidx_t sw)
 	return -1;
 }
 
+static int write_routing_sw(struct fpga_bits* bits, struct fpga_model* model, int y, int x)
+{
+	struct fpga_tile* tile;
+	int i, bit_pos, rc;
+
+	// go through enabled switches, lookup in sw_bitpos
+	// and set bits
+	tile = YX_TILE(model, y, x);
+	for (i = 0; i < tile->num_switches; i++) {
+		if (!(tile->switches[i] & SWITCH_USED))
+			continue;
+		bit_pos = find_bitpos(model, y, x, i);
+		if (bit_pos == -1) {
+			HERE();
+			continue;
+		}
+		rc = bitpos_set_bits(bits, model, y, x,
+			&model->sw_bitpos[bit_pos]);
+		if (rc) FAIL(rc);
+	}
+	return 0;
+fail:
+	return rc;
+}
+
+#define MAX_IOLOGIC_SWBLOCK	4
+#define MAX_IOLOGIC_BITS	4
+struct iologic_sw_pos
+{
+	const char* to[MAX_IOLOGIC_SWBLOCK];
+	const char* from[MAX_IOLOGIC_SWBLOCK];
+	int minor[MAX_IOLOGIC_BITS];
+	int b64[MAX_IOLOGIC_BITS];
+};
+
+struct iologic_sw_pos s_left_io_swpos[] = { {{0}} };
+struct iologic_sw_pos s_right_io_swpos[] = { {{0}} };
+struct iologic_sw_pos s_top_outer_io_swpos[] = { {{0}} };
+struct iologic_sw_pos s_top_inner_io_swpos[] = { {{0}} };
+
+struct iologic_sw_pos s_bot_inner_io_swpos[] =
+{
+	// input
+	{{"D_ILOGIC_IDATAIN_IODELAY_S"}, {"BIOI_INNER_IBUF0"},
+ 	 {23, 23, -1},
+	 {28, 29}},
+	{{"D_ILOGIC_SITE"}, {"D_ILOGIC_IDATAIN_IODELAY"}, {26, -1}, {20}},
+	{{"D_ILOGIC_SITE_S"}, {"D_ILOGIC_IDATAIN_IODELAY_S"}, {26, -1}, {23}},
+	{{"DFB_ILOGIC_SITE"}, {"D_ILOGIC_SITE"}, {28, -1}, {63}},
+	{{"DFB_ILOGIC_SITE_S"}, {"D_ILOGIC_SITE_S"}, {28, -1}, {0}},
+	{{"FABRICOUT_ILOGIC_SITE"}, {"D_ILOGIC_SITE"}, {29, -1}, {49}},
+	{{"FABRICOUT_ILOGIC_SITE_S"}, {"D_ILOGIC_SITE_S"}, {29, -1}, {14}},
+
+	// output
+	{{"OQ_OLOGIC_SITE", "BIOI_INNER_O0"},
+	 {"D1_OLOGIC_SITE", "OQ_OLOGIC_SITE"},
+	 {26, 27, 28, -1},
+	 {40, 21, 57}},
+	{{"OQ_OLOGIC_SITE_S", "BIOI_INNER_O1"},
+	 {"D1_OLOGIC_SITE_S", "OQ_OLOGIC_SITE_S"},
+	 {26, 27, 28, -1},
+	 {43, 56, 6}},
+
+	{{"IOI_LOGICOUT0"}, {"IOI_INTER_LOGICOUT0"}, {-1}},
+	{{"IOI_LOGICOUT7"}, {"IOI_INTER_LOGICOUT7"}, {-1}},
+	{{"IOI_INTER_LOGICOUT0"}, {"FABRICOUT_ILOGIC_SITE"}, {-1}},
+	{{"IOI_INTER_LOGICOUT7"}, {"FABRICOUT_ILOGIC_SITE_S"}, {-1}},
+	{{"D_ILOGIC_IDATAIN_IODELAY"}, {"BIOI_INNER_IBUF0"}, {-1}},
+	{{"D_ILOGIC_IDATAIN_IODELAY_S"}, {"BIOI_INNER_IBUF1"}, {-1}},
+	{{"D1_OLOGIC_SITE"}, {"IOI_LOGICINB31"}, {-1}},
+	{{0}}
+};
+
+struct iologic_sw_pos s_bot_outer_io_swpos[] =
+{
+	// input
+	{{"D_ILOGIC_IDATAIN_IODELAY_S"}, {"BIOI_OUTER_IBUF0"},
+ 	 {23, 23, -1},
+	 {28, 29}},
+	{{"D_ILOGIC_SITE"}, {"D_ILOGIC_IDATAIN_IODELAY"}, {26, -1}, {20}},
+	{{"D_ILOGIC_SITE_S"}, {"D_ILOGIC_IDATAIN_IODELAY_S"}, {26, -1}, {23}},
+	{{"DFB_ILOGIC_SITE"}, {"D_ILOGIC_SITE"}, {28, -1}, {63}},
+	{{"DFB_ILOGIC_SITE_S"}, {"D_ILOGIC_SITE_S"}, {28, -1}, {0}},
+	{{"FABRICOUT_ILOGIC_SITE"}, {"D_ILOGIC_SITE"}, {29, -1}, {49}},
+	{{"FABRICOUT_ILOGIC_SITE_S"}, {"D_ILOGIC_SITE_S"}, {29, -1}, {14}},
+
+	// output
+	{{"OQ_OLOGIC_SITE", "BIOI_OUTER_O0"},
+	 {"D1_OLOGIC_SITE", "OQ_OLOGIC_SITE"},
+	 {26, 27, 28, -1},
+	 {40, 21, 57}},
+	{{"OQ_OLOGIC_SITE_S", "BIOI_OUTER_O1"},
+	 {"D1_OLOGIC_SITE_S", "OQ_OLOGIC_SITE_S"},
+	 {26, 27, 28, -1},
+	 {43, 56, 6}},
+
+	{{"OQ_OLOGIC_SITE", "BIOI_OUTER_O0"},
+	 {"D1_OLOGIC_SITE", "OQ_OLOGIC_SITE"},
+	 {26, 27, 28, -1},
+	 {40, 21, 57}},
+
+	{{"IOI_LOGICOUT0"}, {"IOI_INTER_LOGICOUT0"}, {-1}},
+	{{"IOI_LOGICOUT7"}, {"IOI_INTER_LOGICOUT7"}, {-1}},
+	{{"IOI_INTER_LOGICOUT0"}, {"FABRICOUT_ILOGIC_SITE"}, {-1}},
+	{{"IOI_INTER_LOGICOUT7"}, {"FABRICOUT_ILOGIC_SITE_S"}, {-1}},
+	{{"D_ILOGIC_IDATAIN_IODELAY"}, {"BIOI_INNER_IBUF0"}, {-1}},
+	{{"D_ILOGIC_IDATAIN_IODELAY_S"}, {"BIOI_INNER_IBUF1"}, {-1}},
+	{{"D1_OLOGIC_SITE"}, {"IOI_LOGICINB31"}, {-1}},
+	{{0}}
+};
+
+struct str_sw
+{
+	const char* from_str;
+	const char* to_str;
+};
+
+static int get_used_switches(struct fpga_model* model, int y, int x,
+	struct str_sw** str_sw, int* num_sw)
+{
+	int i, num_used, rc;
+	struct fpga_tile* tile;
+
+	tile = YX_TILE(model, y, x);
+	num_used = 0;
+	for (i = 0; i < tile->num_switches; i++) {
+		if (tile->switches[i] & SWITCH_USED)
+			num_used++;
+	}
+	if (!num_used) {
+		*num_sw = 0;
+		*str_sw = 0;
+		return 0;
+	}
+	*str_sw = malloc(num_used * sizeof(**str_sw));
+	if (!(*str_sw)) FAIL(ENOMEM);
+	*num_sw = 0;
+	for (i = 0; i < tile->num_switches; i++) {
+		if (!(tile->switches[i] & SWITCH_USED))
+			continue;
+		(*str_sw)[*num_sw].from_str =
+			fpga_switch_str(model, y, x, i, SW_FROM);
+		(*str_sw)[*num_sw].to_str =
+			fpga_switch_str(model, y, x, i, SW_TO);
+		(*num_sw)++;
+	}
+	return 0;
+fail:
+	return rc;
+}
+
+// returns the number of found to-from pairs from search_sw that
+// were found in the str_sw array, but only if all of the to-from
+// pairs in search_sw were found. The found array then contains
+// the indices into str_sw were the matches were made.
+// If not all to-from pairs were found (or none), returns 0.
+static int find_switches(struct iologic_sw_pos* search_sw,
+	struct str_sw* str_sw, int num_str_sw, int (*found)[MAX_IOLOGIC_SWBLOCK])
+{
+	int i, j;
+
+	for (i = 0; i < MAX_IOLOGIC_SWBLOCK && search_sw->to[i]; i++) {
+		for (j = 0; j < num_str_sw; j++) {
+			if (!str_sw[j].to_str)
+				continue;
+			if (strcmp(str_sw[j].to_str, search_sw->to[i])
+			    || strcmp(str_sw[j].from_str, search_sw->from[i]))
+				continue;
+			(*found)[i] = j;
+			break;
+		}
+		if (j >= num_str_sw)
+			return 0;
+	}
+	return i;
+}
+
+static int write_iologic_sw(struct fpga_bits* bits, struct fpga_model* model,
+	int y, int x)
+{
+	int i, j, row_num, row_pos, start_in_frame, rc;
+	struct iologic_sw_pos* sw_pos;
+	struct str_sw* str_sw;
+	int found_i[MAX_IOLOGIC_SWBLOCK];
+	int num_sw, num_found;
+
+	if (x < LEFT_SIDE_WIDTH) {
+		if (x != LEFT_IO_DEVS) FAIL(EINVAL);
+		sw_pos = s_left_io_swpos;
+	} else if (x >= model->x_width-RIGHT_SIDE_WIDTH) {
+		if (x != model->x_width - RIGHT_IO_DEVS_O) FAIL(EINVAL);
+		sw_pos = s_right_io_swpos;
+	} else if (y == TOP_OUTER_IO)
+		sw_pos = s_top_outer_io_swpos;
+	else if (y == TOP_INNER_IO)
+		sw_pos = s_top_inner_io_swpos;
+	else if (y == model->y_height-BOT_INNER_IO)
+		sw_pos = s_bot_inner_io_swpos;
+	else if (y == model->y_height-BOT_OUTER_IO)
+		sw_pos = s_bot_outer_io_swpos;
+	else FAIL(EINVAL);
+
+	is_in_row(model, y, &row_num, &row_pos);
+	if (row_num == -1 || row_pos == -1
+	    || row_pos == HCLK_POS) FAIL(EINVAL);
+	if (row_pos > HCLK_POS)
+		start_in_frame = (row_pos-1)*64 + 16;
+	else
+		start_in_frame = row_pos*64;
+
+	rc = get_used_switches(model, y, x, &str_sw, &num_sw);
+	if (rc) FAIL(rc);
+
+	for (i = 0; sw_pos[i].to[0]; i++) {
+		if (!(num_found = find_switches(&sw_pos[i], str_sw,
+			num_sw, &found_i))) continue;
+		for (j = 0; sw_pos[i].minor[j] != -1; j++) {
+			set_bit(bits, row_num, model->x_major[x],
+				sw_pos[i].minor[j], start_in_frame
+				+ sw_pos[i].b64[j]);
+		}
+		// remove switches from 'used' array
+		for (j = 0; j < num_found; j++)
+			str_sw[found_i[j]].to_str = 0;
+	}
+
+	// check whether all switches were found
+	for (i = 0; i < num_sw; i++) {
+		if (!str_sw[i].to_str)
+			continue;
+		fprintf(stderr, "#E %s:%i unsupported switch "
+			"y%02i x%02i %s -> %s\n", __FILE__, __LINE__,
+			y, x, str_sw[i].from_str, str_sw[i].to_str);
+	}
+	free(str_sw);
+	return 0;
+fail:
+	return rc;
+}
+
 static int write_switches(struct fpga_bits* bits, struct fpga_model* model)
 {
 	struct fpga_tile* tile;
-	int x, y, i, bit_pos, rc;
+	int x, y, i, rc;
 
 	for (x = 0; x < model->x_width; x++) {
 		for (y = 0; y < model->y_height; y++) {
-			if (!is_atx(X_ROUTING_COL, model, x)
-			    || y < TOP_IO_TILES
-			    || y >= model->y_height-BOT_IO_TILES
-			    || is_aty(Y_ROW_HORIZ_AXSYMM|Y_CHIP_HORIZ_REGS,
-					model, y))
+			if (is_atx(X_ROUTING_COL, model, x)
+			    && y >= TOP_IO_TILES
+			    && y < model->y_height-BOT_IO_TILES
+			    && !is_aty(Y_ROW_HORIZ_AXSYMM|Y_CHIP_HORIZ_REGS,
+					model, y)) {
+				rc = write_routing_sw(bits, model, y, x);
+				if (rc) FAIL(rc);
+				continue;
+			}
+			if (is_atyx(YX_DEV_ILOGIC, model, y, x)) {
+				rc = write_iologic_sw(bits, model, y, x);
+				if (rc) FAIL(rc);
+				continue;
+			}
+			// todo: there are probably switches in logic and
+			//       iob that need bits, and switches in other
+			//       tiles that need no bits...
+			if (is_atyx(YX_DEV_LOGIC|YX_DEV_IOB, model, y, x))
 				continue;
 			tile = YX_TILE(model, y, x);
-			// go through enabled switches, lookup in sw_bitpos
-			// and set bits
 			for (i = 0; i < tile->num_switches; i++) {
 				if (!(tile->switches[i] & SWITCH_USED))
 					continue;
-				bit_pos = find_bitpos(model, y, x, i);
-				if (bit_pos == -1)
-					continue;
-				rc = bitpos_set_bits(bits, model, y, x,
-					&model->sw_bitpos[bit_pos]);
-				if (rc) FAIL(rc);
+				fprintf(stderr, "#E %s:%i unsupported switch "
+					"y%02i x%02i %s\n", __FILE__, __LINE__,
+					y, x,
+					fpga_switch_print(model, y, x, i));
 			}
 		}
 	}
