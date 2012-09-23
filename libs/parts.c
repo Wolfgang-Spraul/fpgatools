@@ -150,6 +150,15 @@ enum major_type get_major_type(int idcode, int major)
 	return major_types[major];
 }
 
+int get_rightside_major(int idcode)
+{
+	if ((idcode & IDCODE_MASK) != XC6SLX9) {
+		HERE();
+		return -1;
+	}
+	return XC6_SLX9_RIGHTMOST_MAJOR;
+}
+
 //
 // routing switches
 //

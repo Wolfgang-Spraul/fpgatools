@@ -446,6 +446,7 @@ struct fpgadev_logic
 enum { IOBM = 1, IOBS };
 typedef char IOSTANDARD[32];
 #define IO_LVCMOS33	"LVCMOS33"
+#define IO_SSTL2_I	"SSTL2_I" // drive attr and slew not used here?
 enum { BYPASS_MUX_I = 1, BYPASS_MUX_O, BYPASS_MUX_T };
 enum { IMUX_I_B = 1, IMUX_I };
 enum { SLEW_SLOW = 1, SLEW_FAST, SLEW_QUIETIO };

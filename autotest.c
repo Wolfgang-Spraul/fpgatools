@@ -24,6 +24,7 @@ struct test_state
 	int cmdline_skip;
 	char cmdline_diff_exec[1024];
 	int dry_run;
+	int diff_to_null;
 
 	struct fpga_model* model;
 	// test filenames are: tmp_dir/autotest_<base_name>_<diff_counter>.???
@@ -81,7 +82,8 @@ static int diff_printf(struct test_state* tstate)
 	snprintf(path, sizeof(path), "%s/autotest_%s_%06i", tstate->tmp_dir,
 		tstate->base_name, tstate->next_diff_counter);
 	path_base = strlen(path);
-	if (tstate->next_diff_counter == tstate->cmdline_skip + 1)
+	if (tstate->diff_to_null
+	    || tstate->next_diff_counter == tstate->cmdline_skip + 1)
 		strcpy(prior_fp, "/dev/null");
 	else {
 		snprintf(prior_fp, sizeof(prior_fp), "%s/autotest_%s_%06i.fp",
@@ -872,6 +874,118 @@ fail:
 	return rc;
 }
 
+static int test_iob_config(struct test_state* tstate)
+{
+	int iob_y, iob_x, iob_type_idx, rc;
+	net_idx_t net_idx;
+	struct fpga_device* dev;
+
+	tstate->diff_to_null = 1;
+
+	// P45 is an IOBS
+	rc = fpga_find_iob(tstate->model, "P45", &iob_y, &iob_x, &iob_type_idx);
+	if (rc) FAIL(rc);
+	rc = fdev_iob_input(tstate->model, iob_y, iob_x, iob_type_idx);
+	if (rc) FAIL(rc);
+	dev = fdev_p(tstate->model, iob_y, iob_x, DEV_IOB, iob_type_idx);
+	if (!dev) FAIL(EINVAL);
+
+	if ((rc = diff_printf(tstate))) FAIL(rc);
+	dev->u.iob.I_mux = IMUX_I_B;
+	if ((rc = diff_printf(tstate))) FAIL(rc);
+
+	fdev_delete(tstate->model, iob_y, iob_x, DEV_IOB, iob_type_idx);
+
+	// P46 is an IOBM
+	rc = fpga_find_iob(tstate->model, "P46", &iob_y, &iob_x, &iob_type_idx);
+	if (rc) FAIL(rc);
+	rc = fdev_iob_input(tstate->model, iob_y, iob_x, iob_type_idx);
+	if (rc) FAIL(rc);
+	if ((rc = diff_printf(tstate))) FAIL(rc);
+	fdev_delete(tstate->model, iob_y, iob_x, DEV_IOB, iob_type_idx);
+
+	// P47 is an IOBS
+	rc = fpga_find_iob(tstate->model, "P47", &iob_y, &iob_x, &iob_type_idx);
+	if (rc) FAIL(rc);
+	rc = fdev_iob_output(tstate->model, iob_y, iob_x, iob_type_idx);
+	if (rc) FAIL(rc);
+	dev = fdev_p(tstate->model, iob_y, iob_x, DEV_IOB, iob_type_idx);
+	if (!dev) FAIL(EINVAL);
+
+	// least amount of bits:
+	dev->u.iob.slew = SLEW_SLOW;
+	dev->u.iob.drive_strength = 8;
+	dev->u.iob.suspend = SUSP_3STATE;
+
+	dev->u.iob.suspend = SUSP_3STATE;
+	rc = diff_printf(tstate); if (rc) FAIL(rc);
+	dev->u.iob.suspend = SUSP_3STATE_OCT_ON;
+	rc = diff_printf(tstate); if (rc) FAIL(rc);
+	dev->u.iob.suspend = SUSP_3STATE_KEEPER;
+	rc = diff_printf(tstate); if (rc) FAIL(rc);
+	dev->u.iob.suspend = SUSP_3STATE_PULLUP;
+	rc = diff_printf(tstate); if (rc) FAIL(rc);
+	dev->u.iob.suspend = SUSP_3STATE_PULLDOWN;
+	rc = diff_printf(tstate); if (rc) FAIL(rc);
+	dev->u.iob.suspend = SUSP_LAST_VAL;
+	rc = diff_printf(tstate); if (rc) FAIL(rc);
+	dev->u.iob.suspend = SUSP_3STATE;
+
+	dev->u.iob.drive_strength = 2;
+	rc = diff_printf(tstate); if (rc) FAIL(rc);
+	dev->u.iob.drive_strength = 4;
+	rc = diff_printf(tstate); if (rc) FAIL(rc);
+	dev->u.iob.drive_strength = 6;
+	rc = diff_printf(tstate); if (rc) FAIL(rc);
+	dev->u.iob.drive_strength = 8;
+	rc = diff_printf(tstate); if (rc) FAIL(rc);
+	dev->u.iob.drive_strength = 12;
+	rc = diff_printf(tstate); if (rc) FAIL(rc);
+	dev->u.iob.drive_strength = 16;
+	rc = diff_printf(tstate); if (rc) FAIL(rc);
+	dev->u.iob.drive_strength = 24;
+	rc = diff_printf(tstate); if (rc) FAIL(rc);
+	dev->u.iob.drive_strength = 8;
+
+	dev->u.iob.slew = SLEW_SLOW;
+	rc = diff_printf(tstate); if (rc) FAIL(rc);
+	dev->u.iob.slew = SLEW_FAST;
+	rc = diff_printf(tstate); if (rc) FAIL(rc);
+	dev->u.iob.slew = SLEW_QUIETIO;
+	rc = diff_printf(tstate); if (rc) FAIL(rc);
+	dev->u.iob.slew = SLEW_SLOW;
+
+	fdev_delete(tstate->model, iob_y, iob_x, DEV_IOB, iob_type_idx);
+
+	// P48 is an IOBM
+	rc = fpga_find_iob(tstate->model, "P48", &iob_y, &iob_x, &iob_type_idx);
+	if (rc) FAIL(rc);
+	rc = fdev_iob_output(tstate->model, iob_y, iob_x, iob_type_idx);
+	if (rc) FAIL(rc);
+	dev = fdev_p(tstate->model, iob_y, iob_x, DEV_IOB, iob_type_idx);
+	if (!dev) FAIL(EINVAL);
+
+	// least bits
+	dev->u.iob.slew = SLEW_SLOW;
+	dev->u.iob.drive_strength = 8;
+	dev->u.iob.suspend = SUSP_3STATE;
+
+	// new net
+	rc = fnet_new(tstate->model, &net_idx);
+	if (rc) FAIL(rc);
+	
+	// add iob port
+	rc = fnet_add_port(tstate->model, net_idx, iob_y, iob_x,
+		DEV_IOB, iob_type_idx, IOB_IN_O);
+	if (rc) FAIL(rc);
+	if ((rc = diff_printf(tstate))) FAIL(rc);
+
+	fdev_delete(tstate->model, iob_y, iob_x, DEV_IOB, iob_type_idx);
+	return 0;
+fail:
+	return rc;
+}
+
 #define DEFAULT_DIFF_EXEC "./autotest_diff.sh"
 
 static void printf_help(const char* argv_0, const char** available_tests)
@@ -879,8 +993,8 @@ static void printf_help(const char* argv_0, const char** available_tests)
 	printf( "\n"
 		"fpgatools automatic test suite\n"
 		"\n"
-		"Usage: %s [--test=<name>] [--diff=<diff executable>] [--skip=<num>]\n"
-		"       %*s [--dry-run]\n"
+		"Usage: %s [--test=<name>] [--skip=<num>] [--dry-run]\n"
+		"       %*s [--diff=<diff executable>]\n"
 		"Default diff executable: " DEFAULT_DIFF_EXEC "\n", argv_0, (int) strlen(argv_0), "");
 
 	if (available_tests) {
@@ -902,7 +1016,7 @@ int main(int argc, char** argv)
 	char param[1024], cmdline_test[1024];
 	int i, param_skip, rc;
 	const char* available_tests[] =
-		{ "logic_cfg", "routing_sw", "io_sw", 0 };
+		{ "logic_cfg", "routing_sw", "io_sw", "iob_cfg", 0 };
 
 	// flush after every line is better for the autotest
 	// output, tee, etc.
@@ -923,6 +1037,7 @@ int main(int argc, char** argv)
 	tstate.cmdline_diff_exec[0] = 0;
 	cmdline_test[0] = 0;
 	tstate.dry_run = -1;
+	tstate.diff_to_null = 0;
 	for (i = 1; i < argc; i++) {
 		memset(param, 0, sizeof(param));
 		if (sscanf(argv[i], "--test=%1023c", param) == 1) {
@@ -1020,6 +1135,10 @@ int main(int argc, char** argv)
 	}
 	if (!strcmp(cmdline_test, "io_sw")) {
 		rc = test_iologic_switches(&tstate);
+		if (rc) FAIL(rc);
+	}
+	if (!strcmp(cmdline_test, "iob_cfg")) {
+		rc = test_iob_config(&tstate);
 		if (rc) FAIL(rc);
 	}
 

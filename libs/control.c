@@ -579,9 +579,9 @@ int fdev_iob_output(struct fpga_model* model, int y, int x, int type_idx)
 	if (rc) FAIL(rc);
 
 	strcpy(dev->u.iob.ostandard, IO_LVCMOS33);
-	dev->u.iob.drive_strength = 12;
+	dev->u.iob.drive_strength = 8;
 	dev->u.iob.O_used = 1;
-	dev->u.iob.slew = SLEW_SLOW;
+	dev->u.iob.slew = SLEW_QUIETIO;
 	dev->u.iob.suspend = SUSP_3STATE;
 	dev->instantiated = 1;
 	return 0;

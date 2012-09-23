@@ -364,14 +364,18 @@ const char* lut2bool(const uint64_t lut, int bits,
 int printf_iob(uint8_t* d, int len, int inpos, int num_entries)
 {
 	int i, j, num_printed;
+	uint64_t u64;
 
 	num_printed = 0;
 	for (i = 0; i < num_entries; i++) {
-		if (*(uint32_t*)&d[inpos+i*8] || *(uint32_t*)&d[inpos+i*8+4]) {
-			printf("iob i%i", i);
-			for (j = 0; j < 8; j++)
-				printf(" %02X", d[inpos+i*8+j]);
-			printf("\n");
+		u64 = frame_get_u64(&d[inpos+i*8]);
+		if (u64) {
+			printf("iob i%i 0x%016llX\n", i,
+				(long long unsigned) u64);
+			for (j = 0; j < 64; j++) {
+				if (u64 & (1ULL << j))
+					printf("iob i%i b%i\n", i, j);
+			}
 			num_printed++;
 		}
 	}

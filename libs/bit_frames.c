@@ -94,11 +94,12 @@ struct extract_state
 
 static int write_iobs(struct fpga_bits* bits, struct fpga_model* model)
 {
-	int i, y, x, type_idx, part_idx, dev_idx, rc;
+	int i, y, x, type_idx, part_idx, dev_idx, first_iob, rc;
 	struct fpga_device* dev;
-	uint32_t* u32_p;
+	uint64_t u64;
 	const char* name;
 
+	first_iob = 0;
 	for (i = 0; (name = fpga_enum_iob(model, i, &y, &x, &type_idx)); i++) {
 		dev_idx = fpga_dev_idx(model, y, x, DEV_IOB, type_idx);
 		if (dev_idx == NO_DEV) FAIL(EINVAL);
@@ -112,15 +113,71 @@ static int write_iobs(struct fpga_bits* bits, struct fpga_model* model)
 			continue;
 		}
 
-		u32_p = (uint32_t*)
-			&bits->d[IOB_DATA_START + part_idx*IOB_ENTRY_LEN];
-		if (dev->u.iob.O_used) {
-			u32_p[0] = 0x00000180;
-			u32_p[1] = 0x06001100;
-		} else if (dev->u.iob.I_mux == IMUX_I) {
-			u32_p[0] = 0x00000107;
-			u32_p[1] = 0x0B002400;
+		if (!first_iob) {
+			first_iob = 1;
+			// todo: is this right on the other sides?
+			set_bit(bits, /*row*/ 0, get_rightside_major(XC6SLX9),
+				/*minor*/ 22, 64*15+XC6_HCLK_BITS+4);
 		}
+
+		if (dev->u.iob.istandard[0]) {
+			if (!dev->u.iob.I_mux
+			    || !dev->u.iob.bypass_mux
+			    || strcmp(dev->u.iob.istandard, IO_LVCMOS33)
+			    || dev->u.iob.ostandard[0])
+				HERE();
+
+			u64 = XC6_IOB_INSTANTIATED;
+			u64 |= XC6_IOB_INPUT_LVCMOS33;
+			if (dev->u.iob.I_mux == IMUX_I)
+				u64 |= XC6_IOB_IMUX_I;
+			else if (dev->u.iob.I_mux == IMUX_I_B)
+				u64 |= XC6_IOB_IMUX_I_B;
+			else HERE();
+
+			frame_set_u64(&bits->d[IOB_DATA_START
+				+ part_idx*IOB_ENTRY_LEN], u64);
+		} else if (dev->u.iob.ostandard[0]) {
+			if (!dev->u.iob.drive_strength
+			    || !dev->u.iob.slew
+			    || !dev->u.iob.suspend
+			    || strcmp(dev->u.iob.ostandard, IO_LVCMOS33)
+			    || dev->u.iob.istandard[0])
+				HERE();
+
+			u64 = XC6_IOB_INSTANTIATED;
+			// for now we always turn on O_PINW even if no net
+			// is connected to the pinw
+			u64 |= XC6_IOB_MASK_O_PINW;
+			switch (dev->u.iob.drive_strength) {
+				case 2: u64 |= XC6_IOB_OUTPUT_LVCMOS33_DRIVE_2; break;
+				case 4: u64 |= XC6_IOB_OUTPUT_LVCMOS33_DRIVE_4; break;
+				case 6: u64 |= XC6_IOB_OUTPUT_LVCMOS33_DRIVE_6; break;
+				case 8: u64 |= XC6_IOB_OUTPUT_LVCMOS33_DRIVE_8; break;
+				case 12: u64 |= XC6_IOB_OUTPUT_LVCMOS33_DRIVE_12; break;
+				case 16: u64 |= XC6_IOB_OUTPUT_LVCMOS33_DRIVE_16; break;
+				case 24: u64 |= XC6_IOB_OUTPUT_LVCMOS33_DRIVE_24; break;
+				default: HERE();
+			}
+			switch (dev->u.iob.slew) {
+				case SLEW_SLOW: u64 |= XC6_IOB_SLEW_SLOW; break;
+				case SLEW_QUIETIO: u64 |= XC6_IOB_SLEW_QUIETIO; break;
+				case SLEW_FAST: u64 |= XC6_IOB_SLEW_FAST; break;
+				default: HERE();
+			}
+			switch (dev->u.iob.suspend) {
+				case SUSP_LAST_VAL: u64 |= XC6_IOB_SUSP_LAST_VAL; break;
+				case SUSP_3STATE: u64 |= XC6_IOB_SUSP_3STATE; break;
+				case SUSP_3STATE_PULLUP: u64 |= XC6_IOB_SUSP_3STATE_PULLUP; break;
+				case SUSP_3STATE_PULLDOWN: u64 |= XC6_IOB_SUSP_3STATE_PULLDOWN; break;
+				case SUSP_3STATE_KEEPER: u64 |= XC6_IOB_SUSP_3STATE_KEEPER; break;
+				case SUSP_3STATE_OCT_ON: u64 |= XC6_IOB_SUSP_3STATE_OCT_ON; break;
+				default: HERE();
+			}
+
+			frame_set_u64(&bits->d[IOB_DATA_START
+				+ part_idx*IOB_ENTRY_LEN], u64);
+		} else HERE();
 	}
 	return 0;
 fail:
@@ -129,16 +186,18 @@ fail:
 
 static int extract_iobs(struct fpga_model* model, struct fpga_bits* bits)
 {
-	int i, num_iobs, iob_y, iob_x, iob_idx, dev_idx, rc;
-	uint32_t* u32_p;
+	int i, num_iobs, iob_y, iob_x, iob_idx, dev_idx, first_iob, rc;
+	uint64_t u64;
 	const char* iob_sitename;
 	struct fpga_device* dev;
+	struct fpgadev_iob cfg;
 
 	num_iobs = get_num_iobs(XC6SLX9);
+	first_iob = 0;
 	for (i = 0; i < num_iobs; i++) {
-		u32_p = (uint32_t*) &bits->d[IOB_DATA_START + i*IOB_ENTRY_LEN];
-		if (!u32_p[0] && !u32_p[1])
-			continue;
+		u64 = frame_get_u64(&bits->d[IOB_DATA_START + i*IOB_ENTRY_LEN]);
+		if (!u64) continue;
+
 		iob_sitename = get_iob_sitename(XC6SLX9, i);
 		if (!iob_sitename) {
 			HERE();
@@ -149,27 +208,118 @@ static int extract_iobs(struct fpga_model* model, struct fpga_bits* bits)
 		dev_idx = fpga_dev_idx(model, iob_y, iob_x, DEV_IOB, iob_idx);
 		if (dev_idx == NO_DEV) FAIL(EINVAL);
 		dev = FPGA_DEV(model, iob_y, iob_x, dev_idx);
+		memset(&cfg, 0, sizeof(cfg));
 
-		// we only support 2 hardcoded types of IOB right now
-		// todo: bit 7 goes on when out-net connected?
-		if ((u32_p[0] & 0xFFFFFF7F) == 0x00000100
-		    && u32_p[1] == 0x06001100) {
+		if (!first_iob) {
+			first_iob = 1;
+			// todo: is this right on the other sides?
+			if (!get_bit(bits, /*row*/ 0, get_rightside_major(XC6SLX9),
+				/*minor*/ 22, 64*15+XC6_HCLK_BITS+4))
+				HERE();
+			clear_bit(bits, /*row*/ 0, get_rightside_major(XC6SLX9),
+				/*minor*/ 22, 64*15+XC6_HCLK_BITS+4);
+		}
+		if ((u64 & XC6_IOB_MASK_INSTANTIATED) == XC6_IOB_INSTANTIATED)
+			u64 &= ~XC6_IOB_MASK_INSTANTIATED;
+		else
+			HERE();
+
+		switch (u64 & XC6_IOB_MASK_IO) {
+			case XC6_IOB_INPUT_LVCMOS33:
+				u64 &= ~XC6_IOB_MASK_IO;
+
+				strcpy(cfg.istandard, IO_LVCMOS33);
+				cfg.bypass_mux = BYPASS_MUX_I;
+
+				switch (u64 & XC6_IOB_MASK_I_MUX) {
+					case XC6_IOB_IMUX_I:
+						u64 &= ~XC6_IOB_MASK_I_MUX;
+						cfg.I_mux = IMUX_I;
+						break;
+					case XC6_IOB_IMUX_I_B:
+						u64 &= ~XC6_IOB_MASK_I_MUX;
+						cfg.I_mux = IMUX_I_B;
+						break;
+					default: HERE();
+				}
+				break;
+			case XC6_IOB_OUTPUT_LVCMOS33_DRIVE_2:
+			case XC6_IOB_OUTPUT_LVCMOS33_DRIVE_4:
+			case XC6_IOB_OUTPUT_LVCMOS33_DRIVE_6:
+			case XC6_IOB_OUTPUT_LVCMOS33_DRIVE_8:
+			case XC6_IOB_OUTPUT_LVCMOS33_DRIVE_12:
+			case XC6_IOB_OUTPUT_LVCMOS33_DRIVE_16:
+			case XC6_IOB_OUTPUT_LVCMOS33_DRIVE_24:
+				u64 &= ~XC6_IOB_MASK_IO;
+				u64 &= ~XC6_IOB_MASK_O_PINW;
+
+				strcpy(cfg.ostandard, IO_LVCMOS33);
+				cfg.O_used = 1;
+				switch (u64 & XC6_IOB_MASK_IO) {
+					case XC6_IOB_OUTPUT_LVCMOS33_DRIVE_2:
+						cfg.drive_strength = 2; break;
+					case XC6_IOB_OUTPUT_LVCMOS33_DRIVE_4:
+						cfg.drive_strength = 4; break;
+					case XC6_IOB_OUTPUT_LVCMOS33_DRIVE_6:
+						cfg.drive_strength = 6; break;
+					case XC6_IOB_OUTPUT_LVCMOS33_DRIVE_8:
+						cfg.drive_strength = 8; break;
+					case XC6_IOB_OUTPUT_LVCMOS33_DRIVE_12:
+						cfg.drive_strength = 12; break;
+					case XC6_IOB_OUTPUT_LVCMOS33_DRIVE_16:
+						cfg.drive_strength = 16; break;
+					case XC6_IOB_OUTPUT_LVCMOS33_DRIVE_24:
+						cfg.drive_strength = 24; break;
+					default: HERE();
+				}
+				switch (u64 & XC6_IOB_MASK_SLEW) {
+					case XC6_IOB_SLEW_SLOW:
+						u64 &= ~XC6_IOB_MASK_SLEW;
+						cfg.slew = SLEW_SLOW;
+						break;
+					case XC6_IOB_SLEW_QUIETIO:
+						u64 &= ~XC6_IOB_MASK_SLEW;
+						cfg.slew = SLEW_QUIETIO;
+						break;
+					case XC6_IOB_SLEW_FAST:
+						u64 &= ~XC6_IOB_MASK_SLEW;
+						cfg.slew = SLEW_FAST;
+						break;
+					default: HERE();
+				}
+				switch (u64 & XC6_IOB_MASK_SUSPEND) {
+					case XC6_IOB_SUSP_3STATE:
+						u64 &= ~XC6_IOB_MASK_SUSPEND;
+						cfg.suspend = SUSP_3STATE;
+						break;
+					case XC6_IOB_SUSP_3STATE_OCT_ON:
+						u64 &= ~XC6_IOB_MASK_SUSPEND;
+						cfg.suspend = SUSP_3STATE_OCT_ON;
+						break;
+					case XC6_IOB_SUSP_3STATE_KEEPER:
+						u64 &= ~XC6_IOB_MASK_SUSPEND;
+						cfg.suspend = SUSP_3STATE_KEEPER;
+						break;
+					case XC6_IOB_SUSP_3STATE_PULLUP:
+						u64 &= ~XC6_IOB_MASK_SUSPEND;
+						cfg.suspend = SUSP_3STATE_PULLUP;
+						break;
+					case XC6_IOB_SUSP_3STATE_PULLDOWN:
+						u64 &= ~XC6_IOB_MASK_SUSPEND;
+						cfg.suspend = SUSP_3STATE_PULLDOWN;
+						break;
+					case XC6_IOB_SUSP_LAST_VAL:
+						u64 &= ~XC6_IOB_MASK_SUSPEND;
+						cfg.suspend = SUSP_LAST_VAL;
+						break;
+					default: HERE();
+				}
+				break;
+			default: HERE(); break;
+		}
+		if (!u64) {
 			dev->instantiated = 1;
-			strcpy(dev->u.iob.ostandard, IO_LVCMOS33);
-			dev->u.iob.drive_strength = 12;
-			dev->u.iob.O_used = 1;
-			dev->u.iob.slew = SLEW_SLOW;
-			dev->u.iob.suspend = SUSP_3STATE;
-			u32_p[0] = 0;
-			u32_p[1] = 0;
-		} else if (u32_p[0] == 0x00000107
-			   && u32_p[1] == 0x0B002400) {
-			dev->instantiated = 1;
-			strcpy(dev->u.iob.istandard, IO_LVCMOS33);
-			dev->u.iob.bypass_mux = BYPASS_MUX_I;
-			dev->u.iob.I_mux = IMUX_I;
-			u32_p[0] = 0;
-			u32_p[1] = 0;
+			dev->u.iob = cfg;
 		} else HERE();
 	}
 	return 0;
