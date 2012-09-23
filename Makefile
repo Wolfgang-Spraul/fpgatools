@@ -36,9 +36,11 @@ include Makefile.common
 libs/%.so: FAKE
 	@make -C libs $(notdir $@)
 
-test: test_logic_cfg test_routing_sw
+test: test_logic_cfg test_iob_cfg test_routing_sw
 
 test_logic_cfg: autotest.out/autotest_logic_cfg.diff_to_gold
+
+test_iob_cfg: autotest.out/autotest_iob_cfg.diff_to_gold
 
 test_routing_sw: autotest.out/autotest_routing_sw.diff_to_gold
 

@@ -540,8 +540,12 @@ uint64_t frame_get_u64(uint8_t* frame_d)
 void frame_set_u8(uint8_t* frame_d, uint8_t v)
 {
 	int i;
-	for (i = 0; i < 8; i++)
-		if (v & (1<<(7-i))) (*frame_d) |= 1<<i;
+	for (i = 0; i < 8; i++) {
+		if (v & (1<<(7-i)))
+			(*frame_d) |= 1<<i;
+		else
+			(*frame_d) &= ~(1<<i);
+	}
 }
 
 void frame_set_u16(uint8_t* frame_d, uint16_t v)

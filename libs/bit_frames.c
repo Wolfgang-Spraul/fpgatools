@@ -161,8 +161,8 @@ static int write_iobs(struct fpga_bits* bits, struct fpga_model* model)
 			}
 			switch (dev->u.iob.slew) {
 				case SLEW_SLOW: u64 |= XC6_IOB_SLEW_SLOW; break;
-				case SLEW_QUIETIO: u64 |= XC6_IOB_SLEW_QUIETIO; break;
 				case SLEW_FAST: u64 |= XC6_IOB_SLEW_FAST; break;
+				case SLEW_QUIETIO: u64 |= XC6_IOB_SLEW_QUIETIO; break;
 				default: HERE();
 			}
 			switch (dev->u.iob.suspend) {
@@ -250,11 +250,6 @@ static int extract_iobs(struct fpga_model* model, struct fpga_bits* bits)
 			case XC6_IOB_OUTPUT_LVCMOS33_DRIVE_12:
 			case XC6_IOB_OUTPUT_LVCMOS33_DRIVE_16:
 			case XC6_IOB_OUTPUT_LVCMOS33_DRIVE_24:
-				u64 &= ~XC6_IOB_MASK_IO;
-				u64 &= ~XC6_IOB_MASK_O_PINW;
-
-				strcpy(cfg.ostandard, IO_LVCMOS33);
-				cfg.O_used = 1;
 				switch (u64 & XC6_IOB_MASK_IO) {
 					case XC6_IOB_OUTPUT_LVCMOS33_DRIVE_2:
 						cfg.drive_strength = 2; break;
@@ -270,20 +265,24 @@ static int extract_iobs(struct fpga_model* model, struct fpga_bits* bits)
 						cfg.drive_strength = 16; break;
 					case XC6_IOB_OUTPUT_LVCMOS33_DRIVE_24:
 						cfg.drive_strength = 24; break;
-					default: HERE();
+					default: HERE(); break;
 				}
+				u64 &= ~XC6_IOB_MASK_IO;
+				u64 &= ~XC6_IOB_MASK_O_PINW;
+				strcpy(cfg.ostandard, IO_LVCMOS33);
+				cfg.O_used = 1;
 				switch (u64 & XC6_IOB_MASK_SLEW) {
 					case XC6_IOB_SLEW_SLOW:
 						u64 &= ~XC6_IOB_MASK_SLEW;
 						cfg.slew = SLEW_SLOW;
 						break;
-					case XC6_IOB_SLEW_QUIETIO:
-						u64 &= ~XC6_IOB_MASK_SLEW;
-						cfg.slew = SLEW_QUIETIO;
-						break;
 					case XC6_IOB_SLEW_FAST:
 						u64 &= ~XC6_IOB_MASK_SLEW;
 						cfg.slew = SLEW_FAST;
+						break;
+					case XC6_IOB_SLEW_QUIETIO:
+						u64 &= ~XC6_IOB_MASK_SLEW;
+						cfg.slew = SLEW_QUIETIO;
 						break;
 					default: HERE();
 				}
@@ -318,6 +317,8 @@ static int extract_iobs(struct fpga_model* model, struct fpga_bits* bits)
 			default: HERE(); break;
 		}
 		if (!u64) {
+			frame_set_u64(&bits->d[IOB_DATA_START
+				+ i*IOB_ENTRY_LEN], 0);
 			dev->instantiated = 1;
 			dev->u.iob = cfg;
 		} else HERE();

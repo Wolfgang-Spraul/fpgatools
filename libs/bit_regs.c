@@ -1005,7 +1005,8 @@ static int FAR_pos(int FAR_row, int FAR_major, int FAR_minor)
 	return result + FAR_minor*130;
 }
 
-static int read_bits(struct fpga_config* cfg, uint8_t* d, int len, int inpos, int* outdelta)
+static int read_bits(struct fpga_config* cfg, uint8_t* d, int len,
+	int inpos, int* outdelta)
 {
 	int src_off, packet_hdr_type, packet_hdr_opcode;
 	int packet_hdr_register, packet_hdr_wordcount;
