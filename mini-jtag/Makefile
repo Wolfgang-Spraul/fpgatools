@@ -35,7 +35,10 @@ clean:
 	rm -f mini-jtag
 
 %.bit:
-	wget -O $@ http://downloads.qi-hardware.com/people/xiangfu/mini-slx9/firmware/$@ || { rm -f $@; exit 1; }
+	@echo ""
+	@echo "Compile $@ by yourself. copy the bits file here"
+	@echo ""
+	@exit 1
 
 test-counter: counter.bit mini-jtag
 	@./mini-jtag load $<
@@ -69,3 +72,9 @@ test-blinking: blinking.bit mini-jtag
 	./mini-jtag reset
 	./mini-jtag load $<
 
+hello_world.bit:
+	make -C ../
+	../hello_world | ../fp2bit - $@
+
+test-hello_world: hello_world.bit
+	./mini-jtag load $<
