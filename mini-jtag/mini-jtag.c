@@ -19,9 +19,10 @@
 #define VENDOR  0x20b7
 #define PRODUCT 0x0713
 
-uint8_t jtagcomm_checksum(uint8_t *d, int len)
+uint8_t jtagcomm_checksum(uint8_t *d, uint16_t len)
 {
-	int i, j, bytes, bits;
+	int i, j;
+	uint16_t bytes, bits;
 	uint8_t checksum = 0x01;
 
 	bytes = len / 8;
@@ -33,12 +34,18 @@ uint8_t jtagcomm_checksum(uint8_t *d, int len)
 			for (i = 0; i < 8; i++)
 				checksum ^= ((d[j] >> i) & 0x01) ? 1 : 0;
 
-
 	if (bits)
 		for (i = 0; i < bits; i++)
 			checksum ^= ((d[j] >> i) & 0x01) ? 1 : 0;
 
 	return checksum;
+}
+
+void rev_dump(uint8_t *buf, uint16_t len)
+{
+	int i;
+	for (i = len - 1; i >= 0 ; i--)
+		printf("%02x ", buf[i]);
 }
 
 void usage(char *name)
@@ -114,8 +121,7 @@ int main(int argc, char **argv)
 	if (!strcmp(argv[1], "idcode")) {
 		tap_reset_rti(&ftdi);
 		tap_shift_dr_bits(&ftdi, NULL, 32, buf);
-		printf("0x%02x%02x%02x%02x\n",
-		       buf[3], buf[2], buf[1], buf[0]);
+		rev_dump(buf, 4);
 	}
 
 	if (!strcmp (argv[1], "reset")) {
@@ -126,16 +132,16 @@ int main(int argc, char **argv)
 
 	/* TODO: Fix not working with m1 */
 	if (!strcmp (argv[1], "load")) {
-		if(argc < 3) {
-			usage(argv[0]);
-			goto exit;
-		}
-
+		int i;
 		struct load_bits *bs;
 		FILE *fp;
 		uint8_t *dr_data;
 		uint32_t u;
-		int i;
+
+		if(argc < 3) {
+			usage(argv[0]);
+			goto exit;
+		}
 
 		if (!strcmp(argv[2], "-"))
 			fp = stdin;
@@ -224,11 +230,9 @@ int main(int argc, char **argv)
 		tap_shift_ir(&ftdi, CFG_OUT);
 		tap_shift_dr_bits(&ftdi, NULL, 2 * 8, buf);
 
-		int i;
 		printf("Read: ");
-		for (i = 1; i >= 0 ; i--)
-			printf("%02x ", buf[i]);
-		printf(" [%d]\n",(uint32_t) (buf[1] << 8  | buf[0]));
+		rev_dump(buf, 2);
+		printf("\t[%d]\n",(uint32_t) (buf[1] << 8  | buf[0]));
 
 		tap_reset_rti(&ftdi);
 	}
@@ -239,7 +243,6 @@ int main(int argc, char **argv)
 	/* TODO:
 	 *   There is no error check on read/write paramters */
 	if (!strcmp (argv[1], "read") && argc == 3) {
-		int i;
 		uint8_t addr, checksum;
 		uint8_t in[5];
 
@@ -259,10 +262,9 @@ int main(int argc, char **argv)
 		/* Now read back the register */
 		tap_shift_dr_bits(&ftdi, NULL, 32, buf);
 		printf("Read: ");
-		for (i = 3; i >= 0 ; i--)
-			printf("%02x ", buf[i]);
-		printf(" [%d]\n",(uint32_t) (buf[3] << 24 | buf[2] << 16 |
-					     buf[1] << 8  | buf[0]));
+		rev_dump(buf, 4);
+		printf("\t[%d]\n",(uint32_t) (buf[3] << 24 | buf[2] << 16 |
+					      buf[1] << 8  | buf[0]));
 
 		tap_reset_rti(&ftdi);
 	}
@@ -288,8 +290,9 @@ int main(int argc, char **argv)
 		checksum = jtagcomm_checksum(in, 37);
 
 		in[4] |= (checksum << 5);
-		printf("Write: %02x %02x %02x %02x %02x\n",
-		       in[4],in[3],in[2],in[1],in[0]);
+		printf("Write: ");
+		rev_dump(in, 5);
+		printf("\n");
 
 		tap_shift_dr_bits(&ftdi, in, 38, buf);
 
