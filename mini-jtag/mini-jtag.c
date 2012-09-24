@@ -50,7 +50,7 @@ void usage(char *name)
 		"    idcode\n"
 		"    reset\n"
 		"    load <bits file>\n"
-		"    cr\t\t\t\tRead configure register status\n"
+		"    readreg <reg>\tRead configure register status\n"
 		"    read|write reg <value>\n"
 		"Report bugs to xiangfu@openmobilefree.net\n"
 		"\n", name);
