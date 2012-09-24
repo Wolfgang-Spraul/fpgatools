@@ -49,7 +49,7 @@ void usage(char *name)
 		"Usage:\n"
 		"    idcode\n"
 		"    reset\n"
-		"    load <bits file>\n"
+		"    load <bits file|- for stdin>\n"
 		"    readreg <reg>\tRead configure register status\n"
 		"    read|write reg <value>\n"
 		"Report bugs to xiangfu@openmobilefree.net\n"
@@ -132,14 +132,19 @@ int main(int argc, char **argv)
 		}
 
 		struct load_bits *bs;
-		FILE *pld_file;
+		FILE *fp;
 		uint8_t *dr_data;
 		uint32_t u;
 		int i;
 
-		if ((pld_file = fopen(argv[2], "r")) == NULL) {
-			perror("Unable to open file");
-			goto exit;
+		if (!strcmp(argv[2], "-"))
+			fp = stdin;
+		else {
+			fp = fopen(argv[2], "r");
+			if (!fp) {
+				perror("Unable to open file");
+				goto exit;
+			}
 		}
 
 		bs = calloc(1, sizeof(*bs));
@@ -148,7 +153,7 @@ int main(int argc, char **argv)
 			goto exit;
 		}
 
-		if (load_bits(pld_file, bs) != 0) {
+		if (load_bits(fp, bs) != 0) {
 			fprintf(stderr, "%s not supported\n", argv[2]);
 			goto free_bs;
 		}
@@ -196,7 +201,7 @@ int main(int argc, char **argv)
 		free(dr_data);
 	free_bs:
 		bits_free(bs);
-		fclose(pld_file);
+		fclose(fp);
 	}
 
 	if (!strcmp(argv[1], "readreg") && argc == 3) {
