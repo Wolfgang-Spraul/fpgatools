@@ -5,41 +5,22 @@
 # For details see the UNLICENSE file at the root of the source tree.
 #
 
-PREFIX ?= /usr/local
-
-CFLAGS += -g
 LDLIBS += `pkg-config libftdi --libs`
-OBJS = mini-jtag.o load-bits.o jtag.o
+OBJS := mini-jtag.o load-bits.o jtag.o
 
-# ----- Verbosity control -----------------------------------------------------
-
-CC_normal	:= $(CC)
-BUILD_normal	:=
-DEPEND_normal	:= $(CPP) $(CFLAGS) -D__OPTIMIZE__ -MM -MG
-
-CC_quiet	= @echo "  CC       " $@ && $(CC_normal)
-BUILD_quiet	= @echo "  BUILD    " $@ && $(BUILD_normal)
-DEPEND_quiet	= @$(DEPEND_normal)
-
-ifeq ($(V),1)
-    CC		= $(CC_normal)
-    BUILD	= $(BUILD_normal)
-    DEPEND	= $(DEPEND_normal)
-else
-    CC		= $(CC_quiet)
-    BUILD	= $(BUILD_quiet)
-    DEPEND	= $(DEPEND_quiet)
-endif
-
-# ----- Rules -----------------------------------------------------------------
-
-.PHONY:		all clean
-.PHONY:		install uninstall
+.PHONY:	all clean
+.PHONY:	install uninstall
 
 all: mini-jtag
 
+include ../Makefile.common
+
 mini-jtag: $(OBJS)
 	$(CC) $(LDFLAGS) -o $@ $(OBJS) $(LDLIBS)
+
+%.o:	%.c
+	$(CC) $(CFLAGS) -o $@ -c $<
+	$(MKDEP)
 
 install: all
 	mkdir -p $(DESTDIR)/$(PREFIX)/bin/
@@ -52,26 +33,6 @@ clean:
 	rm -f $(OBJS)
 	rm -f $(OBJS:.o=.d)
 	rm -f mini-jtag
-
-# ----- Dependencies ----------------------------------------------------------
-
-MKDEP =									\
-	$(DEPEND) $< |							\
-	  sed 								\
-	    -e 's|^$(basename $(notdir $<)).o:|$@:|'			\
-	    -e '/^\(.*:\)\? */{p;s///;s/ *\\\?$$/ /;s/  */:\n/g;H;}'	\
-	    -e '$${g;p;}'						\
-	    -e d >$(basename $@).d;					\
-	  [ "$${PIPESTATUS[*]}" = "0 0" ] ||				\
-	  { rm -f $(basename $@).d; exit 1; }
-
-%.o:		%.c
-		$(CC) $(CFLAGS) -o $@ -c $<
-		@$(MKDEP)
-
--include $(OBJS:.o=.d)
-
-# ----- Test -------------------------------------------------------------------
 
 %.bit:
 	wget -O $@ http://downloads.qi-hardware.com/people/xiangfu/mini-slx9/firmware/$@ || { rm -f $@; exit 1; }

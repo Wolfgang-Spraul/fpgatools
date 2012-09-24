@@ -16,7 +16,7 @@
 
 int tap_tms(struct ftdi_context *ftdi, int tms, uint8_t bit7)
 {
-	char buf[3];
+	uint8_t buf[3];
 	buf[0] = MPSSE_WRITE_TMS|MPSSE_LSB|MPSSE_BITMODE|MPSSE_WRITE_NEG;
 	buf[1] = 0;		/* value = lenght - 1 */
 	buf[2] = (tms ? 0x01 : 0x00) | ((bit7 & 0x01) << 7);
@@ -102,12 +102,11 @@ int tap_shift_dr_bits(struct ftdi_context *ftdi,
 		      uint8_t *out)
 {
 	/* Have to be at RTI status before call this function */
-	uint8_t buf[3];
-	uint8_t *buf_bytes;
+	uint8_t buf_bytes[FTDI_MAX_RW_SIZE + 3];
 
 	uint32_t in_bytes = 0;
 	uint32_t last_bits = 0;
-	uint16_t last_bytes, len, len_pre;
+	uint16_t last_bytes, len;
 	int i, t;
 
 	/* Send 3 Clocks with TMS = 1 0 0 to reach SHIFTDR*/
@@ -126,14 +125,6 @@ int tap_shift_dr_bits(struct ftdi_context *ftdi,
 		for (i = 0; i <= t; i++) {
 			len = (i == t) ? last_bytes : FTDI_MAX_RW_SIZE;
 
-			buf_bytes = malloc(len * sizeof(uint8_t) + 3);
-			if (!buf_bytes) {
-				fprintf(stderr,
-					"Can't malloc memory\n");
-				return -1;
-			}
-			memset(buf_bytes, 0, len + 3);
-
 			buf_bytes[0] = MPSSE_LSB|MPSSE_WRITE_NEG;
 
 			if (in)
@@ -146,20 +137,16 @@ int tap_shift_dr_bits(struct ftdi_context *ftdi,
 			buf_bytes[2] = ((len - 1) >> 8) & 0xff;
 
 			if (in)
-				memcpy(&buf_bytes[3], (in + i * len_pre), len);
+				memcpy(&buf_bytes[3], (in + i * FTDI_MAX_RW_SIZE), len);
 
 			if (ftdi_write_data(ftdi, buf_bytes, len + 3) != len + 3) {
 				fprintf(stderr,
 					"Ftdi write failed\n");
-				free(buf_bytes);
 				return -1;
 			}
 
 			if (out)
-				ftdi_read_data(ftdi, (out + i * len), len);
-
-			len_pre = len;
-			free(buf_bytes);
+				ftdi_read_data(ftdi, (out + i * FTDI_MAX_RW_SIZE), len);
 		}
 	}
 
@@ -178,7 +165,7 @@ int tap_shift_dr_bits(struct ftdi_context *ftdi,
 
 int ft232_flush(struct ftdi_context *ftdi)
 {
-	char buf[1] = { SEND_IMMEDIATE };
+	uint8_t buf[1] = { SEND_IMMEDIATE };
 	if (ftdi_write_data(ftdi, buf, 1) != 1) {
 		fprintf(stderr,
 			 "Can't SEND_IMMEDIATE\n");

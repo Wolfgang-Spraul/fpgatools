@@ -124,6 +124,7 @@ int main(int argc, char **argv)
 		tap_reset_rti(&ftdi);
 	}
 
+	/* TODO: Fix not working with m1 */
 	if (!strcmp (argv[1], "load")) {
 		if(argc < 3) {
 			usage(argv[0]);
@@ -160,7 +161,12 @@ int main(int argc, char **argv)
 		printf("\tBitstream length: %d\n", bs->length);
 
 		/* copy data into shift register */
-		dr_data = malloc(bs->length * sizeof(char));
+		dr_data = malloc(bs->length * sizeof(uint8_t));
+		if (!dr_data) {
+			perror("memory allocation failed");
+			goto free_bs;
+		}
+
 		for (u = 0; u < bs->length; u++) {
 			/* flip bits */
 			dr_data[u] |= ((bs->data[u] & 0x80) ? 1 : 0) << 0;
@@ -187,7 +193,6 @@ int main(int argc, char **argv)
 
 		tap_reset_rti(&ftdi);
 
-	free_dr:
 		free(dr_data);
 	free_bs:
 		bits_free(bs);
@@ -258,7 +263,6 @@ int main(int argc, char **argv)
 	}
 
 	if (!strcmp(argv[1], "write") && argc == 4) {
-		int i;
 		uint8_t addr, checksum;
 		uint8_t in[5];
 		uint32_t value;
