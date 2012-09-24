@@ -61,7 +61,7 @@ int main(int argc, char** argv)
 		return 0;
 	}
 
-	// read bitstream file
+	// read binary configuration file
 	{
 		FILE* fbits = fopen(argv[file_arg], "r");
 		if (!fbits) {
@@ -73,7 +73,7 @@ int main(int argc, char** argv)
 		if (rc) FAIL(rc);
 	}
 
-	// fill model from bitstream
+	// fill model from binary configuration
 	if (pull_model)
 		if ((rc = extract_model(&model, &config.bits))) FAIL(rc);
 

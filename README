@@ -24,7 +24,6 @@ FAQ
 
 Libraries
 
-- libfpga-test       autotest suite
 - libfpga-cores      reusable cores
 - libfpga-stdlib     standard design elements on top of libfpga-control
 - libfpga-control    programmatic access to libfpga-model
@@ -92,9 +91,13 @@ long-term:
 
 ChangeLog
 
+2012-09-24
+* First design verified: hello_world is an AND gate design which was
+  verified in a xc6slx9.
+
 2012-08-20
-* Beginning of full fidelity circle with model, floorplan, conversion from
-  and to bitstream and floorplan formats.
+* Beginning of full fidelity circle with model, floorplan, conversion
+  between floorplan and binary configuration formats.
 
 2012-06-03
 * Project started.
