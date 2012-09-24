@@ -49,11 +49,9 @@ uninstall:
 	rm -f $(DESTDIR)/$(PREFIX)/bin/mini-jtag
 
 clean:
+	rm -f $(OBJS)
+	rm -f $(OBJS:.o=.d)
 	rm -f mini-jtag
-	rm -f *.o
-	rm -f *.d
-	rm -f *~
-	rm -f \#*\#
 
 # ----- Dependencies ----------------------------------------------------------
 
