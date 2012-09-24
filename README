@@ -34,6 +34,7 @@ Libraries
 
 Design Utilities
 
+- hello_world        outputs an AND gate floorplan to stdout
 - new_fp             creates empty .fp floorplan file
 - fp2bit             converts .fp floorplan into .bit bitstream
 - bit2fp             converts .bit bitstream into .fp floorplan
@@ -59,23 +60,33 @@ Design Principles
 TODO (as of 2012-08, expected time to delivery: months to years
       completion status overall: 1%)
 
+short-term:
+* include mini-jtag host app
+* verify AND gate sample (hello_world)
+* support reading iologic switches
+* support counter sample (including clock, jtag)
+* autotest: fix roundtrip issues in routing_sw test
+* autotest: automate generation of gold standards
+* autotest: protect stderr of diff executable in autotest log
+* autotest: cleanup extensions and switch to new extension system
+* autotest: include samples such as hello_world in testing
+* 3 Debian packages: libfpga, libfpga-doc, fpgatools
+
+mid-term:
 * support chips other than xc6slx9, maybe an ftg256 or fgg484-packaged
   xc6 or the xc7a100
-* many more test cases for autotester
-* smarter autotester that can remember and verify groups of tests,
-  automatically oversee test execution, etc.
-* 3 Debian packages: libfpga, libfpga-doc, fpgatools
-* auto-crc calculation in .bit file
-* many more cases in logic block configuration
+* more cases in switch (98% done) and inter-tile connections (15% done) models
+* more cases in logic block configuration
 * configuration of bram and macc blocks, bram initialization data
-* routing switches
-* many more cases in model of switches and inter-tile connections
 * write standard design elements for libfpga-stdlib library
-* support lm32 or openrisc core, either via libfpga or iverilog backend
 * several places might benefit from a bison parser:
   - switchbox description into bit parser/generator (bit_frames.c)
   - inter-tile wire connections (model_conns.c)
   - configure devices and route wires
+
+long-term:
+* auto-crc calculation in .bit file
+* support lm32 or openrisc core, either via libfpga or iverilog backend
 * ipv6 or vnc in hardware?
 * iverilog fpga backend
 
