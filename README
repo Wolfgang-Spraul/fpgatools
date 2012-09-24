@@ -56,14 +56,11 @@ Design Principles
 - automatic test suite
 - public domain software
 
-TODO (as of 2012-08, expected time to delivery: months to years
-      completion status overall: 1%)
+TODO
 
-short-term:
-* include mini-jtag host app
-* verify AND gate sample (hello_world)
-* support reading iologic switches
+short-term (1 month):
 * support counter sample (including clock, jtag)
+* support reading iologic switches
 * autotest: fix roundtrip issues in routing_sw test
 * autotest: automate generation of gold standards
 * autotest: protect stderr of diff executable in autotest log
@@ -71,10 +68,10 @@ short-term:
 * autotest: include samples such as hello_world in testing
 * 3 Debian packages: libfpga, libfpga-doc, fpgatools
 
-mid-term:
+mid-term (6 months):
 * support chips other than xc6slx9, maybe an ftg256 or fgg484-packaged
   xc6 or the xc7a100
-* more cases in switch (98% done) and inter-tile connections (15% done) models
+* more cases in switches (98% done) and inter-tile connections (15% done)
 * more cases in logic block configuration
 * configuration of bram and macc blocks, bram initialization data
 * write standard design elements for libfpga-stdlib library
@@ -83,7 +80,7 @@ mid-term:
   - inter-tile wire connections (model_conns.c)
   - configure devices and route wires
 
-long-term:
+long-term (>6 months):
 * auto-crc calculation in .bit file
 * support lm32 or openrisc core, either via libfpga or iverilog backend
 * ipv6 or vnc in hardware?
@@ -92,8 +89,8 @@ long-term:
 ChangeLog
 
 2012-09-24
-* First design verified: hello_world is an AND gate design which was
-  verified in a xc6slx9.
+* First design verified: hello_world is an unclocked AND gate design
+  which was verified in a xc6slx9.
 
 2012-08-20
 * Beginning of full fidelity circle with model, floorplan, conversion
