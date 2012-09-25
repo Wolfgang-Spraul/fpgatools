@@ -35,17 +35,10 @@ void tap_reset_rti(struct ftdi_context *ftdi)
 	tap_tms(ftdi, 0, 0);	/* Goto RTI */
 }
 
-int tap_shift_ir(struct ftdi_context *ftdi, uint8_t ir)
+int tap_shift_ir_only(struct ftdi_context *ftdi, uint8_t ir)
 {
-	/* Have to be at RTI status before call this function */
 	int ret = 0;
 	uint8_t buf[3] = {0, 0, 0};
-
-	tap_tms(ftdi, 1, 0);
-	tap_tms(ftdi, 1, 0);
-	tap_tms(ftdi, 0, 0);
-	tap_tms(ftdi, 0, 0);	/* Goto shift IR */
-
 
 	buf[0] = MPSSE_DO_WRITE|MPSSE_LSB|
 		MPSSE_BITMODE|MPSSE_WRITE_NEG;
@@ -57,12 +50,26 @@ int tap_shift_ir(struct ftdi_context *ftdi, uint8_t ir)
 	}
 
 	tap_tms(ftdi, 1, (ir >> 5));
-	tap_tms(ftdi, 1, 0);
-	tap_tms(ftdi, 0, 0); /* Goto RTI */
 
 	return ret;
 }
 
+int tap_shift_ir(struct ftdi_context *ftdi, uint8_t ir)
+{
+	int ret;
+
+	tap_tms(ftdi, 1, 0);	/* RTI status */
+	tap_tms(ftdi, 1, 0);
+	tap_tms(ftdi, 0, 0);
+	tap_tms(ftdi, 0, 0);	/* Goto shift IR */
+
+	ret = tap_shift_ir_only(ftdi, ir);
+
+	tap_tms(ftdi, 1, 0);
+	tap_tms(ftdi, 0, 0);	/* Goto RTI */
+
+	return ret;
+}
 
 static int shift_last_bits(struct ftdi_context *ftdi,
 	       uint8_t *in, uint8_t len, uint8_t *out)
@@ -97,7 +104,7 @@ static int shift_last_bits(struct ftdi_context *ftdi,
 	return 0;
 }
 
-int tap_shift_dr_bits(struct ftdi_context *ftdi,
+int tap_shift_dr_bits_only(struct ftdi_context *ftdi,
 		      uint8_t *in, uint32_t in_bits,
 		      uint8_t *out)
 {
@@ -108,11 +115,6 @@ int tap_shift_dr_bits(struct ftdi_context *ftdi,
 	uint32_t last_bits = 0;
 	uint16_t last_bytes, len;
 	int i, t;
-
-	/* Send 3 Clocks with TMS = 1 0 0 to reach SHIFTDR*/
-	tap_tms(ftdi, 1, 0);
-	tap_tms(ftdi, 0, 0);
-	tap_tms(ftdi, 0, 0);
 
 	in_bytes = in_bits / 8;
 	last_bits = in_bits % 8;
@@ -157,10 +159,26 @@ int tap_shift_dr_bits(struct ftdi_context *ftdi,
 	} else
 		tap_tms(ftdi, 1, 0);
 
-	tap_tms(ftdi, 1, 0);
-	tap_tms(ftdi, 0, 0); /* Goto RTI */
-
 	return 0;
+}
+
+int tap_shift_dr_bits(struct ftdi_context *ftdi,
+		      uint8_t *in, uint32_t in_bits,
+		      uint8_t *out)
+{
+	int ret;
+
+	/* Send 3 Clocks with TMS = 1 0 0 to reach SHIFTDR*/
+	tap_tms(ftdi, 1, 0);
+	tap_tms(ftdi, 0, 0);
+	tap_tms(ftdi, 0, 0);
+
+	ret = tap_shift_dr_bits_only(ftdi, in, in_bits, out);
+
+	tap_tms(ftdi, 1, 0);
+	tap_tms(ftdi, 0, 0);	/* Goto RTI */
+
+	return ret;
 }
 
 int ft232_flush(struct ftdi_context *ftdi)

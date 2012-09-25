@@ -31,6 +31,10 @@
 
 int tap_tms(struct ftdi_context *ftdi, int tms, uint8_t bit7);
 void tap_reset_rti(struct ftdi_context *ftdi);
+int tap_shift_ir_only(struct ftdi_context *ftdi, uint8_t ir);
+int tap_shift_dr_bits_only(struct ftdi_context *ftdi,
+		      uint8_t *in, uint32_t in_bits,
+		      uint8_t *out);
 int tap_shift_ir(struct ftdi_context *ftdi, uint8_t ir);
 int tap_shift_dr_bits(struct ftdi_context *ftdi,
 		      uint8_t *in, uint32_t in_bits,
