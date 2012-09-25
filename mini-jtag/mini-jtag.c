@@ -66,8 +66,7 @@ static void usage(char *name)
 int main(int argc, char **argv)
 {
 	struct ftdi_context ftdi;
-	uint8_t buf[65536];
-
+	uint8_t buf[4];
 	uint8_t conf_buf[] = {SET_BITS_LOW,  0x08, 0x0b,
 			      SET_BITS_HIGH, 0x00, 0x00,
 			      TCK_DIVISOR,   0x00, 0x00,
@@ -111,17 +110,18 @@ int main(int argc, char **argv)
 			"Can't send command to device\n");
 		return 1;
 	}
-	ftdi_read_data(&ftdi, &buf[3], 1);
-	if (!(buf[3] & 0x10)) {
+	ftdi_read_data(&ftdi, &buf[2], 1);
+	if (!(buf[2] & 0x10)) {
 		fprintf(stderr,
 			"Vref not detected. Please power on target board\n");
 		return 1;
 	}
 
 	if (!strcmp(argv[1], "idcode")) {
+		uint8_t out[4];
 		tap_reset_rti(&ftdi);
-		tap_shift_dr_bits(&ftdi, NULL, 32, buf);
-		rev_dump(buf, 4);
+		tap_shift_dr_bits(&ftdi, NULL, 32, out);
+		rev_dump(out, 4);
 		printf("\n");
 	}
 
@@ -212,6 +212,7 @@ int main(int argc, char **argv)
 	}
 
 	if (!strcmp(argv[1], "readreg") && argc == 3) {
+		uint8_t out[2];
 		uint8_t in[14] = {
 			0xaa, 0x99, 0x55, 0x66,
 			0x00, 0x00, 0x20, 0x00,
@@ -229,11 +230,11 @@ int main(int argc, char **argv)
 		tap_shift_ir(&ftdi, CFG_IN);
 		tap_shift_dr_bits(&ftdi, in, 14 * 8, NULL);
 		tap_shift_ir(&ftdi, CFG_OUT);
-		tap_shift_dr_bits(&ftdi, NULL, 2 * 8, buf);
+		tap_shift_dr_bits(&ftdi, NULL, 2 * 8, out);
 
 		printf("Read: ");
-		rev_dump(buf, 2);
-		printf("\t[%d]\n",(uint32_t) (buf[1] << 8  | buf[0]));
+		rev_dump(out, 2);
+		printf("\t[%d]\n",(uint32_t) (out[1] << 8  | out[0]));
 
 		tap_reset_rti(&ftdi);
 	}
@@ -246,6 +247,7 @@ int main(int argc, char **argv)
 	if (!strcmp (argv[1], "read") && argc == 3) {
 		uint8_t addr, checksum;
 		uint8_t in[5];
+		uint8_t out[4];
 
 		tap_reset_rti(&ftdi);
 		tap_shift_ir(&ftdi, USER1);
@@ -261,11 +263,11 @@ int main(int argc, char **argv)
 		tap_shift_dr_bits(&ftdi, in, 6, NULL);
 
 		/* Now read back the register */
-		tap_shift_dr_bits(&ftdi, NULL, 32, buf);
+		tap_shift_dr_bits(&ftdi, NULL, 32, out);
 		printf("Read: ");
-		rev_dump(buf, 4);
-		printf("\t[%d]\n",(uint32_t) (buf[3] << 24 | buf[2] << 16 |
-					      buf[1] << 8  | buf[0]));
+		rev_dump(out, 4);
+		printf("\t[%d]\n",(uint32_t) (out[3] << 24 | out[2] << 16 |
+					      out[1] << 8  | out[0]));
 
 		tap_reset_rti(&ftdi);
 	}
@@ -295,7 +297,7 @@ int main(int argc, char **argv)
 		rev_dump(in, 5);
 		printf("\n");
 
-		tap_shift_dr_bits(&ftdi, in, 38, buf);
+		tap_shift_dr_bits(&ftdi, in, 38, NULL);
 
 		tap_reset_rti(&ftdi);
 	}
