@@ -19,7 +19,7 @@
 #define VENDOR  0x20b7
 #define PRODUCT 0x0713
 
-uint8_t jtagcomm_checksum(uint8_t *d, uint16_t len)
+static uint8_t jtagcomm_checksum(uint8_t *d, uint16_t len)
 {
 	int i, j;
 	uint16_t bytes, bits;
@@ -41,14 +41,14 @@ uint8_t jtagcomm_checksum(uint8_t *d, uint16_t len)
 	return checksum;
 }
 
-void rev_dump(uint8_t *buf, uint16_t len)
+static void rev_dump(uint8_t *buf, uint16_t len)
 {
 	int i;
 	for (i = len - 1; i >= 0 ; i--)
 		printf("%02x ", buf[i]);
 }
 
-void usage(char *name)
+static void usage(char *name)
 {
 	fprintf(stderr,
 		"\n"
@@ -122,6 +122,7 @@ int main(int argc, char **argv)
 		tap_reset_rti(&ftdi);
 		tap_shift_dr_bits(&ftdi, NULL, 32, buf);
 		rev_dump(buf, 4);
+		printf("\n");
 	}
 
 	if (!strcmp (argv[1], "reset")) {
