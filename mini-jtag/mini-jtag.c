@@ -144,7 +144,6 @@ int main(int argc, char **argv)
 		tap_reset_rti(&ftdi);
 	}
 
-	/* TODO: Fix not working with m1 */
 	if (!strcmp (argv[1], "load")) {
 		int i;
 		struct load_bits *bs;
@@ -196,7 +195,6 @@ int main(int argc, char **argv)
 			dr_data[u] = rev8(bs->data[u]);
 
 		tap_reset_rti(&ftdi);
-		tap_shift_ir(&ftdi, JPROGRAM);
 		tap_shift_ir(&ftdi, CFG_IN);
 
 		tap_shift_dr_bits(&ftdi, dr_data, bs->length * 8, NULL);
