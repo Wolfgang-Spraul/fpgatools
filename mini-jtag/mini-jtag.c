@@ -218,11 +218,11 @@ int main(int argc, char **argv)
 	if (!strcmp(argv[1], "readreg") && argc == 3) {
 		int i;
 		uint8_t out[2];
-		uint8_t dr_in[16];
+		uint8_t dr_in[14];
 
 		uint8_t in[14] = {
 			0xaa, 0x99, 0x55, 0x66,
-			0x29, 0x01, 0x20, 0x00,
+			0x00, 0x00, 0x20, 0x00,
 			0x20, 0x00, 0x20, 0x00,
 			0x20, 0x00
 		};
@@ -230,7 +230,7 @@ int main(int argc, char **argv)
 		uint16_t reg = 0x2801;	/* type 1 packet (word count = 1) */
 		reg |= ((atoi(argv[2]) & 0x3f) << 5);
 		in[4] = (reg & 0xff00) >> 8;
-		in[5] = reg & 0x00;
+		in[5] = reg & 0xff;
 
 		tap_reset_rti(&ftdi);
 
@@ -274,11 +274,10 @@ int main(int argc, char **argv)
 
 		tap_reset_rti(&ftdi);
 
-		printf("Read: ");
 		out[0] = rev8(out[0]);
 		out[1] = rev8(out[1]);
-		rev_dump(out, 2);
-		printf("\t[%d]\n",(uint32_t) (out[1] << 8  | out[0]));
+
+		printf("REG[%d]: 0x%02x%02x\n", atoi(argv[2]), out[0], out[1]);
 	}
 
 	/* TODO:
