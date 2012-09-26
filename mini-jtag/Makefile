@@ -10,6 +10,7 @@ OBJS := mini-jtag.o load-bits.o jtag.o
 
 .PHONY:	all clean
 .PHONY:	install uninstall
+.PHONY:	test test-counter test-blinking test-hello_world
 
 all: mini-jtag
 
@@ -40,6 +41,8 @@ clean:
 	@echo ""
 	@exit 1
 
+test: test-counter test-blinking test-hello_world
+
 test-counter: counter.bit mini-jtag
 	@./mini-jtag load $<
 	@echo "Read counter registers (1 ~ 5)"
@@ -68,9 +71,8 @@ test-counter: counter.bit mini-jtag
 test-blinking: blinking.bit mini-jtag
 	./mini-jtag idcode
 	./mini-jtag load $<
-	sleep 1
+	sleep 2
 	./mini-jtag reset
-	./mini-jtag load $<
 
 hello_world.bit:
 	make -C ../
