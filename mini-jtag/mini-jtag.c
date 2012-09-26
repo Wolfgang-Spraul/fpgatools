@@ -19,6 +19,19 @@
 #define VENDOR  0x20b7
 #define PRODUCT 0x0713
 
+static inline uint8_t rev8(uint8_t d)
+{
+    int i;
+    uint8_t out = 0;
+
+    /* (from left to right) */
+    for (i = 0; i < 8; i++)
+        if (d & (1 << i))
+            out |= (1 << (7 - i));
+
+    return out;
+}
+
 static uint8_t jtagcomm_checksum(uint8_t *d, uint16_t len)
 {
 	int i, j;
@@ -173,23 +186,14 @@ int main(int argc, char **argv)
 		printf("\tBitstream length: %d\n", bs->length);
 
 		/* copy data into shift register */
-		dr_data = malloc(bs->length * sizeof(uint8_t));
+		dr_data = calloc(1, bs->length);
 		if (!dr_data) {
 			perror("memory allocation failed");
 			goto free_bs;
 		}
 
-		for (u = 0; u < bs->length; u++) {
-			/* flip bits */
-			dr_data[u] |= ((bs->data[u] & 0x80) ? 1 : 0) << 0;
-			dr_data[u] |= ((bs->data[u] & 0x40) ? 1 : 0) << 1;
-			dr_data[u] |= ((bs->data[u] & 0x20) ? 1 : 0) << 2;
-			dr_data[u] |= ((bs->data[u] & 0x10) ? 1 : 0) << 3;
-			dr_data[u] |= ((bs->data[u] & 0x08) ? 1 : 0) << 4;
-			dr_data[u] |= ((bs->data[u] & 0x04) ? 1 : 0) << 5;
-			dr_data[u] |= ((bs->data[u] & 0x02) ? 1 : 0) << 6;
-			dr_data[u] |= ((bs->data[u] & 0x01) ? 1 : 0) << 7;
-		}
+		for (u = 0; u < bs->length; u++)
+			dr_data[u] = rev8(bs->data[u]);
 
 		tap_reset_rti(&ftdi);
 		tap_shift_ir(&ftdi, JPROGRAM);
@@ -212,31 +216,69 @@ int main(int argc, char **argv)
 	}
 
 	if (!strcmp(argv[1], "readreg") && argc == 3) {
+		int i;
 		uint8_t out[2];
+		uint8_t dr_in[16];
+
 		uint8_t in[14] = {
 			0xaa, 0x99, 0x55, 0x66,
-			0x00, 0x00, 0x20, 0x00,
+			0x29, 0x01, 0x20, 0x00,
 			0x20, 0x00, 0x20, 0x00,
 			0x20, 0x00
 		};
 
 		uint16_t reg = 0x2801;	/* type 1 packet (word count = 1) */
 		reg |= ((atoi(argv[2]) & 0x3f) << 5);
-
 		in[4] = (reg & 0xff00) >> 8;
 		in[5] = reg & 0x00;
 
 		tap_reset_rti(&ftdi);
-		tap_shift_ir(&ftdi, CFG_IN);
-		tap_shift_dr_bits(&ftdi, in, 14 * 8, NULL);
-		tap_shift_ir(&ftdi, CFG_OUT);
-		tap_shift_dr_bits(&ftdi, NULL, 2 * 8, out);
 
-		printf("Read: ");
-		rev_dump(out, 2);
-		printf("\t[%d]\n",(uint32_t) (out[1] << 8  | out[0]));
+		tap_tms(&ftdi, 1, 0);
+		tap_tms(&ftdi, 1, 0);
+		tap_tms(&ftdi, 0, 0);
+		tap_tms(&ftdi, 0, 0);	/* Goto shift IR */
+
+		tap_shift_ir_only(&ftdi, CFG_IN);
+
+		tap_tms(&ftdi, 1, 0);
+		tap_tms(&ftdi, 1, 0);
+		tap_tms(&ftdi, 0, 0);
+		tap_tms(&ftdi, 0, 0);	/* Goto SHIFT-DR */
+
+		for (i = 0; i < 14; i++)
+			dr_in[i] = rev8(in[i]);
+
+		tap_shift_dr_bits_only(&ftdi, dr_in, 14 * 8, NULL);
+
+		tap_tms(&ftdi, 1, 0);
+		tap_tms(&ftdi, 1, 0);
+		tap_tms(&ftdi, 1, 0);	/* Goto SELECT-IR */
+		tap_tms(&ftdi, 0, 0);
+		tap_tms(&ftdi, 0, 0);	/* Goto SHIFT-IR */
+
+		tap_shift_ir_only(&ftdi, CFG_OUT);
+
+		tap_tms(&ftdi, 1, 0);
+		tap_tms(&ftdi, 1, 0);
+		tap_tms(&ftdi, 0, 0);
+		tap_tms(&ftdi, 0, 0);	/* Goto SHIFT-IR */
+
+		tap_shift_dr_bits_only(&ftdi, NULL, 2 * 8, out);
+
+		tap_tms(&ftdi, 1, 0);
+		tap_tms(&ftdi, 1, 0);
+		tap_tms(&ftdi, 1, 0);	/* Goto SELECT-IR */
+		tap_tms(&ftdi, 0, 0);
+		tap_tms(&ftdi, 0, 0);	/* Goto SHIFT-IR */
 
 		tap_reset_rti(&ftdi);
+
+		printf("Read: ");
+		out[0] = rev8(out[0]);
+		out[1] = rev8(out[1]);
+		rev_dump(out, 2);
+		printf("\t[%d]\n",(uint32_t) (out[1] << 8  | out[0]));
 	}
 
 	/* TODO:
