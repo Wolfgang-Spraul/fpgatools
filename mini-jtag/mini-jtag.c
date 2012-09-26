@@ -215,6 +215,8 @@ int main(int argc, char **argv)
 
 	if (!strcmp(argv[1], "readreg") && argc == 3) {
 		int i;
+		char *err;
+		uint8_t reg;
 		uint8_t out[2];
 		uint8_t dr_in[14];
 
@@ -225,10 +227,18 @@ int main(int argc, char **argv)
 			0x20, 0x00
 		};
 
-		uint16_t reg = 0x2801;	/* type 1 packet (word count = 1) */
-		reg |= ((atoi(argv[2]) & 0x3f) << 5);
-		in[4] = (reg & 0xff00) >> 8;
-		in[5] = reg & 0xff;
+		uint16_t cmd = 0x2801;	/* type 1 packet (word count = 1) */
+
+		reg = strtol(argv[2], &err, 0);
+		if((*err != 0x00) || (reg < 0) || (reg > 0x22)) {
+			fprintf(stderr,
+				"Invalid register, use a decimal or hexadecimal(0x...) number between 0x0 and 0x22\n");
+			goto exit;
+		}
+
+		cmd |= ((reg & 0x3f) << 5);
+		in[4] = (cmd & 0xff00) >> 8;
+		in[5] = cmd & 0xff;
 
 		tap_reset_rti(&ftdi);
 
@@ -275,34 +285,37 @@ int main(int argc, char **argv)
 		out[0] = rev8(out[0]);
 		out[1] = rev8(out[1]);
 
-		printf("REG[%d]: 0x%02x%02x\n", atoi(argv[2]), out[0], out[1]);
+		printf("REG[%d]: 0x%02x%02x\n", reg, out[0], out[1]);
 	}
 
 	/* TODO:
 	 *   Configuration Memory Read Procedure (IEEE Std 1149.1 JTAG) */
 
-	/* TODO:
-	 *   There is no error check on read/write paramters */
 	if (!strcmp (argv[1], "read") && argc == 3) {
+		char *err;
 		uint8_t addr, checksum;
 		uint8_t in[5];
 		uint8_t out[4];
 
-		tap_reset_rti(&ftdi);
-		tap_shift_ir(&ftdi, USER1);
-
 		/* Tell the FPGA what address we would like to read */
-		addr = atoi(argv[2]);
+		addr = strtol(argv[2], &err, 0);
+		if((*err != 0x00) || (addr < 0) || (addr > 4)) {
+			fprintf(stderr,
+				"Invalid address, use a decimal or hexadecimal(0x...) number between 0 and 4\n");
+			goto exit;
+		}
+
 		addr &= 0xf;
 		in[0] = addr;
 		checksum = jtagcomm_checksum(in, 4);
-
 		in[0] = (checksum << 5) | (0 << 4) | addr;
 
+		tap_reset_rti(&ftdi);
+		tap_shift_ir(&ftdi, USER1);
 		tap_shift_dr_bits(&ftdi, in, 6, NULL);
-
 		/* Now read back the register */
 		tap_shift_dr_bits(&ftdi, NULL, 32, out);
+
 		printf("Read: ");
 		rev_dump(out, 4);
 		printf("\t[%d]\n",(uint32_t) (out[3] << 24 | out[2] << 16 |
@@ -312,32 +325,43 @@ int main(int argc, char **argv)
 	}
 
 	if (!strcmp(argv[1], "write") && argc == 4) {
+		char *err;
 		uint8_t addr, checksum;
 		uint8_t in[5];
 		uint32_t value;
 
-		tap_reset_rti(&ftdi);
-		tap_shift_ir(&ftdi, USER1);
+		value = strtol(argv[3], &err, 0);
+		if (*err != 0x00) {
+			fprintf(stderr,
+				"Invalid value, use a decimal or hexadecimal(0x...) number\n");
+			goto exit;
+		}
 
-		value = atoi(argv[3]);
 		in[0] = value & 0x000000ff;
 		in[1] = (value & 0x0000ff00) >> 8;
 		in[2] = (value & 0x00ff0000) >> 16;
 		in[3] = (value & 0xff000000) >> 24;
 
 		/* Tell the FPGA what address we would like to read */
-		addr = atoi(argv[2]);
+		addr = strtol(argv[2], &err, 0);
+		if((*err != 0x00) || (addr < 0) || (addr > 4)) {
+			fprintf(stderr,
+				"Invalid address, use a decimal or hexadecimal(0x...) number between 0 and 4\n");
+			goto exit;
+		}
+
 		addr &= 0xf;
 		in[4] = (1 << 4) | addr;
 		checksum = jtagcomm_checksum(in, 37);
-
 		in[4] |= (checksum << 5);
+
 		printf("Write: ");
 		rev_dump(in, 5);
 		printf("\n");
 
+		tap_reset_rti(&ftdi);
+		tap_shift_ir(&ftdi, USER1);
 		tap_shift_dr_bits(&ftdi, in, 38, NULL);
-
 		tap_reset_rti(&ftdi);
 	}
 
