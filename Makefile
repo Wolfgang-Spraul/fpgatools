@@ -241,7 +241,7 @@ clean:
 	rm -f	test.out/compare_xc6slx9.fp
 	rmdir --ignore-fail-on-non-empty test.out test.gold
 
-install:	all
+install: fp2bit bit2fp
 	@make -C libs install
 	mkdir -p $(DESTDIR)/$(PREFIX)/bin/
 	install -m 755 fp2bit $(DESTDIR)/$(PREFIX)/bin/
