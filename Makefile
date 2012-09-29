@@ -216,9 +216,6 @@ xc6slx9.fp: new_fp
 xc6slx9.svg: draw_svg_tiles
 	./draw_svg_tiles | xmllint --pretty 1 - > $@
 
-#	rm -f $(foreach test,$(TESTS),"autotest.out/autotest_$(test).diff_to_gold")
-#	rm -f $(foreach test,$(TESTS),"autotest.out/autotest_$(test).log")
-
 clean:
 	@make -C libs clean
 	rm -f $(OBJS) *.d
