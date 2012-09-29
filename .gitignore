@@ -28,11 +28,11 @@ autotest
 fp2bit
 bit2fp
 hello_world
+blinking_led
 
 #
 # folders
 #
-autotest.tmp/
-autotest.out/
+test.gold/
+test.out/
 build-libs/
-compare.gold/

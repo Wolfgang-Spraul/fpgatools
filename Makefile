@@ -23,6 +23,7 @@ DYNAMIC_LIBS = libs/libfpga-model.so libs/libfpga-bit.so \
 
 .PHONY:	all test clean install uninstall FAKE
 .SECONDARY:
+.SECONDEXPANSION:
 
 all: new_fp fp2bit bit2fp draw_svg_tiles autotest hstrrep \
 	sort_seq merge_seq pair2net hello_world
@@ -36,21 +37,158 @@ include Makefile.common
 libs/%.so: FAKE
 	@make -C libs $(notdir $@)
 
-test: test_logic_cfg test_iob_cfg test_routing_sw
+#
+# Testing section - there are three types of tests:
+#
+# 1. design
+#
+# design tests run a design binary to produce floorplan stdout, which is
+# converted to binary configuration and back to floorplan. The resulting
+# floorplan after conversion through binary must match the original
+# floorplan. Additionally, the original floorplan is compared to a gold
+# standard if one exists.
+#
+# ./binary -> .fp -> .bit -> .fp -> compare first .fp to second and gold .fp
+#
+# 2. autotest
+#
+# autotest runs an automated test of some fpga logic and produces a log output
+# which is compared against a gold standard.
+#
+# ./autotest -> stdout -> compare with gold standard
+#
+# 3. compare
+#
+# tool output is parsed to extract different types of model data and compare
+# against a gold standard.
+#
+# tool output -> awk/processing -> compare to gold standard
+#
+# - extensions
+#
+# .ftest = fpgatools run test (design, autotest, compare)
+#
+# .f2gd = fpgatools to-gold diff
+# .ffbd = diff between first fp and after roundtrip through binary config
+# .fb2f = fpgatools binary config back to floorplan
+# .ff2b = fpgatools floorplan to binary config
+# .fco = fpgatools compare output for missing/extra
+# .fcr = fpgatools compare missing/extra result
+# .fcm = fpgatools compare match
+# .fcd = fpgatools compare diff
+# .fce = fpgatools compare extra
+# .fao = fpgatools autotest output
+# .far = fpgatools autotest result (diff to gold output)
+#
 
-test_logic_cfg: autotest.out/autotest_logic_cfg.diff_to_gold
+test_dirs := $(shell mkdir -p test.gold test.out)
 
-test_iob_cfg: autotest.out/autotest_iob_cfg.diff_to_gold
+DESIGN_TESTS := hello_world blinking_led
+AUTO_TESTS := logic_cfg routing_sw io_sw iob_cfg
+COMPARE_TESTS := xc6slx9_tiles xc6slx9_devs xc6slx9_ports xc6slx9_conns xc6slx9_sw xc6slx9_swbits
 
-test_routing_sw: autotest.out/autotest_routing_sw.diff_to_gold
+DESIGN_GOLD := $(foreach target, $(DESIGN_TESTS), test.gold/design_$(target).fp)
+AUTOTEST_GOLD := $(foreach target, $(AUTO_TESTS), test.gold/autotest_$(target).fao)
+COMPARE_GOLD := $(foreach target, $(COMPARE_TESTS), test.gold/compare_$(target).fco)
 
-autotest_%.diff_to_gold: autotest_%.log
-	@diff -U 0 -I "^O #NODIFF" autotest.gold/autotest_$(*F).log $< > $@ || true
-	@if test -s $@; then echo "Test failed: $(*F), diff follows"; cat $@; else echo "Test succeeded: $(*F)"; fi;
+test_gold: design_gold autotest_gold compare_gold
+design_gold: $(DESIGN_GOLD)
+autotest_gold: $(AUTOTEST_GOLD)
+compare_gold: $(COMPARE_GOLD)
 
-autotest_%.log: autotest fp2bit bit2fp
-	@mkdir -p $(@D)
+test: test_design test_auto test_compare
+test_design: $(foreach target, $(DESIGN_TESTS), test.out/design_$(target).ftest)
+test_auto: $(foreach target, $(AUTO_TESTS), test.out/autotest_$(target).ftest)
+test_compare: $(foreach target, $(COMPARE_TESTS), test.out/compare_$(target).ftest)
+
+# design testing targets
+
+design_%.ftest: design_%.ffbd
+	@if test -s $<; then echo "Design test: $(*F) - failed, diff follows"; cat $<; else echo "Design test: $(*F) - succeeded"; fi;
+	@if test -s test.gold/$(basename $(@F)).fp; then diff -U 0 test.gold/$(basename $(@F)).fp $(basename $@).fp > $(basename $@).f2gd || (echo Diff to gold: && cat $(basename $@).f2gd); fi;
+
+%.ffbd: %.fp %.fb2f
+	@diff -u $(basename $@).fp $(basename $@).fb2f >$@ || true
+
+%.fb2f: %.ff2b bit2fp
+	@./bit2fp $< 2>&1 >$@
+
+%.ff2b: %.fp fp2bit
+	@./fp2bit $< $@
+
+design_%.fp: $$*
+	@./$(*F) 2>&1 >$@
+
+# autotest targets
+
+autotest_%.ftest: autotest_%.far
+	@if test -s $<; then echo "Test failed: $(*F) (autotest), diff follows"; cat $<; else echo "Test succeeded: $(*F) (autotest)"; fi;
+
+%.far: %.fao
+	@if test ! -e test.gold/$(*F).fao; then echo Gold test.gold/$(*F).fao does not exist, aborting.; false; fi;
+	@diff -U 0 -I "^O #NODIFF" test.gold/$(*F).fao $< >$@ || true
+
+autotest_%.fao: autotest fp2bit bit2fp
 	./autotest --test=$(*F) 2>&1 >$@
+
+# compare testing targets
+
+compare_%.ftest: compare_%.fcr
+	@echo Test: $(*F) \(compare\)
+	@cat $<|awk '{print " "$$0}'
+
+%.fcr: %.fcm %.fcd %.fce
+	@echo Matching lines - $*.fcm >$@
+	@cat $*.fcm | wc -l >>$@
+	@echo Missing lines - $*.fcd >>$@
+	@cat $*.fcd | grep ^-[^-] | wc -l >>$@
+	@if test -s $*.fce; then echo Extra lines - $*.fce: >>$@; cat $*.fce >>$@; fi;
+
+%.fcm: %.fco
+	@if test ! -e test.gold/$(*F).fco; then echo Gold test.gold/$(*F).fco does not exist, aborting.; false; fi;
+	@comm -1 -2 $< test.gold/$(*F).fco >$@
+
+%.fcd: %.fco
+	@if test ! -e test.gold/$(*F).fco; then echo Gold test.gold/$(*F).fco does not exist, aborting.; false; fi;
+	@diff -u test.gold/$(*F).fco $< >$@ || true
+
+%.fce: %.fco
+	@cat $< | grep ^+[^+] >$@ || true
+
+compare_%_tiles.fco: compare_%.fp
+	@cat $<|awk '{if ($$1=="tile" && $$4=="name") printf "%s %s %s\n",$$2,$$3,$$5}'|sort >$@
+
+compare_%_devs.fco: compare_%.fp
+	@cat $<|awk '{if ($$1=="dev") {if ($$6=="type") printf "%s %s %s %s\n",$$2,$$3,$$4,$$7; else printf "%s %s %s\n",$$2,$$3,$$4; }}'|sort >$@
+
+compare_%_ports.fco: compare_%.fp
+	@cat $<|awk '{if ($$1=="port") printf "%s %s %s\n",$$2,$$3,$$4}'|sort >$@
+
+compare_%_conns.fco: compare_%.fp sort_seq merge_seq
+	@cat $<|awk '{if ($$1=="conn") printf "%s %s %s %s %s %s\n",$$2,$$3,$$5,$$6,$$4,$$7}'|sort|./sort_seq -|./merge_seq -|awk '{printf "%s %s %s %s %s %s\n",$$1,$$2,$$5,$$3,$$4,$$6}'|sort >$@
+
+compare_%_sw.fco: compare_%.fp
+	@cat $<|awk '{if ($$1=="sw") printf "%s %s %s %s %s\n",$$2,$$3,$$4,$$5,$$6}'|sort >$@
+
+compare_%_swbits.fco: bit2fp
+	@./bit2fp --printf-swbits | sort > $@
+
+compare_%.fp: new_fp
+	@./new_fp >$@
+
+# todo: .cnets not integrated yet
+%.cnets: %.fp pair2net
+	cat $<|awk '{if ($$1=="conn") printf "%s-%s-%s %s-%s-%s\n",$$2,$$3,$$4,$$5,$$6,$$7}' |./pair2net -|sort >$@
+	@echo Number of conn nets:
+	@cat $@|wc -l
+	@echo Number of connection points:
+	@cat $@|wc -w
+	@echo Largest net:
+	@cat $@|awk '{if (NF>max) max=NF} END {print max}'
+
+#
+# end of testing section
+#
 
 autotest: autotest.o $(DYNAMIC_LIBS)
 
@@ -78,66 +216,30 @@ xc6slx9.fp: new_fp
 xc6slx9.svg: draw_svg_tiles
 	./draw_svg_tiles | xmllint --pretty 1 - > $@
 
-compare_all: compare_tiles compare_devs compare_conns \
-	compare_ports compare_sw compare_swbits
-
-compare_gold: compare.gold/xc6slx9.swbits
-
-compare_%: xc6slx9.%
-	@comm -1 -2 $< compare.gold/$< > compare_$*_matching.txt
-	@echo Matching lines - compare_$*_matching.txt:
-	@cat compare_$*_matching.txt | wc -l
-	@diff -u compare.gold/$< $< > compare_$*_diff.txt || true
-	@echo Missing lines - compare_$*_diff.txt
-	@cat compare_$*_diff.txt | grep ^-[^-] | wc -l
-	@cat compare_$*_diff.txt | grep ^+[^+] > compare_$*_extra.txt || true
-	@if test -s compare_$*_extra.txt; then echo Extra lines - compare_$*_extra.txt: ; cat compare_$*_extra.txt; fi;
-
-%.tiles: %.fp
-	@cat $<|awk '{if ($$1=="tile" && $$4=="name") printf "%s %s %s\n",$$2,$$3,$$5}'|sort >$@
-
-%.devs: %.fp
-	@cat $<|awk '{if ($$1=="dev") {if ($$6=="type") printf "%s %s %s %s\n",$$2,$$3,$$4,$$7; else printf "%s %s %s\n",$$2,$$3,$$4; }}'|sort >$@
-
-%.cnets: %.fp pair2net
-	cat $<|awk '{if ($$1=="conn") printf "%s-%s-%s %s-%s-%s\n",$$2,$$3,$$4,$$5,$$6,$$7}' |./pair2net -|sort >$@
-	@echo Number of conn nets:
-	@cat $@|wc -l
-	@echo Number of connection points:
-	@cat $@|wc -w
-	@echo Largest net:
-	@cat $@|awk '{if (NF>max) max=NF} END {print max}'
-
-%.conns: %.fp sort_seq merge_seq
-	@cat $<|awk '{if ($$1=="conn") printf "%s %s %s %s %s %s\n",$$2,$$3,$$5,$$6,$$4,$$7}'|sort|./sort_seq -|./merge_seq -|awk '{printf "%s %s %s %s %s %s\n",$$1,$$2,$$5,$$3,$$4,$$6}'|sort >$@
-
-%.ports: %.fp
-	@cat $<|awk '{if ($$1=="port") printf "%s %s %s\n",$$2,$$3,$$4}'|sort >$@
-
-%.sw: %.fp
-	@cat $<|awk '{if ($$1=="sw") printf "%s %s %s %s %s\n",$$2,$$3,$$4,$$5,$$6}'|sort >$@
-
-%.swbits: bit2fp
-	./bit2fp --printf-swbits | sort > $@
+#	rm -f $(foreach test,$(TESTS),"autotest.out/autotest_$(test).diff_to_gold")
+#	rm -f $(foreach test,$(TESTS),"autotest.out/autotest_$(test).log")
 
 clean:
 	@make -C libs clean
 	rm -f $(OBJS) *.d
-	rm -f $(foreach test,$(TESTS),"autotest.out/autotest_$(test).diff_to_gold")
-	rm -f $(foreach test,$(TESTS),"autotest.out/autotest_$(test).log")
-	rmdir --ignore-fail-on-non-empty autotest.out || exit 0
 	rm -f 	draw_svg_tiles new_fp hstrrep sort_seq merge_seq autotest fp2bit bit2fp pair2net \
 		hello_world 
-	rm -f	xc6slx9.fp xc6slx9.svg \
-		xc6slx9.tiles xc6slx9.devs xc6slx9.conns \
-		xc6slx9.ports xc6slx9.sw xc6slx9.cnets xc6slx9.swbits \
-		compare_tiles_matching.txt compare_tiles_diff.txt compare_tiles_extra.txt \
-		compare_devs_matching.txt compare_devs_diff.txt compare_devs_extra.txt \
-		compare_conns_matching.txt compare_conns_diff.txt compare_conns_extra.txt \
-		compare_ports_matching.txt compare_ports_diff.txt compare_ports_extra.txt \
-		compare_sw_matching.txt compare_sw_diff.txt compare_sw_extra.txt \
-		compare_cnets_matching.txt compare_cnets_diff.txt compare_cnets_extra.txt \
-		compare_swbits_matching.txt compare_swbits_diff.txt compare_swbits_extra.txt
+	rm -f	xc6slx9.fp xc6slx9.svg
+	rm -f	$(DESIGN_GOLD) $(AUTOTEST_GOLD) $(COMPARE_GOLD)
+	rm -f	test.gold/compare_xc6slx9.fp
+	rm -f	$(foreach f, $(DESIGN_TESTS), test.out/design_$(f).ffbd)
+	rm -f	$(foreach f, $(DESIGN_TESTS), test.out/design_$(f).ff2b)
+	rm -f	$(foreach f, $(DESIGN_TESTS), test.out/design_$(f).fb2f)
+	rm -f	$(foreach f, $(DESIGN_TESTS), test.out/design_$(f).f2gd)
+	rm -f	$(foreach f, $(DESIGN_TESTS), test.out/design_$(f).fp)
+	rm -f	test.out/autotest_*
+	rm -f	$(foreach f, $(COMPARE_TESTS), test.out/compare_$(f).fco)
+	rm -f	$(foreach f, $(COMPARE_TESTS), test.out/compare_$(f).fcr)
+	rm -f	$(foreach f, $(COMPARE_TESTS), test.out/compare_$(f).fcm)
+	rm -f	$(foreach f, $(COMPARE_TESTS), test.out/compare_$(f).fcd)
+	rm -f	$(foreach f, $(COMPARE_TESTS), test.out/compare_$(f).fce)
+	rm -f	test.out/compare_xc6slx9.fp
+	rmdir --ignore-fail-on-non-empty test.out test.gold
 
 install:	all
 	@make -C libs install

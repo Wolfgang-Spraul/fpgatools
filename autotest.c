@@ -17,7 +17,7 @@ time_t g_start_time;
 #define MEMUSAGE()	printf("O #NODIFF memusage %i\n", get_vm_mb());
 #define TIME_AND_MEM()	TIMESTAMP(); MEMUSAGE()
 
-#define AUTOTEST_TMP_DIR	"autotest.tmp"
+#define AUTOTEST_TMP_DIR	"test.out"
 
 struct test_state
 {

@@ -59,13 +59,11 @@ Design Principles
 TODO
 
 short-term (1 month):
-* support counter sample (including clock, jtag)
+* example: blinking_led
+* example: counter (including clock, jtag)
 * support reading iologic switches
 * autotest: fix roundtrip issues in routing_sw test
-* autotest: automate generation of gold standards
 * autotest: protect stderr of diff executable in autotest log
-* autotest: cleanup extensions and switch to new extension system
-* autotest: include samples such as hello_world in testing
 * 3 Debian packages: libfpga, libfpga-doc, fpgatools
 
 mid-term (6 months):
