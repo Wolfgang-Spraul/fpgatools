@@ -112,13 +112,13 @@ design_%.ftest: design_%.ffbd
 	@diff -u $(basename $@).fp $(basename $@).fb2f >$@ || true
 
 %.fb2f: %.ff2b bit2fp
-	@./bit2fp $< 2>&1 >$@
+	@./bit2fp $< >$@ 2>&1
 
 %.ff2b: %.fp fp2bit
 	@./fp2bit $< $@
 
 design_%.fp: $$*
-	@./$(*F) 2>&1 >$@
+	@./$(*F) >$@ 2>&1
 
 # autotest targets
 
@@ -130,7 +130,7 @@ autotest_%.ftest: autotest_%.far
 	@diff -U 0 -I "^O #NODIFF" test.gold/$(*F).fao $< >$@ || true
 
 autotest_%.fao: autotest fp2bit bit2fp
-	./autotest --test=$(*F) 2>&1 >$@
+	./autotest --test=$(*F) >$@ 2>&1
 
 # compare testing targets
 

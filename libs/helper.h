@@ -66,17 +66,17 @@ const char* lut2bool(const uint64_t lut, int bits,
 int printf_iob(uint8_t* d, int len, int inpos, int num_entries);
 void printf_ramb16_data(uint8_t* bits, int inpos);
 
-int is_empty(uint8_t* d, int l);
-int count_bits(uint8_t* d, int l);
+int is_empty(const uint8_t* d, int l);
+int count_bits(const uint8_t* d, int l);
 
-int frame_get_bit(uint8_t* frame_d, int bit);
+int frame_get_bit(const uint8_t* frame_d, int bit);
 void frame_clear_bit(uint8_t* frame_d, int bit);
 void frame_set_bit(uint8_t* frame_d, int bit);
 
-uint8_t frame_get_u8(uint8_t* frame_d);
-uint16_t frame_get_u16(uint8_t* frame_d);
-uint32_t frame_get_u32(uint8_t* frame_d);
-uint64_t frame_get_u64(uint8_t* frame_d);
+uint8_t frame_get_u8(const uint8_t* frame_d);
+uint16_t frame_get_u16(const uint8_t* frame_d);
+uint32_t frame_get_u32(const uint8_t* frame_d);
+uint64_t frame_get_u64(const uint8_t* frame_d);
 
 void frame_set_u8(uint8_t* frame_d, uint8_t v);
 void frame_set_u16(uint8_t* frame_d, uint16_t v);
@@ -85,13 +85,13 @@ void frame_set_u64(uint8_t* frame_d, uint64_t v);
 
 // if row is negative, it's an absolute frame number and major and
 // minor are ignored
-int printf_frames(uint8_t* bits, int max_frames, int row, int major,
-	int minor, int print_empty);
-void printf_clock(uint8_t* frame, int row, int major, int minor);
+int printf_frames(const uint8_t* bits, int max_frames, int row, int major,
+	int minor, int print_empty, int no_clock);
+void printf_clock(const uint8_t* frame, int row, int major, int minor);
 int clb_empty(uint8_t* maj_bits, int idx);
-void printf_extrabits(uint8_t* maj_bits, int start_minor, int num_minors,
+void printf_extrabits(const uint8_t* maj_bits, int start_minor, int num_minors,
 	int start_bit, int num_bits, int row, int major);
-uint64_t read_lut64(uint8_t* two_minors, int off_in_frame);
+uint64_t read_lut64(const uint8_t* two_minors, int bit_off_in_frame);
 void write_lut64(uint8_t* two_minors, int off_in_frame, uint64_t u64);
 
 int get_vm_mb(void);

@@ -1,9 +1,9 @@
 Introduction
- fpgatools is a toolchain to program flexible programmable gate arrays
+ fpgatools is a toolchain to program field-programmable gate arrays
  (FPGAs). The only supported chip at this time is the xc6slx9, a cheap
- (ca. 10 USD) but powerful 45nm-generation chip with about 2400 LUTs,
+ (ca. 7 USD) but powerful 45nm-generation chip with 5720 6-input LUTs,
  block ram and multiply-accumulate devices.
- The principles of fpgatools are:
+ The long-term goals of fpgatools are:
 
  *) reach the maximum physical performance of the chip
  *) fast development cycles
@@ -59,6 +59,8 @@ Design Principles
 TODO
 
 short-term (1 month):
+* add lut_encoding autotest for lut6 and lut5 in a-d position
+  of x(m), x(l), l and m devs
 * example: blinking_led
 * example: counter (including clock, jtag)
 * support reading iologic switches

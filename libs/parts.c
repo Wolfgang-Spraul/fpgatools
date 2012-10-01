@@ -159,6 +159,21 @@ int get_rightside_major(int idcode)
 	return XC6_SLX9_RIGHTMOST_MAJOR;
 }
 
+int get_major_framestart(int idcode, int major)
+{
+	int i, frame_count;
+
+	frame_count = 0;
+	for (i = 0; i < major; i++)
+		frame_count += get_major_minors(idcode, i);
+	return frame_count;
+}
+
+int get_frames_per_row(int idcode)
+{
+	return get_major_framestart(idcode, get_rightside_major(idcode)+1);
+}
+
 //
 // routing switches
 //

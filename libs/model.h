@@ -412,9 +412,11 @@ enum { LUT_A = 0, LUT_B, LUT_C, LUT_D }; // offset into a2d[]
 enum { FF_SRINIT0 = 1, FF_SRINIT1 };
 enum { MUX_O6 = 1, MUX_O5, MUX_5Q, MUX_X, MUX_F7, MUX_CY, MUX_XOR };
 enum { FF_OR2L = 1, FF_AND2L, FF_LATCH, FF_FF };
+enum { CY0_X = 1, CY0_O5 };
 enum { CLKINV_B = 1, CLKINV_CLK };
 enum { SYNCATTR_SYNC = 1, SYNCATTR_ASYNC };
 enum { WEMUX_WE = 1, WEMUX_CE };
+enum { PRECYINIT_0 = 1, PRECYINIT_1, PRECYINIT_AX };
 
 #define MAX_LUT_LEN 2048
 
@@ -427,6 +429,7 @@ struct fpgadev_logic_a2d
 	int ff_srinit;	// SRINIT0, SRINIT1 
 	int out_mux;	// O6, O5, 5Q, F7, CY, XOR
 	int ff;		// OR2L, AND2L, LATCH, FF
+	int cy0;	// X, O5
 };
 
 struct fpgadev_logic
@@ -437,6 +440,8 @@ struct fpgadev_logic
 	int ce_used;
 	int sr_used;
 	int we_mux;	// WEMUX_WE, WEMUX_CE
+	int cout_used;
+	int precyinit;	// PRECYINIT_0, PRECYINIT_1, PRECYINIT_AX
 };
 
 //

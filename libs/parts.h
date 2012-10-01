@@ -81,6 +81,8 @@ enum major_type get_major_type(int idcode, int major);
 #define XC6_SLX9_RIGHTMOST_MAJOR 17
 
 int get_rightside_major(int idcode);
+int get_major_framestart(int idcode, int major);
+int get_frames_per_row(int idcode);
 
 int get_num_iobs(int idcode);
 const char* get_iob_sitename(int idcode, int idx);

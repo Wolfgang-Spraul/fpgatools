@@ -715,7 +715,7 @@ static void print_ramb16_cfg(ramb16_cfg_t* cfg)
 	printf("}\n");
 }
 
-static void printf_routing_2minors(uint8_t* bits, int row, int major,
+static void printf_routing_2minors(const uint8_t* bits, int row, int major,
 	int even_minor)
 {
 	int y, i, hclk;
@@ -742,7 +742,7 @@ static void printf_routing_2minors(uint8_t* bits, int row, int major,
 	}
 }
 
-static void printf_v64_mi20(uint8_t* bits, int row, int major)
+static void printf_v64_mi20(const uint8_t* bits, int row, int major)
 {
 	int y, i, hclk;
 	uint64_t u64;
@@ -761,115 +761,283 @@ static void printf_v64_mi20(uint8_t* bits, int row, int major)
 	}
 }
 
+static void printf_lut(const uint8_t* bits, int row, int major,
+	int minor, int v32_i)
+{
+	int i, byte_off_in_frame;
+	uint32_t u32;
+	uint64_t u64;
+	char bit_str[64];
+
+	byte_off_in_frame = v32_i*4;
+	if (byte_off_in_frame >= 64)
+		byte_off_in_frame += XC6_HCLK_BYTES;
+	u64 = read_lut64(&bits[minor*FRAME_SIZE], byte_off_in_frame*8);
+	if (u64) {
+		for (i = 0; i < 64; i++)
+			bit_str[i] = (u64 & (1ULL << i)) ? '1' : '0';
+		printf("r%i ma%i v32_%02i mip%i_lut %.64s\n", row,
+			major, v32_i, minor, bit_str);
+
+		u32 = frame_get_u32(&bits[minor*FRAME_SIZE + byte_off_in_frame]);
+		for (i = 0; i < 32; i++)
+			bit_str[i] = (u32 & (1 << i)) ? '1' : '0';
+		printf("r%i ma%i v32_%02i mi%i_f32 %.32s\n", row, major,
+			v32_i, minor, bit_str);
+
+		u32 = frame_get_u32(&bits[(minor+1)*FRAME_SIZE + byte_off_in_frame]);
+		for (i = 0; i < 32; i++)
+			bit_str[i] = (u32 & (1 << i)) ? '1' : '0';
+		printf("r%i ma%i v32_%02i mi%i_f32 %.32s\n", row, major,
+			v32_i, minor+1, bit_str);
+	}
+}
+
+static int dump_maj_zero(const uint8_t* bits, int row, int major)
+{
+	int minor;
+
+	for (minor = 0; minor < get_major_minors(XC6SLX9, major); minor++)
+		printf_clock(&bits[minor*FRAME_SIZE], row, major, minor);
+	for (minor = 0; minor < get_major_minors(XC6SLX9, major); minor++)
+		printf_frames(&bits[minor*FRAME_SIZE], /*max_frames*/ 1,
+			row, major, minor, /*print_empty*/ 0, /*no_clock*/ 1);
+	return 0;
+}
+
+static int dump_maj_left(const uint8_t* bits, int row, int major)
+{
+	int minor;
+
+	for (minor = 0; minor < get_major_minors(XC6SLX9, major); minor++)
+		printf_clock(&bits[minor*FRAME_SIZE], row, major, minor);
+	for (minor = 0; minor < get_major_minors(XC6SLX9, major); minor++)
+		printf_frames(&bits[minor*FRAME_SIZE], /*max_frames*/ 1,
+			row, major, minor, /*print_empty*/ 0, /*no_clock*/ 1);
+	return 0;
+}
+
+static int dump_maj_right(const uint8_t* bits, int row, int major)
+{
+	int minor;
+
+	for (minor = 0; minor < get_major_minors(XC6SLX9, major); minor++)
+		printf_clock(&bits[minor*FRAME_SIZE], row, major, minor);
+	for (minor = 0; minor < get_major_minors(XC6SLX9, major); minor++)
+		printf_frames(&bits[minor*FRAME_SIZE], /*max_frames*/ 1,
+			row, major, minor, /*print_empty*/ 0, /*no_clock*/ 1);
+	return 0;
+}
+
+static int dump_maj_center(const uint8_t* bits, int row, int major)
+{
+	int minor, i;
+
+	for (minor = 0; minor < get_major_minors(XC6SLX9, major); minor++)
+		printf_clock(&bits[minor*FRAME_SIZE], row, major, minor);
+
+	// 0:19 routing minor pairs
+	for (i = 0; i < 10; i++)
+		printf_routing_2minors(&bits[i*2*FRAME_SIZE], row, major, i*2);
+
+	// mi20 as 64-char 0/1 string
+	printf_v64_mi20(&bits[20*FRAME_SIZE], row, major);
+
+	// L devices
+	for (i = 0; i < 16; i++) {
+		printf_lut(bits, row, major, 21, i*2);
+		printf_lut(bits, row, major, 23, i*2);
+		printf_lut(bits, row, major, 21, i*2+1);
+		printf_lut(bits, row, major, 23, i*2+1);
+	}
+
+	for (minor = 25; minor < get_major_minors(XC6SLX9, major); minor++)
+		printf_frames(&bits[minor*FRAME_SIZE], /*max_frames*/ 1,
+			row, major, minor, /*print_empty*/ 0, /*no_clock*/ 1);
+	return 0;
+}
+
+static int dump_maj_logic_xm(const uint8_t* bits, int row, int major)
+{
+	int minor, i;
+
+	for (minor = 0; minor < get_major_minors(XC6SLX9, major); minor++)
+		printf_clock(&bits[minor*FRAME_SIZE], row, major, minor);
+
+	// 0:19 routing minor pairs
+	for (i = 0; i < 10; i++)
+		printf_routing_2minors(&bits[i*2*FRAME_SIZE], row, major, i*2);
+
+	// mi20 as 64-char 0/1 string
+	printf_v64_mi20(&bits[20*FRAME_SIZE], row, major);
+
+	// todo: some logic device configuration bits are also in mi20
+	// todo: the top and bottom two luts should be skipped in !no_io cols
+
+	// M devices
+	for (i = 0; i < 16; i++) {
+		printf_lut(bits, row, major, 21, i*2);
+		printf_lut(bits, row, major, 21, i*2+1);
+	}
+	printf_frames(&bits[23*FRAME_SIZE], /*max_frames*/ 1,
+		row, major, 23, /*print_empty*/ 0, /*no_clock*/ 1);
+	for (i = 0; i < 16; i++) {
+		printf_lut(bits, row, major, 24, i*2);
+		printf_lut(bits, row, major, 24, i*2+1);
+	}
+
+	// X devices
+	printf_frames(&bits[26*FRAME_SIZE], /*max_frames*/ 1,
+		row, major, 26, /*print_empty*/ 0, /*no_clock*/ 1);
+	for (i = 0; i < 16; i++) {
+		printf_lut(bits, row, major, 27, i*2);
+		printf_lut(bits, row, major, 29, i*2);
+		printf_lut(bits, row, major, 27, i*2+1);
+		printf_lut(bits, row, major, 29, i*2+1);
+	}
+	return 0;
+}
+
+static int dump_maj_logic_xl(const uint8_t* bits, int row, int major)
+{
+	int minor, i;
+
+	for (minor = 0; minor < get_major_minors(XC6SLX9, major); minor++)
+		printf_clock(&bits[minor*FRAME_SIZE], row, major, minor);
+
+	// 0:19 routing minor pairs
+	for (i = 0; i < 10; i++)
+		printf_routing_2minors(&bits[i*2*FRAME_SIZE], row, major, i*2);
+
+	// mi20 as 64-char 0/1 string
+	printf_v64_mi20(&bits[20*FRAME_SIZE], row, major);
+
+	// L devices
+	for (i = 0; i < 16; i++) {
+		printf_lut(bits, row, major, 21, i*2);
+		printf_lut(bits, row, major, 23, i*2);
+		printf_lut(bits, row, major, 21, i*2+1);
+		printf_lut(bits, row, major, 23, i*2+1);
+	}
+
+	for (minor = 25; minor < get_major_minors(XC6SLX9, major); minor++)
+		printf_frames(&bits[minor*FRAME_SIZE], /*max_frames*/ 1,
+			row, major, minor, /*print_empty*/ 0, /*no_clock*/ 1);
+	return 0;
+}
+
+static int dump_maj_bram(const uint8_t* bits, int row, int major)
+{
+	ramb16_cfg_t ramb16_cfg[4];
+	int minor, i, j, offset_in_frame;
+
+	for (minor = 0; minor < get_major_minors(XC6SLX9, major); minor++)
+		printf_clock(&bits[minor*FRAME_SIZE], row, major, minor);
+
+	// 0:19 routing minor pairs
+	for (i = 0; i < 10; i++)
+		printf_routing_2minors(&bits[i*2*FRAME_SIZE], row, major, i*2);
+
+	// mi20 as 64-char 0/1 string
+	printf_v64_mi20(&bits[20*FRAME_SIZE], row, major);
+
+	printf_frames(&bits[21*FRAME_SIZE], /*max_frames*/ 1,
+		row, major, 21, /*print_empty*/ 0, /*no_clock*/ 1);
+	printf_frames(&bits[22*FRAME_SIZE], /*max_frames*/ 1,
+		row, major, 22, /*print_empty*/ 0, /*no_clock*/ 1);
+
+	// minors 23&24
+	for (i = 0; i < 4; i++) {
+		offset_in_frame = i*32;
+		if (offset_in_frame >= 64)
+			offset_in_frame += 2;
+		for (j = 0; j < 32; j++) {
+			ramb16_cfg[i].byte[j] = bits[23*130+offset_in_frame+j];
+			ramb16_cfg[i].byte[j+32] = bits[24*130+offset_in_frame+j];
+		}
+	}
+	for (i = 0; i < 4; i++) {
+		for (j = 0; j < 64; j++) {
+			if (ramb16_cfg[i].byte[j])
+				break;
+		}
+		if (j >= 64)
+			continue;
+		printf("r%i ma%i ramb16 i%i\n",
+			row, major, i);
+		print_ramb16_cfg(&ramb16_cfg[i]);
+	}
+	return 0;
+}
+
+static int dump_maj_macc(const uint8_t* bits, int row, int major)
+{
+	int minor, i;
+
+	for (minor = 0; minor < get_major_minors(XC6SLX9, major); minor++)
+		printf_clock(&bits[minor*FRAME_SIZE], row, major, minor);
+
+	// 0:19 routing minor pairs
+	for (i = 0; i < 10; i++)
+		printf_routing_2minors(&bits[i*2*FRAME_SIZE], row, major, i*2);
+
+	// mi20 as 64-char 0/1 string
+	printf_v64_mi20(&bits[20*FRAME_SIZE], row, major);
+
+	for (minor = 21; minor < get_major_minors(XC6SLX9, major); minor++)
+		printf_frames(&bits[minor*FRAME_SIZE], /*max_frames*/ 1,
+			row, major, minor, /*print_empty*/ 0, /*no_clock*/ 1);
+	return 0;
+}
+
 static int dump_bits(struct fpga_config* cfg)
 {
-	int row, major, minor, i, j, off, offset_in_frame;
+	int row, major, off, rc;
 
 	// type0
-	off = 0;
-	for (row = 0; row < 4; row++) {
-		for (major = 0; major < 18; major++) {
-			// todo: the macc/bram/logic special cases can be removed
-			if (get_major_type(cfg->reg[cfg->idcode_reg].int_v,
-				major) == MAJ_MACC) {
-				int last_extra_minor;
-
-				if (!row || row == 3)
-					last_extra_minor = 23;
-				else
-					last_extra_minor = 21;
-				minor = 0;
-				while (minor <= last_extra_minor) {
-					minor += printf_frames(&cfg->bits.d[off
-					  +minor*130], 31 - minor, row,
-					  major, minor, /*print_empty*/ 0);
-				}
-
-				// clock
-				for (; minor < 24; minor++)
-					printf_clock(&cfg->bits.d[off+minor*130],
-						row, major, minor);
-
-				for (i = 0; i < 4; i++) {
-					for (minor = last_extra_minor+1; minor < 24;
-					     minor++) {
-						for (j = 0; j < 256; j++) {
-							if (frame_get_bit(&cfg->bits.d[off+minor*130], i*256 + ((i>=2)?16:0) + j))
-							printf("r%i ma%i dsp i%i mi%i bit %i\n", row, major, i, minor, i*256+j);
-						}
-					}
-				}
-			} else if (get_major_type(cfg->reg[cfg->idcode_reg].int_v, major) == MAJ_LOGIC_XM) {
-				// clock
-				for (minor = 0; minor < 31; minor++)
-					printf_clock(
-						&cfg->bits.d[off+minor*130],
-						row, major, minor);
-
-				// bitwise
-				minor = 0;
-				while (minor < 31) {
-					minor += printf_frames(&cfg->bits.d[off
-					  +minor*130], 31 - minor,
-					  row, major, minor, /*print_empty*/ 0);
-				}
-
-				// 0:20 routing minor pairs
-				for (i = 0; i < 10; i++)
-					printf_routing_2minors(&cfg->bits.d[
-					  off+i*2*FRAME_SIZE], row, major, i*2);
-
-				// mi20 as 64-char 0/1 string
-				printf_v64_mi20(&cfg->bits.d[
-					off+20*FRAME_SIZE], row, major);
-			} else if (get_major_type(cfg->reg[cfg->idcode_reg].int_v, major) == MAJ_BRAM) {
-				ramb16_cfg_t ramb16_cfg[4];
-
-				// minors 0..22
-				minor = 0;
-				while (minor < 23) {
-					minor += printf_frames(&cfg->bits.d[off
-					  +minor*130], 23 - minor, row,
-					  major, minor, /*print_empty*/ 0);
-				}
-
-				// minors 23&24
-				printf_clock(&cfg->bits.d[off+23*130], row, major, 23);
-				printf_clock(&cfg->bits.d[off+24*130], row, major, 24);
-				for (i = 0; i < 4; i++) {
-					offset_in_frame = i*32;
-					if (offset_in_frame >= 64)
-						offset_in_frame += 2;
-					for (j = 0; j < 32; j++) {
-						ramb16_cfg[i].byte[j] = cfg->bits.d[off+23*130+offset_in_frame+j];
-						ramb16_cfg[i].byte[j+32] = cfg->bits.d[off+24*130+offset_in_frame+j];
-					}
-				}
-				for (i = 0; i < 4; i++) {
-					for (j = 0; j < 64; j++) {
-						if (ramb16_cfg[i].byte[j])
-							break;
-					}
-					if (j >= 64)
-						continue;
-					printf("r%i ma%i ramb16 i%i\n",
-						row, major, i);
-					print_ramb16_cfg(&ramb16_cfg[i]);
-				}
-			} else {
-				int major_minors =
-					get_major_minors(cfg->reg[cfg->idcode_reg].int_v, major);
-				minor = 0;
-				while (minor < major_minors) {
-					minor += printf_frames(&cfg->bits.d[off
-					  +minor*130], major_minors - minor,
-					  row, major, minor, /*print_empty*/ 0);
-				}
+	for (major = 0; major <= get_rightside_major(XC6SLX9); major++) {
+		for (row = 3; row >= 0; row--) {
+			off = (row*get_frames_per_row(XC6SLX9) + get_major_framestart(XC6SLX9, major)) * FRAME_SIZE;
+			switch (get_major_type(cfg->reg[cfg->idcode_reg].int_v, major)) {
+				case MAJ_ZERO:
+					rc = dump_maj_zero(&cfg->bits.d[off], row, major);
+					if (rc) FAIL(rc);
+					break;
+				case MAJ_LEFT:
+					rc = dump_maj_left(&cfg->bits.d[off], row, major);
+					if (rc) FAIL(rc);
+					break;
+				case MAJ_RIGHT:
+					rc = dump_maj_right(&cfg->bits.d[off], row, major);
+					if (rc) FAIL(rc);
+					break;
+				case MAJ_CENTER:
+					rc = dump_maj_center(&cfg->bits.d[off], row, major);
+					if (rc) FAIL(rc);
+					break;
+				case MAJ_LOGIC_XM:
+					rc = dump_maj_logic_xm(&cfg->bits.d[off], row, major);
+					if (rc) FAIL(rc);
+					break;
+				case MAJ_LOGIC_XL:
+					rc = dump_maj_logic_xl(&cfg->bits.d[off], row, major);
+					if (rc) FAIL(rc);
+					break;
+				case MAJ_BRAM:
+					rc = dump_maj_bram(&cfg->bits.d[off], row, major);
+					if (rc) FAIL(rc);
+					break;
+				case MAJ_MACC:
+					rc = dump_maj_macc(&cfg->bits.d[off], row, major);
+					if (rc) FAIL(rc);
+					break;
+				default: HERE(); break;
 			}
-			off += get_major_minors(XC6SLX9, major) * FRAME_SIZE;
 		}
 	}
 	return 0;
+fail:
+	return rc;
 }
 
 static int dump_bram(struct fpga_config* cfg)

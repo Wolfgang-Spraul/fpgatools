@@ -399,6 +399,15 @@ static int printf_LOGIC(FILE* f, struct fpga_model* model,
 					break;
 				case 0: break; default: FAIL(EINVAL);
 			}
+			switch (cfg->a2d[j].cy0) {
+				case CY0_X:
+					fprintf(f, "%s %c_cy0 X\n", pref, 'A'+j);
+					break;
+				case CY0_O5:
+					fprintf(f, "%s %c_cy0 O5\n", pref, 'A'+j);
+					break;
+				case 0: break; default: FAIL(EINVAL);
+			}
 		}
 		switch (cfg->clk_inv) {
 			case CLKINV_B:
@@ -428,6 +437,20 @@ static int printf_LOGIC(FILE* f, struct fpga_model* model,
 				break;
 			case WEMUX_CE:
 				fprintf(f, "%s wemux CE\n", pref);
+				break;
+			case 0: break; default: FAIL(EINVAL);
+		}
+		if (cfg->cout_used)
+			fprintf(f, "%s cout_used\n", pref);
+		switch (cfg->precyinit) {
+			case PRECYINIT_0:
+				fprintf(f, "%s precyinit 0\n", pref);
+				break;
+			case PRECYINIT_1:
+				fprintf(f, "%s precyinit 1\n", pref);
+				break;
+			case PRECYINIT_AX:
+				fprintf(f, "%s precyinit AX\n", pref);
 				break;
 			case 0: break; default: FAIL(EINVAL);
 		}
@@ -461,6 +484,10 @@ static int read_LOGIC_attr(struct fpga_model* model, int y, int x, int type_idx,
 	}
 	if (!str_cmp(w1, w1_len, "sr_used", ZTERM)) {
 		dev->u.logic.sr_used = 1;
+		goto inst_1;
+	}
+	if (!str_cmp(w1, w1_len, "cout_used", ZTERM)) {
+		dev->u.logic.cout_used = 1;
 		goto inst_1;
 	}
 
@@ -512,15 +539,15 @@ static int read_LOGIC_attr(struct fpga_model* model, int y, int x, int type_idx,
 		if (!str_cmp(w1, w1_len, cmp_str, ZTERM)) {
 			if (!str_cmp(w2, w2_len, "O6", ZTERM))
 				dev->u.logic.a2d[i].out_mux = MUX_O6;
-			if (!str_cmp(w2, w2_len, "O5", ZTERM))
+			else if (!str_cmp(w2, w2_len, "O5", ZTERM))
 				dev->u.logic.a2d[i].out_mux = MUX_O5;
-			if (!str_cmp(w2, w2_len, "5Q", ZTERM))
+			else if (!str_cmp(w2, w2_len, "5Q", ZTERM))
 				dev->u.logic.a2d[i].out_mux = MUX_5Q;
-			if (!str_cmp(w2, w2_len, "F7", ZTERM))
+			else if (!str_cmp(w2, w2_len, "F7", ZTERM))
 				dev->u.logic.a2d[i].out_mux = MUX_F7;
-			if (!str_cmp(w2, w2_len, "CY", ZTERM))
+			else if (!str_cmp(w2, w2_len, "CY", ZTERM))
 				dev->u.logic.a2d[i].out_mux = MUX_CY;
-			if (!str_cmp(w2, w2_len, "XOR", ZTERM))
+			else if (!str_cmp(w2, w2_len, "XOR", ZTERM))
 				dev->u.logic.a2d[i].out_mux = MUX_XOR;
 			else return 0;
 			goto inst_2;
@@ -529,12 +556,21 @@ static int read_LOGIC_attr(struct fpga_model* model, int y, int x, int type_idx,
 		if (!str_cmp(w1, w1_len, cmp_str, ZTERM)) {
 			if (!str_cmp(w2, w2_len, "OR2L", ZTERM))
 				dev->u.logic.a2d[i].ff = FF_OR2L;
-			if (!str_cmp(w2, w2_len, "AND2L", ZTERM))
+			else if (!str_cmp(w2, w2_len, "AND2L", ZTERM))
 				dev->u.logic.a2d[i].ff = FF_AND2L;
-			if (!str_cmp(w2, w2_len, "LATCH", ZTERM))
+			else if (!str_cmp(w2, w2_len, "LATCH", ZTERM))
 				dev->u.logic.a2d[i].ff = FF_LATCH;
-			if (!str_cmp(w2, w2_len, "FF", ZTERM))
+			else if (!str_cmp(w2, w2_len, "FF", ZTERM))
 				dev->u.logic.a2d[i].ff = FF_FF;
+			else return 0;
+			goto inst_2;
+		}
+		snprintf(cmp_str, sizeof(cmp_str), "%c_cy0", 'A'+i);
+		if (!str_cmp(w1, w1_len, cmp_str, ZTERM)) {
+			if (!str_cmp(w2, w2_len, "X", ZTERM))
+				dev->u.logic.a2d[i].cy0 = CY0_X;
+			else if (!str_cmp(w2, w2_len, "O5", ZTERM))
+				dev->u.logic.a2d[i].cy0 = CY0_O5;
 			else return 0;
 			goto inst_2;
 		}
@@ -560,6 +596,16 @@ static int read_LOGIC_attr(struct fpga_model* model, int y, int x, int type_idx,
 			dev->u.logic.we_mux = WEMUX_WE;
 		else if (!str_cmp(w2, w2_len, "CE", ZTERM))
 			dev->u.logic.we_mux = WEMUX_CE;
+		else return 0;
+		goto inst_2;
+	}
+	if (!str_cmp(w1, w1_len, "precyinit", ZTERM)) {
+		if (!str_cmp(w2, w2_len, "0", ZTERM))
+			dev->u.logic.precyinit = PRECYINIT_0;
+		else if (!str_cmp(w2, w2_len, "1", ZTERM))
+			dev->u.logic.precyinit = PRECYINIT_1;
+		else if (!str_cmp(w2, w2_len, "AX", ZTERM))
+			dev->u.logic.precyinit = PRECYINIT_AX;
 		else return 0;
 		goto inst_2;
 	}

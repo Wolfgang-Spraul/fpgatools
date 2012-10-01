@@ -463,14 +463,14 @@ void printf_ramb16_data(uint8_t* bits, int inpos)
 	}
 }
 
-int is_empty(uint8_t* d, int l)
+int is_empty(const uint8_t* d, int l)
 {
 	while (--l >= 0)
 		if (d[l]) return 0;
 	return 1;
 }
 
-int count_bits(uint8_t* d, int l)
+int count_bits(const uint8_t* d, int l)
 {
 	int bits = 0;
 	while (--l >= 0) {
@@ -486,7 +486,7 @@ int count_bits(uint8_t* d, int l)
 	return bits;
 }
 
-int frame_get_bit(uint8_t* frame_d, int bit)
+int frame_get_bit(const uint8_t* frame_d, int bit)
 {
 	uint8_t v = 1<<(7-(bit%8));
 	return (frame_d[(bit/16)*2 + !((bit/8)%2)] & v) != 0;
@@ -504,7 +504,7 @@ void frame_set_bit(uint8_t* frame_d, int bit)
 	frame_d[(bit/16)*2 + !((bit/8)%2)] |= v;
 }
 
-uint8_t frame_get_u8(uint8_t* frame_d)
+uint8_t frame_get_u8(const uint8_t* frame_d)
 {
 	uint8_t v = 0;
 	int i;
@@ -513,7 +513,7 @@ uint8_t frame_get_u8(uint8_t* frame_d)
 	return v;
 }
 
-uint16_t frame_get_u16(uint8_t* frame_d)
+uint16_t frame_get_u16(const uint8_t* frame_d)
 {
 	uint16_t high_b, low_b;
 	high_b = frame_get_u8(frame_d);
@@ -521,7 +521,7 @@ uint16_t frame_get_u16(uint8_t* frame_d)
 	return (high_b << 8) | low_b;
 }
 
-uint32_t frame_get_u32(uint8_t* frame_d)
+uint32_t frame_get_u32(const uint8_t* frame_d)
 {
 	uint32_t high_w, low_w;
 	low_w = frame_get_u16(frame_d);
@@ -529,7 +529,7 @@ uint32_t frame_get_u32(uint8_t* frame_d)
 	return (high_w << 16) | low_w;
 }
 
-uint64_t frame_get_u64(uint8_t* frame_d)
+uint64_t frame_get_u64(const uint8_t* frame_d)
 {
 	uint64_t high_w, low_w;
 	low_w = frame_get_u32(frame_d);
@@ -575,8 +575,8 @@ void frame_set_u64(uint8_t* frame_d, uint64_t v)
 	frame_set_u32(frame_d+4, high_w);
 }
 
-int printf_frames(uint8_t* bits, int max_frames,
-	int row, int major, int minor, int print_empty)
+int printf_frames(const uint8_t* bits, int max_frames,
+	int row, int major, int minor, int print_empty, int no_clock)
 {
 	int i, i_without_clk;
 	char prefix[128], suffix[128];
@@ -599,11 +599,14 @@ int printf_frames(uint8_t* bits, int max_frames,
 		}
 		return i;
 	}
-	if (count_bits(bits, 130) <= 32) {
+	// value 128 chosen randomly for readability to decide
+	// between printing individual bits or a hex block.
+	if (count_bits(bits, 130) <= 128) {
 		for (i = 0; i < FRAME_SIZE*8; i++) {
 			if (!frame_get_bit(bits, i)) continue;
 			if (i >= 512 && i < 528) { // hclk
-				printf("%sbit %i\n", prefix, i);
+				if (!no_clock)
+					printf("%sbit %i\n", prefix, i);
 				continue;
 			}
 			i_without_clk = i;
@@ -623,7 +626,7 @@ int printf_frames(uint8_t* bits, int max_frames,
 	return 1;
 }
 
-void printf_clock(uint8_t* frame, int row, int major, int minor)
+void printf_clock(const uint8_t* frame, int row, int major, int minor)
 {
 	int i;
 	for (i = 0; i < 16; i++) {
@@ -649,7 +652,7 @@ int clb_empty(uint8_t* maj_bits, int idx)
 	return 1;
 }
 
-void printf_extrabits(uint8_t* maj_bits, int start_minor, int num_minors,
+void printf_extrabits(const uint8_t* maj_bits, int start_minor, int num_minors,
 	int start_bit, int num_bits, int row, int major)
 {
 	int minor, bit;
@@ -663,19 +666,19 @@ void printf_extrabits(uint8_t* maj_bits, int start_minor, int num_minors,
 	}
 }
 
-uint64_t read_lut64(uint8_t* two_minors, int off_in_frame)
+uint64_t read_lut64(const uint8_t* two_minors, int bit_off_in_frame)
 {
 	uint64_t lut64 = 0;
 	int j;
 
 	for (j = 0; j < 16; j++) {
-		if (frame_get_bit(two_minors, off_in_frame+j*2))
+		if (frame_get_bit(two_minors, bit_off_in_frame+j*2))
 			lut64 |= 1LL << (j*4);
-		if (frame_get_bit(two_minors, off_in_frame+(j*2)+1))
+		if (frame_get_bit(two_minors, bit_off_in_frame+(j*2)+1))
 			lut64 |= 1LL << (j*4+1);
-		if (frame_get_bit(&two_minors[130], off_in_frame+j*2))
+		if (frame_get_bit(&two_minors[130], bit_off_in_frame+j*2))
 			lut64 |= 1LL << (j*4+2);
-		if (frame_get_bit(&two_minors[130], off_in_frame+(j*2)+1))
+		if (frame_get_bit(&two_minors[130], bit_off_in_frame+(j*2)+1))
 			lut64 |= 1LL << (j*4+3);
 	}
 	return lut64;
