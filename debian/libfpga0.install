@@ -1,0 +1,2 @@
+usr/lib/libfpga-*.so*
+usr/include/*.h

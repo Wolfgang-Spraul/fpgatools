@@ -3,20 +3,11 @@ Section: electronics
 Priority: extra
 Maintainer: Xiangfu Liu <xiangfu@openmobilefree.net>
 Build-Depends: debhelper (>=  7.4.10), pkg-config, 
-	libxml2-dev
 Standards-Version: 3.9.3
 Homepage: https://github.com/Wolfgang-Spraul/fpgatools
+Vcs-Git: git://github.com/Wolfgang-Spraul/fpgatools.git
 
-Package: fpgatools
-Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}
-Description: tool to program flexible programmable gate arrays
- fpgatools is a toolchain to program flexible programmable
- gate arrays (FPGAs). The only supported chip at this time is
- the xc6slx9, a cheap (ca. 10 USD) but powerful 45nm-generation
- chip with about 2400 LUTs, block ram and multiply-accumulate devices
-
-Package: libfpga
+Package: libfpga0
 Architecture: any
 Section: libs
 Depends: ${shlibs:Depends}, ${misc:Depends}
@@ -27,3 +18,13 @@ Description: libs of fpgatools
  text-based file formats
  no documentation - read the sources
  automatic test suite
+
+Package: fpgatools
+Section: utils
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, libfpga0 (= ${binary:Version})
+Description: tool to program flexible programmable gate arrays
+ fpgatools is a toolchain to program flexible programmable gate arrays
+ (FPGAs). one supported chip at this time is the xc6slx9, a cheap but
+ powerful 45nm-generation chip with about 2400 LUTs, block ram and
+ multiply-accumulate devices

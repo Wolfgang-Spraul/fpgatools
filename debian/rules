@@ -10,6 +10,9 @@ export PREFIX=/usr
 build clean install binary-arch binary-indep binary:
 	+dh --parallel $(opt_no_act) $@
 
+override_dh_auto_build:
+	$(MAKE) fp2bit bit2fp
+
 override_dh_auto_clean:
 	$(MAKE) clean
 	sh debian/clean.sh
@@ -22,23 +25,6 @@ override_dh_installchangelogs:
 # Remove auto test for fast develop
 # will include auto_test in the end
 override_dh_auto_test:
-
-opt_optimize = CFLAGS="-g -O2"
-opt_no_act =
-opt_quiet =
-
-ifneq (,$(filter noopt,$(DEB_BUILD_OPTIONS)))
-    opt_optimize = CFLAGS="-g -O0"
-endif
-
-ifneq (,$(findstring n,$(MAKEFLAGS)))
-    opt_no_act = --no-act
-endif
-
-ifneq (,$(filter quiet,$(DEB_BUILD_OPTIONS)))
-    opt_quiet = --quiet
-    MAKEFLAGS += --quiet
-endif
 
 REPO = git://github.com/Wolfgang-Spraul/fpgatools.git
 BRANCH = master
