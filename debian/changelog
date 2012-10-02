@@ -1,6 +1,0 @@
-fpgatools (0.0+201210-1) unstable; urgency=low
-
-  * New snapshot, taken from commit d069d19
-  * Initial release. (Closes: #686949)
-
- -- Xiangfu Liu <xiangfu@openmobilefree.net>  Tue, 14 Aug 2012 10:03:41 +0800
