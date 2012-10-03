@@ -514,7 +514,7 @@ int test_routing_sw_from_iob(struct test_state* tstate,
 
 	rc = fpga_find_iob(tstate->model, "P48", &iob_y, &iob_x, &iob_type_idx);
 	if (rc) FAIL(rc);
-	rc = fdev_iob_output(tstate->model, iob_y, iob_x, iob_type_idx);
+	rc = fdev_iob_output(tstate->model, iob_y, iob_x, iob_type_idx, IO_LVCMOS33);
 	if (rc) FAIL(rc);
 	iob_dev = fdev_p(tstate->model, iob_y, iob_x, DEV_IOB, iob_type_idx);
 	if (!iob_dev) FAIL(EINVAL);
@@ -851,7 +851,7 @@ static int test_iologic_switches(struct test_state* tstate)
 		// input IOB
 		rc = fpga_find_iob(tstate->model, iob_name, &iob_y, &iob_x, &iob_type_idx);
 		if (rc) FAIL(rc);
-		rc = fdev_iob_input(tstate->model, iob_y, iob_x, iob_type_idx);
+		rc = fdev_iob_input(tstate->model, iob_y, iob_x, iob_type_idx, IO_LVCMOS33);
 		if (rc) FAIL(rc);
 		rc = test_iologic_switches2(tstate, iob_y, iob_x, iob_type_idx);
 		if (rc) FAIL(rc);
@@ -860,7 +860,7 @@ static int test_iologic_switches(struct test_state* tstate)
 		// output IOB
 		rc = fpga_find_iob(tstate->model, iob_name, &iob_y, &iob_x, &iob_type_idx);
 		if (rc) FAIL(rc);
-		rc = fdev_iob_output(tstate->model, iob_y, iob_x, iob_type_idx);
+		rc = fdev_iob_output(tstate->model, iob_y, iob_x, iob_type_idx, IO_LVCMOS33);
 		if (rc) FAIL(rc);
 		rc = test_iologic_switches2(tstate, iob_y, iob_x, iob_type_idx);
 		if (rc) FAIL(rc);
@@ -873,16 +873,17 @@ fail:
 
 static int test_iob_config(struct test_state* tstate)
 {
-	int iob_y, iob_x, iob_type_idx, rc;
+	int iob_y, iob_x, iob_type_idx, i, j, rc;
 	net_idx_t net_idx;
 	struct fpga_device* dev;
+	int drive_strengths[] = {2, 4, 6, 8, 12, 16, 24};
 
 	tstate->diff_to_null = 1;
 
 	// P45 is an IOBS
 	rc = fpga_find_iob(tstate->model, "P45", &iob_y, &iob_x, &iob_type_idx);
 	if (rc) FAIL(rc);
-	rc = fdev_iob_input(tstate->model, iob_y, iob_x, iob_type_idx);
+	rc = fdev_iob_input(tstate->model, iob_y, iob_x, iob_type_idx, IO_LVCMOS33);
 	if (rc) FAIL(rc);
 	dev = fdev_p(tstate->model, iob_y, iob_x, DEV_IOB, iob_type_idx);
 	if (!dev) FAIL(EINVAL);
@@ -896,7 +897,7 @@ static int test_iob_config(struct test_state* tstate)
 	// P46 is an IOBM
 	rc = fpga_find_iob(tstate->model, "P46", &iob_y, &iob_x, &iob_type_idx);
 	if (rc) FAIL(rc);
-	rc = fdev_iob_input(tstate->model, iob_y, iob_x, iob_type_idx);
+	rc = fdev_iob_input(tstate->model, iob_y, iob_x, iob_type_idx, IO_LVCMOS33);
 	if (rc) FAIL(rc);
 	if ((rc = diff_printf(tstate))) FAIL(rc);
 	fdev_delete(tstate->model, iob_y, iob_x, DEV_IOB, iob_type_idx);
@@ -904,7 +905,7 @@ static int test_iob_config(struct test_state* tstate)
 	// P47 is an IOBS
 	rc = fpga_find_iob(tstate->model, "P47", &iob_y, &iob_x, &iob_type_idx);
 	if (rc) FAIL(rc);
-	rc = fdev_iob_output(tstate->model, iob_y, iob_x, iob_type_idx);
+	rc = fdev_iob_output(tstate->model, iob_y, iob_x, iob_type_idx, IO_LVCMOS33);
 	if (rc) FAIL(rc);
 	dev = fdev_p(tstate->model, iob_y, iob_x, DEV_IOB, iob_type_idx);
 	if (!dev) FAIL(EINVAL);
@@ -928,20 +929,10 @@ static int test_iob_config(struct test_state* tstate)
 	rc = diff_printf(tstate); if (rc) FAIL(rc);
 	dev->u.iob.suspend = SUSP_3STATE;
 
-	dev->u.iob.drive_strength = 2;
-	rc = diff_printf(tstate); if (rc) FAIL(rc);
-	dev->u.iob.drive_strength = 4;
-	rc = diff_printf(tstate); if (rc) FAIL(rc);
-	dev->u.iob.drive_strength = 6;
-	rc = diff_printf(tstate); if (rc) FAIL(rc);
-	dev->u.iob.drive_strength = 8;
-	rc = diff_printf(tstate); if (rc) FAIL(rc);
-	dev->u.iob.drive_strength = 12;
-	rc = diff_printf(tstate); if (rc) FAIL(rc);
-	dev->u.iob.drive_strength = 16;
-	rc = diff_printf(tstate); if (rc) FAIL(rc);
-	dev->u.iob.drive_strength = 24;
-	rc = diff_printf(tstate); if (rc) FAIL(rc);
+	for (i = 0; i < sizeof(drive_strengths)/sizeof(*drive_strengths); i++) {
+		dev->u.iob.drive_strength = drive_strengths[i];
+		rc = diff_printf(tstate); if (rc) FAIL(rc);
+	}
 	dev->u.iob.drive_strength = 8;
 
 	dev->u.iob.slew = SLEW_SLOW;
@@ -957,7 +948,7 @@ static int test_iob_config(struct test_state* tstate)
 	// P48 is an IOBM
 	rc = fpga_find_iob(tstate->model, "P48", &iob_y, &iob_x, &iob_type_idx);
 	if (rc) FAIL(rc);
-	rc = fdev_iob_output(tstate->model, iob_y, iob_x, iob_type_idx);
+	rc = fdev_iob_output(tstate->model, iob_y, iob_x, iob_type_idx, IO_LVCMOS33);
 	if (rc) FAIL(rc);
 	dev = fdev_p(tstate->model, iob_y, iob_x, DEV_IOB, iob_type_idx);
 	if (!dev) FAIL(EINVAL);
@@ -977,7 +968,59 @@ static int test_iob_config(struct test_state* tstate)
 	if (rc) FAIL(rc);
 	if ((rc = diff_printf(tstate))) FAIL(rc);
 
+	fnet_delete(tstate->model, net_idx);
 	fdev_delete(tstate->model, iob_y, iob_x, DEV_IOB, iob_type_idx);
+
+	// different IO standards
+	// The left (3) and right (1) banks have higher voltage ranges
+	// than the top (0) and bottom (2) banks, so we test this on
+	// the left side (ug381 page 13).
+	// todo: IO_SSTL2_I is not implemented right
+	{ const char* io_std[] = { IO_LVCMOS33, IO_LVCMOS25, IO_LVCMOS18,
+		IO_LVCMOS18_JEDEC, IO_LVCMOS15, IO_LVCMOS15_JEDEC,
+		IO_LVCMOS12, IO_LVCMOS12_JEDEC, IO_LVTTL, IO_SSTL2_I, 0 };
+	i = 0;
+	while (io_std[i]) {
+		// input
+		rc = fpga_find_iob(tstate->model, "P22", &iob_y, &iob_x, &iob_type_idx);
+		if (rc) FAIL(rc);
+		rc = fdev_iob_input(tstate->model, iob_y, iob_x, iob_type_idx, io_std[i]);
+		if (rc) FAIL(rc);
+		if ((rc = diff_printf(tstate))) FAIL(rc);
+		fdev_delete(tstate->model, iob_y, iob_x, DEV_IOB, iob_type_idx);
+
+		i++;
+	}
+	i = 0;
+	while (io_std[i]) {
+		// output
+		rc = fpga_find_iob(tstate->model, "P22", &iob_y, &iob_x, &iob_type_idx);
+		if (rc) FAIL(rc);
+		rc = fdev_iob_output(tstate->model, iob_y, iob_x, iob_type_idx, io_std[i]);
+		if (rc) FAIL(rc);
+		if (!strcmp(io_std[i], IO_SSTL2_I)) {
+			rc = diff_printf(tstate); if (rc) FAIL(rc);
+		} else {
+			dev = fdev_p(tstate->model, iob_y, iob_x, DEV_IOB, iob_type_idx);
+			if (!dev) FAIL(EINVAL);
+		
+			for (j = 0; j < sizeof(drive_strengths)/sizeof(*drive_strengths); j++) {
+				if ((!strcmp(io_std[i], IO_LVCMOS15)
+				     || !strcmp(io_std[i], IO_LVCMOS15_JEDEC))
+				    && drive_strengths[j] == 24)
+					continue;
+				if ((!strcmp(io_std[i], IO_LVCMOS12)
+				     || !strcmp(io_std[i], IO_LVCMOS12_JEDEC))
+				    && (drive_strengths[j] == 16 || drive_strengths[j] == 24))
+					continue;
+				dev->u.iob.drive_strength = drive_strengths[j];
+				rc = diff_printf(tstate); if (rc) FAIL(rc);
+			}
+		}
+		fdev_delete(tstate->model, iob_y, iob_x, DEV_IOB, iob_type_idx);
+
+		i++;
+	}}
 	return 0;
 fail:
 	return rc;
@@ -1126,7 +1169,6 @@ static int test_lut_encoding(struct test_state* tstate)
 			}
 		}
 	}
-out:
 	return 0;
 fail:
 	return rc;

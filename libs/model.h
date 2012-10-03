@@ -445,8 +445,16 @@ struct fpgadev_logic
 
 enum { IOBM = 1, IOBS };
 typedef char IOSTANDARD[32];
-#define IO_LVCMOS33	"LVCMOS33"
-#define IO_SSTL2_I	"SSTL2_I" // drive attr and slew not used here?
+#define IO_LVTTL		"LVTTL"
+#define IO_LVCMOS33		"LVCMOS33"
+#define IO_LVCMOS25		"LVCMOS25"
+#define IO_LVCMOS18		"LVCMOS18"
+#define IO_LVCMOS18_JEDEC	"LVCMOS18_JEDEC"
+#define IO_LVCMOS15		"LVCMOS15"
+#define IO_LVCMOS15_JEDEC	"LVCMOS15_JEDEC"
+#define IO_LVCMOS12		"LVCMOS12"
+#define IO_LVCMOS12_JEDEC	"LVCMOS12_JEDEC"
+#define IO_SSTL2_I		"SSTL2_I" // TODO: sstl not fully supported
 enum { BYPASS_MUX_I = 1, BYPASS_MUX_O, BYPASS_MUX_T };
 enum { IMUX_I_B = 1, IMUX_I };
 enum { SLEW_SLOW = 1, SLEW_FAST, SLEW_QUIETIO };

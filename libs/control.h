@@ -78,8 +78,10 @@ int fdev_logic_cout_used(struct fpga_model* model, int y, int x,
 int fdev_logic_precyinit(struct fpga_model* model, int y, int x,
 	int type_idx, int precyinit);
 
-int fdev_iob_input(struct fpga_model* model, int y, int x, int type_idx);
-int fdev_iob_output(struct fpga_model* model, int y, int x, int type_idx);
+int fdev_iob_input(struct fpga_model* model, int y, int x,
+	int type_idx, const char* io_std);
+int fdev_iob_output(struct fpga_model* model, int y, int x,
+	int type_idx, const char* io_std);
 
 int fdev_set_required_pins(struct fpga_model* model, int y, int x, int type,
 	int type_idx);

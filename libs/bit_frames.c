@@ -123,17 +123,30 @@ static int write_iobs(struct fpga_bits* bits, struct fpga_model* model)
 		if (dev->u.iob.istandard[0]) {
 			if (!dev->u.iob.I_mux
 			    || !dev->u.iob.bypass_mux
-			    || strcmp(dev->u.iob.istandard, IO_LVCMOS33)
 			    || dev->u.iob.ostandard[0])
 				HERE();
 
-			u64 = XC6_IOB_INSTANTIATED;
-			u64 |= XC6_IOB_INPUT_LVCMOS33;
-			if (dev->u.iob.I_mux == IMUX_I)
-				u64 |= XC6_IOB_IMUX_I;
-			else if (dev->u.iob.I_mux == IMUX_I_B)
+			u64 = XC6_IOB_INPUT | XC6_IOB_INSTANTIATED;
+
+			if (dev->u.iob.I_mux == IMUX_I_B)
 				u64 |= XC6_IOB_IMUX_I_B;
-			else HERE();
+
+			if (!strcmp(dev->u.iob.istandard, IO_LVCMOS33)
+			    || !strcmp(dev->u.iob.istandard, IO_LVCMOS25)
+			    || !strcmp(dev->u.iob.istandard, IO_LVTTL))
+				u64 |= XC6_IOB_INPUT_LVCMOS33_25_LVTTL;
+			else if (!strcmp(dev->u.iob.istandard, IO_LVCMOS18)
+			    || !strcmp(dev->u.iob.istandard, IO_LVCMOS15)
+			    || !strcmp(dev->u.iob.istandard, IO_LVCMOS12))
+				u64 |= XC6_IOB_INPUT_LVCMOS18_15_12;
+			else if (!strcmp(dev->u.iob.istandard, IO_LVCMOS18_JEDEC)
+			    || !strcmp(dev->u.iob.istandard, IO_LVCMOS15_JEDEC)
+			    || !strcmp(dev->u.iob.istandard, IO_LVCMOS12_JEDEC))
+				u64 |= XC6_IOB_INPUT_LVCMOS18_15_12_JEDEC;
+			else if (!strcmp(dev->u.iob.istandard, IO_SSTL2_I))
+				u64 |= XC6_IOB_INPUT_SSTL2_I;
+			else
+				HERE();
 
 			frame_set_u64(&bits->d[IOB_DATA_START
 				+ part_idx*IOB_ENTRY_LEN], u64);
@@ -141,29 +154,85 @@ static int write_iobs(struct fpga_bits* bits, struct fpga_model* model)
 			if (!dev->u.iob.drive_strength
 			    || !dev->u.iob.slew
 			    || !dev->u.iob.suspend
-			    || strcmp(dev->u.iob.ostandard, IO_LVCMOS33)
 			    || dev->u.iob.istandard[0])
 				HERE();
 
 			u64 = XC6_IOB_INSTANTIATED;
 			// for now we always turn on O_PINW even if no net
 			// is connected to the pinw
-			u64 |= XC6_IOB_MASK_O_PINW;
-			switch (dev->u.iob.drive_strength) {
-				case 2: u64 |= XC6_IOB_OUTPUT_LVCMOS33_DRIVE_2; break;
-				case 4: u64 |= XC6_IOB_OUTPUT_LVCMOS33_DRIVE_4; break;
-				case 6: u64 |= XC6_IOB_OUTPUT_LVCMOS33_DRIVE_6; break;
-				case 8: u64 |= XC6_IOB_OUTPUT_LVCMOS33_DRIVE_8; break;
-				case 12: u64 |= XC6_IOB_OUTPUT_LVCMOS33_DRIVE_12; break;
-				case 16: u64 |= XC6_IOB_OUTPUT_LVCMOS33_DRIVE_16; break;
-				case 24: u64 |= XC6_IOB_OUTPUT_LVCMOS33_DRIVE_24; break;
-				default: HERE();
-			}
+			u64 |= XC6_IOB_O_PINW;
+			if (!strcmp(dev->u.iob.ostandard, IO_LVTTL)) {
+				switch (dev->u.iob.drive_strength) {
+					case 2: u64 |= XC6_IOB_OUTPUT_LVTTL_DRIVE_2; break;
+					case 4: u64 |= XC6_IOB_OUTPUT_LVTTL_DRIVE_4; break;
+					case 6: u64 |= XC6_IOB_OUTPUT_LVTTL_DRIVE_6; break;
+					case 8: u64 |= XC6_IOB_OUTPUT_LVTTL_DRIVE_8; break;
+					case 12: u64 |= XC6_IOB_OUTPUT_LVTTL_DRIVE_12; break;
+					case 16: u64 |= XC6_IOB_OUTPUT_LVTTL_DRIVE_16; break;
+					case 24: u64 |= XC6_IOB_OUTPUT_LVTTL_DRIVE_24; break;
+					default: FAIL(EINVAL);
+				}
+			} else if (!strcmp(dev->u.iob.ostandard, IO_LVCMOS33)) {
+				switch (dev->u.iob.drive_strength) {
+					case 2: u64 |= XC6_IOB_OUTPUT_LVCMOS33_25_DRIVE_2; break;
+					case 4: u64 |= XC6_IOB_OUTPUT_LVCMOS33_DRIVE_4; break;
+					case 6: u64 |= XC6_IOB_OUTPUT_LVCMOS33_DRIVE_6; break;
+					case 8: u64 |= XC6_IOB_OUTPUT_LVCMOS33_DRIVE_8; break;
+					case 12: u64 |= XC6_IOB_OUTPUT_LVCMOS33_DRIVE_12; break;
+					case 16: u64 |= XC6_IOB_OUTPUT_LVCMOS33_DRIVE_16; break;
+					case 24: u64 |= XC6_IOB_OUTPUT_LVCMOS33_DRIVE_24; break;
+					default: FAIL(EINVAL);
+				}
+			} else if (!strcmp(dev->u.iob.ostandard, IO_LVCMOS25)) {
+				switch (dev->u.iob.drive_strength) {
+					case 2: u64 |= XC6_IOB_OUTPUT_LVCMOS33_25_DRIVE_2; break;
+					case 4: u64 |= XC6_IOB_OUTPUT_LVCMOS25_DRIVE_4; break;
+					case 6: u64 |= XC6_IOB_OUTPUT_LVCMOS25_DRIVE_6; break;
+					case 8: u64 |= XC6_IOB_OUTPUT_LVCMOS25_DRIVE_8; break;
+					case 12: u64 |= XC6_IOB_OUTPUT_LVCMOS25_DRIVE_12; break;
+					case 16: u64 |= XC6_IOB_OUTPUT_LVCMOS25_DRIVE_16; break;
+					case 24: u64 |= XC6_IOB_OUTPUT_LVCMOS25_DRIVE_24; break;
+					default: FAIL(EINVAL);
+				}
+			} else if (!strcmp(dev->u.iob.ostandard, IO_LVCMOS18)
+				   || !strcmp(dev->u.iob.ostandard, IO_LVCMOS18_JEDEC)) {
+				switch (dev->u.iob.drive_strength) {
+					case 2: u64 |= XC6_IOB_OUTPUT_LVCMOS18_DRIVE_2; break;
+					case 4: u64 |= XC6_IOB_OUTPUT_LVCMOS18_DRIVE_4; break;
+					case 6: u64 |= XC6_IOB_OUTPUT_LVCMOS18_DRIVE_6; break;
+					case 8: u64 |= XC6_IOB_OUTPUT_LVCMOS18_DRIVE_8; break;
+					case 12: u64 |= XC6_IOB_OUTPUT_LVCMOS18_DRIVE_12; break;
+					case 16: u64 |= XC6_IOB_OUTPUT_LVCMOS18_DRIVE_16; break;
+					case 24: u64 |= XC6_IOB_OUTPUT_LVCMOS18_DRIVE_24; break;
+					default: FAIL(EINVAL);
+				}
+			} else if (!strcmp(dev->u.iob.ostandard, IO_LVCMOS15)
+				   || !strcmp(dev->u.iob.ostandard, IO_LVCMOS15_JEDEC)) {
+				switch (dev->u.iob.drive_strength) {
+					case 2: u64 |= XC6_IOB_OUTPUT_LVCMOS15_DRIVE_2; break;
+					case 4: u64 |= XC6_IOB_OUTPUT_LVCMOS15_DRIVE_4; break;
+					case 6: u64 |= XC6_IOB_OUTPUT_LVCMOS15_DRIVE_6; break;
+					case 8: u64 |= XC6_IOB_OUTPUT_LVCMOS15_DRIVE_8; break;
+					case 12: u64 |= XC6_IOB_OUTPUT_LVCMOS15_DRIVE_12; break;
+					case 16: u64 |= XC6_IOB_OUTPUT_LVCMOS15_DRIVE_16; break;
+					default: FAIL(EINVAL);
+				}
+			} else if (!strcmp(dev->u.iob.ostandard, IO_LVCMOS12)
+				   || !strcmp(dev->u.iob.ostandard, IO_LVCMOS12_JEDEC)) {
+				switch (dev->u.iob.drive_strength) {
+					case 2: u64 |= XC6_IOB_OUTPUT_LVCMOS12_DRIVE_2; break;
+					case 4: u64 |= XC6_IOB_OUTPUT_LVCMOS12_DRIVE_4; break;
+					case 6: u64 |= XC6_IOB_OUTPUT_LVCMOS12_DRIVE_6; break;
+					case 8: u64 |= XC6_IOB_OUTPUT_LVCMOS12_DRIVE_8; break;
+					case 12: u64 |= XC6_IOB_OUTPUT_LVCMOS12_DRIVE_12; break;
+					default: FAIL(EINVAL);
+				}
+			} else FAIL(EINVAL);
 			switch (dev->u.iob.slew) {
 				case SLEW_SLOW: u64 |= XC6_IOB_SLEW_SLOW; break;
 				case SLEW_FAST: u64 |= XC6_IOB_SLEW_FAST; break;
 				case SLEW_QUIETIO: u64 |= XC6_IOB_SLEW_QUIETIO; break;
-				default: HERE();
+				default: FAIL(EINVAL);
 			}
 			switch (dev->u.iob.suspend) {
 				case SUSP_LAST_VAL: u64 |= XC6_IOB_SUSP_LAST_VAL; break;
@@ -172,7 +241,7 @@ static int write_iobs(struct fpga_bits* bits, struct fpga_model* model)
 				case SUSP_3STATE_PULLDOWN: u64 |= XC6_IOB_SUSP_3STATE_PULLDOWN; break;
 				case SUSP_3STATE_KEEPER: u64 |= XC6_IOB_SUSP_3STATE_KEEPER; break;
 				case SUSP_3STATE_OCT_ON: u64 |= XC6_IOB_SUSP_3STATE_OCT_ON; break;
-				default: HERE();
+				default: FAIL(EINVAL);
 			}
 
 			frame_set_u64(&bits->d[IOB_DATA_START
@@ -219,58 +288,214 @@ static int extract_iobs(struct fpga_model* model, struct fpga_bits* bits)
 			clear_bit(bits, /*row*/ 0, get_rightside_major(XC6SLX9),
 				/*minor*/ 22, 64*15+XC6_HCLK_BITS+4);
 		}
-		if ((u64 & XC6_IOB_MASK_INSTANTIATED) == XC6_IOB_INSTANTIATED)
-			u64 &= ~XC6_IOB_MASK_INSTANTIATED;
+		if (u64 & XC6_IOB_INSTANTIATED)
+			u64 &= ~XC6_IOB_INSTANTIATED;
 		else
 			HERE();
 
 		switch (u64 & XC6_IOB_MASK_IO) {
-			case XC6_IOB_INPUT_LVCMOS33:
-				u64 &= ~XC6_IOB_MASK_IO;
-
-				strcpy(cfg.istandard, IO_LVCMOS33);
+			case XC6_IOB_INPUT:
 				cfg.bypass_mux = BYPASS_MUX_I;
 
-				switch (u64 & XC6_IOB_MASK_I_MUX) {
-					case XC6_IOB_IMUX_I:
-						u64 &= ~XC6_IOB_MASK_I_MUX;
-						cfg.I_mux = IMUX_I;
+				if (u64 & XC6_IOB_IMUX_I_B) {
+					cfg.I_mux = IMUX_I_B;
+					u64 &= ~XC6_IOB_IMUX_I_B;
+				} else
+					cfg.I_mux = IMUX_I;
+
+				switch (u64 & XC6_IOB_MASK_IN_TYPE) {
+					case XC6_IOB_INPUT_LVCMOS33_25_LVTTL:
+						u64 &= ~XC6_IOB_MASK_IN_TYPE;
+						strcpy(cfg.istandard, IO_LVCMOS25);
 						break;
-					case XC6_IOB_IMUX_I_B:
-						u64 &= ~XC6_IOB_MASK_I_MUX;
-						cfg.I_mux = IMUX_I_B;
+					case XC6_IOB_INPUT_LVCMOS18_15_12:
+						u64 &= ~XC6_IOB_MASK_IN_TYPE;
+						strcpy(cfg.istandard, IO_LVCMOS12);
 						break;
-					default: HERE();
-				}
-				break;
-			case XC6_IOB_OUTPUT_LVCMOS33_DRIVE_2:
-			case XC6_IOB_OUTPUT_LVCMOS33_DRIVE_4:
-			case XC6_IOB_OUTPUT_LVCMOS33_DRIVE_6:
-			case XC6_IOB_OUTPUT_LVCMOS33_DRIVE_8:
-			case XC6_IOB_OUTPUT_LVCMOS33_DRIVE_12:
-			case XC6_IOB_OUTPUT_LVCMOS33_DRIVE_16:
-			case XC6_IOB_OUTPUT_LVCMOS33_DRIVE_24:
-				switch (u64 & XC6_IOB_MASK_IO) {
-					case XC6_IOB_OUTPUT_LVCMOS33_DRIVE_2:
-						cfg.drive_strength = 2; break;
-					case XC6_IOB_OUTPUT_LVCMOS33_DRIVE_4:
-						cfg.drive_strength = 4; break;
-					case XC6_IOB_OUTPUT_LVCMOS33_DRIVE_6:
-						cfg.drive_strength = 6; break;
-					case XC6_IOB_OUTPUT_LVCMOS33_DRIVE_8:
-						cfg.drive_strength = 8; break;
-					case XC6_IOB_OUTPUT_LVCMOS33_DRIVE_12:
-						cfg.drive_strength = 12; break;
-					case XC6_IOB_OUTPUT_LVCMOS33_DRIVE_16:
-						cfg.drive_strength = 16; break;
-					case XC6_IOB_OUTPUT_LVCMOS33_DRIVE_24:
-						cfg.drive_strength = 24; break;
+					case XC6_IOB_INPUT_LVCMOS18_15_12_JEDEC:
+						u64 &= ~XC6_IOB_MASK_IN_TYPE;
+						strcpy(cfg.istandard, IO_LVCMOS12_JEDEC);
+						break;
+					case XC6_IOB_INPUT_SSTL2_I:
+						u64 &= ~XC6_IOB_MASK_IN_TYPE;
+						strcpy(cfg.istandard, IO_SSTL2_I);
+						break;
 					default: HERE(); break;
 				}
-				u64 &= ~XC6_IOB_MASK_IO;
-				u64 &= ~XC6_IOB_MASK_O_PINW;
+				break;
+
+			case XC6_IOB_OUTPUT_LVCMOS33_25_DRIVE_2:	
+				cfg.drive_strength = 2;
+				strcpy(cfg.ostandard, IO_LVCMOS25);
+				break;
+			case XC6_IOB_OUTPUT_LVCMOS33_DRIVE_4:
+				cfg.drive_strength = 4;
 				strcpy(cfg.ostandard, IO_LVCMOS33);
-				cfg.O_used = 1;
+				break;
+			case XC6_IOB_OUTPUT_LVCMOS33_DRIVE_6:
+				cfg.drive_strength = 6;
+				strcpy(cfg.ostandard, IO_LVCMOS33);
+				break;
+			case XC6_IOB_OUTPUT_LVCMOS33_DRIVE_8:
+				cfg.drive_strength = 8;
+				strcpy(cfg.ostandard, IO_LVCMOS33);
+				break;
+			case XC6_IOB_OUTPUT_LVCMOS33_DRIVE_12:
+				cfg.drive_strength = 12;
+				strcpy(cfg.ostandard, IO_LVCMOS33);
+				break;
+			case XC6_IOB_OUTPUT_LVCMOS33_DRIVE_16:
+				cfg.drive_strength = 16;
+				strcpy(cfg.ostandard, IO_LVCMOS33);
+				break;
+			case XC6_IOB_OUTPUT_LVCMOS33_DRIVE_24:
+				cfg.drive_strength = 24;
+				strcpy(cfg.ostandard, IO_LVCMOS33);
+				break;
+
+			case XC6_IOB_OUTPUT_LVCMOS25_DRIVE_4:
+				cfg.drive_strength = 4;
+				strcpy(cfg.ostandard, IO_LVCMOS25);
+				break;
+			case XC6_IOB_OUTPUT_LVCMOS25_DRIVE_6:
+				cfg.drive_strength = 6;
+				strcpy(cfg.ostandard, IO_LVCMOS25);
+				break;
+			case XC6_IOB_OUTPUT_LVCMOS25_DRIVE_8:
+				cfg.drive_strength = 8;
+				strcpy(cfg.ostandard, IO_LVCMOS25);
+				break;
+			case XC6_IOB_OUTPUT_LVCMOS25_DRIVE_12:
+				cfg.drive_strength = 12;
+				strcpy(cfg.ostandard, IO_LVCMOS25);
+				break;
+			case XC6_IOB_OUTPUT_LVCMOS25_DRIVE_16:
+				cfg.drive_strength = 16;
+				strcpy(cfg.ostandard, IO_LVCMOS25);
+				break;
+			case XC6_IOB_OUTPUT_LVCMOS25_DRIVE_24:
+				cfg.drive_strength = 24;
+				strcpy(cfg.ostandard, IO_LVCMOS25);
+				break;
+
+			case XC6_IOB_OUTPUT_LVTTL_DRIVE_2:
+				cfg.drive_strength = 2;
+				strcpy(cfg.ostandard, IO_LVTTL);
+				break;
+			case XC6_IOB_OUTPUT_LVTTL_DRIVE_4:
+				cfg.drive_strength = 4;
+				strcpy(cfg.ostandard, IO_LVTTL);
+				break;
+			case XC6_IOB_OUTPUT_LVTTL_DRIVE_6:
+				cfg.drive_strength = 6;
+				strcpy(cfg.ostandard, IO_LVTTL);
+				break;
+			case XC6_IOB_OUTPUT_LVTTL_DRIVE_8:
+				cfg.drive_strength = 8;
+				strcpy(cfg.ostandard, IO_LVTTL);
+				break;
+			case XC6_IOB_OUTPUT_LVTTL_DRIVE_12:
+				cfg.drive_strength = 12;
+				strcpy(cfg.ostandard, IO_LVTTL);
+				break;
+			case XC6_IOB_OUTPUT_LVTTL_DRIVE_16:
+				cfg.drive_strength = 16;
+				strcpy(cfg.ostandard, IO_LVTTL);
+				break;
+			case XC6_IOB_OUTPUT_LVTTL_DRIVE_24:
+				cfg.drive_strength = 24;
+				strcpy(cfg.ostandard, IO_LVTTL);
+				break;
+
+			case XC6_IOB_OUTPUT_LVCMOS18_DRIVE_2:
+				cfg.drive_strength = 2;
+				strcpy(cfg.ostandard, IO_LVCMOS18);
+				break;
+			case XC6_IOB_OUTPUT_LVCMOS18_DRIVE_4:
+				cfg.drive_strength = 4;
+				strcpy(cfg.ostandard, IO_LVCMOS18);
+				break;
+			case XC6_IOB_OUTPUT_LVCMOS18_DRIVE_6:
+				cfg.drive_strength = 6;
+				strcpy(cfg.ostandard, IO_LVCMOS18);
+				break;
+			case XC6_IOB_OUTPUT_LVCMOS18_DRIVE_8:
+				cfg.drive_strength = 8;
+				strcpy(cfg.ostandard, IO_LVCMOS18);
+				break;
+			case XC6_IOB_OUTPUT_LVCMOS18_DRIVE_12:
+				cfg.drive_strength = 12;
+				strcpy(cfg.ostandard, IO_LVCMOS18);
+				break;
+			case XC6_IOB_OUTPUT_LVCMOS18_DRIVE_16:
+				cfg.drive_strength = 16;
+				strcpy(cfg.ostandard, IO_LVCMOS18);
+				break;
+			case XC6_IOB_OUTPUT_LVCMOS18_DRIVE_24:
+				cfg.drive_strength = 24;
+				strcpy(cfg.ostandard, IO_LVCMOS18);
+				break;
+
+			case XC6_IOB_OUTPUT_LVCMOS15_DRIVE_2:
+				cfg.drive_strength = 2;
+				strcpy(cfg.ostandard, IO_LVCMOS15);
+				break;
+			case XC6_IOB_OUTPUT_LVCMOS15_DRIVE_4:
+				cfg.drive_strength = 4;
+				strcpy(cfg.ostandard, IO_LVCMOS15);
+				break;
+			case XC6_IOB_OUTPUT_LVCMOS15_DRIVE_6:
+				cfg.drive_strength = 6;
+				strcpy(cfg.ostandard, IO_LVCMOS15);
+				break;
+			case XC6_IOB_OUTPUT_LVCMOS15_DRIVE_8:
+				cfg.drive_strength = 8;
+				strcpy(cfg.ostandard, IO_LVCMOS15);
+				break;
+			case XC6_IOB_OUTPUT_LVCMOS15_DRIVE_12:
+				cfg.drive_strength = 12;
+				strcpy(cfg.ostandard, IO_LVCMOS15);
+				break;
+			case XC6_IOB_OUTPUT_LVCMOS15_DRIVE_16:
+				cfg.drive_strength = 16;
+				strcpy(cfg.ostandard, IO_LVCMOS15);
+				break;
+
+			case XC6_IOB_OUTPUT_LVCMOS12_DRIVE_2:
+				cfg.drive_strength = 2;
+				strcpy(cfg.ostandard, IO_LVCMOS12);
+				break;
+			case XC6_IOB_OUTPUT_LVCMOS12_DRIVE_4:
+				cfg.drive_strength = 4;
+				strcpy(cfg.ostandard, IO_LVCMOS12);
+				break;
+			case XC6_IOB_OUTPUT_LVCMOS12_DRIVE_6:
+				cfg.drive_strength = 6;
+				strcpy(cfg.ostandard, IO_LVCMOS12);
+				break;
+			case XC6_IOB_OUTPUT_LVCMOS12_DRIVE_8:
+				cfg.drive_strength = 8;
+				strcpy(cfg.ostandard, IO_LVCMOS12);
+				break;
+			case XC6_IOB_OUTPUT_LVCMOS12_DRIVE_12:
+				cfg.drive_strength = 12;
+				strcpy(cfg.ostandard, IO_LVCMOS12);
+				break;
+
+			default: HERE(); break;
+		}
+		if (cfg.istandard[0] || cfg.ostandard[0])
+			u64 &= ~XC6_IOB_MASK_IO;
+		if (cfg.ostandard[0]) {
+			cfg.O_used = 1;
+			u64 &= ~XC6_IOB_O_PINW;
+
+			if (!strcmp(cfg.ostandard, IO_LVCMOS12)
+			    || !strcmp(cfg.ostandard, IO_LVCMOS15)
+			    || !strcmp(cfg.ostandard, IO_LVCMOS18)
+			    || !strcmp(cfg.ostandard, IO_LVCMOS25)
+			    || !strcmp(cfg.ostandard, IO_LVCMOS33)
+			    || !strcmp(cfg.ostandard, IO_LVTTL)) {
 				switch (u64 & XC6_IOB_MASK_SLEW) {
 					case XC6_IOB_SLEW_SLOW:
 						u64 &= ~XC6_IOB_MASK_SLEW;
@@ -286,35 +511,34 @@ static int extract_iobs(struct fpga_model* model, struct fpga_bits* bits)
 						break;
 					default: HERE();
 				}
-				switch (u64 & XC6_IOB_MASK_SUSPEND) {
-					case XC6_IOB_SUSP_3STATE:
-						u64 &= ~XC6_IOB_MASK_SUSPEND;
-						cfg.suspend = SUSP_3STATE;
-						break;
-					case XC6_IOB_SUSP_3STATE_OCT_ON:
-						u64 &= ~XC6_IOB_MASK_SUSPEND;
-						cfg.suspend = SUSP_3STATE_OCT_ON;
-						break;
-					case XC6_IOB_SUSP_3STATE_KEEPER:
-						u64 &= ~XC6_IOB_MASK_SUSPEND;
-						cfg.suspend = SUSP_3STATE_KEEPER;
-						break;
-					case XC6_IOB_SUSP_3STATE_PULLUP:
-						u64 &= ~XC6_IOB_MASK_SUSPEND;
-						cfg.suspend = SUSP_3STATE_PULLUP;
-						break;
-					case XC6_IOB_SUSP_3STATE_PULLDOWN:
-						u64 &= ~XC6_IOB_MASK_SUSPEND;
-						cfg.suspend = SUSP_3STATE_PULLDOWN;
-						break;
-					case XC6_IOB_SUSP_LAST_VAL:
-						u64 &= ~XC6_IOB_MASK_SUSPEND;
-						cfg.suspend = SUSP_LAST_VAL;
-						break;
-					default: HERE();
-				}
-				break;
-			default: HERE(); break;
+			}
+			switch (u64 & XC6_IOB_MASK_SUSPEND) {
+				case XC6_IOB_SUSP_3STATE:
+					u64 &= ~XC6_IOB_MASK_SUSPEND;
+					cfg.suspend = SUSP_3STATE;
+					break;
+				case XC6_IOB_SUSP_3STATE_OCT_ON:
+					u64 &= ~XC6_IOB_MASK_SUSPEND;
+					cfg.suspend = SUSP_3STATE_OCT_ON;
+					break;
+				case XC6_IOB_SUSP_3STATE_KEEPER:
+					u64 &= ~XC6_IOB_MASK_SUSPEND;
+					cfg.suspend = SUSP_3STATE_KEEPER;
+					break;
+				case XC6_IOB_SUSP_3STATE_PULLUP:
+					u64 &= ~XC6_IOB_MASK_SUSPEND;
+					cfg.suspend = SUSP_3STATE_PULLUP;
+					break;
+				case XC6_IOB_SUSP_3STATE_PULLDOWN:
+					u64 &= ~XC6_IOB_MASK_SUSPEND;
+					cfg.suspend = SUSP_3STATE_PULLDOWN;
+					break;
+				case XC6_IOB_SUSP_LAST_VAL:
+					u64 &= ~XC6_IOB_MASK_SUSPEND;
+					cfg.suspend = SUSP_LAST_VAL;
+					break;
+				default: HERE();
+			}
 		}
 		if (!u64) {
 			frame_set_u64(&bits->d[IOB_DATA_START

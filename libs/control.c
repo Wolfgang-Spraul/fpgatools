@@ -682,7 +682,8 @@ fail:
 // iob device
 //
 
-int fdev_iob_input(struct fpga_model* model, int y, int x, int type_idx)
+int fdev_iob_input(struct fpga_model* model, int y, int x, int type_idx,
+	const char* io_std)
 {
 	struct fpga_device* dev;
 	int rc;
@@ -692,7 +693,7 @@ int fdev_iob_input(struct fpga_model* model, int y, int x, int type_idx)
 	rc = reset_required_pins(dev);
 	if (rc) FAIL(rc);
 
-	strcpy(dev->u.iob.istandard, IO_LVCMOS33);
+	strcpy(dev->u.iob.istandard, io_std);
 	dev->u.iob.bypass_mux = BYPASS_MUX_I;
 	dev->u.iob.I_mux = IMUX_I;
 	dev->instantiated = 1;
@@ -701,7 +702,8 @@ fail:
 	return rc;
 }
 
-int fdev_iob_output(struct fpga_model* model, int y, int x, int type_idx)
+int fdev_iob_output(struct fpga_model* model, int y, int x, int type_idx,
+	const char* io_std)
 {
 	struct fpga_device* dev;
 	int rc;
@@ -711,11 +713,21 @@ int fdev_iob_output(struct fpga_model* model, int y, int x, int type_idx)
 	rc = reset_required_pins(dev);
 	if (rc) FAIL(rc);
 
-	strcpy(dev->u.iob.ostandard, IO_LVCMOS33);
-	dev->u.iob.drive_strength = 8;
+	strcpy(dev->u.iob.ostandard, io_std);
 	dev->u.iob.O_used = 1;
-	dev->u.iob.slew = SLEW_QUIETIO;
 	dev->u.iob.suspend = SUSP_3STATE;
+	if (strcmp(io_std, IO_SSTL2_I)) {
+		// also see ug381 page 31
+		if (!strcmp(io_std, IO_LVCMOS33)
+		    || !strcmp(io_std, IO_LVCMOS25))
+			dev->u.iob.drive_strength = 12;
+		else if (!strcmp(io_std, IO_LVCMOS12)
+			 || !strcmp(io_std, IO_LVCMOS12_JEDEC))
+			dev->u.iob.drive_strength = 6;
+		else
+			dev->u.iob.drive_strength = 8;
+		dev->u.iob.slew = SLEW_SLOW;
+	}
 	dev->instantiated = 1;
 	return 0;
 fail:

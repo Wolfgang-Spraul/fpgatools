@@ -25,17 +25,17 @@ int main(int argc, char** argv)
 	if ((rc = fpga_find_iob(&model, "P45", &iob_inA_y, &iob_inA_x,
 		&iob_inA_type_idx))) FAIL(rc);
 	if ((rc = fdev_iob_input(&model, iob_inA_y, iob_inA_x,
-		iob_inA_type_idx))) FAIL(rc);
+		iob_inA_type_idx, IO_LVCMOS33))) FAIL(rc);
 
 	if ((rc = fpga_find_iob(&model, "P46", &iob_inB_y, &iob_inB_x,
 		&iob_inB_type_idx))) FAIL(rc);
 	if ((rc = fdev_iob_input(&model, iob_inB_y, iob_inB_x,
-		iob_inB_type_idx))) FAIL(rc);
+		iob_inB_type_idx, IO_LVCMOS33))) FAIL(rc);
 
 	if ((rc = fpga_find_iob(&model, "P48", &iob_out_y, &iob_out_x,
 		&iob_out_type_idx))) FAIL(rc);
 	if ((rc = fdev_iob_output(&model, iob_out_y, iob_out_x,
-		iob_out_type_idx))) FAIL(rc);
+		iob_out_type_idx, IO_LVCMOS33))) FAIL(rc);
 
 	logic_y = 68;
 	logic_x = 13;

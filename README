@@ -61,6 +61,7 @@ TODO
 short-term (1 month):
 * add lut_encoding autotest for lut6 and lut5 in a-d position
   of x(m), x(l), l and m devs
+* more cases in logic_cfg test
 * example: blinking_led
 * example: counter (including clock, jtag)
 * support reading iologic switches
