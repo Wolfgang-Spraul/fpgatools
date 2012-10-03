@@ -7,10 +7,7 @@
 #
 
 
-CFLAGS  += `pkg-config libxml-2.0 --cflags`
 CFLAGS  += -I$(CURDIR)/libs
-
-LDLIBS  += `pkg-config libxml-2.0 --libs`
 
 LDFLAGS += -Wl,-rpath,$(CURDIR)/libs
 
@@ -203,6 +200,8 @@ bit2fp: bit2fp.o $(DYNAMIC_LIBS)
 
 new_fp: new_fp.o $(DYNAMIC_LIBS)
 
+draw_svg_tiles: CFLAGS += `pkg-config libxml-2.0 --cflags`
+draw_svg_tiles: LDLIBS += `pkg-config libxml-2.0 --libs`
 draw_svg_tiles: draw_svg_tiles.o $(DYNAMIC_LIBS)
 
 pair2net: pair2net.o $(DYNAMIC_LIBS)
@@ -241,7 +240,7 @@ clean:
 	rm -f	test.out/compare_xc6slx9.fp
 	rmdir --ignore-fail-on-non-empty test.out test.gold
 
-install:	all
+install: fp2bit bit2fp
 	@make -C libs install
 	mkdir -p $(DESTDIR)/$(PREFIX)/bin/
 	install -m 755 fp2bit $(DESTDIR)/$(PREFIX)/bin/

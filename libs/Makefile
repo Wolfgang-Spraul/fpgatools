@@ -6,7 +6,7 @@
 # For details see the UNLICENSE file at the root of the source tree.
 #
 
-LIBS_VERSION = 0.0.0
+LIBS_VERSION = 0
 
 LIBFPGA_BIT_OBJS       = bit_frames.o bit_regs.o
 LIBFPGA_MODEL_OBJS     = model_main.o model_tiles.o model_devices.o \
@@ -41,21 +41,22 @@ libfpga-floorplan.so: $(LIBFPGA_FLOORPLAN_OBJS)
 libfpga-control.so: $(LIBFPGA_CONTROL_OBJS)
 
 %.so:
-	$(CC) -shared -Wl,-soname,$@ -o $@ $^
+	$(CC) -shared -Wl,-soname,$@.$(LIBS_VERSION) -o $@.$(LIBS_VERSION) $^
+	@rm -f $@ && ln -s $@.$(LIBS_VERSION) $@
 
 %.o:	%.c
 	$(CC) $(CFLAGS) -fPIC -o $@ -c $<
 	$(MKDEP)
 
 clean:
-	rm -f *.o *.d *.so
+	rm -f $(OBJS) $(OBJS:.o=.d) $(DYNAMIC_LIBS) $(DYNAMIC_LIBS:.so=.so.$(LIBS_VERSION))
 
 install: all
 	mkdir -p $(DESTDIR)/$(PREFIX)/lib/
 	mkdir -p $(DESTDIR)/$(PREFIX)/include/
 	install -m 644 $(DYNAMIC_HEADS) $(DESTDIR)/$(PREFIX)/include/
 	for f in $(DYNAMIC_LIBS); do \
-		install -m 644 $$f $(DESTDIR)/$(PREFIX)/lib/$$f.$(LIBS_VERSION) && \
+		install -m 644 $$f.$(LIBS_VERSION) $(DESTDIR)/$(PREFIX)/lib/$$f.$(LIBS_VERSION) && \
 		(cd $(DESTDIR)/$(PREFIX)/lib/ && ln -s $$f.$(LIBS_VERSION) $$f) \
 		|| exit 1; done
 

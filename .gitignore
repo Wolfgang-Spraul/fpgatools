@@ -2,10 +2,11 @@
 # common ignore files
 #
 .*
+*.d
 *.o
 *.o.*
 *.so
-*.d
+*.so.*
 
 /tags
 /TAGS
