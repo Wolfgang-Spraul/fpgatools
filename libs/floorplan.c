@@ -758,7 +758,7 @@ int printf_conns(FILE* f, struct fpga_model* model)
 						tmp_line[k++] = ' ';
 					sprintf(&tmp_line[k], "y%02i x%02i %s\n",
 						other_tile_y, other_tile_x, other_tile_connpt_str);
-					fprintf(f, tmp_line);
+					fprintf(f, "%s", tmp_line);
 				}
 			}
 		}

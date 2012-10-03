@@ -29,7 +29,7 @@ all: new_fp fp2bit bit2fp draw_svg_tiles autotest hstrrep \
 include Makefile.common
 
 %.o:	%.c
-	$(CC) $(CFLAGS) -o $@ -c $<
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ -c $<
 	$(MKDEP)
 
 libs/%.so: FAKE

@@ -41,11 +41,11 @@ libfpga-floorplan.so: $(LIBFPGA_FLOORPLAN_OBJS)
 libfpga-control.so: $(LIBFPGA_CONTROL_OBJS)
 
 %.so:
-	$(CC) -shared -Wl,-soname,$@.$(LIBS_VERSION) -o $@.$(LIBS_VERSION) $^
+	$(CC) $(LDFLAGS) -shared -Wl,-soname,$@.$(LIBS_VERSION) -o $@.$(LIBS_VERSION) $^
 	@rm -f $@ && ln -s $@.$(LIBS_VERSION) $@
 
 %.o:	%.c
-	$(CC) $(CFLAGS) -fPIC -o $@ -c $<
+	$(CC) $(CPPFLAGS) $(CFLAGS) -fPIC -o $@ -c $<
 	$(MKDEP)
 
 clean:
@@ -56,6 +56,7 @@ install: all
 	mkdir -p $(DESTDIR)/$(PREFIX)/include/
 	install -m 644 $(DYNAMIC_HEADS) $(DESTDIR)/$(PREFIX)/include/
 	for f in $(DYNAMIC_LIBS); do \
+		chrpath -d $$f.$(LIBS_VERSION) && \
 		install -m 644 $$f.$(LIBS_VERSION) $(DESTDIR)/$(PREFIX)/lib/$$f.$(LIBS_VERSION) && \
 		(cd $(DESTDIR)/$(PREFIX)/lib/ && ln -s $$f.$(LIBS_VERSION) $$f) \
 		|| exit 1; done
