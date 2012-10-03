@@ -284,7 +284,8 @@ int init_devices(struct fpga_model* model)
 		if (!is_atx(X_FABRIC_LOGIC_COL|X_CENTER_LOGIC_COL, model, x))
 			continue;
 		for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
-			// M and L are at index 0 (DEV_LOGM and DEV_LOGL), X is at index 1 (DEV_LOGX).
+			// M and L are at index 0 (DEV_LOG_M_OR_L),
+			// X is at index 1 (DEV_LOG_X).
 			if (YX_TILE(model, y, x)->flags & TF_LOGIC_XM_DEV) {
 				if ((rc = add_dev(model, y, x, DEV_LOGIC, LOGIC_M))) goto fail;
 				if ((rc = add_dev(model, y, x, DEV_LOGIC, LOGIC_X))) goto fail;

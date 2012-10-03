@@ -324,7 +324,7 @@ static int printf_LOGIC(FILE* f, struct fpga_model* model,
 		}
 		cfg = &tile->devs[i].u.logic;
 		for (j = LUT_A; j <= LUT_D; j++) {
-			if (cfg->a2d[j].used)
+			if (cfg->a2d[j].out_used)
 				fprintf(f, "%s %c_used\n", pref, 'A'+j);
 			if (cfg->a2d[j].lut6 && cfg->a2d[j].lut6[0])
 				fprintf(f, "%s %c6_lut %s\n", pref, 'A'+j,
@@ -343,14 +343,20 @@ static int printf_LOGIC(FILE* f, struct fpga_model* model,
 				case MUX_X:
 					fprintf(f, "%s %c_ffmux X\n", pref, 'A'+j);
 					break;
-				case MUX_F7:
-					fprintf(f, "%s %c_ffmux F7\n", pref, 'A'+j);
-					break;
 				case MUX_CY:
 					fprintf(f, "%s %c_ffmux CY\n", pref, 'A'+j);
 					break;
 				case MUX_XOR:
 					fprintf(f, "%s %c_ffmux XOR\n", pref, 'A'+j);
+					break;
+				case MUX_F7:
+					fprintf(f, "%s %c_ffmux F7\n", pref, 'A'+j);
+					break;
+				case MUX_F8:
+					fprintf(f, "%s %c_ffmux F8\n", pref, 'A'+j);
+					break;
+				case MUX_MC31:
+					fprintf(f, "%s %c_ffmux MC31\n", pref, 'A'+j);
 					break;
 				case 0: break; default: FAIL(EINVAL);
 			}
@@ -373,14 +379,20 @@ static int printf_LOGIC(FILE* f, struct fpga_model* model,
 				case MUX_5Q:
 					fprintf(f, "%s %c_outmux 5Q\n", pref, 'A'+j);
 					break;
-				case MUX_F7:
-					fprintf(f, "%s %c_outmux F7\n", pref, 'A'+j);
-					break;
 				case MUX_CY:
 					fprintf(f, "%s %c_outmux CY\n", pref, 'A'+j);
 					break;
 				case MUX_XOR:
 					fprintf(f, "%s %c_outmux XOR\n", pref, 'A'+j);
+					break;
+				case MUX_F7:
+					fprintf(f, "%s %c_outmux F7\n", pref, 'A'+j);
+					break;
+				case MUX_F8:
+					fprintf(f, "%s %c_outmux F8\n", pref, 'A'+j);
+					break;
+				case MUX_MC31:
+					fprintf(f, "%s %c_outmux MC31\n", pref, 'A'+j);
 					break;
 				case 0: break; default: FAIL(EINVAL);
 			}
@@ -474,7 +486,7 @@ static int read_LOGIC_attr(struct fpga_model* model, int y, int x, int type_idx,
 	for (i = LUT_A; i <= LUT_D; i++) {
 		snprintf(cmp_str, sizeof(cmp_str), "%c_used", 'A'+i);
 		if (!str_cmp(w1, w1_len, cmp_str, ZTERM)) {
-			dev->u.logic.a2d[i].used = 1;
+			dev->u.logic.a2d[i].out_used = 1;
 			goto inst_1;
 		}
 	}
@@ -499,13 +511,13 @@ static int read_LOGIC_attr(struct fpga_model* model, int y, int x, int type_idx,
 	for (i = LUT_A; i <= LUT_D; i++) {
 		snprintf(cmp_str, sizeof(cmp_str), "%c6_lut", 'A'+i);
 		if (!str_cmp(w1, w1_len, cmp_str, ZTERM)) {
-			rc = fdev_logic_set_lut(model, y, x, type_idx, i, 6, w2, w2_len);
+			rc = fdev_logic_a2d_lut(model, y, x, type_idx, i, 6, w2, w2_len);
 			if (rc) return 0;
 			goto inst_2;
 		}
 		snprintf(cmp_str, sizeof(cmp_str), "%c5_lut", 'A'+i);
 		if (!str_cmp(w1, w1_len, cmp_str, ZTERM)) {
-			rc = fdev_logic_set_lut(model, y, x, type_idx, i, 5, w2, w2_len);
+			rc = fdev_logic_a2d_lut(model, y, x, type_idx, i, 5, w2, w2_len);
 			if (rc) return 0;
 			goto inst_2;
 		}
@@ -517,12 +529,16 @@ static int read_LOGIC_attr(struct fpga_model* model, int y, int x, int type_idx,
 				dev->u.logic.a2d[i].ff_mux = MUX_O5;
 			else if (!str_cmp(w2, w2_len, "X", ZTERM))
 				dev->u.logic.a2d[i].ff_mux = MUX_X;
-			else if (!str_cmp(w2, w2_len, "F7", ZTERM))
-				dev->u.logic.a2d[i].ff_mux = MUX_F7;
 			else if (!str_cmp(w2, w2_len, "CY", ZTERM))
 				dev->u.logic.a2d[i].ff_mux = MUX_CY;
 			else if (!str_cmp(w2, w2_len, "XOR", ZTERM))
 				dev->u.logic.a2d[i].ff_mux = MUX_XOR;
+			else if (!str_cmp(w2, w2_len, "F7", ZTERM))
+				dev->u.logic.a2d[i].ff_mux = MUX_F7;
+			else if (!str_cmp(w2, w2_len, "F8", ZTERM))
+				dev->u.logic.a2d[i].ff_mux = MUX_F8;
+			else if (!str_cmp(w2, w2_len, "MC31", ZTERM))
+				dev->u.logic.a2d[i].ff_mux = MUX_MC31;
 			else return 0;
 			goto inst_2;
 		}
@@ -543,12 +559,16 @@ static int read_LOGIC_attr(struct fpga_model* model, int y, int x, int type_idx,
 				dev->u.logic.a2d[i].out_mux = MUX_O5;
 			else if (!str_cmp(w2, w2_len, "5Q", ZTERM))
 				dev->u.logic.a2d[i].out_mux = MUX_5Q;
-			else if (!str_cmp(w2, w2_len, "F7", ZTERM))
-				dev->u.logic.a2d[i].out_mux = MUX_F7;
 			else if (!str_cmp(w2, w2_len, "CY", ZTERM))
 				dev->u.logic.a2d[i].out_mux = MUX_CY;
 			else if (!str_cmp(w2, w2_len, "XOR", ZTERM))
 				dev->u.logic.a2d[i].out_mux = MUX_XOR;
+			else if (!str_cmp(w2, w2_len, "F7", ZTERM))
+				dev->u.logic.a2d[i].out_mux = MUX_F7;
+			else if (!str_cmp(w2, w2_len, "F8", ZTERM))
+				dev->u.logic.a2d[i].out_mux = MUX_F8;
+			else if (!str_cmp(w2, w2_len, "MC31", ZTERM))
+				dev->u.logic.a2d[i].out_mux = MUX_MC31;
 			else return 0;
 			goto inst_2;
 		}

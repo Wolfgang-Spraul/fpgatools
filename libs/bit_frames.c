@@ -354,7 +354,7 @@ static int extract_logic(struct fpga_model* model, struct fpga_bits* bits)
 			if (row_pos >= 8) byte_off += HCLK_BYTES;
 
 			// M device
-			dev_idx = fpga_dev_idx(model, y, x, DEV_LOGIC, DEV_LOGM);
+			dev_idx = fpga_dev_idx(model, y, x, DEV_LOGIC, DEV_LOG_M_OR_L);
 			if (dev_idx == NO_DEV) FAIL(EINVAL);
 
 			// A6_LUT
@@ -364,7 +364,7 @@ static int extract_logic(struct fpga_model* model, struct fpga_bits* bits)
 				{ int logic_base[6] = {0,1,0,0,1,0};
 				  lut_str = lut2bool(u64, 64, &logic_base, /*flip_b0*/ 1); }
 				if (*lut_str) {
-					rc = fdev_logic_set_lut(model, y, x, DEV_LOGM,
+					rc = fdev_logic_a2d_lut(model, y, x, DEV_LOG_M_OR_L,
 						LUT_A, 6, lut_str, ZTERM);
 					if (rc) FAIL(rc);
 					*(uint32_t*)(u8_p+24*FRAME_SIZE+byte_off+4) = 0;
@@ -378,7 +378,7 @@ static int extract_logic(struct fpga_model* model, struct fpga_bits* bits)
 				{ int logic_base[6] = {1,1,0,1,0,1};
 				  lut_str = lut2bool(u64, 64, &logic_base, /*flip_b0*/ 1); }
 				if (*lut_str) {
-					rc = fdev_logic_set_lut(model, y, x, DEV_LOGM,
+					rc = fdev_logic_a2d_lut(model, y, x, DEV_LOG_M_OR_L,
 						LUT_B, 6, lut_str, ZTERM);
 					if (rc) FAIL(rc);
 					*(uint32_t*)(u8_p+21*FRAME_SIZE+byte_off+4) = 0;
@@ -392,7 +392,7 @@ static int extract_logic(struct fpga_model* model, struct fpga_bits* bits)
 				{ int logic_base[6] = {0,1,0,0,1,0};
 				  lut_str = lut2bool(u64, 64, &logic_base, /*flip_b0*/ 1); }
 				if (*lut_str) {
-					rc = fdev_logic_set_lut(model, y, x, DEV_LOGM,
+					rc = fdev_logic_a2d_lut(model, y, x, DEV_LOG_M_OR_L,
 						LUT_C, 6, lut_str, ZTERM);
 					if (rc) FAIL(rc);
 					*(uint32_t*)(u8_p+24*FRAME_SIZE+byte_off) = 0;
@@ -406,7 +406,7 @@ static int extract_logic(struct fpga_model* model, struct fpga_bits* bits)
 				{ int logic_base[6] = {1,1,0,1,0,1};
 				  lut_str = lut2bool(u64, 64, &logic_base, /*flip_b0*/ 1); }
 				if (*lut_str) {
-					rc = fdev_logic_set_lut(model, y, x, DEV_LOGM,
+					rc = fdev_logic_a2d_lut(model, y, x, DEV_LOG_M_OR_L,
 						LUT_D, 6, lut_str, ZTERM);
 					if (rc) FAIL(rc);
 					*(uint32_t*)(u8_p+21*FRAME_SIZE+byte_off) = 0;
@@ -433,16 +433,19 @@ static int extract_logic(struct fpga_model* model, struct fpga_bits* bits)
 					continue;
 				}
 
-				dev_idx = fpga_dev_idx(model, y, x, DEV_LOGIC, DEV_LOGX);
+				dev_idx = fpga_dev_idx(model, y, x, DEV_LOGIC, DEV_LOG_X);
 				if (dev_idx == NO_DEV) FAIL(EINVAL);
 				*(uint64_t*)(u8_p+26*FRAME_SIZE+byte_off) = 0;
 
 				// A6_LUT
 				u64 = read_lut64(u8_p + 27*FRAME_SIZE, (byte_off+4)*8);
-				{ int logic_base[6] = {1,1,0,1,1,0};
-				  lut_str = lut2bool(u64, 64, &logic_base, /*flip_b0*/ 0); }
-				if (*lut_str) {
-					rc = fdev_logic_set_lut(model, y, x, DEV_LOGX,
+				if (!u64) lut_str = 0;
+				else {
+					int logic_base[6] = {1,1,0,1,1,0};
+					lut_str = lut2bool(u64, 64, &logic_base, /*flip_b0*/ 0);
+				}
+				if (lut_str && *lut_str) {
+					rc = fdev_logic_a2d_lut(model, y, x, DEV_LOG_X,
 						LUT_A, 6, lut_str, ZTERM);
 					if (rc) FAIL(rc);
 					*(uint32_t*)(u8_p+27*FRAME_SIZE+byte_off+4) = 0;
@@ -450,30 +453,39 @@ static int extract_logic(struct fpga_model* model, struct fpga_bits* bits)
 				}
 				// B6_LUT
 				u64 = read_lut64(u8_p + 29*FRAME_SIZE, (byte_off+4)*8);
-				{ int logic_base[6] = {1,1,0,1,1,0};
-				  lut_str = lut2bool(u64, 64, &logic_base, /*flip_b0*/ 0); }
-				if (*lut_str) {
-					rc = fdev_logic_set_lut(model, y, x, DEV_LOGX,
+				if (!u64) lut_str = 0;
+				else {
+					int logic_base[6] = {1,1,0,1,1,0};
+					lut_str = lut2bool(u64, 64, &logic_base, /*flip_b0*/ 0);
+				}
+				if (lut_str && *lut_str) {
+					rc = fdev_logic_a2d_lut(model, y, x, DEV_LOG_X,
 						LUT_B, 6, lut_str, ZTERM);
 					*(uint32_t*)(u8_p+29*FRAME_SIZE+byte_off+4) = 0;
 					*(uint32_t*)(u8_p+30*FRAME_SIZE+byte_off+4) = 0;
 				}
 				// C6_LUT
 				u64 = read_lut64(u8_p + 27*FRAME_SIZE, byte_off*8);
-				{ int logic_base[6] = {0,1,0,0,0,1};
-				  lut_str = lut2bool(u64, 64, &logic_base, /*flip_b0*/ 0); }
-				if (*lut_str) {
-					rc = fdev_logic_set_lut(model, y, x, DEV_LOGX,
+				if (!u64) lut_str = 0;
+				else {
+					int logic_base[6] = {0,1,0,0,0,1};
+					lut_str = lut2bool(u64, 64, &logic_base, /*flip_b0*/ 0);
+				}
+				if (lut_str && *lut_str) {
+					rc = fdev_logic_a2d_lut(model, y, x, DEV_LOG_X,
 						LUT_C, 6, lut_str, ZTERM);
 					*(uint32_t*)(u8_p+27*FRAME_SIZE+byte_off) = 0;
 					*(uint32_t*)(u8_p+28*FRAME_SIZE+byte_off) = 0;
 				}
 				// D6_LUT
 				u64 = read_lut64(u8_p + 29*FRAME_SIZE, byte_off*8);
-				{ int logic_base[6] = {0,1,0,0,0,1};
-				  lut_str = lut2bool(u64, 64, &logic_base, /*flip_b0*/ 0); }
-				if (*lut_str) {
-					rc = fdev_logic_set_lut(model, y, x, DEV_LOGX,
+				if (!u64) lut_str = 0;
+				else {
+					int logic_base[6] = {0,1,0,0,0,1};
+					lut_str = lut2bool(u64, 64, &logic_base, /*flip_b0*/ 0);
+				}
+				if (lut_str && *lut_str) {
+					rc = fdev_logic_a2d_lut(model, y, x, DEV_LOG_X,
 						LUT_D, 6, lut_str, ZTERM);
 					*(uint32_t*)(u8_p+29*FRAME_SIZE+byte_off) = 0;
 					*(uint32_t*)(u8_p+30*FRAME_SIZE+byte_off) = 0;
@@ -1074,7 +1086,7 @@ static int write_logic(struct fpga_bits* bits, struct fpga_model* model)
 
 			if (xm_col) {
 				// X device
-				dev_idx = fpga_dev_idx(model, y, x, DEV_LOGIC, DEV_LOGX);
+				dev_idx = fpga_dev_idx(model, y, x, DEV_LOGIC, DEV_LOG_X);
 				if (dev_idx == NO_DEV) FAIL(EINVAL);
 				dev = FPGA_DEV(model, y, x, dev_idx);
 				if (dev->instantiated) {
@@ -1102,7 +1114,7 @@ static int write_logic(struct fpga_bits* bits, struct fpga_model* model)
 				}
 
 				// M device
-				dev_idx = fpga_dev_idx(model, y, x, DEV_LOGIC, DEV_LOGM);
+				dev_idx = fpga_dev_idx(model, y, x, DEV_LOGIC, DEV_LOG_M_OR_L);
 				if (dev_idx == NO_DEV) FAIL(EINVAL);
 				dev = FPGA_DEV(model, y, x, dev_idx);
 				if (dev->instantiated) {
@@ -1110,7 +1122,7 @@ static int write_logic(struct fpga_bits* bits, struct fpga_model* model)
 				}
 			} else {
 				// X device
-				dev_idx = fpga_dev_idx(model, y, x, DEV_LOGIC, DEV_LOGX);
+				dev_idx = fpga_dev_idx(model, y, x, DEV_LOGIC, DEV_LOG_X);
 				if (dev_idx == NO_DEV) FAIL(EINVAL);
 				dev = FPGA_DEV(model, y, x, dev_idx);
 				if (dev->instantiated) {
@@ -1118,7 +1130,7 @@ static int write_logic(struct fpga_bits* bits, struct fpga_model* model)
 				}
 
 				// L device
-				dev_idx = fpga_dev_idx(model, y, x, DEV_LOGIC, DEV_LOGL);
+				dev_idx = fpga_dev_idx(model, y, x, DEV_LOGIC, DEV_LOG_M_OR_L);
 				if (dev_idx == NO_DEV) FAIL(EINVAL);
 				dev = FPGA_DEV(model, y, x, dev_idx);
 				if (dev->instantiated) {

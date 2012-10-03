@@ -225,7 +225,11 @@ struct fpga_device* fdev_p(struct fpga_model* model,
 	int y, int x, enum fpgadev_type type, dev_type_idx_t type_idx)
 {
 	dev_idx_t dev_idx = fpga_dev_idx(model, y, x, type, type_idx);
-	if (dev_idx == NO_DEV) { HERE(); return 0; }
+	if (dev_idx == NO_DEV) {
+		fprintf(stderr, "#E %s:%i fdev_p() y%02i x%02i type %i/%i not"
+			" found\n", __FILE__, __LINE__, y, x, type, type_idx);
+		return 0;
+	}
 	return FPGA_DEV(model, y, x, dev_idx);
 }
 
@@ -395,6 +399,13 @@ void fdev_print_required_pins(struct fpga_model* model, int y, int x,
 
 static void add_req_inpin(struct fpga_device* dev, pinw_idx_t pinw_i)
 {
+	int i;
+
+	// check for duplicate
+	for (i = 0; i < dev->pinw_req_in; i++) {
+		if (dev->pinw_req_for_cfg[i] == pinw_i)
+			return;
+	}
 	if (dev->pinw_req_total > dev->pinw_req_in) {
 		memmove(&dev->pinw_req_for_cfg[dev->pinw_req_in+1],
 			&dev->pinw_req_for_cfg[dev->pinw_req_in],
@@ -408,11 +419,40 @@ static void add_req_inpin(struct fpga_device* dev, pinw_idx_t pinw_i)
 
 static void add_req_outpin(struct fpga_device* dev, pinw_idx_t pinw_i)
 {
+	int i;
+
+	// check for duplicate
+	for (i = dev->pinw_req_in; i < dev->pinw_req_total; i++) {
+		if (dev->pinw_req_for_cfg[i] == pinw_i)
+			return;
+	}
 	dev->pinw_req_for_cfg[dev->pinw_req_total] = pinw_i;
 	dev->pinw_req_total++;
 }
 
-int fdev_logic_set_lut(struct fpga_model* model, int y, int x, int type_idx,
+//
+// logic device
+//
+
+int fdev_logic_a2d_out_used(struct fpga_model* model, int y, int x,
+	int type_idx, int lut_a2d, int used)
+{
+	struct fpga_device* dev;
+	int rc;
+
+	dev = fdev_p(model, y, x, DEV_LOGIC, type_idx);
+	if (!dev) FAIL(EINVAL);
+	rc = reset_required_pins(dev);
+	if (rc) FAIL(rc);
+
+	dev->u.logic.a2d[lut_a2d].out_used = (used != 0);
+	dev->instantiated = 1;
+	return 0;
+fail:
+	return rc;
+}
+
+int fdev_logic_a2d_lut(struct fpga_model* model, int y, int x, int type_idx,
 	int lut_a2d, int lut_5or6, const char* lut_str, int lut_len)
 {
 	struct fpga_device* dev;
@@ -435,31 +475,28 @@ int fdev_logic_set_lut(struct fpga_model* model, int y, int x, int type_idx,
 	memcpy(*lut_ptr, lut_str, lut_len);
 	(*lut_ptr)[lut_len] = 0;
 
+	// todo: the logic by which we auto-enable the direct
+	//       output could have more cases, the O6 signal
+	//	 could go into the carry chain/XOR/CY, F7/F8, others?
+	//	 O5 could go into carry chain/XOR/CY, others?
+	//       We need to find out over time what makes sense for
+	//	 the caller.
+	if (lut_5or6 == 6
+	    && dev->u.logic.a2d[lut_a2d].ff_mux != MUX_O6
+	    && dev->u.logic.a2d[lut_a2d].out_mux != MUX_O6)
+		dev->u.logic.a2d[lut_a2d].out_used = 1;
+	if (lut_5or6 == 5
+	    && dev->u.logic.a2d[lut_a2d].ff_mux != MUX_O5
+	    && !dev->u.logic.a2d[lut_a2d].out_mux)
+		dev->u.logic.a2d[lut_a2d].out_mux = MUX_O5;
+
 	dev->instantiated = 1;
 	return 0;
 fail:
 	return rc;
 }
 
-int fdev_logic_out_used(struct fpga_model* model, int y, int x, int type_idx,
-	int lut_a2d)
-{
-	struct fpga_device* dev;
-	int rc;
-
-	dev = fdev_p(model, y, x, DEV_LOGIC, type_idx);
-	if (!dev) FAIL(EINVAL);
-	rc = reset_required_pins(dev);
-	if (rc) FAIL(rc);
-
-	dev->u.logic.a2d[lut_a2d].used = 1;
-	dev->instantiated = 1;
-	return 0;
-fail:
-	return rc;
-}
-
-int fdev_logic_FF(struct fpga_model* model, int y, int x, int type_idx,
+int fdev_logic_a2d_ff(struct fpga_model* model, int y, int x, int type_idx,
 	int lut_a2d, int ff_mux, int srinit)
 {
 	struct fpga_device* dev;
@@ -473,6 +510,44 @@ int fdev_logic_FF(struct fpga_model* model, int y, int x, int type_idx,
 	dev->u.logic.a2d[lut_a2d].ff = FF_FF;
 	dev->u.logic.a2d[lut_a2d].ff_mux = ff_mux;
 	dev->u.logic.a2d[lut_a2d].ff_srinit = srinit;
+	dev->instantiated = 1;
+	return 0;
+fail:
+	return rc;
+}
+
+int fdev_logic_a2d_out_mux(struct fpga_model* model, int y, int x,
+	int type_idx, int lut_a2d, int out_mux)
+{
+	struct fpga_device* dev;
+	int rc;
+
+	dev = fdev_p(model, y, x, DEV_LOGIC, type_idx);
+	if (!dev) FAIL(EINVAL);
+	rc = reset_required_pins(dev);
+	if (rc) FAIL(rc);
+
+	dev->u.logic.a2d[lut_a2d].out_mux = out_mux;
+	dev->instantiated = 1;
+	return 0;
+fail:
+	return rc;
+}
+
+int fdev_logic_a2d_cy0(struct fpga_model* model, int y, int x,
+	int type_idx, int lut_a2d, int cy0)
+{
+	struct fpga_device* dev;
+	int rc;
+
+	dev = fdev_p(model, y, x, DEV_LOGIC, type_idx);
+	if (!dev) FAIL(EINVAL);
+	rc = reset_required_pins(dev);
+	if (rc) FAIL(rc);
+
+	dev->u.logic.a2d[lut_a2d].cy0 = cy0;
+// todo: when cy0 is CY0_O5 and lut5 is empty, set to "0"
+// 	 (same for setting ff_mux or out_mux to MUX_O5
 	dev->instantiated = 1;
 	return 0;
 fail:
@@ -515,7 +590,7 @@ fail:
 	return rc;
 }
 
-int fdev_logic_ceused(struct fpga_model* model, int y, int x, int type_idx)
+int fdev_logic_ce_used(struct fpga_model* model, int y, int x, int type_idx)
 {
 	struct fpga_device* dev;
 	int rc;
@@ -532,7 +607,7 @@ fail:
 	return rc;
 }
 
-int fdev_logic_srused(struct fpga_model* model, int y, int x, int type_idx)
+int fdev_logic_sr_used(struct fpga_model* model, int y, int x, int type_idx)
 {
 	struct fpga_device* dev;
 	int rc;
@@ -548,6 +623,64 @@ int fdev_logic_srused(struct fpga_model* model, int y, int x, int type_idx)
 fail:
 	return rc;
 }
+
+int fdev_logic_we_mux(struct fpga_model* model, int y, int x,
+	int type_idx, int we_mux)
+{
+	struct fpga_device* dev;
+	int rc;
+
+	dev = fdev_p(model, y, x, DEV_LOGIC, type_idx);
+	if (!dev) FAIL(EINVAL);
+	rc = reset_required_pins(dev);
+	if (rc) FAIL(rc);
+
+	dev->u.logic.we_mux = we_mux;
+	dev->instantiated = 1;
+	return 0;
+fail:
+	return rc;
+}
+
+int fdev_logic_cout_used(struct fpga_model* model, int y, int x,
+	int type_idx, int used)
+{
+	struct fpga_device* dev;
+	int rc;
+
+	dev = fdev_p(model, y, x, DEV_LOGIC, type_idx);
+	if (!dev) FAIL(EINVAL);
+	rc = reset_required_pins(dev);
+	if (rc) FAIL(rc);
+
+	dev->u.logic.cout_used = (used != 0);
+	dev->instantiated = 1;
+	return 0;
+fail:
+	return rc;
+}
+
+int fdev_logic_precyinit(struct fpga_model* model, int y, int x,
+	int type_idx, int precyinit)
+{
+	struct fpga_device* dev;
+	int rc;
+
+	dev = fdev_p(model, y, x, DEV_LOGIC, type_idx);
+	if (!dev) FAIL(EINVAL);
+	rc = reset_required_pins(dev);
+	if (rc) FAIL(rc);
+
+	dev->u.logic.precyinit = precyinit;
+	dev->instantiated = 1;
+	return 0;
+fail:
+	return rc;
+}
+
+//
+// iob device
+//
 
 int fdev_iob_input(struct fpga_model* model, int y, int x, int type_idx)
 {
@@ -596,9 +729,13 @@ static void scan_lut_digits(const char* s, int* digits)
 	for (i = 0; i < 6; i++)
 		digits[i] = 0;
 	if (!s) return;
+	// Note special cases "0" and "1" for a lut that
+	// always results in 0 or 1.
 	for (i = 0; s[i]; i++) {
-		if (s[i] >= '1' && s[i] <= '6')
-			digits[s[i]-'1']++;
+		if (s[i] != 'A' && s[i] != 'a')
+			continue;
+		if (s[i+1] >= '1' && s[i+1] <= '6')
+			digits[s[++i]-'1']++;
 	}
 }
 
@@ -620,16 +757,28 @@ int fdev_set_required_pins(struct fpga_model* model, int y, int x, int type,
 			add_req_inpin(dev, LI_CE);
 		if (dev->u.logic.sr_used)
 			add_req_inpin(dev, LI_SR);
+		if (dev->u.logic.cout_used) {
+			add_req_outpin(dev, LO_COUT);
+			if (!dev->u.logic.precyinit)
+				add_req_inpin(dev, LI_CIN);
+		}
+		if (dev->u.logic.precyinit == PRECYINIT_AX)
+			add_req_inpin(dev, LI_AX);
 		for (i = LUT_A; i <= LUT_D; i++) {
-			if (dev->u.logic.a2d[i].used) {
+			if (dev->u.logic.a2d[i].out_used) {
 				// LO_A..LO_D are in sequence
 				add_req_outpin(dev, LO_A+i);
+			}
+			if (dev->u.logic.a2d[i].out_mux) {
+				// LO_AMUX..LO_DMUX are in sequence
+				add_req_outpin(dev, LO_AMUX+i);
 			}
 			if (dev->u.logic.a2d[i].ff) {
 				// LO_AQ..LO_DQ are in sequence
 				add_req_outpin(dev, LO_AQ+i);
 			}
-			if (dev->u.logic.a2d[i].ff_mux == MUX_X) {
+			if (dev->u.logic.a2d[i].ff_mux == MUX_X
+			    || dev->u.logic.a2d[i].cy0 == CY0_X) {
 				// LI_AX..LI_DX are in sequence
 				add_req_inpin(dev, LI_AX+i);
 			}
@@ -641,12 +790,18 @@ int fdev_set_required_pins(struct fpga_model* model, int y, int x, int type,
 				}
 			}
 			if (dev->u.logic.a2d[i].lut5) {
+				// A6 must be high/vcc if lut5 is used
+				add_req_inpin(dev, LI_A6+i*6);
 				scan_lut_digits(dev->u.logic.a2d[i].lut5, digits);
 				for (j = 0; j < 6; j++) {
 					if (!digits[j]) continue;
 					add_req_inpin(dev, LI_A1+i*6+j);
 				}
 			}
+			if ((dev->u.logic.a2d[i].ff_mux == MUX_XOR
+			     || dev->u.logic.a2d[i].out_mux == MUX_XOR)
+			    && !dev->u.logic.precyinit)
+				add_req_inpin(dev, LI_CIN);
 		}
 		return 0;
 	}
@@ -1979,6 +2134,46 @@ int fnet_autoroute(struct fpga_model* model, net_idx_t net_i)
 		return 0;
 	}
 	FAIL(ENOTSUP);
+fail:
+	return rc;
+}
+
+int fnet_route_to_inpins(struct fpga_model* model, net_idx_t net_i,
+	const char* from)
+{
+	struct fpga_net* net_p;
+	struct fpga_device* dev_p;
+	str16_t from_i;
+	struct sw_set start_set, end_set;
+	int i, rc;
+
+	net_p = fnet_get(model, net_i);
+	if (!net_p) FAIL(EINVAL);
+	from_i = strarray_find(&model->str, from);
+	if (from_i == STRIDX_NO_ENTRY) FAIL(EINVAL);
+
+	for (i = 0; i < net_p->len; i++) {
+		if (!(net_p->el[i].idx & NET_IDX_IS_PINW))
+			// skip existing switch
+			continue;
+		dev_p = FPGA_DEV(model, net_p->el[i].y,
+			net_p->el[i].x, net_p->el[i].dev_idx);
+		if ((net_p->el[i].idx & NET_IDX_MASK) >= dev_p->num_pinw_in)
+			// skip outpin
+			continue;
+		rc = froute_direct(model, net_p->el[i].y, net_p->el[i].x-1,
+			from_i, net_p->el[i].y, net_p->el[i].x,
+			dev_p->pinw[net_p->el[i].idx & NET_IDX_MASK],
+			&start_set, &end_set);
+		if (rc) FAIL(rc);
+		rc = fnet_add_sw(model, net_i, net_p->el[i].y,
+			net_p->el[i].x-1, start_set.sw, start_set.len);
+		if (rc) FAIL(rc);
+		rc = fnet_add_sw(model, net_i, net_p->el[i].y,
+			net_p->el[i].x, end_set.sw, end_set.len);
+		if (rc) FAIL(rc);
+	}
+	return 0;
 fail:
 	return rc;
 }

@@ -46,23 +46,37 @@ const char* fdev_pinw_idx2str(int devtype, pinw_idx_t idx);
 const char* fdev_logic_pinstr(pinw_idx_t idx, int ld1_type);
 str16_t fdev_logic_pinstr_i(struct fpga_model* model, pinw_idx_t idx, int ld1_type);
 
-// lut_a2d is LUT_A to LUT_D value, lut_5or6 is int 5 or int 6.
-int fdev_logic_set_lut(struct fpga_model* model, int y, int x, int type_idx,
+// lut_a2d is LUT_A to LUT_D
+int fdev_logic_a2d_out_used(struct fpga_model* model, int y, int x,
+	int type_idx, int lut_a2d, int used);
+// lut_5or6 is int 5 or int 6
+int fdev_logic_a2d_lut(struct fpga_model* model, int y, int x, int type_idx,
 	int lut_a2d, int lut_5or6, const char* lut_str, int lut_len);
-int fdev_logic_out_used(struct fpga_model* model, int y, int x, int type_idx,
-	int lut_a2d);
-// ff_mux is MUX_O6 or MUX_X
 // srinit is FF_SRINIT0 or FF_SRINIT1
-int fdev_logic_FF(struct fpga_model* model, int y, int x, int type_idx,
+int fdev_logic_a2d_ff(struct fpga_model* model, int y, int x, int type_idx,
 	int lut_a2d, int ff_mux, int srinit);
+int fdev_logic_a2d_out_mux(struct fpga_model* model, int y, int x,
+	int type_idx, int lut_a2d, int out_mux);
+// cy0 is CY0_X or CY0_O5
+int fdev_logic_a2d_cy0(struct fpga_model* model, int y, int x,
+	int type_idx, int lut_a2d, int cy0);
+
 // clk is CLKINV_B or CLKINV_CLK
 int fdev_logic_clk(struct fpga_model* model, int y, int x, int type_idx,
 	int clk);
 // sync is SYNCATTR_SYNC or SYNCATTR_ASYNC
 int fdev_logic_sync(struct fpga_model* model, int y, int x, int type_idx,
 	int sync_attr);
-int fdev_logic_ceused(struct fpga_model* model, int y, int x, int type_idx);
-int fdev_logic_srused(struct fpga_model* model, int y, int x, int type_idx);
+int fdev_logic_ce_used(struct fpga_model* model, int y, int x, int type_idx);
+int fdev_logic_sr_used(struct fpga_model* model, int y, int x, int type_idx);
+// we_mux can be WEMUX_WE or WEMUX_CE
+int fdev_logic_we_mux(struct fpga_model* model, int y, int x,
+	int type_idx, int we_mux);
+int fdev_logic_cout_used(struct fpga_model* model, int y, int x,
+	int type_idx, int used);
+// precyinit can be PRECYINIT_O, PRECYINIT_1 or PRECYINIT_AX
+int fdev_logic_precyinit(struct fpga_model* model, int y, int x,
+	int type_idx, int precyinit);
 
 int fdev_iob_input(struct fpga_model* model, int y, int x, int type_idx);
 int fdev_iob_output(struct fpga_model* model, int y, int x, int type_idx);
@@ -334,6 +348,9 @@ void fnet_free_all(struct fpga_model* model);
 void fnet_printf(FILE* f, struct fpga_model* model, net_idx_t net_i);
 
 int fnet_autoroute(struct fpga_model* model, net_idx_t net_i);
+
+int fnet_route_to_inpins(struct fpga_model* model, net_idx_t net_i,
+	const char* from);
 
 //
 // routing

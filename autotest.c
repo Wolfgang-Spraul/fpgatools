@@ -128,7 +128,7 @@ fail:
 // goal: configure logic devices in all supported variations
 static int test_logic_config(struct test_state* tstate)
 {
-	int idx_enum[] = { DEV_LOGM, DEV_LOGX };
+	int idx_enum[] = { DEV_LOG_M_OR_L, DEV_LOG_X };
 	int y, x, i, j, k, rc;
 
         y = 68;
@@ -139,7 +139,7 @@ static int test_logic_config(struct test_state* tstate)
 
 			// A1..A6 to A..D
 			for (k = '1'; k <= '6'; k++) {
-				rc = fdev_logic_set_lut(tstate->model, y, x,
+				rc = fdev_logic_a2d_lut(tstate->model, y, x,
 					idx_enum[i], j, 6, pf("A%c", k), ZTERM);
 				if (rc) FAIL(rc);
 				rc = fdev_set_required_pins(tstate->model, y, x,
@@ -155,10 +155,10 @@ static int test_logic_config(struct test_state* tstate)
 			}
 
 			// A1 to O6 to FF to AQ
-			rc = fdev_logic_set_lut(tstate->model, y, x,
+			rc = fdev_logic_a2d_lut(tstate->model, y, x,
 				idx_enum[i], j, 6, "A1", ZTERM);
 			if (rc) FAIL(rc);
-			rc = fdev_logic_FF(tstate->model, y, x, idx_enum[i],
+			rc = fdev_logic_a2d_ff(tstate->model, y, x, idx_enum[i],
 				j, MUX_O6, FF_SRINIT0);
 			if (rc) FAIL(rc);
 			rc = fdev_logic_sync(tstate->model, y, x, idx_enum[i],
@@ -167,9 +167,9 @@ static int test_logic_config(struct test_state* tstate)
 			rc = fdev_logic_clk(tstate->model, y, x, idx_enum[i],
 				CLKINV_B);
 			if (rc) FAIL(rc);
-			rc = fdev_logic_ceused(tstate->model, y, x, idx_enum[i]);
+			rc = fdev_logic_ce_used(tstate->model, y, x, idx_enum[i]);
 			if (rc) FAIL(rc);
-			rc = fdev_logic_srused(tstate->model, y, x, idx_enum[i]);
+			rc = fdev_logic_sr_used(tstate->model, y, x, idx_enum[i]);
 			if (rc) FAIL(rc);
 
 			rc = fdev_set_required_pins(tstate->model, y, x,
@@ -599,24 +599,24 @@ static int test_routing_sw_from_logic(struct test_state* tstate,
 	// from below, or sr1/sl1 wires from above.
 	for (rel_y = -1; rel_y <= 1; rel_y += 2) {
 		for (i = '1'; i <= '6'; i++) {
-			rc = fdev_logic_set_lut(tstate->model, y, x,
-				DEV_LOGM, LUT_A, 6, pf("A%c", i), ZTERM);
+			rc = fdev_logic_a2d_lut(tstate->model, y, x,
+				DEV_LOG_M_OR_L, LUT_A, 6, pf("A%c", i), ZTERM);
 			if (rc) FAIL(rc);
 			rc = fdev_set_required_pins(tstate->model, y, x,
-				DEV_LOGIC, DEV_LOGM);
+				DEV_LOGIC, DEV_LOG_M_OR_L);
 			if (rc) FAIL(rc);
 		
 			if (tstate->dry_run)
 				fdev_print_required_pins(tstate->model,
-					y, x, DEV_LOGIC, DEV_LOGM);
-			dev = fdev_p(tstate->model, y, x, DEV_LOGIC, DEV_LOGM);
+					y, x, DEV_LOGIC, DEV_LOG_M_OR_L);
+			dev = fdev_p(tstate->model, y, x, DEV_LOGIC, DEV_LOG_M_OR_L);
 			if (!dev) FAIL(EINVAL);
 			if (!dev->pinw_req_in) FAIL(EINVAL);
 		
 			rc = fnet_new(tstate->model, &net);
 			if (rc) FAIL(rc);
 			rc = fnet_add_port(tstate->model, net, y, x,
-				DEV_LOGIC, DEV_LOGM, dev->pinw_req_for_cfg[0]);
+				DEV_LOGIC, DEV_LOG_M_OR_L, dev->pinw_req_for_cfg[0]);
 			if (rc) FAIL(rc);
 		
 			swto.model = tstate->model;
@@ -665,7 +665,7 @@ static int test_routing_sw_from_logic(struct test_state* tstate,
 				if (rc) FAIL(rc);
 			}
 			destruct_sw_conns(&conns);
-			fdev_delete(tstate->model, y, x, DEV_LOGIC, DEV_LOGM);
+			fdev_delete(tstate->model, y, x, DEV_LOGIC, DEV_LOG_M_OR_L);
 			fnet_delete(tstate->model, net);
 		}
 	}
@@ -677,7 +677,7 @@ fail:
 // goal: use all switches in a routing switchbox
 static int test_routing_switches(struct test_state* tstate)
 {
-	int idx_enum[] = { DEV_LOGM, DEV_LOGX };
+	int idx_enum[] = { DEV_LOG_M_OR_L, DEV_LOG_X };
 	int y, x, i, j, k, r, rc;
 	swidx_t done_sw_list[MAX_SWITCHBOX_SIZE];
 	int done_sw_len;
@@ -699,11 +699,8 @@ static int test_routing_switches(struct test_state* tstate)
 	
 				// A1-A6 to A (same for lut B-D)
 				for (k = '1'; k <= '6'; k++) {
-					rc = fdev_logic_set_lut(tstate->model, y, x,
+					rc = fdev_logic_a2d_lut(tstate->model, y, x,
 						idx_enum[i], j, 6, pf("A%c", k), ZTERM);
-					if (rc) FAIL(rc);
-					rc = fdev_logic_out_used(tstate->model, y, x,
-						idx_enum[i], j);
 					if (rc) FAIL(rc);
 	
 					if (!r)
@@ -719,10 +716,10 @@ static int test_routing_switches(struct test_state* tstate)
 				}
 	
 				// A1->O6->FF->AQ (same for lut B-D)
-				rc = fdev_logic_set_lut(tstate->model, y, x,
+				rc = fdev_logic_a2d_lut(tstate->model, y, x,
 					idx_enum[i], j, 6, "A1", ZTERM);
 				if (rc) FAIL(rc);
-				rc = fdev_logic_FF(tstate->model, y, x, idx_enum[i],
+				rc = fdev_logic_a2d_ff(tstate->model, y, x, idx_enum[i],
 					j, MUX_O6, FF_SRINIT0);
 				if (rc) FAIL(rc);
 				rc = fdev_logic_sync(tstate->model, y, x, idx_enum[i],
@@ -731,9 +728,9 @@ static int test_routing_switches(struct test_state* tstate)
 				rc = fdev_logic_clk(tstate->model, y, x, idx_enum[i],
 					CLKINV_B);
 				if (rc) FAIL(rc);
-				rc = fdev_logic_ceused(tstate->model, y, x, idx_enum[i]);
+				rc = fdev_logic_ce_used(tstate->model, y, x, idx_enum[i]);
 				if (rc) FAIL(rc);
-				rc = fdev_logic_srused(tstate->model, y, x, idx_enum[i]);
+				rc = fdev_logic_sr_used(tstate->model, y, x, idx_enum[i]);
 				if (rc) FAIL(rc);
 	
 				rc = fdev_set_required_pins(tstate->model, y, x,
@@ -986,6 +983,155 @@ fail:
 	return rc;
 }
 
+static int test_lut(struct test_state* tstate, int y, int x, int type_idx,
+	int lut, const char* lut6, const char* lut5)
+{
+	struct fpga_device* dev;
+	net_idx_t pinw_nets[MAX_NUM_PINW];
+	int i, rc;
+
+	if (tstate->dry_run)
+		printf("O lut6 '%s' lut5 '%s'\n",
+			lut6 ? lut6 : "-", lut5 ? lut5 : "-");
+	if (lut6) {
+		rc = fdev_logic_a2d_lut(tstate->model, y, x,
+			type_idx, lut, 6, lut6, ZTERM);
+		if (rc) FAIL(rc);
+	}
+	if (lut5) {
+		rc = fdev_logic_a2d_lut(tstate->model, y, x,
+			type_idx, lut, 5, lut5, ZTERM);
+		if (rc) FAIL(rc);
+	}
+	rc = fdev_set_required_pins(tstate->model, y, x, DEV_LOGIC, type_idx);
+	if (rc) FAIL(rc);
+	if (tstate->dry_run) {
+		fdev_print_required_pins(tstate->model, y, x,
+			DEV_LOGIC, type_idx);
+	}
+
+	// add stub nets for each required pin
+	dev = fdev_p(tstate->model, y, x, DEV_LOGIC, type_idx);
+	if (!dev) FAIL(EINVAL);
+	for (i = 0; i < dev->pinw_req_total; i++) {
+		// i < dev->pinw_req_in -> input
+		rc = fnet_new(tstate->model, &pinw_nets[i]);
+		if (rc) FAIL(rc);
+		rc = fnet_add_port(tstate->model, pinw_nets[i], y, x,
+			DEV_LOGIC, type_idx, dev->pinw_req_for_cfg[i]);
+		if (rc) FAIL(rc);
+		if ((dev->pinw_req_for_cfg[i] == LI_A6
+		     && dev->u.logic.a2d[LUT_A].lut5
+		     && *dev->u.logic.a2d[LUT_A].lut5)
+		    || (dev->pinw_req_for_cfg[i] == LI_B6
+		        && dev->u.logic.a2d[LUT_B].lut5
+		        && *dev->u.logic.a2d[LUT_B].lut5)
+		    || (dev->pinw_req_for_cfg[i] == LI_C6
+			&& dev->u.logic.a2d[LUT_C].lut5
+			&& *dev->u.logic.a2d[LUT_C].lut5)
+		    || (dev->pinw_req_for_cfg[i] == LI_D6
+			&& dev->u.logic.a2d[LUT_D].lut5
+			&& *dev->u.logic.a2d[LUT_D].lut5)) {
+			rc = fnet_route_to_inpins(tstate->model, pinw_nets[i], "VCC_WIRE");
+			if (rc) FAIL(rc);
+		}
+	}
+
+	if ((rc = diff_printf(tstate))) FAIL(rc);
+
+	for (i = 0; i < dev->pinw_req_total; i++)
+		fnet_delete(tstate->model, pinw_nets[i]);
+	fdev_delete(tstate->model, y, x, DEV_LOGIC, type_idx);
+	return 0;
+fail:
+	return rc;
+}
+
+static int test_lut_encoding(struct test_state* tstate)
+{
+	int idx_enum[] = { DEV_LOG_M_OR_L, DEV_LOG_X };
+	int x_enum[] = { /*xm*/ 13, /* center-xl*/ 22, /*xl*/ 39 };
+	int y, x_i, i, j, k, lut_str_len, rc;
+	int type_i, lut;
+	char lut_str[128];
+	const char* lut5_parents[] = {"(A6+~A6)*1", "(A6+~A6)*0",
+		"(A6+~A6)*A1", "(A6+~A6)*A3", 0};
+
+	tstate->diff_to_null = 1;
+
+	y = 68;
+	for (x_i = 0; x_i < sizeof(x_enum)/sizeof(*x_enum); x_i++) {
+		for (type_i = 0; type_i < sizeof(idx_enum)/sizeof(*idx_enum); type_i++) {
+			for (lut = LUT_A; lut <= LUT_D; lut++) {
+				// lut6 only
+				rc = test_lut(tstate, y, x_enum[x_i], idx_enum[type_i],
+					lut, "0", /*lut5*/ 0);
+				if (rc) FAIL(rc);
+				rc = test_lut(tstate, y, x_enum[x_i], idx_enum[type_i],
+					lut, "1", /*lut5*/ 0);
+				if (rc) FAIL(rc);
+				for (i = '1'; i <= '6'; i++) {
+					snprintf(lut_str, sizeof(lut_str), "A%c", i);
+					rc = test_lut(tstate, y, x_enum[x_i], idx_enum[type_i],
+						lut, lut_str, /*lut5*/ 0);
+					if (rc) FAIL(rc);
+				}
+				for (i = 0; i < 64; i++) {
+					lut_str_len = 0;
+					for (j = 0; j < 6; j++) {
+						if (lut_str_len)
+							lut_str[lut_str_len++] = '*';
+						if (!(i & (1<<j)))
+							lut_str[lut_str_len++] = '~';
+						lut_str[lut_str_len++] = 'A';
+						lut_str[lut_str_len++] = '1' + j;
+					}
+					lut_str[lut_str_len] = 0;
+					rc = test_lut(tstate, y, x_enum[x_i], idx_enum[type_i],
+						lut, lut_str, /*lut5*/ 0);
+					if (rc) FAIL(rc);
+				}
+				// lut6 and lut5 pairs
+				i = 0;
+				while (lut5_parents[i]) {
+					rc = test_lut(tstate, y, x_enum[x_i], idx_enum[type_i],
+						lut, /*lut6*/ lut5_parents[i], /*lut5*/ "0");
+					if (rc) FAIL(rc);
+					rc = test_lut(tstate, y, x_enum[x_i], idx_enum[type_i],
+						lut, /*lut6*/ lut5_parents[i], /*lut5*/ "1");
+					if (rc) FAIL(rc);
+					for (j = '1'; j <= '5'; j++) {
+						snprintf(lut_str, sizeof(lut_str), "A%c", j);
+						rc = test_lut(tstate, y, x_enum[x_i], idx_enum[type_i],
+							lut, /*lut6*/ lut5_parents[i], /*lut5*/ lut_str);
+						if (rc) FAIL(rc);
+					}
+					for (j = 0; j < 32; j++) {
+						lut_str_len = 0;
+						for (k = 0; k < 5; k++) {
+							if (lut_str_len)
+								lut_str[lut_str_len++] = '*';
+							if (!(j & (1<<k)))
+								lut_str[lut_str_len++] = '~';
+							lut_str[lut_str_len++] = 'A';
+							lut_str[lut_str_len++] = '1' + k;
+						}
+						lut_str[lut_str_len] = 0;
+						rc = test_lut(tstate, y, x_enum[x_i], idx_enum[type_i],
+							lut, /*lut6*/ lut5_parents[i], /*lut5*/ lut_str);
+						if (rc) FAIL(rc);
+					}
+					i++;
+				}
+			}
+		}
+	}
+out:
+	return 0;
+fail:
+	return rc;
+}
+
 #define DEFAULT_DIFF_EXEC "./autotest_diff.sh"
 
 static void printf_help(const char* argv_0, const char** available_tests)
@@ -1016,7 +1162,7 @@ int main(int argc, char** argv)
 	char param[1024], cmdline_test[1024];
 	int i, param_skip, rc;
 	const char* available_tests[] =
-		{ "logic_cfg", "routing_sw", "io_sw", "iob_cfg", 0 };
+		{ "logic_cfg", "routing_sw", "io_sw", "iob_cfg", "lut_encoding", 0 };
 
 	// flush after every line is better for the autotest
 	// output, tee, etc.
@@ -1139,6 +1285,10 @@ int main(int argc, char** argv)
 	}
 	if (!strcmp(cmdline_test, "iob_cfg")) {
 		rc = test_iob_config(&tstate);
+		if (rc) FAIL(rc);
+	}
+	if (!strcmp(cmdline_test, "lut_encoding")) {
+		rc = test_lut_encoding(&tstate);
 		if (rc) FAIL(rc);
 	}
 

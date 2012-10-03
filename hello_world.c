@@ -39,11 +39,9 @@ int main(int argc, char** argv)
 
 	logic_y = 68;
 	logic_x = 13;
-	logic_type_idx = DEV_LOGX;
-	if ((rc = fdev_logic_set_lut(&model, logic_y, logic_x, logic_type_idx,
+	logic_type_idx = DEV_LOG_X;
+	if ((rc = fdev_logic_a2d_lut(&model, logic_y, logic_x, logic_type_idx,
 		LUT_D, 6, "A3*A5", ZTERM))) FAIL(rc);
-	if ((rc = fdev_logic_out_used(&model, logic_y, logic_x, logic_type_idx,
-		LUT_D))) FAIL(rc);
 
 	if ((rc = fnet_new(&model, &inA_net))) FAIL(rc);
 	if ((rc = fnet_add_port(&model, inA_net, iob_inA_y, iob_inA_x,

@@ -346,9 +346,8 @@ typedef int dev_type_idx_t;
 
 // M and L device is always at type index 0, X device
 // is always at type index 1.
-#define DEV_LOGM 0
-#define DEV_LOGL 0
-#define DEV_LOGX 1
+#define DEV_LOG_M_OR_L 0
+#define DEV_LOG_X 1
 
 // All device configuration is structured so that the value
 // 0 is never a valid configured setting. That way all config
@@ -368,14 +367,10 @@ enum {
 	// input:
 	LI_FIRST = 0,
 
-	LI_A1 = LI_FIRST,
-	LI_A2, LI_A3, LI_A4, LI_A5, LI_A6,
-	LI_B1, LI_B2, LI_B3, LI_B4, LI_B5,
-	LI_B6,
-	LI_C1, LI_C2, LI_C3, LI_C4, LI_C5,
-	LI_C6,
-	LI_D1, LI_D2, LI_D3, LI_D4, LI_D5,
-	LI_D6,
+	LI_A1 = LI_FIRST, LI_A2, LI_A3, LI_A4, LI_A5, LI_A6,
+	LI_B1, LI_B2, LI_B3, LI_B4, LI_B5, LI_B6,
+	LI_C1, LI_C2, LI_C3, LI_C4, LI_C5, LI_C6,
+	LI_D1, LI_D2, LI_D3, LI_D4, LI_D5, LI_D6,
 	LI_AX, LI_BX, LI_CX, LI_DX,
 	LI_CLK, LI_CE, LI_SR,
 	// only for L and M:
@@ -410,7 +405,7 @@ enum {
 
 enum { LUT_A = 0, LUT_B, LUT_C, LUT_D }; // offset into a2d[]
 enum { FF_SRINIT0 = 1, FF_SRINIT1 };
-enum { MUX_O6 = 1, MUX_O5, MUX_5Q, MUX_X, MUX_F7, MUX_CY, MUX_XOR };
+enum { MUX_O6 = 1, MUX_O5, MUX_5Q, MUX_X, MUX_CY, MUX_XOR, MUX_F7, MUX_F8, MUX_MC31 };
 enum { FF_OR2L = 1, FF_AND2L, FF_LATCH, FF_FF };
 enum { CY0_X = 1, CY0_O5 };
 enum { CLKINV_B = 1, CLKINV_CLK };
@@ -422,12 +417,12 @@ enum { PRECYINIT_0 = 1, PRECYINIT_1, PRECYINIT_AX };
 
 struct fpgadev_logic_a2d
 {
-	int used;
+	int out_used;
 	char* lut6;
 	char* lut5;
-	int ff_mux;	// O6, O5, X, F7, CY, XOR
+	int ff_mux;	// O6, O5, X, F7(a/c), F8(b), MC31(d), CY, XOR
 	int ff_srinit;	// SRINIT0, SRINIT1 
-	int out_mux;	// O6, O5, 5Q, F7, CY, XOR
+	int out_mux;	// O6, O5, 5Q, F7(a/c), F8(b), MC31(d), CY, XOR
 	int ff;		// OR2L, AND2L, LATCH, FF
 	int cy0;	// X, O5
 };
@@ -492,6 +487,10 @@ struct fpgadev_iob
 
 typedef int pinw_idx_t; // index into pinw array
 
+// A bram dev has about 190 pinwires (input and output
+// combined), macc about 350, mcb about 1200.
+#define MAX_NUM_PINW	2048
+
 struct fpga_device
 {
 	enum fpgadev_type type;
@@ -501,8 +500,6 @@ struct fpga_device
 	int subtype;
 	int instantiated;
 
-	// A bram dev has about 190 pinwires (input and output
-	// combined), macc about 350, mcb about 1200.
 	int num_pinw_total, num_pinw_in;
 	// The array holds first the input wires, then the output wires.
 	// Unused members are set to STRIDX_NO_ENTRY.

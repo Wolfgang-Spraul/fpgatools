@@ -245,6 +245,9 @@ const char* lut2bool(const uint64_t lut, int bits,
 	int str_end, first_op;
 	static char str[2048];
 
+	if (!lut) return "0";
+	if (lut == 0xFFFFFFFFFFFFFFFFULL) return "1";
+
 	memset(mt, 0, sizeof(mt));
 	memset(mt_size, 0, sizeof(mt_size));
 
