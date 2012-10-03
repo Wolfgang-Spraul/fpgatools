@@ -6,7 +6,8 @@
 # For details see the UNLICENSE file at the root of the source tree.
 #
 
-LIBS_VERSION = 0
+LIBS_VERSION_MAJOR = 0
+LIBS_VERSION = $(LIBS_VERSION_MAJOR).0.0
 
 LIBFPGA_BIT_OBJS       = bit_frames.o bit_regs.o
 LIBFPGA_MODEL_OBJS     = model_main.o model_tiles.o model_devices.o \
@@ -23,12 +24,26 @@ DYNAMIC_LIBS = libfpga-model.so libfpga-bit.so libfpga-floorplan.so \
 
 DYNAMIC_HEADS = bit.h control.h floorplan.h helper.h model.h parts.h
 
+SHARED_FLAGS = -shared -Wl,-soname,$@.$(LIBS_VERSION_MAJOR)
 .PHONY:	all clean install uninstall FAKE
 
-all: libfpga-model.so libfpga-bit.so libfpga-floorplan.so \
-	libfpga-control.so libfpga-cores.so
+all: $(DYNAMIC_LIBS) $(DYNAMIC_LIBS:.so=.a)
 
 include ../Makefile.common
+
+libfpga-cores.a: $(LIBFPGA_CORES_OBJS)
+
+libfpga-bit.a: $(LIBFPGA_BIT_OBJS)
+
+libfpga-model.a: $(LIBFPGA_MODEL_OBJS)
+
+libfpga-floorplan.a: $(LIBFPGA_FLOORPLAN_OBJS)
+
+libfpga-control.a: $(LIBFPGA_CONTROL_OBJS)
+
+%.a:
+	$(AR) $@ $^
+	$(RANLIB) $@
 
 libfpga-cores.so: $(LIBFPGA_CORES_OBJS)
 
@@ -41,26 +56,33 @@ libfpga-floorplan.so: $(LIBFPGA_FLOORPLAN_OBJS)
 libfpga-control.so: $(LIBFPGA_CONTROL_OBJS)
 
 %.so:
-	$(CC) $(LDFLAGS) -shared -Wl,-soname,$@.$(LIBS_VERSION) -o $@.$(LIBS_VERSION) $^
-	@rm -f $@ && ln -s $@.$(LIBS_VERSION) $@
+	$(CC) $(LDFLAGS) $(SHARED_FLAGS) -o $@.$(LIBS_VERSION) $^
+	@ln -sf $@.$(LIBS_VERSION_MAJOR) $@
+	@ln -sf $@.$(LIBS_VERSION) $@.$(LIBS_VERSION_MAJOR)
 
 %.o:	%.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) -fPIC -o $@ -c $<
 	$(MKDEP)
 
 clean:
-	rm -f $(OBJS) $(OBJS:.o=.d) $(DYNAMIC_LIBS) $(DYNAMIC_LIBS:.so=.so.$(LIBS_VERSION))
+	rm -f $(OBJS) $(OBJS:.o=.d) $(DYNAMIC_LIBS) $(DYNAMIC_LIBS:.so=.so.$(LIBS_VERSION_MAJOR))
 
 install: all
-	mkdir -p $(DESTDIR)/$(PREFIX)/lib/
 	mkdir -p $(DESTDIR)/$(PREFIX)/include/
+	mkdir -p $(DESTDIR)/$(PREFIX)/lib/
 	install -m 644 $(DYNAMIC_HEADS) $(DESTDIR)/$(PREFIX)/include/
 	for f in $(DYNAMIC_LIBS); do \
-		chrpath -d $$f.$(LIBS_VERSION) && \
+		chrpath -d $$f.$(LIBS_VERSION_MAJOR) && \
 		install -m 644 $$f.$(LIBS_VERSION) $(DESTDIR)/$(PREFIX)/lib/$$f.$(LIBS_VERSION) && \
-		(cd $(DESTDIR)/$(PREFIX)/lib/ && ln -s $$f.$(LIBS_VERSION) $$f) \
+		(cd $(DESTDIR)/$(PREFIX)/lib/ && \
+		  ln -sf $$f.$(LIBS_VERSION) $$f.$(LIBS_VERSION_MAJOR) && \
+		  ln -sf $$f.$(LIBS_VERSION_MAJOR) $$f) \
 		|| exit 1; done
+	for f in $(DYNAMIC_LIBS:.so=.a); do \
+		install -m 644 $$f $(DESTDIR)/$(PREFIX)/lib/$$f \
+		|| exit 1; done
+
 
 uninstall:
 	for f in $(DYNAMIC_HEADS); do rm -f $(DESTDIR)/$(PREFIX)/include/$$f || exit 1; done
-	for f in $(DYNAMIC_LIBS); do rm -f $(DESTDIR)/$(PREFIX)/lib/$$f* || exit 1; done
+	for f in $(DYNAMIC_LIBS) $(DYNAMIC_LIBS:.so=.a); do rm -f $(DESTDIR)/$(PREFIX)/lib/$$f* || exit 1; done
