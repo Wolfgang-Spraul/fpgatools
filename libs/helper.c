@@ -829,7 +829,7 @@ void printf_wrap(FILE* f, char* line, int prefix_len,
 	if (i >= 80) {
 		line[i] = '\n';
 		line[i+1] = 0;
-		fprintf(f, line);
+		fprintf(f, "%s", line);
 		line[prefix_len] = 0;
 		i = prefix_len;
 	}	

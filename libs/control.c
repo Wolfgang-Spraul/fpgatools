@@ -1937,7 +1937,7 @@ static void fprintf_inout_pin(FILE* f, struct fpga_model* model,
 		fdev_type2str(tile->devs[dev_idx].type),
 		fdev_typeidx(model, el->y, el->x, dev_idx),
 		pin_str);
-	fprintf(f, buf);
+	fprintf(f, "%s", buf);
 }
 
 void fnet_printf(FILE* f, struct fpga_model* model, net_idx_t net_i)
