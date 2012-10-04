@@ -65,24 +65,29 @@ libfpga-control.so: $(LIBFPGA_CONTROL_OBJS)
 	$(MKDEP)
 
 clean:
-	rm -f $(OBJS) $(OBJS:.o=.d) $(DYNAMIC_LIBS) $(DYNAMIC_LIBS:.so=.so.$(LIBS_VERSION_MAJOR))
+	rm -f $(OBJS) $(OBJS:.o=.d) $(DYNAMIC_LIBS)
+	rm -f $(DYNAMIC_LIBS:.so=.a)
+	rm -f $(DYNAMIC_LIBS:.so=.so.$(LIBS_VERSION_MAJOR))
+	rm -f $(DYNAMIC_LIBS:.so=.so.$(LIBS_VERSION))
 
 install: all
 	mkdir -p $(DESTDIR)/$(PREFIX)/include/
 	mkdir -p $(DESTDIR)/$(PREFIX)/lib/
 	install -m 644 $(DYNAMIC_HEADS) $(DESTDIR)/$(PREFIX)/include/
 	for f in $(DYNAMIC_LIBS); do \
-		chrpath -d $$f.$(LIBS_VERSION_MAJOR) && \
-		install -m 644 $$f.$(LIBS_VERSION) $(DESTDIR)/$(PREFIX)/lib/$$f.$(LIBS_VERSION) && \
-		(cd $(DESTDIR)/$(PREFIX)/lib/ && \
-		  ln -sf $$f.$(LIBS_VERSION) $$f.$(LIBS_VERSION_MAJOR) && \
-		  ln -sf $$f.$(LIBS_VERSION_MAJOR) $$f) \
-		|| exit 1; done
+	  chrpath -d $$f.$(LIBS_VERSION_MAJOR) && \
+	  install -m 644 $$f.$(LIBS_VERSION) $(DESTDIR)/$(PREFIX)/lib/$$f.$(LIBS_VERSION) && \
+	  (cd $(DESTDIR)/$(PREFIX)/lib/ && \
+	   ln -sf $$f.$(LIBS_VERSION) $$f.$(LIBS_VERSION_MAJOR) && \
+	   ln -sf $$f.$(LIBS_VERSION_MAJOR) $$f) \
+	  || exit 1; done
 	for f in $(DYNAMIC_LIBS:.so=.a); do \
-		install -m 644 $$f $(DESTDIR)/$(PREFIX)/lib/$$f \
-		|| exit 1; done
-
+	  install -m 644 $$f $(DESTDIR)/$(PREFIX)/lib/$$f \
+	  || exit 1; done
 
 uninstall:
 	for f in $(DYNAMIC_HEADS); do rm -f $(DESTDIR)/$(PREFIX)/include/$$f || exit 1; done
-	for f in $(DYNAMIC_LIBS) $(DYNAMIC_LIBS:.so=.a); do rm -f $(DESTDIR)/$(PREFIX)/lib/$$f* || exit 1; done
+	for f in $(DYNAMIC_LIBS) $(DYNAMIC_LIBS:.so=.a) \
+	  $(DYNAMIC_LIBS:.so=.so.$(LIBS_VERSION_MAJOR)) \
+	  $(DYNAMIC_LIBS:.so=.so.$(LIBS_VERSION)); do \
+	  rm -f $(DESTDIR)/$(PREFIX)/lib/$$f || exit 1; done
