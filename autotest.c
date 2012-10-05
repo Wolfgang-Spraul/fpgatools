@@ -1093,12 +1093,12 @@ fail:
 static int test_lut_encoding(struct test_state* tstate)
 {
 	int idx_enum[] = { DEV_LOG_M_OR_L, DEV_LOG_X };
-	int x_enum[] = { /*xm*/ 13, /* center-xl*/ 22, /*xl*/ 39 };
-	int y, x_i, i, j, k, lut_str_len, rc;
+	// The center column (x==22 on a xc6slx9) is a regular XL column
+	// for the lut encoding, so it doesn't need separate testing.
+	int x_enum[] = { /*xm*/ 13, /*xl*/ 39 };
+	int y, x_i, i, j, lut_str_len, rc;
 	int type_i, lut;
 	char lut_str[128];
-	const char* lut5_parents[] = {"(A6+~A6)*1", "(A6+~A6)*0",
-		"(A6+~A6)*A1", "(A6+~A6)*A3", 0};
 
 	tstate->diff_to_null = 1;
 
@@ -1135,36 +1135,35 @@ static int test_lut_encoding(struct test_state* tstate)
 					if (rc) FAIL(rc);
 				}
 				// lut6 and lut5 pairs
-				i = 0;
-				while (lut5_parents[i]) {
+				rc = test_lut(tstate, y, x_enum[x_i], idx_enum[type_i],
+					lut, /*lut6*/ "(A6+~A6)*1", /*lut5*/ "0");
+				if (rc) FAIL(rc);
+				rc = test_lut(tstate, y, x_enum[x_i], idx_enum[type_i],
+					lut, /*lut6*/ "(A6+~A6)*0", /*lut5*/ "1");
+				if (rc) FAIL(rc);
+				for (i = '1'; i <= '5'; i++) {
+					snprintf(lut_str, sizeof(lut_str), "A%c", i);
 					rc = test_lut(tstate, y, x_enum[x_i], idx_enum[type_i],
-						lut, /*lut6*/ lut5_parents[i], /*lut5*/ "0");
+						lut,
+						/*lut6*/ pf("(A6+~A6)*%s", lut_str),
+						/*lut5*/ lut_str);
 					if (rc) FAIL(rc);
+				}
+				for (i = 0; i < 32; i++) {
+					lut_str_len = 0;
+					for (j = 0; j < 5; j++) {
+						if (lut_str_len)
+							lut_str[lut_str_len++] = '*';
+						if (!(i & (1<<j)))
+							lut_str[lut_str_len++] = '~';
+						lut_str[lut_str_len++] = 'A';
+						lut_str[lut_str_len++] = '1' + j;
+					}
+					lut_str[lut_str_len] = 0;
 					rc = test_lut(tstate, y, x_enum[x_i], idx_enum[type_i],
-						lut, /*lut6*/ lut5_parents[i], /*lut5*/ "1");
+						lut, /*lut6*/ pf("(A6+~A6)*%s", lut_str),
+						/*lut5*/ lut_str);
 					if (rc) FAIL(rc);
-					for (j = '1'; j <= '5'; j++) {
-						snprintf(lut_str, sizeof(lut_str), "A%c", j);
-						rc = test_lut(tstate, y, x_enum[x_i], idx_enum[type_i],
-							lut, /*lut6*/ lut5_parents[i], /*lut5*/ lut_str);
-						if (rc) FAIL(rc);
-					}
-					for (j = 0; j < 32; j++) {
-						lut_str_len = 0;
-						for (k = 0; k < 5; k++) {
-							if (lut_str_len)
-								lut_str[lut_str_len++] = '*';
-							if (!(j & (1<<k)))
-								lut_str[lut_str_len++] = '~';
-							lut_str[lut_str_len++] = 'A';
-							lut_str[lut_str_len++] = '1' + k;
-						}
-						lut_str[lut_str_len] = 0;
-						rc = test_lut(tstate, y, x_enum[x_i], idx_enum[type_i],
-							lut, /*lut6*/ lut5_parents[i], /*lut5*/ lut_str);
-						if (rc) FAIL(rc);
-					}
-					i++;
 				}
 			}
 		}
@@ -1210,6 +1209,39 @@ int main(int argc, char** argv)
 	// output, tee, etc.
 	// for example: ./autotest 2>&1 | tee autotest.log
 	setvbuf(stdout, /*buf*/ 0, _IOLBF, /*size*/ 0);
+
+#if 0
+int lut_map1[64] = {63,62,61,60,59,58,57,56,55,54,53,52,51,50,
+	49,48,47,46,45,44,43,42,41,40,39,38,37,36,35,34,33,32,31,
+	30,29,28,27,26,25,24,23,22,21,20,19,18,17,16,15,14,13,12,11,10,
+	9,8,7,6,5,4,3,2,1,0};
+//int bool_str2bits(const char* str, uint64_t* u64, int num_bits);
+//const char* bool_bits2str(uint64_t u64, int num_bits);
+{
+	uint64_t u64, u64_2;
+
+	rc = bool_str2bits("~A6*~A5*~A4*~A3*~A2*~A1", &u64, 64);
+	printf("rc %i u64 %llX 2str %s\n", rc, u64, bool_bits2str(u64, 64));
+	rc = bool_str2bits("~A6*~A5*~A4*~A3*~A2*A1", &u64, 64);
+	printf("rc %i u64 %llX 2str %s\n", rc, u64, bool_bits2str(u64, 64));
+	rc = bool_str2bits("A6*A5*A4*A3*A2*A1", &u64, 64);
+	printf("rc %i u64 %llX 2str %s\n", rc, u64, bool_bits2str(u64, 64));
+	rc = bool_str2bits("A5*A4*A3*A2*A1", &u64, 32);
+	printf("rc %i u32 %llX 2str %s\n", rc, u64, bool_bits2str(u64, 32));
+	rc = bool_str2bits("A4*A3", &u64, 32);
+	printf("rc %i u32 %llX 2str %s\n", rc, u64, bool_bits2str(u64, 32));
+	rc = bool_str2bits("A1", &u64, 64);
+	printf("rc %i u64 %llX 2str %s\n", rc, u64, bool_bits2str(u64, 64));
+	rc = bool_str2bits("A1", &u64, 32);
+	printf("rc %i u32 %llX 2str %s\n", rc, u64, bool_bits2str(u64, 32));
+
+	u64 = 1;
+	u64_2 = map_bits(u64, 64, lut_map1);
+	printf("u %llX mapped %llX\n", u64, u64_2);
+
+	return 0;
+}
+#endif
 
 	if (argc < 2) {
 		printf_help(argv[0], available_tests);

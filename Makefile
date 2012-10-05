@@ -82,7 +82,7 @@ libs/%.so: FAKE
 test_dirs := $(shell mkdir -p test.gold test.out)
 
 DESIGN_TESTS := hello_world blinking_led
-AUTO_TESTS := logic_cfg routing_sw io_sw iob_cfg
+AUTO_TESTS := logic_cfg routing_sw io_sw iob_cfg lut_encoding
 COMPARE_TESTS := xc6slx9_tiles xc6slx9_devs xc6slx9_ports xc6slx9_conns xc6slx9_sw xc6slx9_swbits
 
 DESIGN_GOLD := $(foreach target, $(DESIGN_TESTS), test.gold/design_$(target).fp)

@@ -97,6 +97,8 @@
 #define XC6_IOB_OUTPUT_LVCMOS12_DRIVE_8		0x0014000002000000
 #define XC6_IOB_OUTPUT_LVCMOS12_DRIVE_12	0x00FC008802000000
 
+#define XC6_IOB_OUTPUT_SSTL2_I			0x0040001C00000000
+
 #define XC6_IOB_IMUX_I_B			0x0000000000000400
 #define XC6_IOB_O_PINW				0x0000000000000100
 #define XC6_IOB_SLEW_SLOW			0x0000000000000000
@@ -152,3 +154,26 @@ struct xc6_routing_bitpos
 
 int get_xc6_routing_bitpos(struct xc6_routing_bitpos** bitpos, int* num_bitpos);
 void free_xc6_routing_bitpos(struct xc6_routing_bitpos* bitpos);
+
+#define XC6_LMAP_XM_M_A 0
+#define XC6_LMAP_XM_M_B 1
+#define XC6_LMAP_XM_M_C 0
+#define XC6_LMAP_XM_M_D 1
+#define XC6_LMAP_XM_X_A 2
+#define XC6_LMAP_XM_X_B 2
+#define XC6_LMAP_XM_X_C 3
+#define XC6_LMAP_XM_X_D 3
+#define XC6_LMAP_XL_L_A 3
+#define XC6_LMAP_XL_L_B 2
+#define XC6_LMAP_XL_L_C 3
+#define XC6_LMAP_XL_L_D 2
+#define XC6_LMAP_XL_X_A 2
+#define XC6_LMAP_XL_X_B 2
+#define XC6_LMAP_XL_X_C 3
+#define XC6_LMAP_XL_X_D 3
+
+// num_bits must be 32 or 64. If it is 32, the lower
+// 32 entries of map contain the bit positions for lut5,
+// the upper 32 entries of map the ones for lut6.
+// In either case 64 entries are written to map.
+void xc6_lut_bitmap(int lut_pos, int* map, int num_bits);

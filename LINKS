@@ -13,8 +13,54 @@ Andrew's redtin logic analyzer
 gtkwave wave viewer
  http://gtkwave.sourceforge.net
 
+cores
+ https://github.com/openrisc/mor1kx
+ https://github.com/milkymist
+
 Fedora Electronic Lab tool overview
  http://spins.fedoraproject.org/fel/#portfolio
  http://chitlesh.fedorapeople.org/FEL/list.html
 
  with links to magic, toped, qucs, iverilog, alliance, etc.
+
+chip makers
+ www.xilinx.com		FPGA
+ www.altera.com		FPGA
+ Murata
+ Peregrine
+ TriQuint
+ Maxim
+ Avago
+ Skyworks
+ Analog Devices
+
+standards
+ IEEE 1149.1 Boundary Scan/JTAG
+ IEEE 1532 Configuration and Programming
+
+ http://www.xilinx.com/products/design_resources/config_sol/isp_standards_specs.htm
+
+materials
+ www.injectorall.com   photoresist
+ www.dudadiesel.com    NaOH, KOH
+ www.mtixtl.com        individual 6'' wafers
+ www.unitednuclear.com
+ www.tedpella.com/gold_html/Nanotubes.htm
+                       Carbon Nanotubes
+ www.tubedevices.com/alek/pwl/pwl_e.htm
+                       Private Tube Manufacture-PWL vacuum tubes
+
+wafer makers
+ www.oci.co.kr/eng/    OCI (South Korea)
+ www.gcl-poly.com      GCL-Poly (China)
+ www.hscpoly.com       Hemlock (USA)
+ www.wacker.com/cms/de/wacker_group/divisions/polysilicon/polysilicon.jsp
+                       Wacker (EU)
+
+semiconductor supplies
+ www.asml.com          lithography systems
+ www.kns.com           assembly equipment
+
+foundries
+ http://cmp.imag.fr/products/ic/?p=prices	CMP
+ www.lfoundry.com      analog and mixed signal

@@ -764,32 +764,31 @@ static void printf_v64_mi20(const uint8_t* bits, int row, int major)
 static void printf_lut(const uint8_t* bits, int row, int major,
 	int minor, int v32_i)
 {
-	int i, byte_off_in_frame;
-	uint32_t u32;
-	uint64_t u64;
 	char bit_str[64];
+	uint64_t u64;
+	int i, num_on_bits;
 
-	byte_off_in_frame = v32_i*4;
-	if (byte_off_in_frame >= 64)
-		byte_off_in_frame += XC6_HCLK_BYTES;
-	u64 = read_lut64(&bits[minor*FRAME_SIZE], byte_off_in_frame*8);
+	u64 = frame_get_lut64(&bits[minor*FRAME_SIZE], v32_i);
 	if (u64) {
-		for (i = 0; i < 64; i++)
-			bit_str[i] = (u64 & (1ULL << i)) ? '1' : '0';
-		printf("r%i ma%i v32_%02i mip%i_lut %.64s\n", row,
-			major, v32_i, minor, bit_str);
-
-		u32 = frame_get_u32(&bits[minor*FRAME_SIZE + byte_off_in_frame]);
-		for (i = 0; i < 32; i++)
-			bit_str[i] = (u32 & (1 << i)) ? '1' : '0';
-		printf("r%i ma%i v32_%02i mi%i_f32 %.32s\n", row, major,
-			v32_i, minor, bit_str);
-
-		u32 = frame_get_u32(&bits[(minor+1)*FRAME_SIZE + byte_off_in_frame]);
-		for (i = 0; i < 32; i++)
-			bit_str[i] = (u32 & (1 << i)) ? '1' : '0';
-		printf("r%i ma%i v32_%02i mi%i_f32 %.32s\n", row, major,
-			v32_i, minor+1, bit_str);
+		num_on_bits = 0;
+		for (i = 0; i < 64; i++) {
+			if (u64 & (1ULL << i))
+				num_on_bits++;
+		}
+		if (num_on_bits < 5) {
+			printf("r%i ma%02i v32_%02i mip%02i_lut", row,
+				major, v32_i, minor);
+			for (i = 0; i < 64; i++) {
+				if (u64 & (1ULL << i))
+					printf(" b%i", i);
+			}
+			printf("\n");
+		} else {
+			for (i = 0; i < 64; i++)
+				bit_str[i] = (u64 & (1ULL << i)) ? '1' : '0';
+			printf("r%i ma%02i v32_%02i mip%02i_lut %.64s\n", row,
+				major, v32_i, minor, bit_str);
+		}
 	}
 }
 
@@ -833,6 +832,8 @@ static int dump_maj_center(const uint8_t* bits, int row, int major)
 {
 	int minor, i;
 
+	if (get_major_minors(XC6SLX9, major) != 31) HERE();
+
 	for (minor = 0; minor < get_major_minors(XC6SLX9, major); minor++)
 		printf_clock(&bits[minor*FRAME_SIZE], row, major, minor);
 
@@ -850,16 +851,25 @@ static int dump_maj_center(const uint8_t* bits, int row, int major)
 		printf_lut(bits, row, major, 21, i*2+1);
 		printf_lut(bits, row, major, 23, i*2+1);
 	}
-
-	for (minor = 25; minor < get_major_minors(XC6SLX9, major); minor++)
-		printf_frames(&bits[minor*FRAME_SIZE], /*max_frames*/ 1,
-			row, major, minor, /*print_empty*/ 0, /*no_clock*/ 1);
+	printf_frames(&bits[25*FRAME_SIZE], /*max_frames*/ 1,
+		row, major, 25, /*print_empty*/ 0, /*no_clock*/ 1);
+	// X devices
+	for (i = 0; i < 16; i++) {
+		printf_lut(bits, row, major, 26, i*2);
+		printf_lut(bits, row, major, 28, i*2);
+		printf_lut(bits, row, major, 26, i*2+1);
+		printf_lut(bits, row, major, 28, i*2+1);
+	}
+	printf_frames(&bits[30*FRAME_SIZE], /*max_frames*/ 1,
+		row, major, 30, /*print_empty*/ 0, /*no_clock*/ 1);
 	return 0;
 }
 
 static int dump_maj_logic_xm(const uint8_t* bits, int row, int major)
 {
 	int minor, i;
+
+	if (get_major_minors(XC6SLX9, major) != 31) HERE();
 
 	for (minor = 0; minor < get_major_minors(XC6SLX9, major); minor++)
 		printf_clock(&bits[minor*FRAME_SIZE], row, major, minor);
@@ -902,6 +912,8 @@ static int dump_maj_logic_xl(const uint8_t* bits, int row, int major)
 {
 	int minor, i;
 
+	if (get_major_minors(XC6SLX9, major) != 30) HERE();
+
 	for (minor = 0; minor < get_major_minors(XC6SLX9, major); minor++)
 		printf_clock(&bits[minor*FRAME_SIZE], row, major, minor);
 
@@ -919,10 +931,15 @@ static int dump_maj_logic_xl(const uint8_t* bits, int row, int major)
 		printf_lut(bits, row, major, 21, i*2+1);
 		printf_lut(bits, row, major, 23, i*2+1);
 	}
-
-	for (minor = 25; minor < get_major_minors(XC6SLX9, major); minor++)
-		printf_frames(&bits[minor*FRAME_SIZE], /*max_frames*/ 1,
-			row, major, minor, /*print_empty*/ 0, /*no_clock*/ 1);
+	printf_frames(&bits[25*FRAME_SIZE], /*max_frames*/ 1,
+		row, major, 25, /*print_empty*/ 0, /*no_clock*/ 1);
+	// X devices
+	for (i = 0; i < 16; i++) {
+		printf_lut(bits, row, major, 26, i*2);
+		printf_lut(bits, row, major, 28, i*2);
+		printf_lut(bits, row, major, 26, i*2+1);
+		printf_lut(bits, row, major, 28, i*2+1);
+	}
 	return 0;
 }
 

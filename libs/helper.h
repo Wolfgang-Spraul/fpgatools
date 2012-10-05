@@ -57,8 +57,11 @@ typedef struct _cfg_atom
 int atom_found(char* bits, const cfg_atom_t* atom);
 void atom_remove(char* bits, const cfg_atom_t* atom);
 
+uint64_t map_bits(uint64_t u64, int num_bits, int* dest_pos);
+int bool_str2bits(const char* str, uint64_t* u64, int num_bits);
+const char* bool_bits2str(uint64_t u64, int num_bits);
+
 int parse_boolexpr(const char* expr, uint64_t* lut);
-void printf_lut6(const char* cfg);
 // bits is tested only for 32 and 64
 const char* lut2bool(const uint64_t lut, int bits,
 	int (*logic_base)[6], int flip_b0);
@@ -82,6 +85,12 @@ void frame_set_u8(uint8_t* frame_d, uint8_t v);
 void frame_set_u16(uint8_t* frame_d, uint16_t v);
 void frame_set_u32(uint8_t* frame_d, uint32_t v);
 void frame_set_u64(uint8_t* frame_d, uint64_t v);
+
+uint64_t frame_get_lut64(const uint8_t* two_minors, int v32);
+// In a lut pair, LOW32 is lut5, HIGH32 is lut6.
+#define ULL_LOW32(v)	((uint32_t) (((uint64_t)v) & 0xFFFFFFFFULL))
+#define ULL_HIGH32(v)	((uint32_t) (((uint64_t)v) >> 32))
+void frame_set_lut64(uint8_t* two_minors, int v32, uint64_t v);
 
 // if row is negative, it's an absolute frame number and major and
 // minor are ignored

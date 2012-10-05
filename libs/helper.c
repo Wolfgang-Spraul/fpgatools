@@ -6,6 +6,7 @@
 //
 
 #include <stdarg.h>
+#include <errno.h>
 #include "helper.h"
 #include "parts.h"
 
@@ -177,6 +178,157 @@ fail:
 	return -1;
 }
 
+uint64_t map_bits(uint64_t u64, int num_bits, int* dest_pos)
+{
+	uint64_t result;
+	int i;
+
+	result = 0;
+	for (i = 0; i < num_bits; i++) {
+		if (u64 & (1ULL<<i))
+			result |= 1ULL<<(dest_pos[i]);
+	}
+	return result;
+}
+
+int bool_str2bits(const char* str, uint64_t* u64, int num_bits)
+{
+	int i, j, bool_res, rc, vars[6];
+
+	if (num_bits != 32 && num_bits != 64) HERE();
+	*u64 = 0;
+	for (i = 0; i < num_bits; i++) {
+		for (j = 0; j < sizeof(vars)/sizeof(*vars); j++)
+			vars[j] = (i & (1<<j)) != 0;
+		bool_res = bool_eval(str, strlen(str), vars);
+		if (bool_res == -1) FAIL(EINVAL);
+		if (bool_res) *u64 |= 1ULL<<i;
+	}
+	return 0;
+fail:
+	return rc;
+}
+
+typedef struct _minterm_entry
+{
+	char a[6]; // 0=A1, 5=A6. value can be 0, 1 or 2 for 'removed'
+	int merged;
+} minterm_entry;
+
+const char* bool_bits2str(uint64_t u64, int num_bits)
+{
+	// round 0 needs 64 entries
+	// round 1 (size2): 192
+	// round 2 (size4): 240
+	// round 3 (size8): 160
+	// round 4 (size16): 60
+	// round 5 (size32): 12
+	// round 6 (size64): 1
+	minterm_entry mt[7][256];
+	int mt_size[7];
+	int i, j, k, round, only_diff_bit;
+	int str_end, first_op, bit_width;
+	static char str[2048];
+
+	if (num_bits == 64)
+		bit_width = 6;
+	else if (num_bits == 32)
+		bit_width = 5;
+	else {
+		HERE();
+		return "0";
+	}
+	if (!u64) return "0";
+	if (u64 == 0xFFFFFFFFFFFFFFFFULL) return "1";
+
+	memset(mt, 0, sizeof(mt));
+	memset(mt_size, 0, sizeof(mt_size));
+
+	// set starting minterms
+	for (i = 0; i < num_bits; i++) {
+		if (u64 & (1ULL<<i)) {
+			for (j = 0; j < bit_width; j++) {
+				if (i&(1<<j))
+					mt[0][mt_size[0]].a[j] = 1;
+			}
+			mt_size[0]++;
+		}
+	}
+
+	// go through five rounds of merging
+	for (round = 1; round < 7; round++) {
+		for (i = 0; i < mt_size[round-1]; i++) {
+			for (j = i+1; j < mt_size[round-1]; j++) {
+				only_diff_bit = -1;
+				for (k = 0; k < bit_width; k++) {
+					if (mt[round-1][i].a[k] != mt[round-1][j].a[k]) {
+						if (only_diff_bit != -1) {
+							only_diff_bit = -1;
+							break;
+						}
+						only_diff_bit = k;
+					}
+				}
+				if (only_diff_bit != -1) {
+					char new_term[6];
+	
+					for (k = 0; k < bit_width; k++)
+						new_term[k] =
+						  (k == only_diff_bit) ? 2 
+						    : mt[round-1][i].a[k];
+					for (k = 0; k < mt_size[round]; k++) {
+						if (new_term[0] == mt[round][k].a[0]
+						    && new_term[1] == mt[round][k].a[1]
+						    && new_term[2] == mt[round][k].a[2]
+						    && new_term[3] == mt[round][k].a[3]
+						    && new_term[4] == mt[round][k].a[4]
+						    && new_term[5] == mt[round][k].a[5])
+							break;
+					}
+					if (k >= mt_size[round]) {
+						mt[round][mt_size[round]].a[0] = new_term[0];
+						mt[round][mt_size[round]].a[1] = new_term[1];
+						mt[round][mt_size[round]].a[2] = new_term[2];
+						mt[round][mt_size[round]].a[3] = new_term[3];
+						mt[round][mt_size[round]].a[4] = new_term[4];
+						mt[round][mt_size[round]].a[5] = new_term[5];
+						mt_size[round]++;
+					}
+					mt[round-1][i].merged = 1;
+					mt[round-1][j].merged = 1;
+				}
+			}
+		}
+	}
+
+	str_end = 0;
+	for (round = 0; round < 7; round++) {
+		for (i = 0; i < mt_size[round]; i++) {
+			if (!mt[round][i].merged) {
+				if (str_end)
+					str[str_end++] = '+';
+				first_op = 1;
+				for (j = 0; j < bit_width; j++) {
+					if (mt[round][i].a[j] != 2) {
+						if (!first_op)
+							str[str_end++] = '*';
+						if (!mt[round][i].a[j])
+							str[str_end++] = '~';
+						str[str_end++] = 'A';
+						str[str_end++] = '1' + j;
+						first_op = 0;
+					}
+				}
+			}
+		}
+	}
+	str[str_end] = 0;
+
+	// TODO: This could be further simplified, see Petrick's method.
+	// XOR don't simplify well, try A2@A3
+	return str;
+}
+
 int parse_boolexpr(const char* expr, uint64_t* lut)
 {
 	int i, j, result, vars[6];
@@ -197,36 +349,6 @@ int parse_boolexpr(const char* expr, uint64_t* lut)
 	}
 	return 0;
 }
-
-void printf_lut6(const char* cfg)
-{
-	uint64_t lut;
-	uint32_t first_major, second_major;
-	int i;
-
-	first_major = 0;
-	second_major = 0;
-	// todo: this is missing the different base_values, flip_b0 etc.
-	parse_boolexpr(cfg, &lut);
-
-	for (i = 0; i < 16; i++) {
-		if (lut & (1LL<<(i*4)))
-			first_major |= 1<<(i*2);
-		if (lut & (1LL<<(i*4+1)))
-			first_major |= 1<<(i*2+1);
-		if (lut & (1LL<<(i*4+2)))
-			second_major |= 1<<(i*2);
-		if (lut & (1LL<<(i*4+3)))
-			second_major |= 1<<(i*2+1);
-	}
-	printf("first_major 0x%X second_major 0x%X\n", first_major, second_major);
-}
-
-typedef struct _minterm_entry
-{
-	char a[6]; // 0=A1, 5=A6. value can be 0, 1 or 2 for 'removed'
-	int merged;
-} minterm_entry;
 
 // bits is tested only for 32 and 64
 const char* lut2bool(const uint64_t lut, int bits,
@@ -572,6 +694,48 @@ void frame_set_u64(uint8_t* frame_d, uint64_t v)
 	high_w = v >> 32;
 	frame_set_u32(frame_d, low_w);
 	frame_set_u32(frame_d+4, high_w);
+}
+
+uint64_t frame_get_lut64(const uint8_t* two_minors, int v32)
+{
+	int off_in_frame, i;
+	uint32_t m0, m1;
+	uint64_t lut64;
+
+	off_in_frame = v32*4;
+	if (off_in_frame >= 64)
+		off_in_frame += XC6_HCLK_BYTES;
+
+	m0 = frame_get_u32(&two_minors[off_in_frame]);
+	m1 = frame_get_u32(&two_minors[FRAME_SIZE + off_in_frame]);
+	lut64 = 0;
+	for (i = 0; i < 32; i++) {
+		if (m0 & (1<<i)) lut64 |= 1ULL << (2*i);
+		if (m1 & (1<<i)) lut64 |= 1ULL << (2*i+1);
+	}
+	return lut64;
+}
+
+void frame_set_lut64(uint8_t* two_minors, int v32, uint64_t v)
+{
+	int off_in_frame, i;
+	uint32_t m0, m1;
+
+	m0 = 0;
+	m1 = 0;
+	for (i = 0; i < 64; i++) {
+		if (v & (1ULL << i)) {
+			if (i%2)
+				m1 |= 1<<(i/2);
+			else
+				m0 |= 1<<(i/2);
+		}
+	}
+	off_in_frame = v32*4;
+	if (off_in_frame >= 64)
+		off_in_frame += XC6_HCLK_BYTES;
+	frame_set_u32(&two_minors[off_in_frame], m0);
+	frame_set_u32(&two_minors[FRAME_SIZE + off_in_frame], m1);
 }
 
 int printf_frames(const uint8_t* bits, int max_frames,

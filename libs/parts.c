@@ -809,3 +809,42 @@ void free_xc6_routing_bitpos(struct xc6_routing_bitpos* bitpos)
 {
 	free(bitpos);
 }
+
+void xc6_lut_bitmap(int lut_pos, int* map, int num_bits)
+{
+	static const int xc6_lut_wiring[4][16] = {
+	// xm-m a; xm-m c;
+	  { 17, 19, 16, 18, 23, 21, 22, 20, 31, 29, 30, 28, 25, 27, 24, 26 },
+	// xm-m b; xm-m d;
+	  { 47, 45, 46, 44, 41, 43, 40, 42, 33, 35, 32, 34, 39, 37, 38, 36 },
+	// xm-x a; xm-x b; xl-l b; xl-l d; xl-x a; xl-x b;
+	  { 31, 29, 30, 28, 27, 25, 26, 24, 19, 17, 18, 16, 23, 21, 22, 20 },
+	// xm-x c; xm-x d; xl-l a; xl-l c; xl-x c; xl-x d;
+	  { 33, 35, 32, 34, 37, 39, 36, 38, 45, 47, 44, 46, 41, 43, 40, 42 }};
+
+	int map32[32];
+	int i;
+
+	// expand from 16 to 32 bit positions
+	for (i = 0; i < 16; i++) {
+		map32[i] = xc6_lut_wiring[lut_pos][i];
+		if (map32[i] < 32) {
+			if (map32[i] < 16) HERE();
+			map32[16+i] = map32[i]-16;
+		} else {
+			if (map32[i] > 47) HERE();
+			map32[16+i] = map32[i]+16;
+		}
+	}
+	// expand from 32 to 64 for either lut6 only or lut5/lut6 pair.
+	for (i = 0; i < 32; i++) {
+		if (num_bits == 32) {
+			map[i] = map32[i]%32;
+			map[32+i] = 32+map[i];
+		} else {
+			if (num_bits != 64) HERE();
+			map[i] = map32[i];
+			map[32+i] = (map[i]+32)%64;
+		}
+	}
+}

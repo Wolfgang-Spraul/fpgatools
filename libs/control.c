@@ -478,7 +478,6 @@ int fdev_logic_a2d_lut(struct fpga_model* model, int y, int x, int type_idx,
 	// todo: the logic by which we auto-enable the direct
 	//       output could have more cases, the O6 signal
 	//	 could go into the carry chain/XOR/CY, F7/F8, others?
-	//	 O5 could go into carry chain/XOR/CY, others?
 	//       We need to find out over time what makes sense for
 	//	 the caller.
 	if (lut_5or6 == 6
@@ -486,6 +485,7 @@ int fdev_logic_a2d_lut(struct fpga_model* model, int y, int x, int type_idx,
 	    && dev->u.logic.a2d[lut_a2d].out_mux != MUX_O6)
 		dev->u.logic.a2d[lut_a2d].out_used = 1;
 	if (lut_5or6 == 5
+	    && dev->u.logic.a2d[lut_a2d].cy0 != CY0_O5
 	    && dev->u.logic.a2d[lut_a2d].ff_mux != MUX_O5
 	    && !dev->u.logic.a2d[lut_a2d].out_mux)
 		dev->u.logic.a2d[lut_a2d].out_mux = MUX_O5;
