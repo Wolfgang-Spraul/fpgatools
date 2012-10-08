@@ -422,6 +422,7 @@ struct fpgadev_logic_a2d
 	char* lut5;
 	int ff_mux;	// O6, O5, X, F7(a/c), F8(b), MC31(d), CY, XOR
 	int ff_srinit;	// SRINIT0, SRINIT1 
+	int ff5_srinit; // SRINIT0, SRINIT1
 	int out_mux;	// O6, O5, 5Q, F7(a/c), F8(b), MC31(d), CY, XOR
 	int ff;		// OR2L, AND2L, LATCH, FF
 	int cy0;	// X, O5

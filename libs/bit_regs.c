@@ -744,7 +744,7 @@ static void printf_routing_2minors(const uint8_t* bits, int row, int major,
 
 static void printf_v64_mi20(const uint8_t* bits, int row, int major)
 {
-	int y, i, hclk;
+	int y, i, num_bits_on, hclk;
 	uint64_t u64;
 	char bit_str[65];
 
@@ -757,6 +757,19 @@ static void printf_v64_mi20(const uint8_t* bits, int row, int major)
 				bit_str[i] = (u64 & (1ULL << i)) ? '1' : '0';
 			printf("r%i ma%i v64_%02i mi20 %s\n",
 				row, major, y, bit_str);
+			num_bits_on = 0;
+			for (i = 0; i < 64; i++) {
+				if (u64 & (1ULL << i))
+					num_bits_on++;
+			}
+			if (num_bits_on < 3) {
+				for (i = 0; i < 64; i++) {
+					if (!(u64 & (1ULL << i)))
+						continue;
+					printf("r%i ma%i v64_%02i mi20 b%i\n",
+						row, major, y, i);
+				}
+			}
 		}
 	}
 }
@@ -766,16 +779,16 @@ static void printf_lut(const uint8_t* bits, int row, int major,
 {
 	char bit_str[64];
 	uint64_t u64;
-	int i, num_on_bits;
+	int i, num_bits_on;
 
 	u64 = frame_get_lut64(&bits[minor*FRAME_SIZE], v32_i);
 	if (u64) {
-		num_on_bits = 0;
+		num_bits_on = 0;
 		for (i = 0; i < 64; i++) {
 			if (u64 & (1ULL << i))
-				num_on_bits++;
+				num_bits_on++;
 		}
-		if (num_on_bits < 5) {
+		if (num_bits_on < 5) {
 			printf("r%i ma%02i v32_%02i mip%02i_lut", row,
 				major, v32_i, minor);
 			for (i = 0; i < 64; i++) {

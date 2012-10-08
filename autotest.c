@@ -125,70 +125,6 @@ fail:
 	return rc;
 }
 
-// goal: configure logic devices in all supported variations
-static int test_logic_config(struct test_state* tstate)
-{
-	int idx_enum[] = { DEV_LOG_M_OR_L, DEV_LOG_X };
-	int y, x, i, j, k, rc;
-
-        y = 68;
-	x = 13;
-
-	for (i = 0; i < sizeof(idx_enum)/sizeof(*idx_enum); i++) {
-		for (j = LUT_A; j <= LUT_D; j++) {
-
-			// A1..A6 to A..D
-			for (k = '1'; k <= '6'; k++) {
-				rc = fdev_logic_a2d_lut(tstate->model, y, x,
-					idx_enum[i], j, 6, pf("A%c", k), ZTERM);
-				if (rc) FAIL(rc);
-				rc = fdev_set_required_pins(tstate->model, y, x,
-					DEV_LOGIC, idx_enum[i]);
-				if (rc) FAIL(rc);
-
-				if (tstate->dry_run)
-					fdev_print_required_pins(tstate->model,
-						y, x, DEV_LOGIC, idx_enum[i]);
-				rc = diff_printf(tstate);
-				if (rc) FAIL(rc);
-				fdev_delete(tstate->model, y, x, DEV_LOGIC, idx_enum[i]);
-			}
-
-			// A1 to O6 to FF to AQ
-			rc = fdev_logic_a2d_lut(tstate->model, y, x,
-				idx_enum[i], j, 6, "A1", ZTERM);
-			if (rc) FAIL(rc);
-			rc = fdev_logic_a2d_ff(tstate->model, y, x, idx_enum[i],
-				j, MUX_O6, FF_SRINIT0);
-			if (rc) FAIL(rc);
-			rc = fdev_logic_sync(tstate->model, y, x, idx_enum[i],
-				SYNCATTR_ASYNC);
-			if (rc) FAIL(rc);
-			rc = fdev_logic_clk(tstate->model, y, x, idx_enum[i],
-				CLKINV_B);
-			if (rc) FAIL(rc);
-			rc = fdev_logic_ce_used(tstate->model, y, x, idx_enum[i]);
-			if (rc) FAIL(rc);
-			rc = fdev_logic_sr_used(tstate->model, y, x, idx_enum[i]);
-			if (rc) FAIL(rc);
-
-			rc = fdev_set_required_pins(tstate->model, y, x,
-				DEV_LOGIC, idx_enum[i]);
-			if (rc) FAIL(rc);
-
-			if (tstate->dry_run)
-				fdev_print_required_pins(tstate->model,
-					y, x, DEV_LOGIC, idx_enum[i]);
-			rc = diff_printf(tstate);
-			if (rc) FAIL(rc);
-			fdev_delete(tstate->model, y, x, DEV_LOGIC, idx_enum[i]);
-		}
-	}
-	return 0;
-fail:
-	return rc;
-}
-
 static int test_logic_net(struct test_state* tstate, int logic_y, int logic_x,
 	int type_idx, pinw_idx_t port, const struct sw_set* logic_switch_set,
 	int routing_y, int routing_x, swidx_t routing_sw1, swidx_t routing_sw2)
@@ -1026,27 +962,26 @@ fail:
 	return rc;
 }
 
-static int test_lut(struct test_state* tstate, int y, int x, int type_idx,
-	int lut, const char* lut6, const char* lut5)
+static int test_logic(struct test_state* tstate, int y, int x, int type_idx,
+	const struct fpgadev_logic* logic_cfg)
 {
 	struct fpga_device* dev;
 	net_idx_t pinw_nets[MAX_NUM_PINW];
-	int i, rc;
+	int i, lut, rc;
 
-	if (tstate->dry_run)
-		printf("O lut6 '%s' lut5 '%s'\n",
-			lut6 ? lut6 : "-", lut5 ? lut5 : "-");
-	if (lut6) {
-		rc = fdev_logic_a2d_lut(tstate->model, y, x,
-			type_idx, lut, 6, lut6, ZTERM);
-		if (rc) FAIL(rc);
+	if (tstate->dry_run) {
+		for (lut = LUT_A; lut <= LUT_D; lut++) {
+			if (!logic_cfg->a2d[lut].lut6
+			    && !logic_cfg->a2d[lut].lut5)
+				continue;
+			printf("O %c6_lut '%s' %c5_lut '%s'\n",
+				'A'+lut, logic_cfg->a2d[lut].lut6
+					? logic_cfg->a2d[lut].lut6 : "-",
+				'A'+lut, logic_cfg->a2d[lut].lut5
+					? logic_cfg->a2d[lut].lut5 : "-");
+		}
 	}
-	if (lut5) {
-		rc = fdev_logic_a2d_lut(tstate->model, y, x,
-			type_idx, lut, 5, lut5, ZTERM);
-		if (rc) FAIL(rc);
-	}
-	rc = fdev_set_required_pins(tstate->model, y, x, DEV_LOGIC, type_idx);
+	rc = fdev_logic_setconf(tstate->model, y, x, type_idx, logic_cfg);
 	if (rc) FAIL(rc);
 	if (tstate->dry_run) {
 		fdev_print_required_pins(tstate->model, y, x,
@@ -1090,6 +1025,90 @@ fail:
 	return rc;
 }
 
+static int test_logic_enum_precyinit(struct test_state* tstate, int y, int x,
+	int type_idx, const struct fpgadev_logic* logic_cfg)
+{
+	struct fpgadev_logic local_cfg = *logic_cfg;
+	int rc;
+
+	rc = test_logic(tstate, y, x, type_idx, &local_cfg);
+	if (rc) FAIL(rc);
+	local_cfg.precyinit = PRECYINIT_0;
+	rc = test_logic(tstate, y, x, type_idx, &local_cfg);
+	if (rc) FAIL(rc);
+	local_cfg.precyinit = PRECYINIT_1;
+	rc = test_logic(tstate, y, x, type_idx, &local_cfg);
+	if (rc) FAIL(rc);
+	local_cfg.precyinit = PRECYINIT_AX;
+	rc = test_logic(tstate, y, x, type_idx, &local_cfg);
+	if (rc) FAIL(rc);
+	return 0;
+fail:
+	return rc;
+}
+
+static int test_logic_enum_srinit_clk_sync_ce_sr(struct test_state* tstate, int y,
+	int x, int type_idx, const struct fpgadev_logic* logic_cfg)
+{
+	struct fpgadev_logic local_cfg = *logic_cfg;
+	int lut, rc;
+
+	for (lut = LUT_A; lut <= LUT_D; lut++) {
+
+		if (!local_cfg.a2d[lut].ff_mux
+		    && !local_cfg.a2d[lut].out_mux)
+			continue;
+
+		if (local_cfg.a2d[lut].ff_mux)
+			local_cfg.a2d[lut].ff_srinit = FF_SRINIT0;
+		if (local_cfg.a2d[lut].out_mux == MUX_5Q)
+			local_cfg.a2d[lut].ff5_srinit = FF_SRINIT0;
+		local_cfg.clk_inv = CLKINV_CLK;
+		local_cfg.sync_attr = SYNCATTR_ASYNC;
+		local_cfg.ce_used = 0;
+		local_cfg.sr_used = 0;
+	
+		rc = test_logic(tstate, y, x, type_idx, &local_cfg);
+		if (rc) FAIL(rc);
+	
+		if (local_cfg.a2d[lut].ff_mux) {
+			local_cfg.a2d[lut].ff_srinit = FF_SRINIT1;
+			rc = test_logic(tstate, y, x, type_idx, &local_cfg);
+			if (rc) FAIL(rc);
+			local_cfg.a2d[lut].ff_srinit = FF_SRINIT0;
+		}
+		if (local_cfg.a2d[lut].out_mux == MUX_5Q) {
+			local_cfg.a2d[lut].ff5_srinit = FF_SRINIT1;
+			rc = test_logic(tstate, y, x, type_idx, &local_cfg);
+			if (rc) FAIL(rc);
+			local_cfg.a2d[lut].ff5_srinit = FF_SRINIT0;
+		}
+	
+		local_cfg.clk_inv = CLKINV_B;
+		rc = test_logic(tstate, y, x, type_idx, &local_cfg);
+		if (rc) FAIL(rc);
+		local_cfg.clk_inv = CLKINV_CLK;
+	
+		local_cfg.sync_attr = SYNCATTR_SYNC;
+		rc = test_logic(tstate, y, x, type_idx, &local_cfg);
+		if (rc) FAIL(rc);
+		local_cfg.sync_attr = SYNCATTR_ASYNC;
+	
+		local_cfg.ce_used = 1;
+		rc = test_logic(tstate, y, x, type_idx, &local_cfg);
+		if (rc) FAIL(rc);
+		local_cfg.ce_used = 0;
+	
+		local_cfg.sr_used = 1;
+		rc = test_logic(tstate, y, x, type_idx, &local_cfg);
+		if (rc) FAIL(rc);
+		local_cfg.sr_used = 0;
+	}
+	return 0;
+fail:
+	return rc;
+}
+
 static int test_lut_encoding(struct test_state* tstate)
 {
 	int idx_enum[] = { DEV_LOG_M_OR_L, DEV_LOG_X };
@@ -1097,8 +1116,9 @@ static int test_lut_encoding(struct test_state* tstate)
 	// for the lut encoding, so it doesn't need separate testing.
 	int x_enum[] = { /*xm*/ 13, /*xl*/ 39 };
 	int y, x_i, i, j, lut_str_len, rc;
+	struct fpgadev_logic logic_cfg;
 	int type_i, lut;
-	char lut_str[128];
+	char lut6_str[128], lut5_str[128];
 
 	tstate->diff_to_null = 1;
 
@@ -1106,68 +1126,408 @@ static int test_lut_encoding(struct test_state* tstate)
 	for (x_i = 0; x_i < sizeof(x_enum)/sizeof(*x_enum); x_i++) {
 		for (type_i = 0; type_i < sizeof(idx_enum)/sizeof(*idx_enum); type_i++) {
 			for (lut = LUT_A; lut <= LUT_D; lut++) {
+				memset(&logic_cfg, 0, sizeof(logic_cfg));
+				logic_cfg.a2d[lut].lut6 = lut6_str;
+				logic_cfg.a2d[lut].out_used = 1;
+
 				// lut6 only
-				rc = test_lut(tstate, y, x_enum[x_i], idx_enum[type_i],
-					lut, "0", /*lut5*/ 0);
+				sprintf(lut6_str, "0");
+				rc = test_logic(tstate, y, x_enum[x_i], idx_enum[type_i],
+					&logic_cfg);
 				if (rc) FAIL(rc);
-				rc = test_lut(tstate, y, x_enum[x_i], idx_enum[type_i],
-					lut, "1", /*lut5*/ 0);
+				sprintf(lut6_str, "1");
+				rc = test_logic(tstate, y, x_enum[x_i], idx_enum[type_i],
+					&logic_cfg);
 				if (rc) FAIL(rc);
 				for (i = '1'; i <= '6'; i++) {
-					snprintf(lut_str, sizeof(lut_str), "A%c", i);
-					rc = test_lut(tstate, y, x_enum[x_i], idx_enum[type_i],
-						lut, lut_str, /*lut5*/ 0);
+					sprintf(lut6_str, "A%c", i);
+					rc = test_logic(tstate, y, x_enum[x_i], idx_enum[type_i],
+						&logic_cfg);
 					if (rc) FAIL(rc);
 				}
 				for (i = 0; i < 64; i++) {
 					lut_str_len = 0;
 					for (j = 0; j < 6; j++) {
 						if (lut_str_len)
-							lut_str[lut_str_len++] = '*';
+							lut6_str[lut_str_len++] = '*';
 						if (!(i & (1<<j)))
-							lut_str[lut_str_len++] = '~';
-						lut_str[lut_str_len++] = 'A';
-						lut_str[lut_str_len++] = '1' + j;
+							lut6_str[lut_str_len++] = '~';
+						lut6_str[lut_str_len++] = 'A';
+						lut6_str[lut_str_len++] = '1' + j;
 					}
-					lut_str[lut_str_len] = 0;
-					rc = test_lut(tstate, y, x_enum[x_i], idx_enum[type_i],
-						lut, lut_str, /*lut5*/ 0);
+					lut6_str[lut_str_len] = 0;
+					rc = test_logic(tstate, y, x_enum[x_i], idx_enum[type_i],
+						&logic_cfg);
 					if (rc) FAIL(rc);
 				}
+
 				// lut6 and lut5 pairs
-				rc = test_lut(tstate, y, x_enum[x_i], idx_enum[type_i],
-					lut, /*lut6*/ "(A6+~A6)*1", /*lut5*/ "0");
+				logic_cfg.a2d[lut].lut5 = lut5_str;
+				logic_cfg.a2d[lut].out_mux = MUX_O5;
+
+				sprintf(lut6_str, "(A6+~A6)*1");
+				sprintf(lut5_str, "0");
+				rc = test_logic(tstate, y, x_enum[x_i], idx_enum[type_i],
+					&logic_cfg);
 				if (rc) FAIL(rc);
-				rc = test_lut(tstate, y, x_enum[x_i], idx_enum[type_i],
-					lut, /*lut6*/ "(A6+~A6)*0", /*lut5*/ "1");
+				sprintf(lut6_str, "(A6+~A6)*0");
+				sprintf(lut5_str, "1");
+				rc = test_logic(tstate, y, x_enum[x_i], idx_enum[type_i],
+					&logic_cfg);
 				if (rc) FAIL(rc);
 				for (i = '1'; i <= '5'; i++) {
-					snprintf(lut_str, sizeof(lut_str), "A%c", i);
-					rc = test_lut(tstate, y, x_enum[x_i], idx_enum[type_i],
-						lut,
-						/*lut6*/ pf("(A6+~A6)*%s", lut_str),
-						/*lut5*/ lut_str);
+					sprintf(lut5_str, "A%c", i);
+					sprintf(lut6_str, "(A6+~A6)*%s", lut5_str);
+					rc = test_logic(tstate, y, x_enum[x_i], idx_enum[type_i],
+						&logic_cfg);
 					if (rc) FAIL(rc);
 				}
 				for (i = 0; i < 32; i++) {
 					lut_str_len = 0;
 					for (j = 0; j < 5; j++) {
 						if (lut_str_len)
-							lut_str[lut_str_len++] = '*';
+							lut5_str[lut_str_len++] = '*';
 						if (!(i & (1<<j)))
-							lut_str[lut_str_len++] = '~';
-						lut_str[lut_str_len++] = 'A';
-						lut_str[lut_str_len++] = '1' + j;
+							lut5_str[lut_str_len++] = '~';
+						lut5_str[lut_str_len++] = 'A';
+						lut5_str[lut_str_len++] = '1' + j;
 					}
-					lut_str[lut_str_len] = 0;
-					rc = test_lut(tstate, y, x_enum[x_i], idx_enum[type_i],
-						lut, /*lut6*/ pf("(A6+~A6)*%s", lut_str),
-						/*lut5*/ lut_str);
+					lut5_str[lut_str_len] = 0;
+					sprintf(lut6_str, "(A6+~A6)*%s", lut5_str);
+					rc = test_logic(tstate, y, x_enum[x_i], idx_enum[type_i],
+						&logic_cfg);
 					if (rc) FAIL(rc);
 				}
 			}
 		}
 	}
+	return 0;
+fail:
+	return rc;
+}
+
+// goal: configure logic devices in all supported variations
+static int test_logic_config(struct test_state* tstate)
+{
+	int idx_enum[] = { DEV_LOG_M_OR_L, DEV_LOG_X };
+	// The center column (x==22 on a xc6slx9) appears idential
+	// in configuration to a regular XL column so it is normally
+	// not included separately. Add when needed.
+	int x_enum[] = { /*xm*/ 13, /*xl*/ 39 };
+	int y, x_i, rc;
+	int type_i, lut;
+	struct fpgadev_logic logic_cfg;
+
+	tstate->diff_to_null = 1;
+
+	y = 68;
+	for (x_i = 0; x_i < sizeof(x_enum)/sizeof(*x_enum); x_i++) {
+		for (type_i = 0; type_i < sizeof(idx_enum)/sizeof(*idx_enum); type_i++) {
+			for (lut = LUT_A; lut <= LUT_D; lut++) {
+
+				// lut6, direct-out
+				memset(&logic_cfg, 0, sizeof(logic_cfg));
+				logic_cfg.a2d[lut].lut6 = "A1";
+				logic_cfg.a2d[lut].out_used = 1;
+
+				rc = test_logic(tstate, y, x_enum[x_i],
+					idx_enum[type_i], &logic_cfg);
+				if (rc) FAIL(rc);
+
+				// lut6, mux-out
+				memset(&logic_cfg, 0, sizeof(logic_cfg));
+				logic_cfg.a2d[lut].lut6 = "A1";
+				logic_cfg.a2d[lut].out_mux = MUX_O6;
+
+				rc = test_logic(tstate, y, x_enum[x_i],
+					idx_enum[type_i], &logic_cfg);
+				if (rc) FAIL(rc);
+
+				if (idx_enum[type_i] == DEV_LOG_M_OR_L) {
+					// . out_mux=xor
+					logic_cfg.a2d[lut].out_mux = MUX_XOR;
+					if (lut == LUT_A) {
+						// . precyinit=0/1/ax
+						rc = test_logic_enum_precyinit(tstate,
+							y, x_enum[x_i], idx_enum[type_i], &logic_cfg);
+						if (rc) FAIL(rc);
+					} else {
+						rc = test_logic(tstate, y, x_enum[x_i],
+							idx_enum[type_i], &logic_cfg);
+						if (rc) FAIL(rc);
+					}
+
+					// . out_mux=cy cy0=x
+					logic_cfg.a2d[lut].out_mux = MUX_CY;
+					logic_cfg.a2d[lut].cy0 = CY0_X;
+					if (lut == LUT_A) {
+						// . precyinit=0/1/ax
+						// tbd: the X enum will have X drive
+						// both cy0 and precyinit at the same time.
+						rc = test_logic_enum_precyinit(tstate,
+							y, x_enum[x_i], idx_enum[type_i], &logic_cfg);
+						if (rc) FAIL(rc);
+					} else {
+						rc = test_logic(tstate, y, x_enum[x_i],
+							idx_enum[type_i], &logic_cfg);
+						if (rc) FAIL(rc);
+					}
+				}
+
+				// lut6, ff-out
+				memset(&logic_cfg, 0, sizeof(logic_cfg));
+				logic_cfg.a2d[lut].lut6 = "A1";
+				logic_cfg.a2d[lut].ff = FF_FF;
+				logic_cfg.a2d[lut].ff_mux = MUX_O6;
+				logic_cfg.a2d[lut].ff_srinit = FF_SRINIT0;
+
+				logic_cfg.clk_inv = CLKINV_CLK;
+				logic_cfg.sync_attr = SYNCATTR_ASYNC;
+
+				rc = test_logic_enum_srinit_clk_sync_ce_sr(tstate, y,
+					x_enum[x_i], idx_enum[type_i], &logic_cfg);
+				if (rc) FAIL(rc);
+
+				if (idx_enum[type_i] == DEV_LOG_M_OR_L) {
+					// . ff_mux=xor
+					logic_cfg.a2d[lut].ff_mux = MUX_XOR;
+					if (lut == LUT_A) {
+						// . precyinit=0/1/ax
+						rc = test_logic_enum_precyinit(tstate,
+							y, x_enum[x_i], idx_enum[type_i], &logic_cfg);
+						if (rc) FAIL(rc);
+					} else {
+						rc = test_logic(tstate, y, x_enum[x_i],
+							idx_enum[type_i], &logic_cfg);
+						if (rc) FAIL(rc);
+					}
+
+					// . ff_mux=cy cy0=x
+					logic_cfg.a2d[lut].ff_mux = MUX_CY;
+					logic_cfg.a2d[lut].cy0 = CY0_X;
+					if (lut == LUT_A) {
+						// . precyinit=0/1/ax
+						rc = test_logic_enum_precyinit(tstate,
+							y, x_enum[x_i], idx_enum[type_i], &logic_cfg);
+						if (rc) FAIL(rc);
+					} else {
+						rc = test_logic(tstate, y, x_enum[x_i],
+							idx_enum[type_i], &logic_cfg);
+						if (rc) FAIL(rc);
+					}
+				}
+
+				// x, ff-out
+				memset(&logic_cfg, 0, sizeof(logic_cfg));
+				logic_cfg.a2d[lut].ff = FF_FF;
+				logic_cfg.a2d[lut].ff_mux = MUX_X;
+				logic_cfg.a2d[lut].ff_srinit = FF_SRINIT0;
+
+				logic_cfg.clk_inv = CLKINV_CLK;
+				logic_cfg.sync_attr = SYNCATTR_ASYNC;
+				rc = test_logic(tstate, y, x_enum[x_i],
+					idx_enum[type_i], &logic_cfg);
+				if (rc) FAIL(rc);
+
+				// . o6-direct
+				logic_cfg.a2d[lut].lut6 = "A1";
+				logic_cfg.a2d[lut].out_used = 1;
+				rc = test_logic(tstate, y, x_enum[x_i],
+					idx_enum[type_i], &logic_cfg);
+				if (rc) FAIL(rc);
+				logic_cfg.a2d[lut].out_used = 0;
+
+				// . o6-outmux
+				logic_cfg.a2d[lut].out_mux = MUX_O6;
+				rc = test_logic(tstate, y, x_enum[x_i],
+					idx_enum[type_i], &logic_cfg);
+				if (rc) FAIL(rc);
+				logic_cfg.a2d[lut].out_mux = 0;
+
+				//
+				// lut5/6 pairs
+				//
+
+				// lut6 direct-out, lut5 mux-out
+				memset(&logic_cfg, 0, sizeof(logic_cfg));
+				logic_cfg.a2d[lut].lut6 = "(A6+~A6)*A1";
+				logic_cfg.a2d[lut].out_used = 1;
+				logic_cfg.a2d[lut].lut5 = "A1*A2";
+				logic_cfg.a2d[lut].out_mux = MUX_O5;
+				rc = test_logic(tstate, y, x_enum[x_i],
+					idx_enum[type_i], &logic_cfg);
+				if (rc) FAIL(rc);
+
+				if (idx_enum[type_i] == DEV_LOG_M_OR_L) {
+					// . out_mux=cy cy0=o5
+					logic_cfg.a2d[lut].out_mux = MUX_CY;
+					logic_cfg.a2d[lut].cy0 = CY0_O5;
+					if (lut == LUT_A) {
+						// . precyinit=0/1/ax
+						rc = test_logic_enum_precyinit(tstate,
+							y, x_enum[x_i], idx_enum[type_i], &logic_cfg);
+						if (rc) FAIL(rc);
+					} else {
+						rc = test_logic(tstate, y, x_enum[x_i],
+							idx_enum[type_i], &logic_cfg);
+						if (rc) FAIL(rc);
+					}
+				}
+
+				// lut6 direct-out, lut5 a5q-out, ff5_srinit=0
+				logic_cfg.a2d[lut].cy0 = 0;
+				logic_cfg.a2d[lut].out_mux = MUX_5Q;
+				logic_cfg.a2d[lut].ff5_srinit = FF_SRINIT0;
+
+				logic_cfg.clk_inv = CLKINV_CLK;
+				logic_cfg.sync_attr = SYNCATTR_ASYNC;
+
+   				// We go through the global ff configs again for
+   				// the second ff.
+				rc = test_logic_enum_srinit_clk_sync_ce_sr(tstate, y,
+					x_enum[x_i], idx_enum[type_i], &logic_cfg);
+				if (rc) FAIL(rc);
+
+				// . change from out_mux/5q to ff_mux
+				logic_cfg.a2d[lut].out_mux = 0;
+				logic_cfg.a2d[lut].ff5_srinit = 0;
+				logic_cfg.a2d[lut].ff = FF_FF;
+				logic_cfg.a2d[lut].ff_mux = MUX_O5;
+				logic_cfg.a2d[lut].ff_srinit = FF_SRINIT0;
+				rc = test_logic(tstate, y, x_enum[x_i],
+					idx_enum[type_i], &logic_cfg);
+				if (rc) FAIL(rc);
+
+				if (idx_enum[type_i] == DEV_LOG_M_OR_L) {
+					// . add out_mux=cy cy0=x
+					logic_cfg.a2d[lut].out_mux = MUX_CY;
+					logic_cfg.a2d[lut].cy0 = CY0_X;
+					rc = test_logic(tstate, y, x_enum[x_i],
+						idx_enum[type_i], &logic_cfg);
+					if (rc) FAIL(rc);
+					logic_cfg.a2d[lut].out_mux = 0;
+					logic_cfg.a2d[lut].cy0 = 0;
+
+					// . ff_mux=cy cy0=o5
+					logic_cfg.a2d[lut].ff_mux = MUX_CY;
+					logic_cfg.a2d[lut].cy0 = CY0_O5;
+					if (lut == LUT_A) {
+						// . precyinit=0/1/ax
+						rc = test_logic_enum_precyinit(tstate,
+							y, x_enum[x_i], idx_enum[type_i], &logic_cfg);
+						if (rc) FAIL(rc);
+					} else {
+						rc = test_logic(tstate, y, x_enum[x_i],
+							idx_enum[type_i], &logic_cfg);
+						if (rc) FAIL(rc);
+					}
+				}
+//break;
+			}
+			if (idx_enum[type_i] != DEV_LOG_M_OR_L)
+				continue;
+
+			// cout
+			memset(&logic_cfg, 0, sizeof(logic_cfg));
+			logic_cfg.a2d[LUT_A].lut6 = "(A6+~A6)*(~A5)";
+			logic_cfg.a2d[LUT_A].lut5 = "1";
+			logic_cfg.a2d[LUT_A].cy0 = CY0_O5;
+			logic_cfg.a2d[LUT_A].ff = FF_FF;
+			logic_cfg.a2d[LUT_A].ff_mux = MUX_XOR;
+			logic_cfg.a2d[LUT_A].ff_srinit = FF_SRINIT0;
+			logic_cfg.a2d[LUT_B].lut6 = "(A6+~A6)*(A5)";
+			logic_cfg.a2d[LUT_B].lut5 = "1";
+			logic_cfg.a2d[LUT_B].cy0 = CY0_O5;
+			logic_cfg.a2d[LUT_B].ff = FF_FF;
+			logic_cfg.a2d[LUT_B].ff_mux = MUX_XOR;
+			logic_cfg.a2d[LUT_B].ff_srinit = FF_SRINIT0;
+			logic_cfg.a2d[LUT_C].lut6 = "(A6+~A6)*(A5)";
+			logic_cfg.a2d[LUT_C].lut5 = "1";
+			logic_cfg.a2d[LUT_C].cy0 = CY0_O5;
+			logic_cfg.a2d[LUT_C].ff = FF_FF;
+			logic_cfg.a2d[LUT_C].ff_mux = MUX_XOR;
+			logic_cfg.a2d[LUT_C].ff_srinit = FF_SRINIT0;
+			logic_cfg.a2d[LUT_D].lut6 = "(A6+~A6)*(A5)";
+			logic_cfg.a2d[LUT_D].lut5 = "1";
+			logic_cfg.a2d[LUT_D].cy0 = CY0_O5;
+			logic_cfg.a2d[LUT_D].ff = FF_FF;
+			logic_cfg.a2d[LUT_D].ff_mux = MUX_XOR;
+			logic_cfg.a2d[LUT_D].ff_srinit = FF_SRINIT0;
+
+			logic_cfg.clk_inv = CLKINV_CLK;
+			logic_cfg.sync_attr = SYNCATTR_ASYNC;
+			logic_cfg.precyinit = PRECYINIT_0;
+			logic_cfg.cout_used = 1;
+
+			rc = test_logic(tstate, y, x_enum[x_i],
+				idx_enum[type_i], &logic_cfg);
+			if (rc) FAIL(rc);
+
+			// f8 out-mux
+			memset(&logic_cfg, 0, sizeof(logic_cfg));
+			logic_cfg.a2d[LUT_A].lut6 = "~A5";
+			logic_cfg.a2d[LUT_B].lut6 = "(A5)";
+			logic_cfg.a2d[LUT_C].lut6 = "A5";
+			logic_cfg.a2d[LUT_D].lut6 = "((A5))";
+			logic_cfg.a2d[LUT_B].out_mux = MUX_F8;
+			rc = test_logic(tstate, y, x_enum[x_i],
+				idx_enum[type_i], &logic_cfg);
+			if (rc) FAIL(rc);
+
+			// . over ff
+			logic_cfg.a2d[LUT_B].out_mux = 0;
+			logic_cfg.a2d[LUT_B].ff_mux = MUX_F8;
+			logic_cfg.a2d[LUT_B].ff = FF_FF;
+			logic_cfg.a2d[LUT_B].ff_srinit = FF_SRINIT0;
+			logic_cfg.clk_inv = CLKINV_CLK;
+			logic_cfg.sync_attr = SYNCATTR_ASYNC;
+			rc = test_logic(tstate, y, x_enum[x_i],
+				idx_enum[type_i], &logic_cfg);
+			if (rc) FAIL(rc);
+
+			// f7amux
+			memset(&logic_cfg, 0, sizeof(logic_cfg));
+			logic_cfg.a2d[LUT_A].lut6 = "~A5";
+			logic_cfg.a2d[LUT_B].lut6 = "(A5)";
+			logic_cfg.a2d[LUT_A].out_mux = MUX_F7;
+			rc = test_logic(tstate, y, x_enum[x_i],
+				idx_enum[type_i], &logic_cfg);
+			if (rc) FAIL(rc);
+
+			// . over ff
+			logic_cfg.a2d[LUT_A].out_mux = 0;
+			logic_cfg.a2d[LUT_A].ff_mux = MUX_F7;
+			logic_cfg.a2d[LUT_A].ff = FF_FF;
+			logic_cfg.a2d[LUT_A].ff_srinit = FF_SRINIT0;
+			logic_cfg.clk_inv = CLKINV_CLK;
+			logic_cfg.sync_attr = SYNCATTR_ASYNC;
+			rc = test_logic(tstate, y, x_enum[x_i],
+				idx_enum[type_i], &logic_cfg);
+			if (rc) FAIL(rc);
+
+			// f7bmux
+			memset(&logic_cfg, 0, sizeof(logic_cfg));
+			logic_cfg.a2d[LUT_C].lut6 = "~A5";
+			logic_cfg.a2d[LUT_D].lut6 = "(A5)";
+			logic_cfg.a2d[LUT_C].out_mux = MUX_F7;
+			rc = test_logic(tstate, y, x_enum[x_i],
+				idx_enum[type_i], &logic_cfg);
+			if (rc) FAIL(rc);
+
+			// . over ff
+			logic_cfg.a2d[LUT_C].out_mux = 0;
+			logic_cfg.a2d[LUT_C].ff_mux = MUX_F7;
+			logic_cfg.a2d[LUT_C].ff = FF_FF;
+			logic_cfg.a2d[LUT_C].ff_srinit = FF_SRINIT0;
+			logic_cfg.clk_inv = CLKINV_CLK;
+			logic_cfg.sync_attr = SYNCATTR_ASYNC;
+			rc = test_logic(tstate, y, x_enum[x_i],
+				idx_enum[type_i], &logic_cfg);
+			if (rc) FAIL(rc);
+//goto out;
+		}
+	}
+out:
 	return 0;
 fail:
 	return rc;

@@ -434,6 +434,69 @@ static void add_req_outpin(struct fpga_device* dev, pinw_idx_t pinw_i)
 // logic device
 //
 
+int fdev_logic_setconf(struct fpga_model* model, int y, int x,
+	int type_idx, const struct fpgadev_logic* logic_cfg)
+{
+	struct fpga_device* dev;
+	int lut, rc;
+
+	dev = fdev_p(model, y, x, DEV_LOGIC, type_idx);
+	if (!dev) FAIL(EINVAL);
+	rc = reset_required_pins(dev);
+	if (rc) FAIL(rc);
+
+	for (lut = LUT_A; lut <= LUT_D; lut++) {
+		if (logic_cfg->a2d[lut].out_used)
+			dev->u.logic.a2d[lut].out_used = 1;
+		if (logic_cfg->a2d[lut].lut6) {
+			rc = fdev_logic_a2d_lut(model, y, x, type_idx,
+				lut, 6, logic_cfg->a2d[lut].lut6, ZTERM);
+			if (rc) FAIL(rc);
+		}
+		if (logic_cfg->a2d[lut].lut5) {
+			rc = fdev_logic_a2d_lut(model, y, x, type_idx,
+				lut, 5, logic_cfg->a2d[lut].lut5, ZTERM);
+			if (rc) FAIL(rc);
+		}
+		if (logic_cfg->a2d[lut].ff == FF_FF) {
+			if (!logic_cfg->a2d[lut].ff_mux
+			    || !logic_cfg->a2d[lut].ff_srinit)
+				FAIL(EINVAL);
+			dev->u.logic.a2d[lut].ff = FF_FF;
+			dev->u.logic.a2d[lut].ff_mux = logic_cfg->a2d[lut].ff_mux;
+			dev->u.logic.a2d[lut].ff_srinit = logic_cfg->a2d[lut].ff_srinit;
+		} else if (logic_cfg->a2d[lut].ff)
+			FAIL(EINVAL);
+		if (logic_cfg->a2d[lut].out_mux)
+			dev->u.logic.a2d[lut].out_mux = logic_cfg->a2d[lut].out_mux;
+		if (logic_cfg->a2d[lut].ff5_srinit)
+			dev->u.logic.a2d[lut].ff5_srinit = logic_cfg->a2d[lut].ff5_srinit;
+		if (logic_cfg->a2d[lut].cy0)
+			dev->u.logic.a2d[lut].cy0 = logic_cfg->a2d[lut].cy0;
+	}
+	if (logic_cfg->clk_inv)
+		dev->u.logic.clk_inv = logic_cfg->clk_inv;
+	if (logic_cfg->sync_attr)
+		dev->u.logic.sync_attr = logic_cfg->sync_attr;
+	if (logic_cfg->ce_used)
+		dev->u.logic.ce_used = logic_cfg->ce_used;
+	if (logic_cfg->sr_used)
+		dev->u.logic.sr_used = logic_cfg->sr_used;
+	if (logic_cfg->we_mux)
+		dev->u.logic.we_mux = logic_cfg->we_mux;
+	if (logic_cfg->cout_used)
+		dev->u.logic.cout_used = logic_cfg->cout_used;
+	if (logic_cfg->precyinit)
+		dev->u.logic.precyinit = logic_cfg->precyinit;
+
+	dev->instantiated = 1;
+	rc = fdev_set_required_pins(model, y, x, DEV_LOGIC, type_idx);
+	if (rc) FAIL(rc);
+	return 0;
+fail:
+	return rc;
+}
+
 int fdev_logic_a2d_out_used(struct fpga_model* model, int y, int x,
 	int type_idx, int lut_a2d, int used)
 {
@@ -475,21 +538,6 @@ int fdev_logic_a2d_lut(struct fpga_model* model, int y, int x, int type_idx,
 	memcpy(*lut_ptr, lut_str, lut_len);
 	(*lut_ptr)[lut_len] = 0;
 
-	// todo: the logic by which we auto-enable the direct
-	//       output could have more cases, the O6 signal
-	//	 could go into the carry chain/XOR/CY, F7/F8, others?
-	//       We need to find out over time what makes sense for
-	//	 the caller.
-	if (lut_5or6 == 6
-	    && dev->u.logic.a2d[lut_a2d].ff_mux != MUX_O6
-	    && dev->u.logic.a2d[lut_a2d].out_mux != MUX_O6)
-		dev->u.logic.a2d[lut_a2d].out_used = 1;
-	if (lut_5or6 == 5
-	    && dev->u.logic.a2d[lut_a2d].cy0 != CY0_O5
-	    && dev->u.logic.a2d[lut_a2d].ff_mux != MUX_O5
-	    && !dev->u.logic.a2d[lut_a2d].out_mux)
-		dev->u.logic.a2d[lut_a2d].out_mux = MUX_O5;
-
 	dev->instantiated = 1;
 	return 0;
 fail:
@@ -510,6 +558,25 @@ int fdev_logic_a2d_ff(struct fpga_model* model, int y, int x, int type_idx,
 	dev->u.logic.a2d[lut_a2d].ff = FF_FF;
 	dev->u.logic.a2d[lut_a2d].ff_mux = ff_mux;
 	dev->u.logic.a2d[lut_a2d].ff_srinit = srinit;
+	// A flip-flop also needs a clock (and sync attribute) to operate.
+	dev->instantiated = 1;
+	return 0;
+fail:
+	return rc;
+}
+
+int fdev_logic_a2d_ff5_srinit(struct fpga_model* model, int y, int x,
+	int type_idx, int lut_a2d, int srinit)
+{
+	struct fpga_device* dev;
+	int rc;
+
+	dev = fdev_p(model, y, x, DEV_LOGIC, type_idx);
+	if (!dev) FAIL(EINVAL);
+	rc = reset_required_pins(dev);
+	if (rc) FAIL(rc);
+
+	dev->u.logic.a2d[lut_a2d].ff5_srinit = srinit;
 	dev->instantiated = 1;
 	return 0;
 fail:
@@ -546,8 +613,6 @@ int fdev_logic_a2d_cy0(struct fpga_model* model, int y, int x,
 	if (rc) FAIL(rc);
 
 	dev->u.logic.a2d[lut_a2d].cy0 = cy0;
-// todo: when cy0 is CY0_O5 and lut5 is empty, set to "0"
-// 	 (same for setting ff_mux or out_mux to MUX_O5
 	dev->instantiated = 1;
 	return 0;
 fail:

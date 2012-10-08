@@ -46,6 +46,9 @@ const char* fdev_pinw_idx2str(int devtype, pinw_idx_t idx);
 const char* fdev_logic_pinstr(pinw_idx_t idx, int ld1_type);
 str16_t fdev_logic_pinstr_i(struct fpga_model* model, pinw_idx_t idx, int ld1_type);
 
+int fdev_logic_setconf(struct fpga_model* model, int y, int x,
+	int type_idx, const struct fpgadev_logic* logic_cfg);
+
 // lut_a2d is LUT_A to LUT_D
 int fdev_logic_a2d_out_used(struct fpga_model* model, int y, int x,
 	int type_idx, int lut_a2d, int used);
@@ -55,6 +58,8 @@ int fdev_logic_a2d_lut(struct fpga_model* model, int y, int x, int type_idx,
 // srinit is FF_SRINIT0 or FF_SRINIT1
 int fdev_logic_a2d_ff(struct fpga_model* model, int y, int x, int type_idx,
 	int lut_a2d, int ff_mux, int srinit);
+int fdev_logic_a2d_ff5_srinit(struct fpga_model* model, int y, int x,
+	int type_idx, int lut_a2d, int srinit);
 int fdev_logic_a2d_out_mux(struct fpga_model* model, int y, int x,
 	int type_idx, int lut_a2d, int out_mux);
 // cy0 is CY0_X or CY0_O5

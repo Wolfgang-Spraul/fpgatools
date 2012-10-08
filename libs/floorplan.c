@@ -369,6 +369,15 @@ static int printf_LOGIC(FILE* f, struct fpga_model* model,
 					break;
 				case 0: break; default: FAIL(EINVAL);
 			}
+			switch (cfg->a2d[j].ff5_srinit) {
+				case FF_SRINIT0:
+					fprintf(f, "%s %c5_ffsrinit 0\n", pref, 'A'+j);
+					break;
+				case FF_SRINIT1:
+					fprintf(f, "%s %c5_ffsrinit 1\n", pref, 'A'+j);
+					break;
+				case 0: break; default: FAIL(EINVAL);
+			}
 			switch (cfg->a2d[j].out_mux) {
 				case MUX_O6:
 					fprintf(f, "%s %c_outmux O6\n", pref, 'A'+j);
@@ -548,6 +557,15 @@ static int read_LOGIC_attr(struct fpga_model* model, int y, int x, int type_idx,
 				dev->u.logic.a2d[i].ff_srinit = FF_SRINIT0;
 			else if (!str_cmp(w2, w2_len, "1", ZTERM))
 				dev->u.logic.a2d[i].ff_srinit = FF_SRINIT1;
+			else return 0;
+			goto inst_2;
+		}
+		snprintf(cmp_str, sizeof(cmp_str), "%c5_ffsrinit", 'A'+i);
+		if (!str_cmp(w1, w1_len, cmp_str, ZTERM)) {
+			if (!str_cmp(w2, w2_len, "0", ZTERM))
+				dev->u.logic.a2d[i].ff5_srinit = FF_SRINIT0;
+			else if (!str_cmp(w2, w2_len, "1", ZTERM))
+				dev->u.logic.a2d[i].ff5_srinit = FF_SRINIT1;
 			else return 0;
 			goto inst_2;
 		}
