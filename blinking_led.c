@@ -9,6 +9,22 @@
 #include "floorplan.h"
 #include "control.h"
 
+/*
+   This C design corresponds to the following Verilog:
+  
+   module blinking(input clk, output led);
+
+   // synthesis attribute LOC clk "P55 | IOSTANDARD = LVCMOS33"
+   // synthesis attribute LOC led "P48 | SLEW = QUIETIO | DRIVE = 8"
+
+     reg [14:0] counter;
+     always @(posedge clk) counter <= counter + 1;
+     assign led = counter[14];
+
+   endmodule
+
+*/
+
 int main(int argc, char** argv)
 {
 	struct fpga_model model;

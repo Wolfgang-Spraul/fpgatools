@@ -967,7 +967,7 @@ static int test_logic(struct test_state* tstate, int y, int x, int type_idx,
 {
 	struct fpga_device* dev;
 	net_idx_t pinw_nets[MAX_NUM_PINW];
-	int i, lut, rc;
+	int i, lut, latch_logic, rc;
 
 	if (tstate->dry_run) {
 		for (lut = LUT_A; lut <= LUT_D; lut++) {
@@ -986,6 +986,14 @@ static int test_logic(struct test_state* tstate, int y, int x, int type_idx,
 	if (tstate->dry_run) {
 		fdev_print_required_pins(tstate->model, y, x,
 			DEV_LOGIC, type_idx);
+	}
+	latch_logic = 0;
+	for (lut = LUT_A; lut <= LUT_D; lut++) {
+		if (logic_cfg->a2d[lut].ff == FF_AND2L
+		    || logic_cfg->a2d[lut].ff == FF_OR2L) {
+			latch_logic = 1;
+			break;
+		}
 	}
 
 	// add stub nets for each required pin
@@ -1009,7 +1017,10 @@ static int test_logic(struct test_state* tstate, int y, int x, int type_idx,
 			&& *dev->u.logic.a2d[LUT_C].lut5)
 		    || (dev->pinw_req_for_cfg[i] == LI_D6
 			&& dev->u.logic.a2d[LUT_D].lut5
-			&& *dev->u.logic.a2d[LUT_D].lut5)) {
+			&& *dev->u.logic.a2d[LUT_D].lut5)
+		    || (latch_logic
+			&& (dev->pinw_req_for_cfg[i] == LI_CLK
+			    || dev->pinw_req_for_cfg[i] == LI_CE))) {
 			rc = fnet_route_to_inpins(tstate->model, pinw_nets[i], "VCC_WIRE");
 			if (rc) FAIL(rc);
 		}
@@ -1234,16 +1245,18 @@ static int test_logic_config(struct test_state* tstate)
 					idx_enum[type_i], &logic_cfg);
 				if (rc) FAIL(rc);
 
-				// lut6, mux-out
-				memset(&logic_cfg, 0, sizeof(logic_cfg));
-				logic_cfg.a2d[lut].lut6 = "A1";
-				logic_cfg.a2d[lut].out_mux = MUX_O6;
-
-				rc = test_logic(tstate, y, x_enum[x_i],
-					idx_enum[type_i], &logic_cfg);
-				if (rc) FAIL(rc);
-
 				if (idx_enum[type_i] == DEV_LOG_M_OR_L) {
+					// lut6, mux-out
+					// O6 over mux-out seems not supported
+					// on an X device.
+					memset(&logic_cfg, 0, sizeof(logic_cfg));
+					logic_cfg.a2d[lut].lut6 = "A1";
+					logic_cfg.a2d[lut].out_mux = MUX_O6;
+
+					rc = test_logic(tstate, y, x_enum[x_i],
+						idx_enum[type_i], &logic_cfg);
+					if (rc) FAIL(rc);
+
 					// . out_mux=xor
 					logic_cfg.a2d[lut].out_mux = MUX_XOR;
 					if (lut == LUT_A) {
@@ -1317,6 +1330,64 @@ static int test_logic_config(struct test_state* tstate)
 					}
 				}
 
+				// lut6, latch-out
+				memset(&logic_cfg, 0, sizeof(logic_cfg));
+				logic_cfg.a2d[lut].lut6 = "A1";
+				logic_cfg.a2d[lut].ff = FF_LATCH;
+				logic_cfg.a2d[lut].ff_mux = MUX_O6;
+				logic_cfg.a2d[lut].ff_srinit = FF_SRINIT0;
+
+				logic_cfg.clk_inv = CLKINV_CLK;
+				logic_cfg.sync_attr = SYNCATTR_ASYNC;
+
+				rc = test_logic(tstate, y, x_enum[x_i],
+					idx_enum[type_i], &logic_cfg);
+				if (rc) FAIL(rc);
+
+				//
+				// AND and OR latches are physically a normal
+				// latch, but with additional configuration
+				// constraints:
+				//
+				// 1. ce and clk must be driven high/vcc
+				// 2. the clk must be inverted before the latch (clk_b)
+				// 3. srinit must be 0 for AND, 1 for OR
+				//
+
+				// lut6, and-latch
+				memset(&logic_cfg, 0, sizeof(logic_cfg));
+				logic_cfg.a2d[lut].lut6 = "A1";
+				logic_cfg.a2d[lut].ff = FF_AND2L;
+				logic_cfg.a2d[lut].ff_mux = MUX_O6;
+				// AND2L requires SRINIT=0
+				logic_cfg.a2d[lut].ff_srinit = FF_SRINIT0;
+
+				logic_cfg.clk_inv = CLKINV_B;
+				logic_cfg.sync_attr = SYNCATTR_ASYNC;
+				logic_cfg.ce_used = 1;
+				logic_cfg.sr_used = 1;
+
+				rc = test_logic(tstate, y, x_enum[x_i],
+					idx_enum[type_i], &logic_cfg);
+				if (rc) FAIL(rc);
+
+				// lut6, or-latch
+				memset(&logic_cfg, 0, sizeof(logic_cfg));
+				logic_cfg.a2d[lut].lut6 = "A1";
+				logic_cfg.a2d[lut].ff = FF_OR2L;
+				logic_cfg.a2d[lut].ff_mux = MUX_O6;
+				// OR2L requires SRINIT=1
+				logic_cfg.a2d[lut].ff_srinit = FF_SRINIT1;
+
+				logic_cfg.clk_inv = CLKINV_B;
+				logic_cfg.sync_attr = SYNCATTR_ASYNC;
+				logic_cfg.ce_used = 1;
+				logic_cfg.sr_used = 1;
+
+				rc = test_logic(tstate, y, x_enum[x_i],
+					idx_enum[type_i], &logic_cfg);
+				if (rc) FAIL(rc);
+
 				// x, ff-out
 				memset(&logic_cfg, 0, sizeof(logic_cfg));
 				logic_cfg.a2d[lut].ff = FF_FF;
@@ -1337,12 +1408,14 @@ static int test_logic_config(struct test_state* tstate)
 				if (rc) FAIL(rc);
 				logic_cfg.a2d[lut].out_used = 0;
 
-				// . o6-outmux
-				logic_cfg.a2d[lut].out_mux = MUX_O6;
-				rc = test_logic(tstate, y, x_enum[x_i],
-					idx_enum[type_i], &logic_cfg);
-				if (rc) FAIL(rc);
-				logic_cfg.a2d[lut].out_mux = 0;
+				if (idx_enum[type_i] == DEV_LOG_M_OR_L) {
+					// . o6-outmux
+					logic_cfg.a2d[lut].out_mux = MUX_O6;
+					rc = test_logic(tstate, y, x_enum[x_i],
+						idx_enum[type_i], &logic_cfg);
+					if (rc) FAIL(rc);
+					logic_cfg.a2d[lut].out_mux = 0;
+				}
 
 				//
 				// lut5/6 pairs
@@ -1388,17 +1461,17 @@ static int test_logic_config(struct test_state* tstate)
 					x_enum[x_i], idx_enum[type_i], &logic_cfg);
 				if (rc) FAIL(rc);
 
-				// . change from out_mux/5q to ff_mux
-				logic_cfg.a2d[lut].out_mux = 0;
-				logic_cfg.a2d[lut].ff5_srinit = 0;
-				logic_cfg.a2d[lut].ff = FF_FF;
-				logic_cfg.a2d[lut].ff_mux = MUX_O5;
-				logic_cfg.a2d[lut].ff_srinit = FF_SRINIT0;
-				rc = test_logic(tstate, y, x_enum[x_i],
-					idx_enum[type_i], &logic_cfg);
-				if (rc) FAIL(rc);
-
 				if (idx_enum[type_i] == DEV_LOG_M_OR_L) {
+					// . change from out_mux/5q to ff_mux
+					logic_cfg.a2d[lut].out_mux = 0;
+					logic_cfg.a2d[lut].ff5_srinit = 0;
+					logic_cfg.a2d[lut].ff = FF_FF;
+					logic_cfg.a2d[lut].ff_mux = MUX_O5;
+					logic_cfg.a2d[lut].ff_srinit = FF_SRINIT0;
+					rc = test_logic(tstate, y, x_enum[x_i],
+						idx_enum[type_i], &logic_cfg);
+					if (rc) FAIL(rc);
+
 					// . add out_mux=cy cy0=x
 					logic_cfg.a2d[lut].out_mux = MUX_CY;
 					logic_cfg.a2d[lut].cy0 = CY0_X;
@@ -1422,7 +1495,6 @@ static int test_logic_config(struct test_state* tstate)
 						if (rc) FAIL(rc);
 					}
 				}
-//break;
 			}
 			if (idx_enum[type_i] != DEV_LOG_M_OR_L)
 				continue;
@@ -1524,7 +1596,6 @@ static int test_logic_config(struct test_state* tstate)
 			rc = test_logic(tstate, y, x_enum[x_i],
 				idx_enum[type_i], &logic_cfg);
 			if (rc) FAIL(rc);
-//goto out;
 		}
 	}
 out:

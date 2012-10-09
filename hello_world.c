@@ -9,6 +9,20 @@
 #include "floorplan.h"
 #include "control.h"
 
+/*
+   This C design corresponds to the following Verilog:
+  
+   module ver_and(input a, b, output y);
+
+   // synthesis attribute LOC a "P45"
+   // synthesis attribute LOC b "P46"
+   // synthesis attribute LOC y "P48 | IOSTANDARD = LVCMOS33 | SLEW = SLOW | DRIVE = 12"
+
+    assign y = a & b;
+
+   endmodule
+*/
+
 int main(int argc, char** argv)
 {
 	struct fpga_model model;

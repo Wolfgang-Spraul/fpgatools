@@ -762,7 +762,7 @@ static void printf_v64_mi20(const uint8_t* bits, int row, int major)
 				if (u64 & (1ULL << i))
 					num_bits_on++;
 			}
-			if (num_bits_on < 3) {
+			if (num_bits_on < 5) {
 				for (i = 0; i < 64; i++) {
 					if (!(u64 & (1ULL << i)))
 						continue;

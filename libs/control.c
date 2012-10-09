@@ -458,15 +458,14 @@ int fdev_logic_setconf(struct fpga_model* model, int y, int x,
 				lut, 5, logic_cfg->a2d[lut].lut5, ZTERM);
 			if (rc) FAIL(rc);
 		}
-		if (logic_cfg->a2d[lut].ff == FF_FF) {
+		if (logic_cfg->a2d[lut].ff) {
 			if (!logic_cfg->a2d[lut].ff_mux
 			    || !logic_cfg->a2d[lut].ff_srinit)
 				FAIL(EINVAL);
-			dev->u.logic.a2d[lut].ff = FF_FF;
+			dev->u.logic.a2d[lut].ff = logic_cfg->a2d[lut].ff;
 			dev->u.logic.a2d[lut].ff_mux = logic_cfg->a2d[lut].ff_mux;
 			dev->u.logic.a2d[lut].ff_srinit = logic_cfg->a2d[lut].ff_srinit;
-		} else if (logic_cfg->a2d[lut].ff)
-			FAIL(EINVAL);
+		}
 		if (logic_cfg->a2d[lut].out_mux)
 			dev->u.logic.a2d[lut].out_mux = logic_cfg->a2d[lut].out_mux;
 		if (logic_cfg->a2d[lut].ff5_srinit)
@@ -841,6 +840,18 @@ int fdev_set_required_pins(struct fpga_model* model, int y, int x, int type,
 		}
 		if (dev->u.logic.precyinit == PRECYINIT_AX)
 			add_req_inpin(dev, LI_AX);
+		if (dev->u.logic.a2d[LUT_A].out_mux == MUX_F7
+		    || dev->u.logic.a2d[LUT_A].ff_mux == MUX_F7)
+			add_req_inpin(dev, LI_AX);
+		if (dev->u.logic.a2d[LUT_C].out_mux == MUX_F7
+		    || dev->u.logic.a2d[LUT_C].ff_mux == MUX_F7)
+			add_req_inpin(dev, LI_CX);
+		if (dev->u.logic.a2d[LUT_B].out_mux == MUX_F8
+		    || dev->u.logic.a2d[LUT_B].ff_mux == MUX_F8) {
+			add_req_inpin(dev, LI_AX);
+			add_req_inpin(dev, LI_BX);
+			add_req_inpin(dev, LI_CX);
+		}
 		for (i = LUT_A; i <= LUT_D; i++) {
 			if (dev->u.logic.a2d[i].out_used) {
 				// LO_A..LO_D are in sequence
@@ -1575,16 +1586,24 @@ int fpga_switch_chain(struct sw_chain* ch)
 					= ch->set.sw[ch->set.len-1];
 			}
 
-			idx = fpga_switch_next(ch->model, ch->y, ch->x,
+			ch->set.sw[ch->set.len-1] = fpga_switch_next(
+				ch->model, ch->y, ch->x,
 				ch->set.sw[ch->set.len-1], ch->from_to);
-			if (idx != NO_SWITCH) {
-				if (fpga_switch_is_used(ch->model, ch->y, ch->x, idx))
+			if (ch->set.sw[ch->set.len-1] != NO_SWITCH) {
+				if (fpga_switch_is_used(ch->model, ch->y,
+					ch->x, ch->set.sw[ch->set.len-1])) {
+#ifdef DBG_ENUM_SWITCH
+					printf(" skipping used %s\n",
+					  fpga_switch_print(ch->model, ch->y,
+					  ch->x, ch->set.sw[ch->set.len-1]));
+#endif
 					continue;
+				}
 #ifdef DBG_ENUM_SWITCH
 				printf(" found %s\n", fpga_switch_print(
-					ch->model, ch->y, ch->x, idx));
+				  ch->model, ch->y, ch->x,
+				  ch->set.sw[ch->set.len-1]));
 #endif
-				ch->set.sw[ch->set.len-1] = idx;
 				break;
 			}
 
@@ -2238,11 +2257,14 @@ int fnet_route_to_inpins(struct fpga_model* model, net_idx_t net_i,
 		if ((net_p->el[i].idx & NET_IDX_MASK) >= dev_p->num_pinw_in)
 			// skip outpin
 			continue;
+
 		rc = froute_direct(model, net_p->el[i].y, net_p->el[i].x-1,
 			from_i, net_p->el[i].y, net_p->el[i].x,
 			dev_p->pinw[net_p->el[i].idx & NET_IDX_MASK],
 			&start_set, &end_set);
 		if (rc) FAIL(rc);
+		if (!start_set.len || !end_set.len)
+			HERE();
 		rc = fnet_add_sw(model, net_i, net_p->el[i].y,
 			net_p->el[i].x-1, start_set.sw, start_set.len);
 		if (rc) FAIL(rc);
@@ -2268,7 +2290,7 @@ int froute_direct(struct fpga_model* model, int start_y, int start_x,
 	if (!end_switches.len) FAIL(EINVAL);
 
 	rc = construct_sw_conns(&conns, model, start_y, start_x, start_pt,
-		SW_FROM, /*max_depth*/ 1);
+		SW_FROM, /*max_depth*/ 2);
 	if (rc) FAIL(rc);
 
 	while (fpga_switch_conns(&conns) != NO_CONN) {
