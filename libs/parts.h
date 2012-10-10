@@ -177,3 +177,156 @@ void free_xc6_routing_bitpos(struct xc6_routing_bitpos* bitpos);
 // the upper 32 entries of map the ones for lut6.
 // In either case 64 entries are written to map.
 void xc6_lut_bitmap(int lut_pos, int* map, int num_bits);
+
+//
+// logic configuration
+//
+
+//
+// Some things noteworthy for *not* having bits set:
+//  cout_used, a_used-d_used, srinit=0, non-inverted clock,
+//  async attribute, precyinit=0, ffmux=O6, cy0=X, enabling
+//  5Q-ff in X devices
+//
+// All offsets into vertical range of 64 bits per logic row.
+//
+
+// minor 20 (only bits 24-39 for logic config, 0-23 and 40-63
+// are for routing switches):
+#define XC6_MI20_LOGIC_MASK 0x000000FFFF000000ULL
+
+#define XC6_ML_D5_FFSRINIT_1	24
+#define XC6_X_D5_FFSRINIT_1	25
+#define XC6_ML_C5_FFSRINIT_1	29
+#define XC6_X_C_FFSRINIT_1	30
+#define XC6_X_C5_FFSRINIT_1	31
+#define XC6_ML_B5_FFSRINIT_1	32
+#define XC6_X_B5_FFSRINIT_1	34
+#define XC6_M_A_FFSRINIT_1	37 // M-device only
+#define XC6_X_A5_FFSRINIT_1	38
+#define XC6_ML_A5_FFSRINIT_1	39
+
+// minor 26 in XM, 25 in XL columns:
+
+// ML_D_CY0=DX			 -
+#define XC6_ML_D_CY0_O5		 0	// implies lut5 on ML-D
+
+// X_D_OUTMUX=5Q 		 -      // implies lut5 on X-D
+#define XC6_X_D_OUTMUX_O5	 1	// default-set, does not imply lut5
+// X_C_OUTMUX=5Q		 -	// implies lut5 on X-C
+#define XC6_X_C_OUTMUX_O5	 2	// default-set, does not imply lut5
+
+#define XC6_ML_D_FFSRINIT_1	 3
+#define XC6_ML_C_FFSRINIT_1	 4
+#define XC6_X_D_FFSRINIT_1	 5
+
+// ML_C_CY0=CX			 -
+#define XC6_ML_C_CY0_O5		 6	// implies lut5 on ML-C
+
+// X_B_OUTMUX=5Q		 -	// implies lut5 on X-B
+#define XC6_X_B_OUTMUX_O5	 7	// default-set, does not imply lut5
+
+#define XC6_ML_D_OUTMUX_MASK	0x0000000000000F00ULL
+#define XC6_ML_D_OUTMUX_O	 8
+#define XC6_ML_D_OUTMUX_O6		 1 // 0001
+#define XC6_ML_D_OUTMUX_XOR		 2 // 0010
+#define XC6_ML_D_OUTMUX_O5		 5 // 0101, implies lut5 on ML-D
+#define XC6_ML_D_OUTMUX_CY		 6 // 0110
+#define XC6_ML_D_OUTMUX_5Q		 8 // 1000, implies lut5 on ML-D
+
+#define XC6_ML_D_FFMUX_MASK	0x000000000000F000ULL
+#define XC6_ML_D_FFMUX_O	12
+#define XC6_ML_D_FFMUX_O6		 0 // 0000
+#define XC6_ML_D_FFMUX_O5		 1 // 0001, implies lut5 on ML-D
+#define XC6_ML_D_FFMUX_X		10 // 1010
+#define XC6_ML_D_FFMUX_XOR		12 // 1100
+#define XC6_ML_D_FFMUX_CY		13 // 1101
+
+#define XC6_X_CLK_B		16
+#define XC6_ML_ALL_LATCH	17
+#define XC6_ML_SR_USED		18
+#define XC6_ML_SYNC		19
+#define XC6_ML_CE_USED		20
+// X_D_FFMUX=O6			 -
+#define XC6_X_D_FFMUX_DX	21	// default-set, does not imply lut5
+// X_C_FFMUX=O6			 -
+#define XC6_X_C_FFMUX_CX	22	// default-set, does not imply lut5
+#define XC6_X_CE_USED		23
+
+#define XC6_ML_C_OUTMUX_MASK	0x000000000F000000ULL
+#define XC6_ML_C_OUTMUX_O	24
+#define XC6_ML_C_OUTMUX_XOR		 1 // 0001
+#define XC6_ML_C_OUTMUX_O6		 2 // 0010
+#define XC6_ML_C_OUTMUX_5Q		 4 // 0100, implies lut5 on ML-C
+#define XC6_ML_C_OUTMUX_CY		 9 // 1001
+#define XC6_ML_C_OUTMUX_O5		10 // 1010, implies lut5 on ML-C
+#define XC6_ML_C_OUTMUX_F7		12 // 1100
+
+#define XC6_ML_C_FFMUX_MASK	0x00000000F0000000ULL
+#define XC6_ML_C_FFMUX_O	28
+#define XC6_ML_C_FFMUX_O6		 0 // 0000
+#define XC6_ML_C_FFMUX_O5		 2 // 0010, implies lut5 on ML-C
+#define XC6_ML_C_FFMUX_X		 5 // 0101
+#define XC6_ML_C_FFMUX_F7		 7 // 0111
+#define XC6_ML_C_FFMUX_XOR		12 // 1100
+#define XC6_ML_C_FFMUX_CY		14 // 1110
+
+#define XC6_ML_B_OUTMUX_MASK	0x0000000F00000000ULL
+#define XC6_ML_B_OUTMUX_O	32
+#define XC6_ML_B_OUTMUX_5Q		 2 // 0010, implies lut5 on ML-B
+#define XC6_ML_B_OUTMUX_F8		 3 // 0011
+#define XC6_ML_B_OUTMUX_XOR		 4 // 0100
+#define XC6_ML_B_OUTMUX_CY		 5 // 0101
+#define XC6_ML_B_OUTMUX_O6		 8 // 1000
+#define XC6_ML_B_OUTMUX_O5		 9 // 1001, implies lut5 on ML-B
+
+// X_B_FFMUX=O6			 -
+#define XC6_X_B_FFMUX_CX	36	// default-set, does not imply lut5
+// X_A_FFMUX=O6			 -
+#define XC6_X_A_FFMUX_CX	37	// default-set, does not imply lut5
+#define XC6_X_B_FFSRINIT_1	38
+// X_A_OUTMUX=5Q		 -	// implies lut5 on X-A
+#define XC6_X_A_OUTMUX_O5	39	// default-set, does not imply lut5
+#define XC6_X_SR_USED		40
+#define XC6_X_SYNC		41
+#define XC6_X_ALL_LATCH		42
+#define XC6_ML_CLK_B		43
+
+#define XC6_ML_B_FFMUX_MASK	0x0000F00000000000ULL
+#define XC6_ML_B_FFMUX_O	44
+#define XC6_ML_B_FFMUX_O6		 0 // 0000
+#define XC6_ML_B_FFMUX_XOR		 3 // 0011
+#define XC6_ML_B_FFMUX_O5		 4 // 0100, implies lut5 on ML-B
+#define XC6_ML_B_FFMUX_CY		 7 // 0111
+#define XC6_ML_B_FFMUX_X		10 // 1010
+#define XC6_ML_B_FFMUX_F8		14 // 1110
+
+#define XC6_ML_A_FFMUX_MASK	0x000F000000000000ULL
+#define XC6_ML_A_FFMUX_O	48
+#define XC6_ML_A_FFMUX_O6		 0 // 0000
+#define XC6_ML_A_FFMUX_XOR 		 3 // 0011
+#define XC6_ML_A_FFMUX_X 		 5 // 0101
+#define XC6_ML_A_FFMUX_O5		 8 // 1000, implies lut5 on ML-A
+#define XC6_ML_A_FFMUX_CY		11 // 1011
+#define XC6_ML_A_FFMUX_F7		13 // 1101
+
+#define XC6_ML_A_OUTMUX_MASK	0x00F0000000000000ULL
+#define XC6_ML_A_OUTMUX_O	52
+#define XC6_ML_A_OUTMUX_5Q		 1 // 0001, implies lut5 on ML-A
+#define XC6_ML_A_OUTMUX_F7		 3 // 0011
+#define XC6_ML_A_OUTMUX_XOR		 4 // 0100
+#define XC6_ML_A_OUTMUX_CY		 6 // 0110
+#define XC6_ML_A_OUTMUX_O6		 8 // 1000
+#define XC6_ML_A_OUTMUX_O5		10 // 1010, implies lut5 on ML-A
+
+// ML_B_CY0=BX			 -
+#define XC6_ML_B_CY0_O5		56	// implies lut5 on ML-B
+#define XC6_ML_PRECYINIT_AX	57
+#define XC6_X_A_FFSRINIT_1	58
+// ML_PRECYINIT=0		 -
+#define XC6_ML_PRECYINIT_1	60
+#define XC6_ML_B_FFSRINIT_1	61
+// ML_A_CY0=AX			 -
+#define XC6_ML_A_CY0_O5		62	// implies lut5 on ML-A
+
+#define XC6_L_A_FFSRINIT_1	63	// L-device only

@@ -253,7 +253,7 @@ fail:
 	return rc;
 }
 
-static int extract_iobs(struct fpga_model* model, struct fpga_bits* bits)
+static int extract_iobs(struct extract_state* es)
 {
 	int i, num_iobs, iob_y, iob_x, iob_idx, dev_idx, first_iob, rc;
 	uint64_t u64;
@@ -264,7 +264,8 @@ static int extract_iobs(struct fpga_model* model, struct fpga_bits* bits)
 	num_iobs = get_num_iobs(XC6SLX9);
 	first_iob = 0;
 	for (i = 0; i < num_iobs; i++) {
-		u64 = frame_get_u64(&bits->d[IOB_DATA_START + i*IOB_ENTRY_LEN]);
+		u64 = frame_get_u64(&es->bits->d[
+			IOB_DATA_START + i*IOB_ENTRY_LEN]);
 		if (!u64) continue;
 
 		iob_sitename = get_iob_sitename(XC6SLX9, i);
@@ -272,20 +273,20 @@ static int extract_iobs(struct fpga_model* model, struct fpga_bits* bits)
 			HERE();
 			continue;
 		}
-		rc = fpga_find_iob(model, iob_sitename, &iob_y, &iob_x, &iob_idx);
+		rc = fpga_find_iob(es->model, iob_sitename, &iob_y, &iob_x, &iob_idx);
 		if (rc) FAIL(rc);
-		dev_idx = fpga_dev_idx(model, iob_y, iob_x, DEV_IOB, iob_idx);
+		dev_idx = fpga_dev_idx(es->model, iob_y, iob_x, DEV_IOB, iob_idx);
 		if (dev_idx == NO_DEV) FAIL(EINVAL);
-		dev = FPGA_DEV(model, iob_y, iob_x, dev_idx);
+		dev = FPGA_DEV(es->model, iob_y, iob_x, dev_idx);
 		memset(&cfg, 0, sizeof(cfg));
 
 		if (!first_iob) {
 			first_iob = 1;
 			// todo: is this right on the other sides?
-			if (!get_bit(bits, /*row*/ 0, get_rightside_major(XC6SLX9),
+			if (!get_bit(es->bits, /*row*/ 0, get_rightside_major(XC6SLX9),
 				/*minor*/ 22, 64*15+XC6_HCLK_BITS+4))
 				HERE();
-			clear_bit(bits, /*row*/ 0, get_rightside_major(XC6SLX9),
+			clear_bit(es->bits, /*row*/ 0, get_rightside_major(XC6SLX9),
 				/*minor*/ 22, 64*15+XC6_HCLK_BITS+4);
 		}
 		if (u64 & XC6_IOB_INSTANTIATED)
@@ -541,7 +542,7 @@ static int extract_iobs(struct fpga_model* model, struct fpga_bits* bits)
 			}
 		}
 		if (!u64) {
-			frame_set_u64(&bits->d[IOB_DATA_START
+			frame_set_u64(&es->bits->d[IOB_DATA_START
 				+ i*IOB_ENTRY_LEN], 0);
 			dev->instantiated = 1;
 			dev->u.iob = cfg;
@@ -552,33 +553,9 @@ fail:
 	return rc;
 }
 
-static int extract_logic(struct fpga_model* model, struct fpga_bits* bits)
-{
-	int dev_idx, row, row_pos, rc;
-	int x, y, byte_off;
-	uint8_t* u8_p;
-	uint64_t u64;
-	const char* lut_str;
-
-	for (x = LEFT_SIDE_WIDTH; x < model->x_width-RIGHT_SIDE_WIDTH; x++) {
-		if (!is_atx(X_FABRIC_LOGIC_COL|X_CENTER_LOGIC_COL, model, x))
-			continue;
-		for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
-			if (!has_device_type(model, y, x, DEV_LOGIC, LOGIC_M))
-				continue;
-			row = which_row(y, model);
-			row_pos = pos_in_row(y, model);
-			if (row == -1 || row_pos == -1 || row_pos == 8) {
-				HERE();
-				continue;
-			}
-			if (row_pos > 8) row_pos--;
-			u8_p = get_first_minor(bits, row, model->x_major[x]);
-			byte_off = row_pos * 8;
-			if (row_pos >= 8) byte_off += HCLK_BYTES;
-
+#if 0
 			// M device
-			dev_idx = fpga_dev_idx(model, y, x, DEV_LOGIC, DEV_LOG_M_OR_L);
+			dev_idx = fpga_dev_idx(es->model, y, x, DEV_LOGIC, DEV_LOG_M_OR_L);
 			if (dev_idx == NO_DEV) FAIL(EINVAL);
 
 			// A6_LUT
@@ -588,7 +565,7 @@ static int extract_logic(struct fpga_model* model, struct fpga_bits* bits)
 				{ int logic_base[6] = {0,1,0,0,1,0};
 				  lut_str = lut2bool(u64, 64, &logic_base, /*flip_b0*/ 1); }
 				if (*lut_str) {
-					rc = fdev_logic_a2d_lut(model, y, x, DEV_LOG_M_OR_L,
+					rc = fdev_logic_a2d_lut(es->model, y, x, DEV_LOG_M_OR_L,
 						LUT_A, 6, lut_str, ZTERM);
 					if (rc) FAIL(rc);
 					*(uint32_t*)(u8_p+24*FRAME_SIZE+byte_off+4) = 0;
@@ -602,7 +579,7 @@ static int extract_logic(struct fpga_model* model, struct fpga_bits* bits)
 				{ int logic_base[6] = {1,1,0,1,0,1};
 				  lut_str = lut2bool(u64, 64, &logic_base, /*flip_b0*/ 1); }
 				if (*lut_str) {
-					rc = fdev_logic_a2d_lut(model, y, x, DEV_LOG_M_OR_L,
+					rc = fdev_logic_a2d_lut(es->model, y, x, DEV_LOG_M_OR_L,
 						LUT_B, 6, lut_str, ZTERM);
 					if (rc) FAIL(rc);
 					*(uint32_t*)(u8_p+21*FRAME_SIZE+byte_off+4) = 0;
@@ -616,7 +593,7 @@ static int extract_logic(struct fpga_model* model, struct fpga_bits* bits)
 				{ int logic_base[6] = {0,1,0,0,1,0};
 				  lut_str = lut2bool(u64, 64, &logic_base, /*flip_b0*/ 1); }
 				if (*lut_str) {
-					rc = fdev_logic_a2d_lut(model, y, x, DEV_LOG_M_OR_L,
+					rc = fdev_logic_a2d_lut(es->model, y, x, DEV_LOG_M_OR_L,
 						LUT_C, 6, lut_str, ZTERM);
 					if (rc) FAIL(rc);
 					*(uint32_t*)(u8_p+24*FRAME_SIZE+byte_off) = 0;
@@ -630,7 +607,7 @@ static int extract_logic(struct fpga_model* model, struct fpga_bits* bits)
 				{ int logic_base[6] = {1,1,0,1,0,1};
 				  lut_str = lut2bool(u64, 64, &logic_base, /*flip_b0*/ 1); }
 				if (*lut_str) {
-					rc = fdev_logic_a2d_lut(model, y, x, DEV_LOG_M_OR_L,
+					rc = fdev_logic_a2d_lut(es->model, y, x, DEV_LOG_M_OR_L,
 						LUT_D, 6, lut_str, ZTERM);
 					if (rc) FAIL(rc);
 					*(uint32_t*)(u8_p+21*FRAME_SIZE+byte_off) = 0;
@@ -657,7 +634,7 @@ static int extract_logic(struct fpga_model* model, struct fpga_bits* bits)
 					continue;
 				}
 
-				dev_idx = fpga_dev_idx(model, y, x, DEV_LOGIC, DEV_LOG_X);
+				dev_idx = fpga_dev_idx(es->model, y, x, DEV_LOGIC, DEV_LOG_X);
 				if (dev_idx == NO_DEV) FAIL(EINVAL);
 				*(uint64_t*)(u8_p+26*FRAME_SIZE+byte_off) = 0;
 
@@ -669,7 +646,7 @@ static int extract_logic(struct fpga_model* model, struct fpga_bits* bits)
 					lut_str = lut2bool(u64, 64, &logic_base, /*flip_b0*/ 0);
 				}
 				if (lut_str && *lut_str) {
-					rc = fdev_logic_a2d_lut(model, y, x, DEV_LOG_X,
+					rc = fdev_logic_a2d_lut(es->model, y, x, DEV_LOG_X,
 						LUT_A, 6, lut_str, ZTERM);
 					if (rc) FAIL(rc);
 					*(uint32_t*)(u8_p+27*FRAME_SIZE+byte_off+4) = 0;
@@ -683,7 +660,7 @@ static int extract_logic(struct fpga_model* model, struct fpga_bits* bits)
 					lut_str = lut2bool(u64, 64, &logic_base, /*flip_b0*/ 0);
 				}
 				if (lut_str && *lut_str) {
-					rc = fdev_logic_a2d_lut(model, y, x, DEV_LOG_X,
+					rc = fdev_logic_a2d_lut(es->model, y, x, DEV_LOG_X,
 						LUT_B, 6, lut_str, ZTERM);
 					*(uint32_t*)(u8_p+29*FRAME_SIZE+byte_off+4) = 0;
 					*(uint32_t*)(u8_p+30*FRAME_SIZE+byte_off+4) = 0;
@@ -696,7 +673,7 @@ static int extract_logic(struct fpga_model* model, struct fpga_bits* bits)
 					lut_str = lut2bool(u64, 64, &logic_base, /*flip_b0*/ 0);
 				}
 				if (lut_str && *lut_str) {
-					rc = fdev_logic_a2d_lut(model, y, x, DEV_LOG_X,
+					rc = fdev_logic_a2d_lut(es->model, y, x, DEV_LOG_X,
 						LUT_C, 6, lut_str, ZTERM);
 					*(uint32_t*)(u8_p+27*FRAME_SIZE+byte_off) = 0;
 					*(uint32_t*)(u8_p+28*FRAME_SIZE+byte_off) = 0;
@@ -709,11 +686,502 @@ static int extract_logic(struct fpga_model* model, struct fpga_bits* bits)
 					lut_str = lut2bool(u64, 64, &logic_base, /*flip_b0*/ 0);
 				}
 				if (lut_str && *lut_str) {
-					rc = fdev_logic_a2d_lut(model, y, x, DEV_LOG_X,
+					rc = fdev_logic_a2d_lut(es->model, y, x, DEV_LOG_X,
 						LUT_D, 6, lut_str, ZTERM);
 					*(uint32_t*)(u8_p+29*FRAME_SIZE+byte_off) = 0;
 					*(uint32_t*)(u8_p+30*FRAME_SIZE+byte_off) = 0;
 				}
+			}
+#endif
+
+static int extract_logic(struct extract_state* es)
+{
+	int row, row_pos, x, y, i, byte_off, last_minor, lut5_used, rc;
+	int ml_latch, x_latch;
+	struct fpgadev_logic cfg_ml, cfg_x;
+	uint64_t lut_X[4], lut_ML[4]; // LUT_A-LUT_D
+	uint64_t mi20, mi23_M, mi2526;
+	uint8_t* u8_p;
+
+	for (x = LEFT_SIDE_WIDTH; x < es->model->x_width-RIGHT_SIDE_WIDTH; x++) {
+		if (!is_atx(X_FABRIC_LOGIC_COL|X_CENTER_LOGIC_COL, es->model, x))
+			continue;
+		for (y = TOP_IO_TILES; y < es->model->y_height - BOT_IO_TILES; y++) {
+			if (!has_device(es->model, y, x, DEV_LOGIC))
+				continue;
+			row = which_row(y, es->model);
+			row_pos = pos_in_row(y, es->model);
+			if (row == -1 || row_pos == -1 || row_pos == 8) {
+				HERE();
+				continue;
+			}
+			if (row_pos > 8) row_pos--;
+			u8_p = get_first_minor(es->bits, row, es->model->x_major[x]);
+			byte_off = row_pos * 8;
+			if (row_pos >= 8) byte_off += HCLK_BYTES;
+
+			mi20 = frame_get_u64(u8_p + 20*FRAME_SIZE + byte_off) & XC6_MI20_LOGIC_MASK;
+			if (has_device_type(es->model, y, x, DEV_LOGIC, LOGIC_M)) {
+				mi23_M = frame_get_u64(u8_p + 23*FRAME_SIZE + byte_off);
+				mi2526 = frame_get_u64(u8_p + 26*FRAME_SIZE + byte_off);
+				lut_ML[LUT_A] = frame_get_lut64(u8_p + 24*FRAME_SIZE, row_pos*2+1);
+				lut_ML[LUT_B] = frame_get_lut64(u8_p + 21*FRAME_SIZE, row_pos*2+1);
+				lut_ML[LUT_C] = frame_get_lut64(u8_p + 24*FRAME_SIZE, row_pos*2);
+				lut_ML[LUT_D] = frame_get_lut64(u8_p + 21*FRAME_SIZE, row_pos*2);
+				lut_X[LUT_A] = frame_get_lut64(u8_p + 27*FRAME_SIZE, row_pos*2+1);
+				lut_X[LUT_B] = frame_get_lut64(u8_p + 29*FRAME_SIZE, row_pos*2+1);
+				lut_X[LUT_C] = frame_get_lut64(u8_p + 27*FRAME_SIZE, row_pos*2);
+				lut_X[LUT_D] = frame_get_lut64(u8_p + 29*FRAME_SIZE, row_pos*2);
+			} else if (has_device_type(es->model, y, x, DEV_LOGIC, LOGIC_L)) {
+				mi23_M = 0;
+				mi2526 = frame_get_u64(u8_p + 25*FRAME_SIZE + byte_off);
+				lut_ML[LUT_A] = frame_get_lut64(u8_p + 23*FRAME_SIZE, row_pos*2+1);
+				lut_ML[LUT_B] = frame_get_lut64(u8_p + 21*FRAME_SIZE, row_pos*2+1);
+				lut_ML[LUT_C] = frame_get_lut64(u8_p + 23*FRAME_SIZE, row_pos*2);
+				lut_ML[LUT_D] = frame_get_lut64(u8_p + 21*FRAME_SIZE, row_pos*2);
+				lut_X[LUT_A] = frame_get_lut64(u8_p + 26*FRAME_SIZE, row_pos*2+1);
+				lut_X[LUT_B] = frame_get_lut64(u8_p + 28*FRAME_SIZE, row_pos*2+1);
+				lut_X[LUT_C] = frame_get_lut64(u8_p + 26*FRAME_SIZE, row_pos*2);
+				lut_X[LUT_D] = frame_get_lut64(u8_p + 28*FRAME_SIZE, row_pos*2);
+			} else {
+				HERE();
+				continue;
+			}
+		   	if (!mi20 && !mi23_M && !mi2526
+			    && !lut_X[0] && !lut_X[1] && !lut_X[2] && !lut_X[3]
+			    && !lut_ML[0] && !lut_ML[1] && !lut_ML[2] && !lut_ML[3])
+				continue;
+
+			memset(&cfg_ml, 0, sizeof(cfg_ml));
+			memset(&cfg_x, 0, sizeof(cfg_x));
+			ml_latch = 0;
+			x_latch = 0;
+
+			// minor20
+			if (mi20 & (1ULL<<XC6_ML_D5_FFSRINIT_1)) {
+				cfg_ml.a2d[LUT_D].ff5_srinit = FF_SRINIT1;
+				mi20 &= ~(1ULL<<XC6_ML_D5_FFSRINIT_1);
+			}
+			if (mi20 & (1ULL<<XC6_X_D5_FFSRINIT_1)) {
+				cfg_x.a2d[LUT_D].ff5_srinit = FF_SRINIT1;
+				mi20 &= ~(1ULL<<XC6_X_D5_FFSRINIT_1);
+			}
+			if (mi20 & (1ULL<<XC6_ML_C5_FFSRINIT_1)) {
+				cfg_ml.a2d[LUT_C].ff5_srinit = FF_SRINIT1;
+				mi20 &= ~(1ULL<<XC6_ML_C5_FFSRINIT_1);
+			}
+			if (mi20 & (1ULL<<XC6_X_C_FFSRINIT_1)) {
+				cfg_x.a2d[LUT_C].ff_srinit = FF_SRINIT1;
+				mi20 &= ~(1ULL<<XC6_X_C_FFSRINIT_1);
+			}
+			if (mi20 & (1ULL<<XC6_X_C5_FFSRINIT_1)) {
+				cfg_x.a2d[LUT_C].ff5_srinit = FF_SRINIT1;
+				mi20 &= ~(1ULL<<XC6_X_C5_FFSRINIT_1);
+			}
+			if (mi20 & (1ULL<<XC6_ML_B5_FFSRINIT_1)) {
+				cfg_ml.a2d[LUT_B].ff5_srinit = FF_SRINIT1;
+				mi20 &= ~(1ULL<<XC6_ML_B5_FFSRINIT_1);
+			}
+			if (mi20 & (1ULL<<XC6_X_B5_FFSRINIT_1)) {
+				cfg_x.a2d[LUT_B].ff5_srinit = FF_SRINIT1;
+				mi20 &= ~(1ULL<<XC6_X_B5_FFSRINIT_1);
+			}
+			if (mi20 & (1ULL<<XC6_M_A_FFSRINIT_1)) {
+				if (has_device_type(es->model, y, x, DEV_LOGIC, LOGIC_L)) {
+					HERE();
+					continue;
+				}
+				cfg_ml.a2d[LUT_A].ff_srinit = FF_SRINIT1;
+				mi20 &= ~(1ULL<<XC6_M_A_FFSRINIT_1);
+			}
+			if (mi20 & (1ULL<<XC6_X_A5_FFSRINIT_1)) {
+				cfg_x.a2d[LUT_A].ff5_srinit = FF_SRINIT1;
+				mi20 &= ~(1ULL<<XC6_X_A5_FFSRINIT_1);
+			}
+			if (mi20 & (1ULL<<XC6_ML_A5_FFSRINIT_1)) {
+				cfg_ml.a2d[LUT_A].ff5_srinit = FF_SRINIT1;
+				mi20 &= ~(1ULL<<XC6_ML_A5_FFSRINIT_1);
+			}
+
+			// minor 25/26
+			if (mi2526 & (1ULL<<XC6_ML_D_CY0_O5)) {
+				cfg_ml.a2d[LUT_D].cy0 = CY0_O5;
+				mi2526 &= ~(1ULL<<XC6_ML_D_CY0_O5);
+			}
+			if (mi2526 & (1ULL<<XC6_X_D_OUTMUX_O5)) {
+				cfg_x.a2d[LUT_D].out_mux = MUX_O5;
+				mi2526 &= ~(1ULL<<XC6_X_D_OUTMUX_O5);
+			}
+			if (mi2526 & (1ULL<<XC6_X_C_OUTMUX_O5)) {
+				cfg_x.a2d[LUT_C].out_mux = MUX_O5;
+				mi2526 &= ~(1ULL<<XC6_X_C_OUTMUX_O5);
+			}
+			if (mi2526 & (1ULL<<XC6_ML_D_FFSRINIT_1)) {
+				cfg_ml.a2d[LUT_D].ff_srinit = 1;
+				mi2526 &= ~(1ULL<<XC6_ML_D_FFSRINIT_1);
+			}
+			if (mi2526 & (1ULL<<XC6_ML_C_FFSRINIT_1)) {
+				cfg_ml.a2d[LUT_C].ff_srinit = 1;
+				mi2526 &= ~(1ULL<<XC6_ML_C_FFSRINIT_1);
+			}
+			if (mi2526 & (1ULL<<XC6_X_D_FFSRINIT_1)) {
+				cfg_x.a2d[LUT_D].ff_srinit = 1;
+				mi2526 &= ~(1ULL<<XC6_X_D_FFSRINIT_1);
+			}
+			if (mi2526 & (1ULL<<XC6_ML_C_CY0_O5)) {
+				cfg_ml.a2d[LUT_C].cy0 = CY0_O5;
+				mi2526 &= ~(1ULL<<XC6_ML_C_CY0_O5);
+			}
+			if (mi2526 & (1ULL<<XC6_X_B_OUTMUX_O5)) {
+				cfg_x.a2d[LUT_B].out_mux = MUX_O5;
+				mi2526 &= ~(1ULL<<XC6_X_B_OUTMUX_O5);
+			}
+			if (mi2526 & XC6_ML_D_OUTMUX_MASK) {
+				switch ((mi2526 & XC6_ML_D_OUTMUX_MASK) >> XC6_ML_D_OUTMUX_O) {
+					case XC6_ML_D_OUTMUX_O6:
+						cfg_ml.a2d[LUT_D].out_mux = MUX_O6;
+						break;
+					case XC6_ML_D_OUTMUX_XOR:
+						cfg_ml.a2d[LUT_D].out_mux = MUX_XOR;
+						break;
+					case XC6_ML_D_OUTMUX_O5:
+						cfg_ml.a2d[LUT_D].out_mux = MUX_O5;
+						break;
+					case XC6_ML_D_OUTMUX_CY:
+						cfg_ml.a2d[LUT_D].out_mux = MUX_CY;
+						break;
+					case XC6_ML_D_OUTMUX_5Q:
+						cfg_ml.a2d[LUT_D].out_mux = MUX_5Q;
+						break;
+					default: HERE(); continue;
+				}
+				mi2526 &= ~XC6_ML_D_OUTMUX_MASK;
+			}
+			if (mi2526 & XC6_ML_D_FFMUX_MASK) {
+				switch ((mi2526 & XC6_ML_D_FFMUX_MASK) >> XC6_ML_D_FFMUX_O) {
+					case XC6_ML_D_FFMUX_O5:
+						cfg_ml.a2d[LUT_D].ff_mux = MUX_O5;
+						break;
+					case XC6_ML_D_FFMUX_X:
+						cfg_ml.a2d[LUT_D].ff_mux = MUX_X;
+						break;
+					case XC6_ML_D_FFMUX_XOR:
+						cfg_ml.a2d[LUT_D].ff_mux = MUX_XOR;
+						break;
+					case XC6_ML_D_FFMUX_CY:
+						cfg_ml.a2d[LUT_D].ff_mux = MUX_CY;
+						break;
+					default: HERE(); continue;
+				}
+				mi2526 &= ~XC6_ML_D_FFMUX_MASK;
+			}
+			if (mi2526 & (1ULL<<XC6_X_CLK_B)) {
+				cfg_x.clk_inv = CLKINV_B;
+				mi2526 &= ~(1ULL<<XC6_X_CLK_B);
+			}
+			if (mi2526 & (1ULL<<XC6_ML_ALL_LATCH)) {
+				ml_latch = 1;
+				mi2526 &= ~(1ULL<<XC6_ML_ALL_LATCH);
+			}
+			if (mi2526 & (1ULL<<XC6_ML_SR_USED)) {
+				cfg_ml.sr_used = 1;
+				mi2526 &= ~(1ULL<<XC6_ML_SR_USED);
+			}
+			if (mi2526 & (1ULL<<XC6_ML_SYNC)) {
+				cfg_ml.sync_attr = SYNCATTR_SYNC;
+				mi2526 &= ~(1ULL<<XC6_ML_SYNC);
+			}
+			if (mi2526 & (1ULL<<XC6_ML_CE_USED)) {
+				cfg_ml.ce_used = 1;
+				mi2526 &= ~(1ULL<<XC6_ML_CE_USED);
+			}
+			if (mi2526 & (1ULL<<XC6_X_D_FFMUX_DX)) {
+				cfg_x.a2d[LUT_D].ff_mux = MUX_X;
+				mi2526 &= ~(1ULL<<XC6_X_D_FFMUX_DX);
+			}
+			if (mi2526 & (1ULL<<XC6_X_C_FFMUX_CX)) {
+				cfg_x.a2d[LUT_C].ff_mux = MUX_X;
+				mi2526 &= ~(1ULL<<XC6_X_C_FFMUX_CX);
+			}
+			if (mi2526 & (1ULL<<XC6_X_CE_USED)) {
+				cfg_x.ce_used = 1;
+				mi2526 &= ~(1ULL<<XC6_X_CE_USED);
+			}
+			if (mi2526 & XC6_ML_C_OUTMUX_MASK) {
+				switch ((mi2526 & XC6_ML_C_OUTMUX_MASK) >> XC6_ML_C_OUTMUX_O) {
+					case XC6_ML_C_OUTMUX_XOR:
+						cfg_ml.a2d[LUT_C].out_mux = MUX_XOR;
+						break;
+					case XC6_ML_C_OUTMUX_O6:
+						cfg_ml.a2d[LUT_C].out_mux = MUX_O6;
+						break;
+					case XC6_ML_C_OUTMUX_5Q:
+						cfg_ml.a2d[LUT_C].out_mux = MUX_5Q;
+						break;
+					case XC6_ML_C_OUTMUX_CY:
+						cfg_ml.a2d[LUT_C].out_mux = MUX_CY;
+						break;
+					case XC6_ML_C_OUTMUX_O5:
+						cfg_ml.a2d[LUT_C].out_mux = MUX_O5;
+						break;
+					case XC6_ML_C_OUTMUX_F7:
+						cfg_ml.a2d[LUT_C].out_mux = MUX_F7;
+						break;
+					default: HERE(); continue;
+				}
+				mi2526 &= ~XC6_ML_C_OUTMUX_MASK;
+			}
+			if (mi2526 & XC6_ML_C_FFMUX_MASK) {
+				switch ((mi2526 & XC6_ML_C_FFMUX_MASK) >> XC6_ML_C_FFMUX_O) {
+					case XC6_ML_C_FFMUX_O5:
+						cfg_ml.a2d[LUT_C].ff_mux = MUX_O5;
+						break;
+					case XC6_ML_C_FFMUX_X:
+						cfg_ml.a2d[LUT_C].ff_mux = MUX_X;
+						break;
+					case XC6_ML_C_FFMUX_F7:
+						cfg_ml.a2d[LUT_C].ff_mux = MUX_F7;
+						break;
+					case XC6_ML_C_FFMUX_XOR:
+						cfg_ml.a2d[LUT_C].ff_mux = MUX_XOR;
+						break;
+					case XC6_ML_C_FFMUX_CY:
+						cfg_ml.a2d[LUT_C].ff_mux = MUX_CY;
+						break;
+					default: HERE(); continue;
+				}
+				mi2526 &= ~XC6_ML_C_FFMUX_MASK;
+			}
+			if (mi2526 & XC6_ML_B_OUTMUX_MASK) {
+				switch ((mi2526 & XC6_ML_B_OUTMUX_MASK) >> XC6_ML_B_OUTMUX_O) {
+					case XC6_ML_B_OUTMUX_5Q:
+						cfg_ml.a2d[LUT_B].out_mux = MUX_5Q;
+						break;
+					case XC6_ML_B_OUTMUX_F8:
+						cfg_ml.a2d[LUT_B].out_mux = MUX_F8;
+						break;
+					case XC6_ML_B_OUTMUX_XOR:
+						cfg_ml.a2d[LUT_B].out_mux = MUX_XOR;
+						break;
+					case XC6_ML_B_OUTMUX_CY:
+						cfg_ml.a2d[LUT_B].out_mux = MUX_CY;
+						break;
+					case XC6_ML_B_OUTMUX_O6:
+						cfg_ml.a2d[LUT_B].out_mux = MUX_O6;
+						break;
+					case XC6_ML_B_OUTMUX_O5:
+						cfg_ml.a2d[LUT_B].out_mux = MUX_O5;
+						break;
+					default: HERE(); continue;
+				}
+				mi2526 &= ~XC6_ML_B_OUTMUX_MASK;
+			}
+			if (mi2526 & (1ULL<<XC6_X_B_FFMUX_CX)) {
+				cfg_x.a2d[LUT_B].ff_mux = MUX_X;
+				mi2526 &= ~(1ULL<<XC6_X_B_FFMUX_CX);
+			}
+			if (mi2526 & (1ULL<<XC6_X_A_FFMUX_CX)) {
+				cfg_x.a2d[LUT_A].ff_mux = MUX_X;
+				mi2526 &= ~(1ULL<<XC6_X_A_FFMUX_CX);
+			}
+			if (mi2526 & (1ULL<<XC6_X_B_FFSRINIT_1)) {
+				cfg_x.a2d[LUT_B].ff_srinit = FF_SRINIT1;
+				mi2526 &= ~(1ULL<<XC6_X_B_FFSRINIT_1);
+			}
+			if (mi2526 & (1ULL<<XC6_X_A_OUTMUX_O5)) {
+				cfg_x.a2d[LUT_A].out_mux = MUX_O5;
+				mi2526 &= ~(1ULL<<XC6_X_A_OUTMUX_O5);
+			}
+			if (mi2526 & (1ULL<<XC6_X_SR_USED)) {
+				cfg_x.sr_used = 1;
+				mi2526 &= ~(1ULL<<XC6_X_SR_USED);
+			}
+			if (mi2526 & (1ULL<<XC6_X_SYNC)) {
+				cfg_x.sync_attr = SYNCATTR_SYNC;
+				mi2526 &= ~(1ULL<<XC6_X_SYNC);
+			}
+			if (mi2526 & (1ULL<<XC6_X_ALL_LATCH)) {
+				x_latch = 1;
+				mi2526 &= ~(1ULL<<XC6_X_ALL_LATCH);
+			}
+			if (mi2526 & (1ULL<<XC6_ML_CLK_B)) {
+				cfg_ml.clk_inv = CLKINV_B;
+				mi2526 &= ~(1ULL<<XC6_ML_CLK_B);
+			}
+			if (mi2526 & XC6_ML_B_FFMUX_MASK) {
+				switch ((mi2526 & XC6_ML_B_FFMUX_MASK) >> XC6_ML_B_FFMUX_O) {
+					case XC6_ML_B_FFMUX_XOR:
+						cfg_ml.a2d[LUT_B].ff_mux = MUX_XOR;
+						break;
+					case XC6_ML_B_FFMUX_O5:
+						cfg_ml.a2d[LUT_B].ff_mux = MUX_O5;
+						break;
+					case XC6_ML_B_FFMUX_CY:
+						cfg_ml.a2d[LUT_B].ff_mux = MUX_CY;
+						break;
+					case XC6_ML_B_FFMUX_X:
+						cfg_ml.a2d[LUT_B].ff_mux = MUX_X;
+						break;
+					case XC6_ML_B_FFMUX_F8:
+						cfg_ml.a2d[LUT_B].ff_mux = MUX_F8;
+						break;
+					default: HERE(); continue;
+				}
+				mi2526 &= ~XC6_ML_B_FFMUX_MASK;
+			}
+			if (mi2526 & XC6_ML_A_FFMUX_MASK) {
+				switch ((mi2526 & XC6_ML_A_FFMUX_MASK) >> XC6_ML_A_FFMUX_O) {
+					case XC6_ML_A_FFMUX_XOR:
+						cfg_ml.a2d[LUT_A].ff_mux = MUX_XOR;
+						break;
+					case XC6_ML_A_FFMUX_X:
+						cfg_ml.a2d[LUT_A].ff_mux = MUX_X;
+						break;
+					case XC6_ML_A_FFMUX_O5:
+						cfg_ml.a2d[LUT_A].ff_mux = MUX_O5;
+						break;
+					case XC6_ML_A_FFMUX_CY:
+						cfg_ml.a2d[LUT_A].ff_mux = MUX_CY;
+						break;
+					case XC6_ML_A_FFMUX_F7:
+						cfg_ml.a2d[LUT_A].ff_mux = MUX_F7;
+						break;
+					default: HERE(); continue;
+				}
+				mi2526 &= ~XC6_ML_A_FFMUX_MASK;
+			}
+			if (mi2526 & XC6_ML_A_OUTMUX_MASK) {
+				switch ((mi2526 & XC6_ML_A_OUTMUX_MASK) >> XC6_ML_A_OUTMUX_O) {
+					case XC6_ML_A_OUTMUX_5Q:
+						cfg_ml.a2d[LUT_A].out_mux = MUX_5Q;
+						break;
+					case XC6_ML_A_OUTMUX_F7:
+						cfg_ml.a2d[LUT_A].out_mux = MUX_F7;
+						break;
+					case XC6_ML_A_OUTMUX_XOR:
+						cfg_ml.a2d[LUT_A].out_mux = MUX_XOR;
+						break;
+					case XC6_ML_A_OUTMUX_CY:
+						cfg_ml.a2d[LUT_A].out_mux = MUX_CY;
+						break;
+					case XC6_ML_A_OUTMUX_O6:
+						cfg_ml.a2d[LUT_A].out_mux = MUX_O6;
+						break;
+					case XC6_ML_A_OUTMUX_O5:
+						cfg_ml.a2d[LUT_A].out_mux = MUX_O5;
+						break;
+					default: HERE(); continue;
+				}
+				mi2526 &= ~XC6_ML_A_OUTMUX_MASK;
+			}
+			if (mi2526 & (1ULL<<XC6_ML_B_CY0_O5)) {
+				cfg_ml.a2d[LUT_B].cy0 = CY0_O5;
+				mi2526 &= ~(1ULL<<XC6_ML_B_CY0_O5);
+			}
+			if (mi2526 & (1ULL<<XC6_ML_PRECYINIT_AX)) {
+				cfg_ml.precyinit = PRECYINIT_AX;
+				mi2526 &= ~(1ULL<<XC6_ML_PRECYINIT_AX);
+			}
+			if (mi2526 & (1ULL<<XC6_X_A_FFSRINIT_1)) {
+				cfg_x.a2d[LUT_A].ff_srinit = FF_SRINIT1;
+				mi2526 &= ~(1ULL<<XC6_X_A_FFSRINIT_1);
+			}
+			if (mi2526 & (1ULL<<XC6_ML_PRECYINIT_1)) {
+				cfg_ml.precyinit = PRECYINIT_1;
+				mi2526 &= ~(1ULL<<XC6_ML_PRECYINIT_1);
+			}
+			if (mi2526 & (1ULL<<XC6_ML_B_FFSRINIT_1)) {
+				cfg_ml.a2d[LUT_B].ff_srinit = FF_SRINIT1;
+				mi2526 &= ~(1ULL<<XC6_ML_B_FFSRINIT_1);
+			}
+			if (mi2526 & (1ULL<<XC6_ML_A_CY0_O5)) {
+				cfg_ml.a2d[LUT_A].cy0 = CY0_O5;
+				mi2526 &= ~(1ULL<<XC6_ML_A_CY0_O5);
+			}
+			if (mi2526 & (1ULL<<XC6_L_A_FFSRINIT_1)) {
+				if (has_device_type(es->model, y, x, DEV_LOGIC, LOGIC_M)) {
+					HERE();
+					continue;
+				}
+				cfg_ml.a2d[LUT_A].ff_srinit = FF_SRINIT1;
+				mi2526 &= ~(1ULL<<XC6_L_A_FFSRINIT_1);
+			}
+
+			// abort if bits remain
+		   	if (mi20 || mi23_M || mi2526) {
+				HERE();
+				continue;
+			}
+
+			// if srinit=1, the matching ff/latch must be on
+			// handle all_latch
+			// todo: cfg_ml.cout_used must be determined from switches
+// fdev_is_pin_connected()
+			// 
+		// todo: srinit=0, ffmux=06
+// todo: in ML, if srinit=0 cannot decide between ff_mux=O6 or direct-out, need to check connectivity!
+
+//  cout_used, a_used-d_used, srinit=0, non-inverted clock,
+//  async attribute, precyinit=0, ffmux=O6, cy0=X, enabling
+//  5Q-ff in X devices
+			// ML-A
+			if (lut_ML[LUT_A]
+			    || !all_zero(&cfg_ml.a2d[LUT_A], sizeof(cfg_ml.a2d[LUT_A]))) {
+				lut5_used = (cfg_ml.a2d[LUT_A].ff_mux == MUX_O5
+					|| cfg_ml.a2d[LUT_A].out_mux == MUX_5Q
+					|| cfg_ml.a2d[LUT_A].out_mux == MUX_O5
+					|| cfg_ml.a2d[LUT_A].cy0 == CY0_O5);
+				// We have to determine out_used from the
+				// environment.
+				// todo: check outpin connectivity
+// todo: ffmux=O6 has no bits set
+				if (lut_ML[LUT_A]
+				    && cfg_ml.a2d[LUT_A].out_mux != MUX_O6
+				    && cfg_ml.a2d[LUT_A].out_mux != MUX_XOR
+				    && cfg_ml.a2d[LUT_A].out_mux != MUX_CY
+				    && cfg_ml.a2d[LUT_A].out_mux != MUX_F7
+				    && cfg_ml.a2d[LUT_A].ff_mux != MUX_O6
+				    && cfg_ml.a2d[LUT_A].ff_mux != MUX_XOR
+				    && cfg_ml.a2d[LUT_A].ff_mux != MUX_CY
+				    && cfg_ml.a2d[LUT_A].ff_mux != MUX_F7)
+					cfg_ml.a2d[LUT_A].out_used = 1;
+
+// minimum: a_used, a_lut
+// decide: lut5/6 pair or just lut6?
+				if (lut5_used) {
+				} else {
+				}
+			}
+			// ML-B
+			// ML-C
+			// ML-D
+			// X-A
+			// X-B
+			// X-C
+			// X-D
+
+			// If any ff_mux is set, check that we have a clock
+			// and sync attribute. Do this after the LUT checks
+			// because presence of a 'hard' clock/sync bit may
+			// signal ff presence there.
+		// todo: if a ff_mux is != 0, clk and sync must be set
+
+			// remove all bits
+			frame_set_u64(u8_p + 20*FRAME_SIZE + byte_off,
+				frame_get_u64(u8_p + 20*FRAME_SIZE + byte_off)
+					& ~XC6_MI20_LOGIC_MASK);
+			last_minor = has_device_type(es->model, y, x, DEV_LOGIC, LOGIC_M) ? 30 : 29;
+			for (i = 21; i <= last_minor; i++)
+				frame_set_u64(u8_p + i*FRAME_SIZE + byte_off, 0);
+		
+			// instantiate configuration
+			if (!all_zero(&cfg_ml, sizeof(cfg_ml))) {
+				rc = fdev_logic_setconf(es->model, y, x, DEV_LOG_M_OR_L, &cfg_ml);
+				if (rc) FAIL(rc);
+			}
+			if (!all_zero(&cfg_x, sizeof(cfg_x))) {
+				rc = fdev_logic_setconf(es->model, y, x, DEV_LOG_X, &cfg_x);
+				if (rc) FAIL(rc);
 			}
 		}
 	}
@@ -918,11 +1386,11 @@ int extract_model(struct fpga_model* model, struct fpga_bits* bits)
 		clear_bitp(bits, &s_default_bits[i]);
 	}
 
-	rc = extract_iobs(model, bits);
-	if (rc) FAIL(rc);
-	rc = extract_logic(model, bits);
-	if (rc) FAIL(rc);
 	rc = extract_switches(&es);
+	if (rc) FAIL(rc);
+	rc = extract_iobs(&es);
+	if (rc) FAIL(rc);
+	rc = extract_logic(&es);
 	if (rc) FAIL(rc);
 
 	// turn switches into nets

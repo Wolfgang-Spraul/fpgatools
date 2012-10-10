@@ -978,6 +978,39 @@ int mod4_calc(int a, int b)
 	return (unsigned int) (a+b)%4;
 }
 
+int all_zero(const void* d, int num_bytes)
+{
+	int i;
+	for (i = 0; i < num_bytes; i++)
+		if (((uint8_t*)d)[i]) return 0;
+	return 1;
+}
+
+int get_nibble(uint64_t u64, int nibble_bit0_off)
+{
+	int n, i;
+
+	n = 0;
+	for (i = 0; i < 4; i++) {
+		if (u64 & (1ULL << (nibble_bit0_off+i)))
+			n |= 1<<i;
+	}
+	return n;
+}
+
+uint64_t set_nibble(uint64_t u64, int nibble_bit0_off, int nibble_val)
+{
+	int i;
+
+	for (i = 0; i < 4; i++) {
+		if (nibble_val & (1<<i))
+			u64 |= 1ULL << (nibble_bit0_off+i);
+		else
+			u64 &= ~(1ULL << (nibble_bit0_off+i));
+	}
+	return u64;
+}
+
 void printf_wrap(FILE* f, char* line, int prefix_len,
 	const char* fmt, ...)
 {

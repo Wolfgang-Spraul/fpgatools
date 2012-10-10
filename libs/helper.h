@@ -115,6 +115,9 @@ int str_cmp(const char* a, int a_len, const char* b, int b_len);
 int all_digits(const char* a, int len);
 int to_i(const char* s, int len);
 int mod4_calc(int a, int b);
+int all_zero(const void* d, int num_bytes);
+int get_nibble(uint64_t u64, int nibble_bit0_off);
+uint64_t set_nibble(uint64_t u64, int nibble_bit0_off, int nibble_val);
 
 void printf_wrap(FILE* f, char* line, int prefix_len,
 	const char* fmt, ...);
