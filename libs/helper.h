@@ -57,14 +57,11 @@ typedef struct _cfg_atom
 int atom_found(char* bits, const cfg_atom_t* atom);
 void atom_remove(char* bits, const cfg_atom_t* atom);
 
-uint64_t map_bits(uint64_t u64, int num_bits, int* dest_pos);
+uint64_t map_bits(uint64_t u64, int num_bits, int* src_pos);
 int bool_str2bits(const char* str, uint64_t* u64, int num_bits);
 const char* bool_bits2str(uint64_t u64, int num_bits);
 
 int parse_boolexpr(const char* expr, uint64_t* lut);
-// bits is tested only for 32 and 64
-const char* lut2bool(const uint64_t lut, int bits,
-	int (*logic_base)[6], int flip_b0);
 
 int printf_iob(uint8_t* d, int len, int inpos, int num_entries);
 void printf_ramb16_data(uint8_t* bits, int inpos);
@@ -100,7 +97,6 @@ void printf_clock(const uint8_t* frame, int row, int major, int minor);
 int clb_empty(uint8_t* maj_bits, int idx);
 void printf_extrabits(const uint8_t* maj_bits, int start_minor, int num_minors,
 	int start_bit, int num_bits, int row, int major);
-uint64_t read_lut64(const uint8_t* two_minors, int bit_off_in_frame);
 void write_lut64(uint8_t* two_minors, int off_in_frame, uint64_t u64);
 
 int get_vm_mb(void);
@@ -116,8 +112,6 @@ int all_digits(const char* a, int len);
 int to_i(const char* s, int len);
 int mod4_calc(int a, int b);
 int all_zero(const void* d, int num_bytes);
-int get_nibble(uint64_t u64, int nibble_bit0_off);
-uint64_t set_nibble(uint64_t u64, int nibble_bit0_off, int nibble_val);
 
 void printf_wrap(FILE* f, char* line, int prefix_len,
 	const char* fmt, ...);

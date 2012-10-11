@@ -810,7 +810,7 @@ void free_xc6_routing_bitpos(struct xc6_routing_bitpos* bitpos)
 	free(bitpos);
 }
 
-void xc6_lut_bitmap(int lut_pos, int* map, int num_bits)
+void xc6_lut_bitmap(int lut_pos, int (*map)[64], int num_bits)
 {
 	static const int xc6_lut_wiring[4][16] = {
 	// xm-m a; xm-m c;
@@ -839,12 +839,12 @@ void xc6_lut_bitmap(int lut_pos, int* map, int num_bits)
 	// expand from 32 to 64 for either lut6 only or lut5/lut6 pair.
 	for (i = 0; i < 32; i++) {
 		if (num_bits == 32) {
-			map[i] = map32[i]%32;
-			map[32+i] = 32+map[i];
+			(*map)[i] = map32[i]%32;
+			(*map)[32+i] = 32+(*map)[i];
 		} else {
 			if (num_bits != 64) HERE();
-			map[i] = map32[i];
-			map[32+i] = (map[i]+32)%64;
+			(*map)[i] = map32[i];
+			(*map)[32+i] = ((*map)[i]+32)%64;
 		}
 	}
 }

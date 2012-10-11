@@ -178,15 +178,15 @@ fail:
 	return -1;
 }
 
-uint64_t map_bits(uint64_t u64, int num_bits, int* dest_pos)
+uint64_t map_bits(uint64_t u64, int num_bits, int* src_pos)
 {
 	uint64_t result;
 	int i;
 
 	result = 0;
 	for (i = 0; i < num_bits; i++) {
-		if (u64 & (1ULL<<i))
-			result |= 1ULL<<(dest_pos[i]);
+		if (u64 & (1ULL<<(src_pos[i])))
+			result |= 1ULL<<i;
 	}
 	return result;
 }
@@ -348,142 +348,6 @@ int parse_boolexpr(const char* expr, uint64_t* lut)
 		if (result) *lut |= 1LL<<i;
 	}
 	return 0;
-}
-
-// bits is tested only for 32 and 64
-const char* lut2bool(const uint64_t lut, int bits,
-	int (*logic_base)[6], int flip_b0)
-{
-	// round 0 needs 64 entries
-	// round 1 (size2): 192
-	// round 2 (size4): 240
-	// round 3 (size8): 160
-	// round 4 (size16): 60
-	// round 5 (size32): 12
-	// round 6 (size64): 1
-	minterm_entry mt[7][256];
-	int mt_size[7];
-	int i, j, k, round, only_diff_bit;
-	int str_end, first_op;
-	static char str[2048];
-
-	if (!lut) return "0";
-	if (lut == 0xFFFFFFFFFFFFFFFFULL) return "1";
-
-	memset(mt, 0, sizeof(mt));
-	memset(mt_size, 0, sizeof(mt_size));
-
-	for (i = 0; i < bits; i++) {
-		if (lut & (1LL<<i)) {
-			mt[0][mt_size[0]].a[0] = (*logic_base)[0];
-			mt[0][mt_size[0]].a[1] = (*logic_base)[1];
-			mt[0][mt_size[0]].a[2] = (*logic_base)[2];
-			mt[0][mt_size[0]].a[3] = (*logic_base)[3];
-			mt[0][mt_size[0]].a[4] = (*logic_base)[4];
-			mt[0][mt_size[0]].a[5] = (*logic_base)[5];
-			for (j = 0; j < 6; j++) {
-				if (j != 2 && (i&(1<<j)))
-					mt[0][mt_size[0]].a[j]
-						= !mt[0][mt_size[0]].a[j];
-			}
-			if (((i&8) != 0) ^ ((i&4) != 0))
-				mt[0][mt_size[0]].a[2] = 1;
-			if (flip_b0
-			   && (mt[0][mt_size[0]].a[2] ^ mt[0][mt_size[0]].a[3]))
-			  mt[0][mt_size[0]].a[0] = !mt[0][mt_size[0]].a[0];
-			mt_size[0]++;
-		}
-	}
-
-	// special case: no minterms -> empty string
-	if (mt_size[0] == 0) {
-		str[0] = 0;
-		return str;
-	}
-
-	// go through five rounds of merging
-	for (round = 1; round < 7; round++) {
-		for (i = 0; i < mt_size[round-1]; i++) {
-			for (j = i+1; j < mt_size[round-1]; j++) {
-				only_diff_bit = -1;
-				for (k = 0; k < 6; k++) {
-					if (mt[round-1][i].a[k] != mt[round-1][j].a[k]) {
-						if (only_diff_bit != -1) {
-							only_diff_bit = -1;
-							break;
-						}
-						only_diff_bit = k;
-					}
-				}
-				if (only_diff_bit != -1) {
-					char new_term[6];
-	
-					for (k = 0; k < 6; k++)
-						new_term[k] =
-						  (k == only_diff_bit) ? 2 
-						    : mt[round-1][i].a[k];
-					for (k = 0; k < mt_size[round]; k++) {
-						if (new_term[0] == mt[round][k].a[0]
-						    && new_term[1] == mt[round][k].a[1]
-						    && new_term[2] == mt[round][k].a[2]
-						    && new_term[3] == mt[round][k].a[3]
-						    && new_term[4] == mt[round][k].a[4]
-						    && new_term[5] == mt[round][k].a[5])
-							break;
-					}
-					if (k >= mt_size[round]) {
-						mt[round][mt_size[round]].a[0] = new_term[0];
-						mt[round][mt_size[round]].a[1] = new_term[1];
-						mt[round][mt_size[round]].a[2] = new_term[2];
-						mt[round][mt_size[round]].a[3] = new_term[3];
-						mt[round][mt_size[round]].a[4] = new_term[4];
-						mt[round][mt_size[round]].a[5] = new_term[5];
-						mt_size[round]++;
-					}
-					mt[round-1][i].merged = 1;
-					mt[round-1][j].merged = 1;
-				}
-			}
-		}
-	}
-	// special case: 222222 -> (A6+~A6)
-	for (i = 0; i < mt_size[6]; i++) {
-		if (mt[6][i].a[0] == 2
-		    && mt[6][i].a[1] == 2
-		    && mt[6][i].a[2] == 2
-		    && mt[6][i].a[3] == 2
-		    && mt[6][i].a[4] == 2
-		    && mt[6][i].a[5] == 2) {
-			strcpy(str, "A6+~A6");
-			return str;
-		}
-	}
-
-	str_end = 0;
-	for (round = 0; round < 7; round++) {
-		for (i = 0; i < mt_size[round]; i++) {
-			if (!mt[round][i].merged) {
-				if (str_end)
-					str[str_end++] = '+';
-				first_op = 1;
-				for (j = 0; j < 6; j++) {
-					if (mt[round][i].a[j] != 2) {
-						if (!first_op)
-							str[str_end++] = '*';
-						if (!mt[round][i].a[j])
-							str[str_end++] = '~';
-						str[str_end++] = 'A';
-						str[str_end++] = '1' + j;
-						first_op = 0;
-					}
-				}
-			}
-		}
-	}
-	str[str_end] = 0;
-	// TODO: This could be further simplified, see Petrick's method.
-	// XOR don't simplify well, try A2@A3
-	return str;
 }
 
 int printf_iob(uint8_t* d, int len, int inpos, int num_entries)
@@ -829,24 +693,6 @@ void printf_extrabits(const uint8_t* maj_bits, int start_minor, int num_minors,
 	}
 }
 
-uint64_t read_lut64(const uint8_t* two_minors, int bit_off_in_frame)
-{
-	uint64_t lut64 = 0;
-	int j;
-
-	for (j = 0; j < 16; j++) {
-		if (frame_get_bit(two_minors, bit_off_in_frame+j*2))
-			lut64 |= 1LL << (j*4);
-		if (frame_get_bit(two_minors, bit_off_in_frame+(j*2)+1))
-			lut64 |= 1LL << (j*4+1);
-		if (frame_get_bit(&two_minors[130], bit_off_in_frame+j*2))
-			lut64 |= 1LL << (j*4+2);
-		if (frame_get_bit(&two_minors[130], bit_off_in_frame+(j*2)+1))
-			lut64 |= 1LL << (j*4+3);
-	}
-	return lut64;
-}
-
 void write_lut64(uint8_t* two_minors, int off_in_frame, uint64_t u64)
 {
 	int i;
@@ -984,31 +830,6 @@ int all_zero(const void* d, int num_bytes)
 	for (i = 0; i < num_bytes; i++)
 		if (((uint8_t*)d)[i]) return 0;
 	return 1;
-}
-
-int get_nibble(uint64_t u64, int nibble_bit0_off)
-{
-	int n, i;
-
-	n = 0;
-	for (i = 0; i < 4; i++) {
-		if (u64 & (1ULL << (nibble_bit0_off+i)))
-			n |= 1<<i;
-	}
-	return n;
-}
-
-uint64_t set_nibble(uint64_t u64, int nibble_bit0_off, int nibble_val)
-{
-	int i;
-
-	for (i = 0; i < 4; i++) {
-		if (nibble_val & (1<<i))
-			u64 |= 1ULL << (nibble_bit0_off+i);
-		else
-			u64 &= ~(1ULL << (nibble_bit0_off+i));
-	}
-	return u64;
 }
 
 void printf_wrap(FILE* f, char* line, int prefix_len,

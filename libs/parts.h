@@ -176,7 +176,7 @@ void free_xc6_routing_bitpos(struct xc6_routing_bitpos* bitpos);
 // 32 entries of map contain the bit positions for lut5,
 // the upper 32 entries of map the ones for lut6.
 // In either case 64 entries are written to map.
-void xc6_lut_bitmap(int lut_pos, int* map, int num_bits);
+void xc6_lut_bitmap(int lut_pos, int (*map)[64], int num_bits);
 
 //
 // logic configuration
@@ -248,9 +248,9 @@ void xc6_lut_bitmap(int lut_pos, int* map, int num_bits);
 #define XC6_ML_SYNC		19
 #define XC6_ML_CE_USED		20
 // X_D_FFMUX=O6			 -
-#define XC6_X_D_FFMUX_DX	21	// default-set, does not imply lut5
+#define XC6_X_D_FFMUX_X		21	// default-set, does not imply lut5
 // X_C_FFMUX=O6			 -
-#define XC6_X_C_FFMUX_CX	22	// default-set, does not imply lut5
+#define XC6_X_C_FFMUX_X		22	// default-set, does not imply lut5
 #define XC6_X_CE_USED		23
 
 #define XC6_ML_C_OUTMUX_MASK	0x000000000F000000ULL
@@ -281,9 +281,9 @@ void xc6_lut_bitmap(int lut_pos, int* map, int num_bits);
 #define XC6_ML_B_OUTMUX_O5		 9 // 1001, implies lut5 on ML-B
 
 // X_B_FFMUX=O6			 -
-#define XC6_X_B_FFMUX_CX	36	// default-set, does not imply lut5
+#define XC6_X_B_FFMUX_X		36	// default-set, does not imply lut5
 // X_A_FFMUX=O6			 -
-#define XC6_X_A_FFMUX_CX	37	// default-set, does not imply lut5
+#define XC6_X_A_FFMUX_X		37	// default-set, does not imply lut5
 #define XC6_X_B_FFSRINIT_1	38
 // X_A_OUTMUX=5Q		 -	// implies lut5 on X-A
 #define XC6_X_A_OUTMUX_O5	39	// default-set, does not imply lut5

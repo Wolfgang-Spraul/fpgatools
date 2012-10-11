@@ -414,6 +414,7 @@ enum { WEMUX_WE = 1, WEMUX_CE };
 enum { PRECYINIT_0 = 1, PRECYINIT_1, PRECYINIT_AX };
 
 #define MAX_LUT_LEN 2048
+#define NUM_LUTS 4
 
 struct fpgadev_logic_a2d
 {
@@ -430,7 +431,7 @@ struct fpgadev_logic_a2d
 
 struct fpgadev_logic
 {
-	struct fpgadev_logic_a2d a2d[4];
+	struct fpgadev_logic_a2d a2d[NUM_LUTS];
 	int clk_inv;	// CLKINV_B, CLKINV_CLK
 	int sync_attr;	// SYNCATTR_SYNC, SYNCATTR_ASYNC
 	int ce_used;
