@@ -163,7 +163,7 @@ const char* fpga_iob_sitename(struct fpga_model* model, int y, int x,
 
 	if (y == TOP_OUTER_ROW) {
 		for (i = 0; i < sizeof(xc6slx9_iob_top)/sizeof(xc6slx9_iob_top[0]); i++) {
-			if (xc6slx9_iob_right[i].xy == x) {
+			if (xc6slx9_iob_top[i].xy == x) {
 				if (idx < 0 || idx > 3) return 0;
 				return xc6slx9_iob_top[i].name[idx];
 			}
@@ -792,6 +792,60 @@ int fdev_iob_output(struct fpga_model* model, int y, int x, int type_idx,
 			dev->u.iob.drive_strength = 8;
 		dev->u.iob.slew = SLEW_SLOW;
 	}
+	dev->instantiated = 1;
+	return 0;
+fail:
+	return rc;
+}
+
+int fdev_iob_IMUX(struct fpga_model* model, int y, int x,
+	int type_idx, int mux)
+{
+	struct fpga_device* dev;
+	int rc;
+
+	dev = fdev_p(model, y, x, DEV_IOB, type_idx);
+	if (!dev) FAIL(EINVAL);
+	rc = reset_required_pins(dev);
+	if (rc) FAIL(rc);
+
+	dev->u.iob.I_mux = mux;
+	dev->instantiated = 1;
+	return 0;
+fail:
+	return rc;
+}
+
+int fdev_iob_slew(struct fpga_model* model, int y, int x,
+	int type_idx, int slew)
+{
+	struct fpga_device* dev;
+	int rc;
+
+	dev = fdev_p(model, y, x, DEV_IOB, type_idx);
+	if (!dev) FAIL(EINVAL);
+	rc = reset_required_pins(dev);
+	if (rc) FAIL(rc);
+
+	dev->u.iob.slew = slew;
+	dev->instantiated = 1;
+	return 0;
+fail:
+	return rc;
+}
+
+int fdev_iob_drive(struct fpga_model* model, int y, int x,
+	int type_idx, int drive_strength)
+{
+	struct fpga_device* dev;
+	int rc;
+
+	dev = fdev_p(model, y, x, DEV_IOB, type_idx);
+	if (!dev) FAIL(EINVAL);
+	rc = reset_required_pins(dev);
+	if (rc) FAIL(rc);
+
+	dev->u.iob.drive_strength = drive_strength;
 	dev->instantiated = 1;
 	return 0;
 fail:

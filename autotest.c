@@ -957,6 +957,22 @@ static int test_iob_config(struct test_state* tstate)
 
 		i++;
 	}}
+	// enum all iobs
+	{
+		const char* name;
+		for (i = 0; (name = fpga_enum_iob(tstate->model, i, &iob_y,
+			&iob_x, &iob_type_idx)); i++) {
+			if (tstate->dry_run)
+				printf("IOB %s y%02i x%02i i%i\n", name,
+					iob_y, iob_x, iob_type_idx);
+			rc = fdev_iob_IMUX(tstate->model, iob_y, iob_x,
+				iob_type_idx, IMUX_I);
+			if (rc) FAIL(rc);
+			if ((rc = diff_printf(tstate))) FAIL(rc);
+			fdev_delete(tstate->model, iob_y, iob_x,
+				DEV_IOB, iob_type_idx);
+		}
+	}
 	return 0;
 fail:
 	return rc;

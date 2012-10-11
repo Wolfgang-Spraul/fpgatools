@@ -57,15 +57,19 @@ fail:
 	return rc;
 }
 
-void fpga_free_model(struct fpga_model* model)
+int fpga_free_model(struct fpga_model* model)
 {
-	if (!model) return;
+	int rc;
+
+	if (!model) return 0;
+	rc = model->rc;
 	free_devices(model);
 	free(model->tmp_str);
 	strarray_free(&model->str);
 	free(model->tiles);
 	free_xc6_routing_bitpos(model->sw_bitpos);
 	memset(model, 0, sizeof(*model));
+	return rc;
 }
 
 static const char* fpga_ttstr[] = // tile type strings

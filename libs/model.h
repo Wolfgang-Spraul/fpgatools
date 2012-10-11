@@ -54,6 +54,8 @@
 
 struct fpga_model
 {
+	int rc; // if rc != 0, all function calls will immediately return
+
 	int cfg_rows;
 	char cfg_columns[512];
 	char cfg_left_wiring[1024], cfg_right_wiring[1024];
@@ -585,7 +587,8 @@ struct fpga_tile
 int fpga_build_model(struct fpga_model* model,
 	int fpga_rows, const char* columns,
 	const char* left_wiring, const char* right_wiring);
-void fpga_free_model(struct fpga_model* model);
+// returns model->rc (model itself will be memset to 0)
+int fpga_free_model(struct fpga_model* model);
 
 const char* fpga_tiletype_str(enum fpga_tile_type type);
 

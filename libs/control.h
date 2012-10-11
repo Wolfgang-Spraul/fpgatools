@@ -87,6 +87,12 @@ int fdev_iob_input(struct fpga_model* model, int y, int x,
 	int type_idx, const char* io_std);
 int fdev_iob_output(struct fpga_model* model, int y, int x,
 	int type_idx, const char* io_std);
+int fdev_iob_IMUX(struct fpga_model* model, int y, int x,
+	int type_idx, int mux);
+int fdev_iob_slew(struct fpga_model* model, int y, int x,
+	int type_idx, int slew);
+int fdev_iob_drive(struct fpga_model* model, int y, int x,
+	int type_idx, int drive_strength);
 
 int fdev_set_required_pins(struct fpga_model* model, int y, int x, int type,
 	int type_idx);

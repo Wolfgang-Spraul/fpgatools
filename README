@@ -5,16 +5,13 @@ Introduction
  block ram and multiply-accumulate devices.
  The long-term goals of fpgatools are:
 
- *) reach the maximum physical performance of the chip
+ *) reach maximum physical chip performance
  *) fast development cycles
  *) independent toolchain that only depends on other free software
- *) bootstrap on chip, i.e. program the fpga from a softcore running
-    on the same fpga
- *) complete package including all tools to get started such as jtag,
-    debugging, parts data and designs for prototyping hardware
- *) work towards a design flow that includes later manufacturing
-    in different ASIC processes, include information about ASIC
-    processes, libraries, GDS generation, etc.
+ *) reconfigure on-chip
+ *) include get-started tools such as jtag, debugging, parts data
+    and designs for prototyping hardware
+ *) design flow that includes asic manufacturing
  *) lightweight C implementation without GUI
  *) supported platform: Linux
  *) license: public domain
@@ -59,13 +56,9 @@ Design Principles
 TODO
 
 short-term (1 month):
-* add lut_encoding autotest for lut6 and lut5 in a-d position
-  of x(m), x(l), l and m devs
-* more cases in logic_cfg test
 * example: blinking_led
 * example: counter (including clock, jtag)
-* support reading iologic switches
-* autotest: fix roundtrip issues in routing_sw test
+* autotest: fix bugs in lut_encoding, logic_cfg, routing_sw, io_sw tests
 * autotest: protect stderr of diff executable in autotest log
 * 3 Debian packages: libfpga, libfpga-doc, fpgatools
 

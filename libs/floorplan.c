@@ -1051,6 +1051,10 @@ int write_floorplan(FILE* f, struct fpga_model* model, int flags)
 
 	if (!(flags & FP_NO_HEADER))
 		printf_version(f);
+	if (model->rc) {
+		fprintf(f, "rc %i\n", model->rc);
+		FAIL(model->rc);
+	}
 
 	rc = printf_devices(f, model, /*config_only*/ 1);
 	if (rc) FAIL(rc);
