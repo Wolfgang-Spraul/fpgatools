@@ -270,7 +270,9 @@ static int extract_iobs(struct extract_state* es)
 
 		iob_sitename = get_iob_sitename(XC6SLX9, i);
 		if (!iob_sitename) {
-			HERE();
+			// The space for 6 IOBs on all four sides
+			// (6*8 = 48 bytes, *4=192 bytes) is used
+			// for clocks etc, so we ignore them here.
 			continue;
 		}
 		rc = fpga_find_iob(es->model, iob_sitename, &iob_y, &iob_x, &iob_idx);
@@ -1038,8 +1040,22 @@ static int extract_logic(struct extract_state* es)
 			// instantiate the logic devices.
 			//
 
-		   	if (mi20 || mi23_M || mi2526) {
-				HERE();
+		   	if (mi20) {
+				fprintf(stderr, "#E %s:%i y%02i x%02i l%i "
+				  "mi20 0x%016lX\n",
+				  __FILE__, __LINE__, y, x, l_col, mi20);
+				continue;
+			}
+		   	if (mi23_M) {
+				fprintf(stderr, "#E %s:%i y%02i x%02i l%i "
+				  "mi23_M 0x%016lX\n",
+				  __FILE__, __LINE__, y, x, l_col, mi23_M);
+				continue;
+			}
+		   	if (mi2526) {
+				fprintf(stderr, "#E %s:%i y%02i x%02i l%i "
+				  "mi2526 0x%016lX\n",
+				  __FILE__, __LINE__, y, x, l_col, mi2526);
 				continue;
 			}
 
@@ -1452,18 +1468,65 @@ fail:
 	return rc;
 }
 
+static int extract_logic_switches(struct extract_state* es, int y, int x)
+{
+	int row, row_pos, byte_off, minor, rc;
+	swidx_t sw_idx;
+	uint8_t* u8_p;
+
+	row = which_row(y, es->model);
+	row_pos = pos_in_row(y, es->model);
+	if (row == -1 || row_pos == -1 || row_pos == 8) FAIL(EINVAL);
+	if (row_pos > 8) row_pos--;
+	u8_p = get_first_minor(es->bits, row, es->model->x_major[x]);
+	byte_off = row_pos * 8;
+	if (row_pos >= 8) byte_off += HCLK_BYTES;
+
+	if (has_device_type(es->model, y, x, DEV_LOGIC, LOGIC_M))
+		minor = 26;
+	else if (has_device_type(es->model, y, x, DEV_LOGIC, LOGIC_L))
+		minor = 25;
+	else
+		FAIL(EINVAL);
+
+	if (frame_get_bit(u8_p + minor*FRAME_SIZE, byte_off*8 + XC6_ML_COUT_CIN_SW)) {
+		sw_idx = fpga_switch_lookup(es->model, y, x,
+			strarray_find(&es->model->str, "M_COUT"),
+			strarray_find(&es->model->str, "M_COUT_N"));
+		if (sw_idx == NO_SWITCH) { HERE(); return 0; }
+
+		if (es->num_yx_pos >= MAX_YX_SWITCHES)
+			{ FAIL(ENOTSUP); }
+		es->yx_pos[es->num_yx_pos].y = y;
+		es->yx_pos[es->num_yx_pos].x = x;
+		es->yx_pos[es->num_yx_pos].idx = sw_idx;
+		es->num_yx_pos++;
+
+		frame_clear_bit(u8_p + minor*FRAME_SIZE, byte_off*8 + XC6_ML_COUT_CIN_SW);
+	}
+	return 0;
+fail:
+	return rc;
+}
+
 static int extract_switches(struct extract_state* es)
 {
 	int x, y, rc;
 
 	for (x = 0; x < es->model->x_width; x++) {
 		for (y = 0; y < es->model->y_height; y++) {
+			// routing switches
 			if (is_atx(X_ROUTING_COL, es->model, x)
 			    && y >= TOP_IO_TILES
 			    && y < es->model->y_height-BOT_IO_TILES
 			    && !is_aty(Y_ROW_HORIZ_AXSYMM|Y_CHIP_HORIZ_REGS,
 					es->model, y)) {
 				rc = extract_routing_switches(es, y, x);
+				if (rc) FAIL(rc);
+			}
+			// logic switches
+			if (has_device(es->model, y, x, DEV_LOGIC)) {
+				rc = extract_logic_switches(es, y, x);
 				if (rc) FAIL(rc);
 			}
 		}

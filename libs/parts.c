@@ -11,6 +11,9 @@
 
 const char* iob_xc6slx9_sitenames[IOB_WORDS*2/8] =
 {
+	// Note that the configuration space for 4*6 IOBs
+	// that are marked with 0 is used for clocks etc,
+	// just not IOBs.
 	[0]
 		"P70", "P69", "P67", "P66", "P65", "P64", "P62", "P61",
 		"P60", "P59", "P58", "P57", "UNB113", "UNB114", "UNB115", "UNB116",

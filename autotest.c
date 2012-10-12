@@ -1012,7 +1012,7 @@ static int test_logic(struct test_state* tstate, int y, int x, int type_idx,
 		}
 	}
 
-	// add stub nets for each required pin
+	// add one stub net per required pin
 	dev = fdev_p(tstate->model, y, x, DEV_LOGIC, type_idx);
 	if (!dev) FAIL(EINVAL);
 	for (i = 0; i < dev->pinw_req_total; i++) {
@@ -1022,6 +1022,30 @@ static int test_logic(struct test_state* tstate, int y, int x, int type_idx,
 		rc = fnet_add_port(tstate->model, pinw_nets[i], y, x,
 			DEV_LOGIC, type_idx, dev->pinw_req_for_cfg[i]);
 		if (rc) FAIL(rc);
+		if (dev->pinw_req_for_cfg[i] == LI_CIN) {
+			int connpt_dests_o, num_dests, cout_y, cout_x;
+			str16_t cout_str;
+			swidx_t cout_sw;
+
+			if ((fpga_connpt_find(tstate->model, y, x,
+				dev->pinw[LI_CIN], &connpt_dests_o,
+				&num_dests) == NO_CONN)
+			    || num_dests != 1) {
+				HERE();
+			} else {
+				fpga_conn_dest(tstate->model, y, x,
+				  connpt_dests_o, &cout_y, &cout_x, &cout_str);
+				cout_sw = fpga_switch_first(tstate->model,
+				  cout_y, cout_x, cout_str, SW_TO);
+				if (cout_sw == NO_SWITCH) HERE();
+				else {
+					rc = fnet_add_sw(tstate->model,
+					  pinw_nets[i], cout_y, cout_x,
+					  &cout_sw, /*num_sw*/ 1);
+					if (rc) FAIL(rc);
+				}
+			}
+		}
 		if ((dev->pinw_req_for_cfg[i] == LI_A6
 		     && dev->u.logic.a2d[LUT_A].lut5
 		     && *dev->u.logic.a2d[LUT_A].lut5)
@@ -1247,7 +1271,8 @@ static int test_logic_config(struct test_state* tstate)
 
 	tstate->diff_to_null = 1;
 
-	y = 68;
+	// For cin/cout testing, pick a y that is not at the bottom.
+	y = 67;
 	for (x_i = 0; x_i < sizeof(x_enum)/sizeof(*x_enum); x_i++) {
 		for (type_i = 0; type_i < sizeof(idx_enum)/sizeof(*idx_enum); type_i++) {
 			for (lut = LUT_A; lut <= LUT_D; lut++) {
@@ -1692,39 +1717,6 @@ int main(int argc, char** argv)
 	// output, tee, etc.
 	// for example: ./autotest 2>&1 | tee autotest.log
 	setvbuf(stdout, /*buf*/ 0, _IOLBF, /*size*/ 0);
-
-#if 0
-int lut_map1[64] = {63,62,61,60,59,58,57,56,55,54,53,52,51,50,
-	49,48,47,46,45,44,43,42,41,40,39,38,37,36,35,34,33,32,31,
-	30,29,28,27,26,25,24,23,22,21,20,19,18,17,16,15,14,13,12,11,10,
-	9,8,7,6,5,4,3,2,1,0};
-//int bool_str2bits(const char* str, uint64_t* u64, int num_bits);
-//const char* bool_bits2str(uint64_t u64, int num_bits);
-{
-	uint64_t u64, u64_2;
-
-	rc = bool_str2bits("~A6*~A5*~A4*~A3*~A2*~A1", &u64, 64);
-	printf("rc %i u64 %llX 2str %s\n", rc, u64, bool_bits2str(u64, 64));
-	rc = bool_str2bits("~A6*~A5*~A4*~A3*~A2*A1", &u64, 64);
-	printf("rc %i u64 %llX 2str %s\n", rc, u64, bool_bits2str(u64, 64));
-	rc = bool_str2bits("A6*A5*A4*A3*A2*A1", &u64, 64);
-	printf("rc %i u64 %llX 2str %s\n", rc, u64, bool_bits2str(u64, 64));
-	rc = bool_str2bits("A5*A4*A3*A2*A1", &u64, 32);
-	printf("rc %i u32 %llX 2str %s\n", rc, u64, bool_bits2str(u64, 32));
-	rc = bool_str2bits("A4*A3", &u64, 32);
-	printf("rc %i u32 %llX 2str %s\n", rc, u64, bool_bits2str(u64, 32));
-	rc = bool_str2bits("A1", &u64, 64);
-	printf("rc %i u64 %llX 2str %s\n", rc, u64, bool_bits2str(u64, 64));
-	rc = bool_str2bits("A1", &u64, 32);
-	printf("rc %i u32 %llX 2str %s\n", rc, u64, bool_bits2str(u64, 32));
-
-	u64 = 1;
-	u64_2 = map_bits(u64, 64, lut_map1);
-	printf("u %llX mapped %llX\n", u64, u64_2);
-
-	return 0;
-}
-#endif
 
 	if (argc < 2) {
 		printf_help(argv[0], available_tests);

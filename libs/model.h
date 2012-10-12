@@ -376,7 +376,7 @@ enum {
 	LI_AX, LI_BX, LI_CX, LI_DX,
 	LI_CLK, LI_CE, LI_SR,
 	// only for L and M:
-	LI_CIN, // only some L and M devs have this
+	LI_CIN,
 	// only for M:
 	LI_WE, LI_AI, LI_BI, LI_CI, LI_DI,
 

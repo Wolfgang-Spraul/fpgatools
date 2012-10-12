@@ -359,8 +359,7 @@ int printf_iob(uint8_t* d, int len, int inpos, int num_entries)
 	for (i = 0; i < num_entries; i++) {
 		u64 = frame_get_u64(&d[inpos+i*8]);
 		if (u64) {
-			printf("iob i%i 0x%016llX\n", i,
-				(long long unsigned) u64);
+			printf("iob i%i 0x%016lX\n", i, u64);
 			num_printed++;
 		}
 	}

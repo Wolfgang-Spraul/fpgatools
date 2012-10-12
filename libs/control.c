@@ -887,11 +887,8 @@ int fdev_set_required_pins(struct fpga_model* model, int y, int x, int type,
 			add_req_inpin(dev, LI_CE);
 		if (dev->u.logic.sr_used)
 			add_req_inpin(dev, LI_SR);
-		if (dev->u.logic.cout_used) {
+		if (dev->u.logic.cout_used)
 			add_req_outpin(dev, LO_COUT);
-			if (!dev->u.logic.precyinit)
-				add_req_inpin(dev, LI_CIN);
-		}
 		if (dev->u.logic.precyinit == PRECYINIT_AX)
 			add_req_inpin(dev, LI_AX);
 		if (dev->u.logic.a2d[LUT_A].out_mux == MUX_F7
@@ -1537,7 +1534,8 @@ int fpga_switch_chain(struct sw_chain* ch)
 		idx = fpga_switch_backtofirst(ch->model, ch->y, ch->x,
 			ch->set.sw[ch->set.len-1], ch->from_to);
 		if (idx == NO_SWITCH) {
-			HERE(); goto internal_error;
+			ch->set.len = 0;
+			return NO_SWITCH;
 		}
 #ifdef DBG_ENUM_SWITCH
 		printf("back_to_first from %s to %s\n",

@@ -25,6 +25,7 @@
 		__FILE__, __LINE__)
 #define FAIL(code) do { HERE(); rc = (code); goto fail; } while (0)
 #define XOUT() do { HERE(); goto xout; } while (0)
+#define CHECK_MODEL(m)	do { if ((m)->rc) return (m)->rc; } while (0)
 
 #define OUT_OF_U16(val)	((val) < 0 || (val) > 0xFFFF)
 

@@ -510,11 +510,11 @@ static int init_logic(struct fpga_model* model, int y, int x, int idx)
 		if (rc) FAIL(rc);
 	} else
 		tile->devs[idx].pinw[LI_WE] = STRIDX_NO_ENTRY;
-	if (tile->devs[idx].subtype != LOGIC_X
-	    && ((is_atx(X_ROUTING_NO_IO, model, x-1)
-		 && is_aty(Y_INNER_BOTTOM, model, y+1))
-		|| (!is_atx(X_ROUTING_NO_IO, model, x-1)
-		    && is_aty(Y_BOT_INNER_IO, model, y+1)))) {
+	if (tile->devs[idx].subtype != LOGIC_X) {
+		// Wire connections will go to some CIN later
+		// (and must not warn about duplicates), but we
+		// have to add the connection point here so
+		// that pinw[LI_CIN] is initialized.
 		rc = add_connpt_name(model, y, x, pf("%sCIN", pre),
 			/*dup_warn*/ 1,
 			&tile->devs[idx].pinw[LI_CIN], 0);
