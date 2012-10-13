@@ -23,9 +23,9 @@
 
 #define HERE() fprintf(stderr, "#E Internal error in %s:%i\n", \
 		__FILE__, __LINE__)
-#define FAIL(code) do { HERE(); rc = (code); goto fail; } while (0)
-#define XOUT() do { HERE(); goto xout; } while (0)
-#define CHECK_MODEL(m)	do { if ((m)->rc) return (m)->rc; } while (0)
+#define FAIL(code)	do { HERE(); rc = (code); goto fail; } while (0)
+#define XOUT()		do { HERE(); goto xout; } while (0)
+#define CHECK_RC(m)	do { if ((m)->rc) return (m)->rc; } while (0)
 
 #define OUT_OF_U16(val)	((val) < 0 || (val) > 0xFFFF)
 
@@ -85,7 +85,7 @@ void frame_set_u32(uint8_t* frame_d, uint32_t v);
 void frame_set_u64(uint8_t* frame_d, uint64_t v);
 
 uint64_t frame_get_lut64(const uint8_t* two_minors, int v32);
-// In a lut pair, LOW32 is lut5, HIGH32 is lut6.
+// In a lut pair, lut5 is always mapped to LOW32, lut6 to HIGH32.
 #define ULL_LOW32(v)	((uint32_t) (((uint64_t)v) & 0xFFFFFFFFULL))
 #define ULL_HIGH32(v)	((uint32_t) (((uint64_t)v) >> 32))
 void frame_set_lut64(uint8_t* two_minors, int v32, uint64_t v);

@@ -1228,7 +1228,7 @@ static int test_lut_encoding(struct test_state* tstate)
 				if (rc) FAIL(rc);
 				for (i = '1'; i <= '5'; i++) {
 					sprintf(lut5_str, "A%c", i);
-					sprintf(lut6_str, "(A6+~A6)*%s", lut5_str);
+					sprintf(lut6_str, "(A6+~A6)*A%c", (i == '5') ? '1' : i+1);
 					rc = test_logic(tstate, y, x_enum[x_i], idx_enum[type_i],
 						&logic_cfg);
 					if (rc) FAIL(rc);
@@ -1540,22 +1540,22 @@ static int test_logic_config(struct test_state* tstate)
 			if (idx_enum[type_i] == DEV_LOG_X) {
 				// minimum-config X device
 				memset(&logic_cfg, 0, sizeof(logic_cfg));
-				logic_cfg.a2d[LUT_A].lut6 = "(A6+~A6)*A3";
-				logic_cfg.a2d[LUT_A].lut5 = "A3+A5";
+				logic_cfg.a2d[LUT_A].lut6 = "(A6+~A6)*A1";
+				logic_cfg.a2d[LUT_A].lut5 = "A2";
 				logic_cfg.a2d[LUT_A].out_mux = MUX_5Q;
 				logic_cfg.a2d[LUT_A].ff5_srinit = FF_SRINIT0;
 				logic_cfg.a2d[LUT_A].ff = FF_FF;
 				logic_cfg.a2d[LUT_A].ff_mux = MUX_O6;
 				logic_cfg.a2d[LUT_A].ff_srinit = FF_SRINIT0;
-				logic_cfg.a2d[LUT_B].lut6 = "(A6+~A6)*A3";
-				logic_cfg.a2d[LUT_B].lut5 = "A3+A5";
+				logic_cfg.a2d[LUT_B].lut6 = "(A6+~A6)*A4";
+				logic_cfg.a2d[LUT_B].lut5 = "A3";
 				logic_cfg.a2d[LUT_B].out_mux = MUX_5Q;
 				logic_cfg.a2d[LUT_B].ff5_srinit = FF_SRINIT0;
 				logic_cfg.a2d[LUT_B].ff = FF_FF;
 				logic_cfg.a2d[LUT_B].ff_mux = MUX_O6;
 				logic_cfg.a2d[LUT_B].ff_srinit = FF_SRINIT0;
-				logic_cfg.a2d[LUT_C].lut6 = "(A6+~A6)*A3";
-				logic_cfg.a2d[LUT_C].lut5 = "A3+A5";
+				logic_cfg.a2d[LUT_C].lut6 = "(A6+~A6)*(A2+A5)";
+				logic_cfg.a2d[LUT_C].lut5 = "A3+A4";
 				logic_cfg.a2d[LUT_C].out_mux = MUX_5Q;
 				logic_cfg.a2d[LUT_C].ff5_srinit = FF_SRINIT0;
 				logic_cfg.a2d[LUT_C].ff = FF_FF;

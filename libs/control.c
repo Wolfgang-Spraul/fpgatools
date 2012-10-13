@@ -1054,6 +1054,7 @@ swidx_t fpga_switch_first(struct fpga_model* model, int y, int x,
 	int i, connpt_o;
 
 	// Finds the first switch either from or to the name given.
+	if (name_i == STRIDX_NO_ENTRY) { HERE(); return NO_SWITCH; }
 	tile = YX_TILE(model, y, x);
 	for (i = 0; i < tile->num_switches; i++) {
 		connpt_o = SW_I(tile->switches[i], from_to);

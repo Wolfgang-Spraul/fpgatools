@@ -49,7 +49,7 @@ int main(int argc, char** argv)
 		8);
 
 #if 0
-	logic_y = 68;
+	logic_y = 55-58
 	logic_x = 13;
 	logic_type_idx = DEV_LOG_X;
 	if ((rc = fdev_logic_a2d_lut(&model, logic_y, logic_x, logic_type_idx,

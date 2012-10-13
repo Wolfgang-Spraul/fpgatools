@@ -323,16 +323,30 @@ static int printf_LOGIC(FILE* f, struct fpga_model* model,
 			}
 		}
 		cfg = &tile->devs[i].u.logic;
-		for (j = LUT_A; j <= LUT_D; j++) {
-			if (cfg->a2d[j].out_used)
-				fprintf(f, "%s %c_used\n", pref, 'A'+j);
+		for (j = LUT_D; j >= LUT_A; j--) {
 			if (cfg->a2d[j].lut6 && cfg->a2d[j].lut6[0])
 				fprintf(f, "%s %c6_lut %s\n", pref, 'A'+j,
 					cfg->a2d[j].lut6);
 			if (cfg->a2d[j].lut5 && cfg->a2d[j].lut5[0])
 				fprintf(f, "%s %c5_lut %s\n", pref, 'A'+j,
 					cfg->a2d[j].lut5);
-
+			if (cfg->a2d[j].out_used)
+				fprintf(f, "%s %c_used\n", pref, 'A'+j);
+			switch (cfg->a2d[j].ff) {
+				case FF_OR2L:
+					fprintf(f, "%s %c_ff OR2L\n", pref, 'A'+j);
+					break;
+				case FF_AND2L:
+					fprintf(f, "%s %c_ff AND2L\n", pref, 'A'+j);
+					break;
+				case FF_LATCH:
+					fprintf(f, "%s %c_ff LATCH\n", pref, 'A'+j);
+					break;
+				case FF_FF:
+					fprintf(f, "%s %c_ff FF\n", pref, 'A'+j);
+					break;
+				case 0: break; default: FAIL(EINVAL);
+			}
 			switch (cfg->a2d[j].ff_mux) {
 				case MUX_O6:
 					fprintf(f, "%s %c_ffmux O6\n", pref, 'A'+j);
@@ -369,15 +383,6 @@ static int printf_LOGIC(FILE* f, struct fpga_model* model,
 					break;
 				case 0: break; default: FAIL(EINVAL);
 			}
-			switch (cfg->a2d[j].ff5_srinit) {
-				case FF_SRINIT0:
-					fprintf(f, "%s %c5_ffsrinit 0\n", pref, 'A'+j);
-					break;
-				case FF_SRINIT1:
-					fprintf(f, "%s %c5_ffsrinit 1\n", pref, 'A'+j);
-					break;
-				case 0: break; default: FAIL(EINVAL);
-			}
 			switch (cfg->a2d[j].out_mux) {
 				case MUX_O6:
 					fprintf(f, "%s %c_outmux O6\n", pref, 'A'+j);
@@ -405,18 +410,12 @@ static int printf_LOGIC(FILE* f, struct fpga_model* model,
 					break;
 				case 0: break; default: FAIL(EINVAL);
 			}
-			switch (cfg->a2d[j].ff) {
-				case FF_OR2L:
-					fprintf(f, "%s %c_ff OR2L\n", pref, 'A'+j);
+			switch (cfg->a2d[j].ff5_srinit) {
+				case FF_SRINIT0:
+					fprintf(f, "%s %c5_ffsrinit 0\n", pref, 'A'+j);
 					break;
-				case FF_AND2L:
-					fprintf(f, "%s %c_ff AND2L\n", pref, 'A'+j);
-					break;
-				case FF_LATCH:
-					fprintf(f, "%s %c_ff LATCH\n", pref, 'A'+j);
-					break;
-				case FF_FF:
-					fprintf(f, "%s %c_ff FF\n", pref, 'A'+j);
+				case FF_SRINIT1:
+					fprintf(f, "%s %c5_ffsrinit 1\n", pref, 'A'+j);
 					break;
 				case 0: break; default: FAIL(EINVAL);
 			}
@@ -663,19 +662,25 @@ int printf_devices(FILE* f, struct fpga_model* model, int config_only)
 
 	for (x = 0; x < model->x_width; x++) {
 		for (y = 0; y < model->y_height; y++) {
-
 			rc = printf_IOB(f, model, y, x, config_only);
 			if (rc) goto fail;
+		}
+	}
+	for (x = 0; x < model->x_width; x++) {
+		for (y = 0; y < model->y_height; y++) {
 			rc = printf_LOGIC(f, model, y, x, config_only);
 			if (rc) goto fail;
-
+		}
+	}
+	for (x = 0; x < model->x_width; x++) {
+		for (y = 0; y < model->y_height; y++) {
 			tile = YX_TILE(model, y, x);
 			for (i = 0; i < tile->num_devs; i++) {
 				if (config_only && !(tile->devs[i].instantiated))
 					continue;
 				if (tile->devs[i].type == DEV_LOGIC
 				    || tile->devs[i].type == DEV_IOB)
-					continue; // handled above
+					continue; // handled earlier
 				fprintf(f, "dev y%02i x%02i %s\n", y, x,
 					fdev_type2str(tile->devs[i].type));
 			}

@@ -92,6 +92,19 @@ struct extract_state
 	struct sw_yxpos yx_pos[MAX_YX_SWITCHES]; // needs to be dynamically alloced...
 };
 
+static int find_es_switch(struct extract_state* es, int y, int x, swidx_t sw)
+{
+	int i;
+	if (sw == NO_CONN) { HERE(); return 0; }
+	for (i = 0; i < es->num_yx_pos; i++) {
+		if (es->yx_pos[i].y == y
+		    && es->yx_pos[i].x == x
+		    && es->yx_pos[i].idx == sw)
+			return 1;
+	}
+	return 0;
+}
+
 static int write_iobs(struct fpga_bits* bits, struct fpga_model* model)
 {
 	int i, y, x, type_idx, part_idx, dev_idx, first_iob, rc;
@@ -603,6 +616,7 @@ static int extract_logic(struct extract_state* es)
 	char lut5_ml[NUM_LUTS][MAX_LUT_LEN];
 	char lut6_x[NUM_LUTS][MAX_LUT_LEN];
 	char lut5_x[NUM_LUTS][MAX_LUT_LEN];
+	struct fpga_device* dev_ml;
 
 	for (x = LEFT_SIDE_WIDTH; x < es->model->x_width-RIGHT_SIDE_WIDTH; x++) {
 		if (!is_atx(X_FABRIC_LOGIC_COL|X_CENTER_LOGIC_COL, es->model, x))
@@ -1065,7 +1079,13 @@ static int extract_logic(struct extract_state* es)
 			// Do device-global sanity checking pre-LUT
 			//
 
-// todo: cfg_ml.cout_used must be determined from switches
+			// cfg_ml.cout_used
+			dev_ml = fdev_p(es->model, y, x, DEV_LOGIC, DEV_LOG_M_OR_L);
+			if (!dev_ml) FAIL(EINVAL);
+			if (find_es_switch(es, y, x, fpga_switch_first(
+				es->model, y, x, dev_ml->pinw[LO_COUT], SW_FROM)))
+				cfg_ml.cout_used = 1;
+
 // todo: if srinit=1, the matching ff/latch must be on
 // todo: handle all_latch
 // todo: precyinit=0 has no bits
@@ -1270,18 +1290,31 @@ static int extract_logic(struct extract_state* es)
 			// todo: latch and2l and or2l need to be determined
 			//       from vcc connectivity, srinit etc.
 			for (lut = LUT_A; lut <= LUT_D; lut++) {
-				if (cfg_ml.a2d[lut].ff_mux)
+				if (cfg_ml.a2d[lut].ff_mux) {
 					cfg_ml.a2d[lut].ff = latch_ml ? FF_LATCH : FF_FF;
-				if (cfg_x.a2d[lut].ff_mux)
+					if (!cfg_ml.a2d[lut].ff_srinit)
+						cfg_ml.a2d[lut].ff_srinit = FF_SRINIT0;
+					if (!cfg_ml.clk_inv)
+						cfg_ml.clk_inv = CLKINV_CLK;
+					if (!cfg_ml.sync_attr)
+						cfg_ml.sync_attr = SYNCATTR_ASYNC;
+				}
+				if (cfg_x.a2d[lut].ff_mux) {
 					cfg_x.a2d[lut].ff = latch_x ? FF_LATCH : FF_FF;
+					if (!cfg_x.a2d[lut].ff_srinit)
+						cfg_x.a2d[lut].ff_srinit = FF_SRINIT0;
+					if (!cfg_x.clk_inv)
+						cfg_x.clk_inv = CLKINV_CLK;
+					if (!cfg_x.sync_attr)
+						cfg_x.sync_attr = SYNCATTR_ASYNC;
+				}
+				// todo: ff5_srinit
+				// todo: 5Q ff also needs clock/sync check
 			}
-
-			// If any ff_mux (5 or 6) is set, check that we have
-			// a clock and sync attribute. Do this after the LUT
-			// checks because presence of a 'hard' clock/sync bit
-			// may signal ff presence there.
-// todo: if a ff_mux is != 0, clk and sync must be set
-// todo: if a ff/latch is on, either srinit1 or srinit0 must be set
+			// todo:
+			// if (lut_a->out_mux == xor || lut_a->ff_mux == xor
+			//     || lut_a->acy0 != 0) && !precyinit && !cin_switch
+			//	-> precyinit = precyinit_0
 
 			//
 			// Step 8:
@@ -1471,7 +1504,6 @@ fail:
 static int extract_logic_switches(struct extract_state* es, int y, int x)
 {
 	int row, row_pos, byte_off, minor, rc;
-	swidx_t sw_idx;
 	uint8_t* u8_p;
 
 	row = which_row(y, es->model);
@@ -1489,20 +1521,38 @@ static int extract_logic_switches(struct extract_state* es, int y, int x)
 	else
 		FAIL(EINVAL);
 
-	if (frame_get_bit(u8_p + minor*FRAME_SIZE, byte_off*8 + XC6_ML_COUT_CIN_SW)) {
-		sw_idx = fpga_switch_lookup(es->model, y, x,
-			strarray_find(&es->model->str, "M_COUT"),
-			strarray_find(&es->model->str, "M_COUT_N"));
-		if (sw_idx == NO_SWITCH) { HERE(); return 0; }
+	if (frame_get_bit(u8_p + minor*FRAME_SIZE, byte_off*8 + XC6_ML_CIN_USED)) {
+		struct fpga_device* dev;
+		int connpt_dests_o, num_dests, cout_y, cout_x;
+		str16_t cout_str;
+		swidx_t cout_sw;
 
-		if (es->num_yx_pos >= MAX_YX_SWITCHES)
-			{ FAIL(ENOTSUP); }
-		es->yx_pos[es->num_yx_pos].y = y;
-		es->yx_pos[es->num_yx_pos].x = x;
-		es->yx_pos[es->num_yx_pos].idx = sw_idx;
-		es->num_yx_pos++;
+		dev = fdev_p(es->model, y, x, DEV_LOGIC, DEV_LOG_M_OR_L);
+		if (!dev) FAIL(EINVAL);
 
-		frame_clear_bit(u8_p + minor*FRAME_SIZE, byte_off*8 + XC6_ML_COUT_CIN_SW);
+		if ((fpga_connpt_find(es->model, y, x,
+			dev->pinw[LI_CIN], &connpt_dests_o,
+			&num_dests) == NO_CONN)
+		    || num_dests != 1) {
+			HERE();
+		} else {
+			fpga_conn_dest(es->model, y, x, connpt_dests_o,
+				&cout_y, &cout_x, &cout_str);
+			cout_sw = fpga_switch_first(es->model, cout_y,
+				cout_x, cout_str, SW_TO);
+			if (cout_sw == NO_SWITCH) HERE();
+			else {
+				if (es->num_yx_pos >= MAX_YX_SWITCHES)
+					{ FAIL(ENOTSUP); }
+				es->yx_pos[es->num_yx_pos].y = cout_y;
+				es->yx_pos[es->num_yx_pos].x = cout_x;
+				es->yx_pos[es->num_yx_pos].idx = cout_sw;
+				es->num_yx_pos++;
+
+				frame_clear_bit(u8_p + minor*FRAME_SIZE,
+					byte_off*8 + XC6_ML_CIN_USED);
+			}
+		}
 	}
 	return 0;
 fail:

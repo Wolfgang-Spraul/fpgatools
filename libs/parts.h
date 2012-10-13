@@ -323,7 +323,9 @@ void xc6_lut_bitmap(int lut_pos, int (*map)[64], int num_bits);
 #define XC6_ML_B_CY0_O5		56	// implies lut5 on ML-B
 #define XC6_ML_PRECYINIT_AX	57
 #define XC6_X_A_FFSRINIT_1	58
-#define XC6_ML_COUT_CIN_SW	59
+// CIN_USED best corresponds to the cout->cout_n switch in the
+// next lower logic device (y+1).
+#define XC6_ML_CIN_USED		59
 // ML_PRECYINIT=0		 -
 #define XC6_ML_PRECYINIT_1	60
 #define XC6_ML_B_FFSRINIT_1	61

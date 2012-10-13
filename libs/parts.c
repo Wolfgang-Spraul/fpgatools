@@ -842,8 +842,20 @@ void xc6_lut_bitmap(int lut_pos, int (*map)[64], int num_bits)
 	// expand from 32 to 64 for either lut6 only or lut5/lut6 pair.
 	for (i = 0; i < 32; i++) {
 		if (num_bits == 32) {
-			(*map)[i] = map32[i]%32;
-			(*map)[32+i] = 32+(*map)[i];
+			if (lut_pos == XC6_LMAP_XM_M_A
+			    || lut_pos == XC6_LMAP_XM_M_C
+			    || lut_pos == XC6_LMAP_XM_X_A
+			    || lut_pos == XC6_LMAP_XM_X_B
+			    || lut_pos == XC6_LMAP_XL_L_B
+			    || lut_pos == XC6_LMAP_XL_L_D
+			    || lut_pos == XC6_LMAP_XL_X_A
+			    || lut_pos == XC6_LMAP_XL_X_B) {
+				(*map)[i] = map32[i]%32;
+				(*map)[32+i] = 32+(map32[i]%32);
+			} else {
+				(*map)[i] = 32+(map32[i]%32);
+				(*map)[32+i] = map32[i]%32;
+			}
 		} else {
 			if (num_bits != 64) HERE();
 			(*map)[i] = map32[i];
