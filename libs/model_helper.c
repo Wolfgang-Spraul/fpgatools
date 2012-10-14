@@ -602,9 +602,9 @@ void is_in_row(const struct fpga_model* model, int y,
 
 	if (row_num) *row_num = -1;
 	if (row_pos) *row_pos = -1;
-	if (y < 2) return;
+	if (y < TOP_IO_TILES) return;
 	// normalize y to beginning of rows
-	y -= 2;
+	y -= TOP_IO_TILES;
 
 	// calculate distance to center and check
 	// that y is not pointing to the center

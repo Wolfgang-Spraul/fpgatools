@@ -95,7 +95,7 @@ struct extract_state
 static int find_es_switch(struct extract_state* es, int y, int x, swidx_t sw)
 {
 	int i;
-	if (sw == NO_CONN) { HERE(); return 0; }
+	if (sw == NO_SWITCH) { HERE(); return 0; }
 	for (i = 0; i < es->num_yx_pos; i++) {
 		if (es->yx_pos[i].y == y
 		    && es->yx_pos[i].x == x
@@ -1311,10 +1311,28 @@ static int extract_logic(struct extract_state* es)
 				// todo: ff5_srinit
 				// todo: 5Q ff also needs clock/sync check
 			}
-			// todo:
-			// if (lut_a->out_mux == xor || lut_a->ff_mux == xor
-			//     || lut_a->acy0 != 0) && !precyinit && !cin_switch
-			//	-> precyinit = precyinit_0
+
+			// Check whether we should default to PRECYINIT_0
+			if (!cfg_ml.precyinit
+			    && (cfg_ml.a2d[LUT_A].out_mux == MUX_XOR
+				|| cfg_ml.a2d[LUT_A].ff_mux == MUX_XOR
+				|| cfg_ml.a2d[LUT_A].cy0)) {
+				int connpt_dests_o, num_dests, cout_y, cout_x;
+				str16_t cout_str;
+
+				if ((fpga_connpt_find(es->model, y, x,
+					dev_ml->pinw[LI_CIN], &connpt_dests_o,
+					&num_dests) == NO_CONN)
+				    || num_dests != 1) {
+					HERE();
+				} else {
+					fpga_conn_dest(es->model, y, x, connpt_dests_o,
+						&cout_y, &cout_x, &cout_str);
+					if (find_es_switch(es, cout_y, cout_x,fpga_switch_first(
+						es->model, cout_y, cout_x, cout_str, SW_TO)))
+						cfg_ml.precyinit = PRECYINIT_0;
+				}
+			}
 
 			//
 			// Step 8:
@@ -1559,6 +1577,216 @@ fail:
 	return rc;
 }
 
+#define MAX_IOLOGIC_SWBLOCK	4
+#define MAX_IOLOGIC_BITS	4
+struct iologic_sw_pos
+{
+	const char* to[MAX_IOLOGIC_SWBLOCK];
+	const char* from[MAX_IOLOGIC_SWBLOCK];
+	int minor[MAX_IOLOGIC_BITS];
+	int b64[MAX_IOLOGIC_BITS];
+};
+
+// todo: can we assume the maximum range for iologic
+//       minors to be 21..29? that would be a total of
+//	 9*64=675 bits for ilogic/ologic/iodelay?
+struct iologic_sw_pos s_left_io_swpos[] = { {{0}} };
+struct iologic_sw_pos s_right_io_swpos[] = { {{0}} };
+struct iologic_sw_pos s_top_outer_io_swpos[] = { {{0}} };
+struct iologic_sw_pos s_top_inner_io_swpos[] = { {{0}} };
+
+struct iologic_sw_pos s_bot_inner_io_swpos[] =
+{
+	// input
+	{{"D_ILOGIC_IDATAIN_IODELAY_S"},
+	 {"BIOI_INNER_IBUF0"},
+ 	 {23, 23, -1},
+	 {28, 29}},
+
+	{{"D_ILOGIC_SITE"},
+	 {"D_ILOGIC_IDATAIN_IODELAY"},
+	 {26, -1},
+	 {20}},
+
+	{{"D_ILOGIC_SITE_S"},
+	 {"D_ILOGIC_IDATAIN_IODELAY_S"},
+	 {26, -1},
+	 {23}},
+
+	{{"DFB_ILOGIC_SITE"},
+	 {"D_ILOGIC_SITE"},
+	 {28, -1},
+	 {63}},
+
+	{{"DFB_ILOGIC_SITE_S"},
+	 {"D_ILOGIC_SITE_S"},
+	 {28, -1},
+	 {0}},
+
+	{{"FABRICOUT_ILOGIC_SITE"},
+	 {"D_ILOGIC_SITE"},
+	 {29, -1},
+	 {49}},
+
+	{{"FABRICOUT_ILOGIC_SITE_S"},
+	 {"D_ILOGIC_SITE_S"},
+	 {29, -1},
+	 {14}},
+
+	// output
+	{{"OQ_OLOGIC_SITE", "BIOI_INNER_O0"},
+	 {"D1_OLOGIC_SITE", "OQ_OLOGIC_SITE"},
+	 {26, 27, 28, -1},
+	 {40, 21, 57}},
+
+	{{"OQ_OLOGIC_SITE_S", "BIOI_INNER_O1"},
+	 {"D1_OLOGIC_SITE_S", "OQ_OLOGIC_SITE_S"},
+	 {26, 27, 28, -1},
+	 {43, 56, 6}},
+
+	{{"IOI_LOGICOUT0"}, {"IOI_INTER_LOGICOUT0"}, {-1}},
+	{{"IOI_LOGICOUT7"}, {"IOI_INTER_LOGICOUT7"}, {-1}},
+	{{"IOI_INTER_LOGICOUT0"}, {"FABRICOUT_ILOGIC_SITE"}, {-1}},
+	{{"IOI_INTER_LOGICOUT7"}, {"FABRICOUT_ILOGIC_SITE_S"}, {-1}},
+	{{"D_ILOGIC_IDATAIN_IODELAY"}, {"BIOI_INNER_IBUF0"}, {-1}},
+	{{"D_ILOGIC_IDATAIN_IODELAY_S"}, {"BIOI_INNER_IBUF1"}, {-1}},
+	{{"D1_OLOGIC_SITE"}, {"IOI_LOGICINB31"}, {-1}},
+	{{0}}
+};
+
+struct iologic_sw_pos s_bot_outer_io_swpos[] =
+{
+	// input
+	{{"D_ILOGIC_IDATAIN_IODELAY_S"},
+	 {"BIOI_OUTER_IBUF0"},
+ 	 {23, 23, -1},
+	 {28, 29}},
+
+	{{"D_ILOGIC_SITE"},
+	 {"D_ILOGIC_IDATAIN_IODELAY"},
+	 {26, -1},
+	 {20}},
+
+	{{"D_ILOGIC_SITE_S"},
+	 {"D_ILOGIC_IDATAIN_IODELAY_S"},
+	 {26, -1},
+	 {23}},
+
+	{{"DFB_ILOGIC_SITE"},
+	 {"D_ILOGIC_SITE"},
+	 {28, -1},
+	 {63}},
+
+	{{"DFB_ILOGIC_SITE_S"},
+	 {"D_ILOGIC_SITE_S"},
+	 {28, -1},
+	 {0}},
+
+	{{"FABRICOUT_ILOGIC_SITE"},
+	 {"D_ILOGIC_SITE"},
+	 {29, -1},
+	 {49}},
+
+	{{"FABRICOUT_ILOGIC_SITE_S"},
+	 {"D_ILOGIC_SITE_S"},
+	 {29, -1},
+	 {14}},
+
+	// output
+	{{"OQ_OLOGIC_SITE", "BIOI_OUTER_O0"},
+	 {"D1_OLOGIC_SITE", "OQ_OLOGIC_SITE"},
+	 {26, 27, 28, -1},
+	 {40, 21, 57}},
+
+	{{"OQ_OLOGIC_SITE_S", "BIOI_OUTER_O1"},
+	 {"D1_OLOGIC_SITE_S", "OQ_OLOGIC_SITE_S"},
+	 {26, 27, 28, -1},
+	 {43, 56, 6}},
+
+	{{"IOI_LOGICOUT0"}, {"IOI_INTER_LOGICOUT0"}, {-1}},
+	{{"IOI_LOGICOUT7"}, {"IOI_INTER_LOGICOUT7"}, {-1}},
+	{{"IOI_INTER_LOGICOUT0"}, {"FABRICOUT_ILOGIC_SITE"}, {-1}},
+	{{"IOI_INTER_LOGICOUT7"}, {"FABRICOUT_ILOGIC_SITE_S"}, {-1}},
+	{{"D_ILOGIC_IDATAIN_IODELAY"}, {"BIOI_INNER_IBUF0"}, {-1}},
+	{{"D_ILOGIC_IDATAIN_IODELAY_S"}, {"BIOI_INNER_IBUF1"}, {-1}},
+	{{"D1_OLOGIC_SITE"}, {"IOI_LOGICINB31"}, {-1}},
+	{{0}}
+};
+
+static int extract_iologic_switches(struct extract_state* es, int y, int x)
+{
+	int row_num, row_pos, bit_in_frame, i, j, rc;
+	uint8_t* minor0_p;
+	struct iologic_sw_pos* sw_pos;
+	str16_t from_str_i, to_str_i;
+	swidx_t sw_idx;
+
+	// From y/x coordinate, determine major, row, bit offset
+	// in frame (v64_i) and pointer to first minor.
+	is_in_row(es->model, y, &row_num, &row_pos);
+	if (row_num == -1 || row_pos == -1
+	    || row_pos == HCLK_POS) FAIL(EINVAL);
+	if (row_pos > HCLK_POS)
+		bit_in_frame = (row_pos-1)*64 + XC6_HCLK_BITS;
+	else
+		bit_in_frame = row_pos*64;
+	minor0_p = get_first_minor(es->bits, row_num, es->model->x_major[x]);
+
+	if (x < LEFT_SIDE_WIDTH) {
+		if (x != LEFT_IO_DEVS) FAIL(EINVAL);
+		sw_pos = s_left_io_swpos;
+	} else if (x >= es->model->x_width-RIGHT_SIDE_WIDTH) {
+		if (x != es->model->x_width - RIGHT_IO_DEVS_O) FAIL(EINVAL);
+		sw_pos = s_right_io_swpos;
+	} else if (y == TOP_OUTER_IO)
+		sw_pos = s_top_outer_io_swpos;
+	else if (y == TOP_INNER_IO)
+		sw_pos = s_top_inner_io_swpos;
+	else if (y == es->model->y_height-BOT_INNER_IO)
+		sw_pos = s_bot_inner_io_swpos;
+	else if (y == es->model->y_height-BOT_OUTER_IO)
+		sw_pos = s_bot_outer_io_swpos;
+	else FAIL(EINVAL);
+
+	// Go through switches
+	for (i = 0; sw_pos[i].to[0]; i++) {
+		for (j = 0; sw_pos[i].minor[j] != -1; j++) {
+			if (!frame_get_bit(&minor0_p[sw_pos[i].minor[j]
+				*FRAME_SIZE], bit_in_frame+sw_pos[i].b64[j]))
+				break;
+		}
+		if (!j || sw_pos[i].minor[j] != -1)
+			continue;
+		for (j = 0; j < MAX_IOLOGIC_SWBLOCK && sw_pos[i].to[j]; j++) {
+			from_str_i = strarray_find(&es->model->str, sw_pos[i].from[j]);
+			to_str_i = strarray_find(&es->model->str, sw_pos[i].to[j]);
+			if (from_str_i == STRIDX_NO_ENTRY
+			    || to_str_i == STRIDX_NO_ENTRY)
+				FAIL(EINVAL);
+			sw_idx = fpga_switch_lookup(es->model, y, x,
+				from_str_i, to_str_i);
+			if (sw_idx == NO_SWITCH) FAIL(EINVAL);
+
+			if (es->num_yx_pos >= MAX_YX_SWITCHES)
+				{ FAIL(ENOTSUP); }
+			es->yx_pos[es->num_yx_pos].y = y;
+			es->yx_pos[es->num_yx_pos].x = x;
+			es->yx_pos[es->num_yx_pos].idx = sw_idx;
+			es->num_yx_pos++;
+		}
+		for (j = 0; sw_pos[i].minor[j] != -1; j++)
+			frame_clear_bit(&minor0_p[sw_pos[i].minor[j]
+			  *FRAME_SIZE], bit_in_frame+sw_pos[i].b64[j]);
+	}
+	// todo: we could implement an all-or-nothing system where
+	//       the device bits are first copied into an u64 array,
+	//	 and switches rewound by resetting num_yx_pos - unless
+	//	 all bits have been processed...
+	return 0;
+fail:
+	return rc;
+}
+
 static int extract_switches(struct extract_state* es)
 {
 	int x, y, rc;
@@ -1577,6 +1805,11 @@ static int extract_switches(struct extract_state* es)
 			// logic switches
 			if (has_device(es->model, y, x, DEV_LOGIC)) {
 				rc = extract_logic_switches(es, y, x);
+				if (rc) FAIL(rc);
+			}
+			// iologic switches
+			if (has_device(es->model, y, x, DEV_ILOGIC)) {
+				rc = extract_iologic_switches(es, y, x);
 				if (rc) FAIL(rc);
 			}
 		}
@@ -1713,92 +1946,6 @@ static int write_routing_sw(struct fpga_bits* bits, struct fpga_model* model, in
 fail:
 	return rc;
 }
-
-#define MAX_IOLOGIC_SWBLOCK	4
-#define MAX_IOLOGIC_BITS	4
-struct iologic_sw_pos
-{
-	const char* to[MAX_IOLOGIC_SWBLOCK];
-	const char* from[MAX_IOLOGIC_SWBLOCK];
-	int minor[MAX_IOLOGIC_BITS];
-	int b64[MAX_IOLOGIC_BITS];
-};
-
-struct iologic_sw_pos s_left_io_swpos[] = { {{0}} };
-struct iologic_sw_pos s_right_io_swpos[] = { {{0}} };
-struct iologic_sw_pos s_top_outer_io_swpos[] = { {{0}} };
-struct iologic_sw_pos s_top_inner_io_swpos[] = { {{0}} };
-
-struct iologic_sw_pos s_bot_inner_io_swpos[] =
-{
-	// input
-	{{"D_ILOGIC_IDATAIN_IODELAY_S"}, {"BIOI_INNER_IBUF0"},
- 	 {23, 23, -1},
-	 {28, 29}},
-	{{"D_ILOGIC_SITE"}, {"D_ILOGIC_IDATAIN_IODELAY"}, {26, -1}, {20}},
-	{{"D_ILOGIC_SITE_S"}, {"D_ILOGIC_IDATAIN_IODELAY_S"}, {26, -1}, {23}},
-	{{"DFB_ILOGIC_SITE"}, {"D_ILOGIC_SITE"}, {28, -1}, {63}},
-	{{"DFB_ILOGIC_SITE_S"}, {"D_ILOGIC_SITE_S"}, {28, -1}, {0}},
-	{{"FABRICOUT_ILOGIC_SITE"}, {"D_ILOGIC_SITE"}, {29, -1}, {49}},
-	{{"FABRICOUT_ILOGIC_SITE_S"}, {"D_ILOGIC_SITE_S"}, {29, -1}, {14}},
-
-	// output
-	{{"OQ_OLOGIC_SITE", "BIOI_INNER_O0"},
-	 {"D1_OLOGIC_SITE", "OQ_OLOGIC_SITE"},
-	 {26, 27, 28, -1},
-	 {40, 21, 57}},
-	{{"OQ_OLOGIC_SITE_S", "BIOI_INNER_O1"},
-	 {"D1_OLOGIC_SITE_S", "OQ_OLOGIC_SITE_S"},
-	 {26, 27, 28, -1},
-	 {43, 56, 6}},
-
-	{{"IOI_LOGICOUT0"}, {"IOI_INTER_LOGICOUT0"}, {-1}},
-	{{"IOI_LOGICOUT7"}, {"IOI_INTER_LOGICOUT7"}, {-1}},
-	{{"IOI_INTER_LOGICOUT0"}, {"FABRICOUT_ILOGIC_SITE"}, {-1}},
-	{{"IOI_INTER_LOGICOUT7"}, {"FABRICOUT_ILOGIC_SITE_S"}, {-1}},
-	{{"D_ILOGIC_IDATAIN_IODELAY"}, {"BIOI_INNER_IBUF0"}, {-1}},
-	{{"D_ILOGIC_IDATAIN_IODELAY_S"}, {"BIOI_INNER_IBUF1"}, {-1}},
-	{{"D1_OLOGIC_SITE"}, {"IOI_LOGICINB31"}, {-1}},
-	{{0}}
-};
-
-struct iologic_sw_pos s_bot_outer_io_swpos[] =
-{
-	// input
-	{{"D_ILOGIC_IDATAIN_IODELAY_S"}, {"BIOI_OUTER_IBUF0"},
- 	 {23, 23, -1},
-	 {28, 29}},
-	{{"D_ILOGIC_SITE"}, {"D_ILOGIC_IDATAIN_IODELAY"}, {26, -1}, {20}},
-	{{"D_ILOGIC_SITE_S"}, {"D_ILOGIC_IDATAIN_IODELAY_S"}, {26, -1}, {23}},
-	{{"DFB_ILOGIC_SITE"}, {"D_ILOGIC_SITE"}, {28, -1}, {63}},
-	{{"DFB_ILOGIC_SITE_S"}, {"D_ILOGIC_SITE_S"}, {28, -1}, {0}},
-	{{"FABRICOUT_ILOGIC_SITE"}, {"D_ILOGIC_SITE"}, {29, -1}, {49}},
-	{{"FABRICOUT_ILOGIC_SITE_S"}, {"D_ILOGIC_SITE_S"}, {29, -1}, {14}},
-
-	// output
-	{{"OQ_OLOGIC_SITE", "BIOI_OUTER_O0"},
-	 {"D1_OLOGIC_SITE", "OQ_OLOGIC_SITE"},
-	 {26, 27, 28, -1},
-	 {40, 21, 57}},
-	{{"OQ_OLOGIC_SITE_S", "BIOI_OUTER_O1"},
-	 {"D1_OLOGIC_SITE_S", "OQ_OLOGIC_SITE_S"},
-	 {26, 27, 28, -1},
-	 {43, 56, 6}},
-
-	{{"OQ_OLOGIC_SITE", "BIOI_OUTER_O0"},
-	 {"D1_OLOGIC_SITE", "OQ_OLOGIC_SITE"},
-	 {26, 27, 28, -1},
-	 {40, 21, 57}},
-
-	{{"IOI_LOGICOUT0"}, {"IOI_INTER_LOGICOUT0"}, {-1}},
-	{{"IOI_LOGICOUT7"}, {"IOI_INTER_LOGICOUT7"}, {-1}},
-	{{"IOI_INTER_LOGICOUT0"}, {"FABRICOUT_ILOGIC_SITE"}, {-1}},
-	{{"IOI_INTER_LOGICOUT7"}, {"FABRICOUT_ILOGIC_SITE_S"}, {-1}},
-	{{"D_ILOGIC_IDATAIN_IODELAY"}, {"BIOI_INNER_IBUF0"}, {-1}},
-	{{"D_ILOGIC_IDATAIN_IODELAY_S"}, {"BIOI_INNER_IBUF1"}, {-1}},
-	{{"D1_OLOGIC_SITE"}, {"IOI_LOGICINB31"}, {-1}},
-	{{0}}
-};
 
 struct str_sw
 {

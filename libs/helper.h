@@ -64,7 +64,7 @@ const char* bool_bits2str(uint64_t u64, int num_bits);
 
 int parse_boolexpr(const char* expr, uint64_t* lut);
 
-int printf_iob(uint8_t* d, int len, int inpos, int num_entries);
+int printf_type2(uint8_t* d, int len, int inpos, int num_entries);
 void printf_ramb16_data(uint8_t* bits, int inpos);
 
 int is_empty(const uint8_t* d, int l);
@@ -151,3 +151,5 @@ int strarray_add(struct hashed_strarray* array, const char* str, int* idx);
 // anymore, only strarray_lookup().
 int strarray_stash(struct hashed_strarray* array, const char* str, int idx);
 int strarray_used_slots(struct hashed_strarray* array);
+
+int row_pos_to_y(int num_rows, int row, int pos);

@@ -23,6 +23,50 @@
 #define XC6SLX100T	0x04031093
 #define XC6SLX150	0x0401D093
 
+#define XC_MAX_MAJORS		400
+#define XC_MAX_TYPE2_ENTRIES	2000
+
+#define XC_MAJ_ZERO		0x00000001
+#define XC_MAJ_LEFT		0x00000002
+#define XC_MAJ_CENTER		0x00000004
+#define XC_MAJ_RIGHT		0x00000008
+#define XC_MAJ_XM		0x00000010
+#define XC_MAJ_XL		0x00000020
+#define XC_MAJ_BRAM		0x00000040
+#define XC_MAJ_MACC		0x00000080
+#define XC_MAJ_TOP_BOT_IO	0x00000100
+#define XC_MAJ_GCLK_SEP		0x00000200
+
+struct xc_major_info
+{
+	int flags;
+	int minors;
+};
+
+#define XC_T2_IOB_PAD		0x00000001
+#define XC_T2_IOB_UNBONDED	0x00000002
+#define XC_T2_CENTER		0x00000004
+
+struct xc_type2_info
+{
+	int flags;
+	int val;
+};
+
+struct xc_info
+{
+	int num_rows;
+	const char* left_wiring;
+	const char* right_wiring;
+	const char* major_str;
+	int num_majors;
+	struct xc_major_info majors[XC_MAX_MAJORS];
+	int num_type2;
+	struct xc_type2_info type2[XC_MAX_TYPE2_ENTRIES];
+};
+
+const struct xc_info* xc_info(int idcode);
+
 #define FRAME_SIZE		130
 #define FRAMES_PER_ROW		505 // for slx4 and slx9
 #define PADDING_FRAMES_PER_ROW	2
@@ -129,6 +173,8 @@ int get_num_iobs(int idcode);
 const char* get_iob_sitename(int idcode, int idx);
 // returns -1 if sitename not found
 int find_iob_sitename(int idcode, const char* name);
+
+int xc_num_rows(int idcode);
 
 // The routing bitpos is relative to a tile, i.e. major (x)
 // and row/v64_i (y) are defined outside.

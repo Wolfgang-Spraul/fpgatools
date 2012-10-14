@@ -762,6 +762,8 @@ static void printf_v64_mi20(const uint8_t* bits, int row, int major)
 				if (u64 & (1ULL << i))
 					num_bits_on++;
 			}
+			// this is most helpful for bits 24:39 which are
+			// part of logic device configuration
 			if (num_bits_on < 5) {
 				for (i = 0; i < 64; i++) {
 					if (!(u64 & (1ULL << i)))
@@ -841,13 +843,12 @@ static int dump_maj_right(const uint8_t* bits, int row, int major)
 	return 0;
 }
 
-static int dump_maj_center(const uint8_t* bits, int row, int major)
+static int dump_maj_logic(const uint8_t* bits, int row, int major)
 {
-	int minor, i;
+	const struct xc_info* xci = xc_info(XC6SLX9);
+	int minor, i, logdev_start, logdev_end;
 
-	if (get_major_minors(XC6SLX9, major) != 31) HERE();
-
-	for (minor = 0; minor < get_major_minors(XC6SLX9, major); minor++)
+	for (minor = 0; minor < xci->majors[major].minors; minor++)
 		printf_clock(&bits[minor*FRAME_SIZE], row, major, minor);
 
 	// 0:19 routing minor pairs
@@ -857,102 +858,89 @@ static int dump_maj_center(const uint8_t* bits, int row, int major)
 	// mi20 as 64-char 0/1 string
 	printf_v64_mi20(&bits[20*FRAME_SIZE], row, major);
 
-	// L devices
-	for (i = 0; i < 16; i++) {
-		printf_lut(bits, row, major, 21, i*2);
-		printf_lut(bits, row, major, 23, i*2);
-		printf_lut(bits, row, major, 21, i*2+1);
-		printf_lut(bits, row, major, 23, i*2+1);
-	}
-	printf_frames(&bits[25*FRAME_SIZE], /*max_frames*/ 1,
-		row, major, 25, /*print_empty*/ 0, /*no_clock*/ 1);
-	// X devices
-	for (i = 0; i < 16; i++) {
-		printf_lut(bits, row, major, 26, i*2);
-		printf_lut(bits, row, major, 28, i*2);
-		printf_lut(bits, row, major, 26, i*2+1);
-		printf_lut(bits, row, major, 28, i*2+1);
-	}
-	printf_frames(&bits[30*FRAME_SIZE], /*max_frames*/ 1,
-		row, major, 30, /*print_empty*/ 0, /*no_clock*/ 1);
-	return 0;
-}
-
-static int dump_maj_logic_xm(const uint8_t* bits, int row, int major)
-{
-	int minor, i;
-
-	if (get_major_minors(XC6SLX9, major) != 31) HERE();
-
-	for (minor = 0; minor < get_major_minors(XC6SLX9, major); minor++)
-		printf_clock(&bits[minor*FRAME_SIZE], row, major, minor);
-
-	// 0:19 routing minor pairs
-	for (i = 0; i < 10; i++)
-		printf_routing_2minors(&bits[i*2*FRAME_SIZE], row, major, i*2);
-
-	// mi20 as 64-char 0/1 string
-	printf_v64_mi20(&bits[20*FRAME_SIZE], row, major);
-
-	// todo: some logic device configuration bits are also in mi20
-	// todo: the top and bottom two luts should be skipped in !no_io cols
-
-	// M devices
-	for (i = 0; i < 16; i++) {
-		printf_lut(bits, row, major, 21, i*2);
-		printf_lut(bits, row, major, 21, i*2+1);
-	}
-	printf_frames(&bits[23*FRAME_SIZE], /*max_frames*/ 1,
-		row, major, 23, /*print_empty*/ 0, /*no_clock*/ 1);
-	for (i = 0; i < 16; i++) {
-		printf_lut(bits, row, major, 24, i*2);
-		printf_lut(bits, row, major, 24, i*2+1);
+	logdev_start = 0;
+	logdev_end = 15;
+	if (xci->majors[major].flags & XC_MAJ_TOP_BOT_IO) {
+		if (row == xc_info(XC6SLX9)->num_rows-1)
+			logdev_start += TOPBOT_IO_ROWS;
+		else if (!row)
+			logdev_end -= TOPBOT_IO_ROWS;
 	}
 
-	// X devices
-	printf_frames(&bits[26*FRAME_SIZE], /*max_frames*/ 1,
-		row, major, 26, /*print_empty*/ 0, /*no_clock*/ 1);
-	for (i = 0; i < 16; i++) {
-		printf_lut(bits, row, major, 27, i*2);
-		printf_lut(bits, row, major, 29, i*2);
-		printf_lut(bits, row, major, 27, i*2+1);
-		printf_lut(bits, row, major, 29, i*2+1);
-	}
-	return 0;
-}
+	if (xci->majors[major].flags & XC_MAJ_XM) {
+		if (xci->majors[major].minors != 31) HERE();
 
-static int dump_maj_logic_xl(const uint8_t* bits, int row, int major)
-{
-	int minor, i;
+		// M devices
+		if (logdev_start)
+			printf_extrabits(bits, 21, 2, 0, logdev_start*64, row, major);
+		for (i = logdev_start; i <= logdev_end; i++) {
+			printf_lut(bits, row, major, 21, i*2);
+			printf_lut(bits, row, major, 21, i*2+1);
+		}
+		if (logdev_end < 15)
+			printf_extrabits(bits, 21, 2, i*64 + XC6_HCLK_BITS, (15-logdev_end)*64, row, major);
+		printf_frames(&bits[23*FRAME_SIZE], /*max_frames*/ 1,
+			row, major, 23, /*print_empty*/ 0, /*no_clock*/ 1);
+		if (logdev_start)
+			printf_extrabits(bits, 24, 2, 0, logdev_start*64, row, major);
+		for (i = logdev_start; i <= logdev_end; i++) {
+			printf_lut(bits, row, major, 24, i*2);
+			printf_lut(bits, row, major, 24, i*2+1);
+		}
+		if (logdev_end < 15)
+			printf_extrabits(bits, 24, 2, i*64 + XC6_HCLK_BITS, (15-logdev_end)*64, row, major);
 
-	if (get_major_minors(XC6SLX9, major) != 30) HERE();
+		// X devices
+		printf_frames(&bits[26*FRAME_SIZE], /*max_frames*/ 1,
+			row, major, 26, /*print_empty*/ 0, /*no_clock*/ 1);
+		if (logdev_start)
+			printf_extrabits(bits, 27, 4, 0, logdev_start*64, row, major);
+		for (i = logdev_start; i <= logdev_end; i++) {
+			printf_lut(bits, row, major, 27, i*2);
+			printf_lut(bits, row, major, 29, i*2);
+			printf_lut(bits, row, major, 27, i*2+1);
+			printf_lut(bits, row, major, 29, i*2+1);
+		}
+		if (logdev_end < 15)
+			printf_extrabits(bits, 27, 4, i*64 + XC6_HCLK_BITS, (15-logdev_end)*64, row, major);
+	} else if (xci->majors[major].flags & (XC_MAJ_XL|XC_MAJ_CENTER)) {
 
-	for (minor = 0; minor < get_major_minors(XC6SLX9, major); minor++)
-		printf_clock(&bits[minor*FRAME_SIZE], row, major, minor);
+		// L devices
+		if (logdev_start)
+			printf_extrabits(bits, 21, 4, 0, logdev_start*64, row, major);
+		for (i = logdev_start; i <= logdev_end; i++) {
+			printf_lut(bits, row, major, 21, i*2);
+			printf_lut(bits, row, major, 23, i*2);
+			printf_lut(bits, row, major, 21, i*2+1);
+			printf_lut(bits, row, major, 23, i*2+1);
+		}
+		if (logdev_end < 15)
+			printf_extrabits(bits, 21, 4, i*64 + XC6_HCLK_BITS, (15-logdev_end)*64, row, major);
+		printf_frames(&bits[25*FRAME_SIZE], /*max_frames*/ 1,
+			row, major, 25, /*print_empty*/ 0, /*no_clock*/ 1);
+		// X devices
+		if (logdev_start)
+			printf_extrabits(bits, 26, 4, 0, logdev_start*64, row, major);
+		for (i = logdev_start; i <= logdev_end; i++) {
+			printf_lut(bits, row, major, 26, i*2);
+			printf_lut(bits, row, major, 28, i*2);
+			printf_lut(bits, row, major, 26, i*2+1);
+			printf_lut(bits, row, major, 28, i*2+1);
+		}
+		if (logdev_end < 15)
+			printf_extrabits(bits, 26, 4, i*64 + XC6_HCLK_BITS, (15-logdev_end)*64, row, major);
 
-	// 0:19 routing minor pairs
-	for (i = 0; i < 10; i++)
-		printf_routing_2minors(&bits[i*2*FRAME_SIZE], row, major, i*2);
+		// one extra minor in the center major
+		if (xci->majors[major].flags & XC_MAJ_CENTER) {
+			if (xci->majors[major].minors != 31) HERE();
+			printf_frames(&bits[30*FRAME_SIZE], /*max_frames*/ 1,
+				row, major, 30, /*print_empty*/ 0, /*no_clock*/ 1);
+		} else { // XL
+			if (xci->majors[major].minors != 30) HERE();
+		}
+	} else
+		HERE();
 
-	// mi20 as 64-char 0/1 string
-	printf_v64_mi20(&bits[20*FRAME_SIZE], row, major);
-
-	// L devices
-	for (i = 0; i < 16; i++) {
-		printf_lut(bits, row, major, 21, i*2);
-		printf_lut(bits, row, major, 23, i*2);
-		printf_lut(bits, row, major, 21, i*2+1);
-		printf_lut(bits, row, major, 23, i*2+1);
-	}
-	printf_frames(&bits[25*FRAME_SIZE], /*max_frames*/ 1,
-		row, major, 25, /*print_empty*/ 0, /*no_clock*/ 1);
-	// X devices
-	for (i = 0; i < 16; i++) {
-		printf_lut(bits, row, major, 26, i*2);
-		printf_lut(bits, row, major, 28, i*2);
-		printf_lut(bits, row, major, 26, i*2+1);
-		printf_lut(bits, row, major, 28, i*2+1);
-	}
 	return 0;
 }
 
@@ -1022,13 +1010,18 @@ static int dump_maj_macc(const uint8_t* bits, int row, int major)
 
 static int dump_bits(struct fpga_config* cfg)
 {
-	int row, major, off, rc;
+	int idcode, num_rows, row, major, off, rc;
+
+	if (cfg->idcode_reg == -1) FAIL(EINVAL);
+	idcode = cfg->reg[cfg->idcode_reg].int_v;
+	num_rows = xc_num_rows(idcode);
+	if (num_rows < 1) FAIL(EINVAL);
 
 	// type0
-	for (major = 0; major <= get_rightside_major(XC6SLX9); major++) {
-		for (row = 3; row >= 0; row--) {
-			off = (row*get_frames_per_row(XC6SLX9) + get_major_framestart(XC6SLX9, major)) * FRAME_SIZE;
-			switch (get_major_type(cfg->reg[cfg->idcode_reg].int_v, major)) {
+	for (major = 0; major <= get_rightside_major(idcode); major++) {
+		for (row = num_rows-1; row >= 0; row--) {
+			off = (row*get_frames_per_row(idcode) + get_major_framestart(idcode, major)) * FRAME_SIZE;
+			switch (get_major_type(idcode, major)) {
 				case MAJ_ZERO:
 					rc = dump_maj_zero(&cfg->bits.d[off], row, major);
 					if (rc) FAIL(rc);
@@ -1041,16 +1034,10 @@ static int dump_bits(struct fpga_config* cfg)
 					rc = dump_maj_right(&cfg->bits.d[off], row, major);
 					if (rc) FAIL(rc);
 					break;
-				case MAJ_CENTER:
-					rc = dump_maj_center(&cfg->bits.d[off], row, major);
-					if (rc) FAIL(rc);
-					break;
 				case MAJ_LOGIC_XM:
-					rc = dump_maj_logic_xm(&cfg->bits.d[off], row, major);
-					if (rc) FAIL(rc);
-					break;
 				case MAJ_LOGIC_XL:
-					rc = dump_maj_logic_xl(&cfg->bits.d[off], row, major);
+				case MAJ_CENTER:
+					rc = dump_maj_logic(&cfg->bits.d[off], row, major);
 					if (rc) FAIL(rc);
 					break;
 				case MAJ_BRAM:
@@ -1113,7 +1100,7 @@ int dump_config(struct fpga_config* cfg, int flags)
 		if (rc) FAIL(rc);
 		rc = dump_bram(cfg);
 		if (rc) FAIL(rc);
-		printf_iob(cfg->bits.d, cfg->bits.len,
+		printf_type2(cfg->bits.d, cfg->bits.len,
 			BRAM_DATA_START + BRAM_DATA_LEN, 896*2/8);
 		if (flags & DUMP_CRC)
 			printf("auto-crc 0x%X\n", cfg->auto_crc);

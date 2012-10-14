@@ -7,7 +7,7 @@
 
 #include <stdarg.h>
 #include <errno.h>
-#include "helper.h"
+#include "model.h"
 #include "parts.h"
 
 const char* bitstr(uint32_t value, int digits)
@@ -230,16 +230,22 @@ const char* bool_bits2str(uint64_t u64, int num_bits)
 	int str_end, first_op, bit_width;
 	static char str[2048];
 
-	if (num_bits == 64)
+	if (!u64) return "0";
+	if (num_bits == 64) {
+		if (u64 == 0xFFFFFFFFFFFFFFFFULL) return "1";
 		bit_width = 6;
-	else if (num_bits == 32)
+	} else if (num_bits == 32) {
+		if (u64 & 0xFFFFFFFF00000000ULL) {
+			// upper 32 bits should be 0
+			HERE();
+			return "0";
+		}
+		if (u64 == 0x00000000FFFFFFFFULL) return "1";
 		bit_width = 5;
-	else {
+	} else {
 		HERE();
 		return "0";
 	}
-	if (!u64) return "0";
-	if (u64 == 0xFFFFFFFFFFFFFFFFULL) return "1";
 
 	memset(mt, 0, sizeof(mt));
 	memset(mt_size, 0, sizeof(mt_size));
@@ -350,7 +356,7 @@ int parse_boolexpr(const char* expr, uint64_t* lut)
 	return 0;
 }
 
-int printf_iob(uint8_t* d, int len, int inpos, int num_entries)
+int printf_type2(uint8_t* d, int len, int inpos, int num_entries)
 {
 	int i, num_printed;
 	uint64_t u64;
@@ -359,7 +365,7 @@ int printf_iob(uint8_t* d, int len, int inpos, int num_entries)
 	for (i = 0; i < num_entries; i++) {
 		u64 = frame_get_u64(&d[inpos+i*8]);
 		if (u64) {
-			printf("iob i%i 0x%016lX\n", i, u64);
+			printf("type2 i%i 0x%016lX\n", i, u64);
 			num_printed++;
 		}
 	}
@@ -681,13 +687,19 @@ int clb_empty(uint8_t* maj_bits, int idx)
 void printf_extrabits(const uint8_t* maj_bits, int start_minor, int num_minors,
 	int start_bit, int num_bits, int row, int major)
 {
-	int minor, bit;
+	int minor, bit, bit_no_clk;
 
 	for (minor = start_minor; minor < start_minor + num_minors; minor++) {
 		for (bit = start_bit; bit < start_bit + num_bits; bit++) {
-			if (frame_get_bit(&maj_bits[minor*130], bit))
-				printf("r%i ma%i extra mi%i bit %i\n",
-					row, major, minor, bit);
+			if (frame_get_bit(&maj_bits[minor*FRAME_SIZE], bit)) {
+				bit_no_clk = bit;
+				if (bit_no_clk >= 528)
+					bit_no_clk -= XC6_HCLK_BITS;
+				printf("r%i ma%i mi%i bit %i 64*%i+%i 256*%i+%i\n",
+					row, major, minor, bit,
+					bit_no_clk/64, bit_no_clk%64,
+					bit_no_clk/256, bit_no_clk%256);
+			}
 		}
 	}
 }
@@ -1048,4 +1060,21 @@ void strarray_free(struct hashed_strarray* array)
 	array->bin_offsets = 0;
 	free(array->index_to_bin);
 	array->index_to_bin = 0;
+}
+
+int row_pos_to_y(int num_rows, int row, int pos)
+{
+	int y;
+
+	if (row >= num_rows) {
+		HERE();
+		return -1;
+	}
+	y = TOP_IO_TILES;
+	if (row < num_rows/2)
+		y++; // below center
+	y += num_rows - row - 1; // hclk in full rows from top
+	if (pos >= HALF_ROW)
+		y++; // hclk in row
+	return y;
 }

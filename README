@@ -1,11 +1,10 @@
 Introduction
  fpgatools is a toolchain to program field-programmable gate arrays
- (FPGAs). The only supported chip at this time is the xc6slx9, a cheap
- (ca. 7 USD) but powerful 45nm-generation chip with 5720 6-input LUTs,
- block ram and multiply-accumulate devices.
- The long-term goals of fpgatools are:
+ (FPGAs). The only supported chip at this time is the xc6slx9, a
+ 7 USD 45nm-generation fpga with 5720 6-input LUTs, block ram and
+ multiply-accumulate devices.
 
- *) reach maximum physical chip performance
+ *) maximize chip performance
  *) fast development cycles
  *) independent toolchain that only depends on other free software
  *) reconfigure on-chip
@@ -31,6 +30,7 @@ Libraries
 Design Utilities
 
 - hello_world        outputs an AND gate floorplan to stdout
+- blinking_led       outputs blinking led design to stdout
 - new_fp             creates empty .fp floorplan file
 - fp2bit             converts .fp floorplan into .bit bitstream
 - bit2fp             converts .bit bitstream into .fp floorplan
@@ -38,7 +38,7 @@ Design Utilities
 
 fpgatools Development Utilities
 
-- autotest           executes test suite
+- autotest           test suite
 - sort_seq           sorts line-based text file by sequence numbers in strings
 - merge_seq          merges a pre-sorted text file into wire sequences
 - pair2net           reads the first two words per line and builds nets
