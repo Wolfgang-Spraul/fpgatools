@@ -184,8 +184,8 @@ static int printf_IOB(FILE* f, struct fpga_model* model,
 	return 0;
 }
 
-static int read_IOB_attr(struct fpga_model* model, struct fpga_device* dev,
-	const char* w1, int w1_len, const char* w2, int w2_len)
+static int read_IOB_attr(struct fpga_model *model, struct fpga_device *dev,
+	const char *w1, int w1_len, const char *w2, int w2_len)
 {
 	// First the one-word attributes.
 	if (!str_cmp(w1, w1_len, "O_used", ZTERM)) {
@@ -283,7 +283,7 @@ inst_1:
 	dev->instantiated = 1;
 	return 1;
 inst_2:
-	dev->instantiated = 2;
+	dev->instantiated = 1;
 	return 2;
 }
 
@@ -655,6 +655,237 @@ inst_2:
 	return 2;
 }
 
+static int printf_BUFGMUX(FILE* f, struct fpga_model* model,
+	int y, int x, int config_only)
+{
+	struct fpga_tile *tile;
+	struct fpgadev_bufgmux *cfg;
+	char pref[256];
+	int type_count, i, rc;
+
+	tile = YX_TILE(model, y, x);
+	type_count = 0;
+	for (i = 0; i < tile->num_devs; i++) {
+		if (tile->devs[i].type != DEV_BUFGMUX)
+			continue;
+		if (config_only && !(tile->devs[i].instantiated)) {
+			type_count++;
+			continue;
+		}
+		snprintf(pref, sizeof(pref), "dev y%02i x%02i BUFGMUX %i",
+			y, x, type_count++);
+		if (!config_only)
+			fprintf(f, "%s\n", pref);
+		cfg = &tile->devs[i].u.bufgmux;
+		switch (cfg->clk) {
+			case BUFG_CLK_ASYNC:
+				fprintf(f, "%s clk ASYNC\n", pref);
+				break;
+			case BUFG_CLK_SYNC:
+				fprintf(f, "%s clk SYNC\n", pref);
+				break;
+			case 0: break; default: FAIL(EINVAL);
+		}
+		switch (cfg->disable_attr) {
+			case BUFG_DISATTR_LOW:
+				fprintf(f, "%s disable_attr LOW\n", pref);
+				break;
+			case BUFG_DISATTR_HIGH:
+				fprintf(f, "%s disable_attr HIGH\n", pref);
+				break;
+			case 0: break; default: FAIL(EINVAL);
+		}
+		switch (cfg->s_inv) {
+			case BUFG_SINV_N:
+				fprintf(f, "%s s_inv NO\n", pref);
+				break;
+			case BUFG_SINV_Y:
+				fprintf(f, "%s s_inv YES\n", pref);
+				break;
+			case 0: break; default: FAIL(EINVAL);
+		}
+	}
+	return 0;
+fail:
+	return rc;
+}
+
+static int read_BUFGMUX_attr(struct fpga_model *model, struct fpga_device *dev,
+	const char *w1, int w1_len, const char *w2, int w2_len)
+{
+	// BUFGMUX only has 2-word attributes
+	if (w2_len < 1) return 0;
+	if (!str_cmp(w1, w1_len, "clk", ZTERM)) {
+		if (!str_cmp(w2, w2_len, "ASYNC", ZTERM))
+			dev->u.bufgmux.clk = BUFG_CLK_ASYNC;
+		else if (!str_cmp(w2, w2_len, "SYNC", ZTERM))
+			dev->u.bufgmux.clk = BUFG_CLK_SYNC;
+		else return 0;
+		goto inst;
+	}
+	if (!str_cmp(w1, w1_len, "disable_attr", ZTERM)) {
+		if (!str_cmp(w2, w2_len, "LOW", ZTERM))
+			dev->u.bufgmux.disable_attr = BUFG_DISATTR_LOW;
+		else if (!str_cmp(w2, w2_len, "HIGH", ZTERM))
+			dev->u.bufgmux.disable_attr = BUFG_DISATTR_HIGH;
+		else return 0;
+		goto inst;
+	}
+	if (!str_cmp(w1, w1_len, "s_inv", ZTERM)) {
+		if (!str_cmp(w2, w2_len, "NO", ZTERM))
+			dev->u.bufgmux.s_inv = BUFG_SINV_N;
+		else if (!str_cmp(w2, w2_len, "YES", ZTERM))
+			dev->u.bufgmux.s_inv = BUFG_SINV_Y;
+		else return 0;
+		goto inst;
+	}
+	return 0;
+inst:
+	dev->instantiated = 1;
+	return 2;
+}
+
+static int printf_BUFIO(FILE* f, struct fpga_model* model,
+	int y, int x, int config_only)
+{
+	struct fpga_tile *tile;
+	struct fpgadev_bufio *cfg;
+	char pref[256];
+	int type_count, i, rc;
+
+	tile = YX_TILE(model, y, x);
+	type_count = 0;
+	for (i = 0; i < tile->num_devs; i++) {
+		if (tile->devs[i].type != DEV_BUFIO)
+			continue;
+		if (config_only && !(tile->devs[i].instantiated)) {
+			type_count++;
+			continue;
+		}
+		snprintf(pref, sizeof(pref), "dev y%02i x%02i BUFGMUX %i",
+			y, x, type_count++);
+		if (!config_only)
+			fprintf(f, "%s\n", pref);
+		cfg = &tile->devs[i].u.bufio;
+		if (cfg->divide)
+			fprintf(f, "%s divide %i\n", pref, cfg->divide);
+		switch (cfg->divide_bypass) {
+			case BUFIO_DIVIDEBP_N:
+				fprintf(f, "%s divide_bypass NO\n", pref);
+				break;
+			case BUFIO_DIVIDEBP_Y:
+				fprintf(f, "%s divide_bypass YES\n", pref);
+				break;
+			case 0: break; default: FAIL(EINVAL);
+		}
+		switch (cfg->i_inv) {
+			case BUFIO_IINV_N:
+				fprintf(f, "%s i_inv NO\n", pref);
+				break;
+			case BUFIO_IINV_Y:
+				fprintf(f, "%s i_inv YES\n", pref);
+				break;
+			case 0: break; default: FAIL(EINVAL);
+		}
+	}
+	return 0;
+fail:
+	return rc;
+}
+
+static int read_BUFIO_attr(struct fpga_model *model, struct fpga_device *dev,
+	const char *w1, int w1_len, const char *w2, int w2_len)
+{
+	// BUFIO only has 2-word attributes
+	if (w2_len < 1) return 0;
+	if (!str_cmp(w1, w1_len, "divide", ZTERM)) {
+		dev->u.bufio.divide = to_i(w2, w2_len);
+		goto inst;
+	}
+	if (!str_cmp(w1, w1_len, "divide_bypass", ZTERM)) {
+		if (!str_cmp(w2, w2_len, "NO", ZTERM))
+			dev->u.bufio.divide_bypass = BUFIO_DIVIDEBP_N;
+		else if (!str_cmp(w2, w2_len, "YES", ZTERM))
+			dev->u.bufio.divide_bypass = BUFIO_DIVIDEBP_Y;
+		else return 0;
+		goto inst;
+	}
+	if (!str_cmp(w1, w1_len, "i_inv", ZTERM)) {
+		if (!str_cmp(w2, w2_len, "NO", ZTERM))
+			dev->u.bufio.i_inv = BUFIO_IINV_N;
+		else if (!str_cmp(w2, w2_len, "YES", ZTERM))
+			dev->u.bufio.i_inv = BUFIO_IINV_Y;
+		else return 0;
+		goto inst;
+	}
+	return 0;
+inst:
+	dev->instantiated = 1;
+	return 2;
+}
+
+static int printf_BSCAN(FILE* f, struct fpga_model* model,
+	int y, int x, int config_only)
+{
+	struct fpga_tile *tile;
+	struct fpgadev_bscan *cfg;
+	char pref[256];
+	int type_count, i, rc;
+
+	tile = YX_TILE(model, y, x);
+	type_count = 0;
+	for (i = 0; i < tile->num_devs; i++) {
+		if (tile->devs[i].type != DEV_BSCAN)
+			continue;
+		if (config_only && !(tile->devs[i].instantiated)) {
+			type_count++;
+			continue;
+		}
+		snprintf(pref, sizeof(pref), "dev y%02i x%02i BUFGMUX %i",
+			y, x, type_count++);
+		if (!config_only)
+			fprintf(f, "%s\n", pref);
+		cfg = &tile->devs[i].u.bscan;
+		if (cfg->jtag_chain)
+			fprintf(f, "%s jtag_chain %i\n", pref, cfg->jtag_chain);
+		switch (cfg->jtag_test) {
+			case BSCAN_JTAG_TEST_N:
+				fprintf(f, "%s jtag_test NO\n", pref);
+				break;
+			case BSCAN_JTAG_TEST_Y:
+				fprintf(f, "%s jtag_test YES\n", pref);
+				break;
+			case 0: break; default: FAIL(EINVAL);
+		}
+	}
+	return 0;
+fail:
+	return rc;
+}
+
+static int read_BSCAN_attr(struct fpga_model *model, struct fpga_device *dev,
+	const char *w1, int w1_len, const char *w2, int w2_len)
+{
+	// BSCAN only has 2-word attributes
+	if (w2_len < 1) return 0;
+	if (!str_cmp(w1, w1_len, "jtag_chain", ZTERM)) {
+		dev->u.bscan.jtag_chain = to_i(w2, w2_len);
+		goto inst;
+	}
+	if (!str_cmp(w1, w1_len, "jtag_test", ZTERM)) {
+		if (!str_cmp(w2, w2_len, "NO", ZTERM))
+			dev->u.bscan.jtag_test = BSCAN_JTAG_TEST_N;
+		else if (!str_cmp(w2, w2_len, "YES", ZTERM))
+			dev->u.bscan.jtag_test = BSCAN_JTAG_TEST_Y;
+		else return 0;
+		goto inst;
+	}
+	return 0;
+inst:
+	dev->instantiated = 1;
+	return 2;
+}
+
 int printf_devices(FILE* f, struct fpga_model* model, int config_only)
 {
 	int x, y, i, rc;
@@ -674,12 +905,33 @@ int printf_devices(FILE* f, struct fpga_model* model, int config_only)
 	}
 	for (x = 0; x < model->x_width; x++) {
 		for (y = 0; y < model->y_height; y++) {
+			rc = printf_BUFGMUX(f, model, y, x, config_only);
+			if (rc) goto fail;
+		}
+	}
+	for (x = 0; x < model->x_width; x++) {
+		for (y = 0; y < model->y_height; y++) {
+			rc = printf_BUFIO(f, model, y, x, config_only);
+			if (rc) goto fail;
+		}
+	}
+	for (x = 0; x < model->x_width; x++) {
+		for (y = 0; y < model->y_height; y++) {
+			rc = printf_BSCAN(f, model, y, x, config_only);
+			if (rc) goto fail;
+		}
+	}
+	for (x = 0; x < model->x_width; x++) {
+		for (y = 0; y < model->y_height; y++) {
 			tile = YX_TILE(model, y, x);
 			for (i = 0; i < tile->num_devs; i++) {
 				if (config_only && !(tile->devs[i].instantiated))
 					continue;
 				if (tile->devs[i].type == DEV_LOGIC
-				    || tile->devs[i].type == DEV_IOB)
+				    || tile->devs[i].type == DEV_IOB
+				    || tile->devs[i].type == DEV_BUFGMUX
+				    || tile->devs[i].type == DEV_BUFIO
+				    || tile->devs[i].type == DEV_BSCAN)
 					continue; // handled earlier
 				fprintf(f, "dev y%02i x%02i %s\n", y, x,
 					fdev_type2str(tile->devs[i].type));
@@ -823,13 +1075,6 @@ int printf_nets(FILE* f, struct fpga_model* model)
 	return 0;
 fail:
 	return rc;
-}
-
-static enum fpgadev_type to_type(const char* s, int len)
-{
-	if (!str_cmp(s, len, "IOB", 3)) return DEV_IOB;
-	if (!str_cmp(s, len, "LOGIC", 5)) return DEV_LOGIC;
-	return DEV_NONE;
 }
 
 static int coord(const char* s, int start, int* end, int* y, int* x)
@@ -986,14 +1231,17 @@ static void read_dev_line(struct fpga_model* model, const char* line, int start)
 
 	if (type_end == type_beg || idx_end == idx_beg
 	    || !all_digits(&line[idx_beg], idx_end-idx_beg)) {
-		fprintf(stderr, "error %i: %s", __LINE__, line);
+		HERE();
 		return;
 	}
-	dev_type = to_type(&line[type_beg], type_end-type_beg);
+	dev_type = fdev_str2type(&line[type_beg], type_end-type_beg);
 	dev_type_idx = to_i(&line[idx_beg], idx_end-idx_beg);
 	dev_idx = fpga_dev_idx(model, y_coord, x_coord, dev_type, dev_type_idx);
 	if (dev_idx == NO_DEV) {
-		fprintf(stderr, "error %i: %s", __LINE__, line);
+		fprintf(stderr, "%s:%i y%02i x%02i dev_type %i "
+			"dev_type_idx %i dev_idx %i\n",
+			__FILE__, __LINE__, y_coord, x_coord, dev_type,
+			dev_type_idx, dev_idx);
 		return;
 	}
 	dev_ptr = FPGA_DEV(model, y_coord, x_coord, dev_idx);
@@ -1012,6 +1260,24 @@ static void read_dev_line(struct fpga_model* model, const char* line, int start)
 			case DEV_LOGIC:
 				words_consumed = read_LOGIC_attr(model, y_coord,
 					x_coord, dev_type_idx,
+					&line[next_beg], next_end-next_beg,
+					&line[second_beg],
+					second_end-second_beg);
+				break;
+			case DEV_BUFGMUX:
+				words_consumed = read_BUFGMUX_attr(model, dev_ptr,
+					&line[next_beg], next_end-next_beg,
+					&line[second_beg],
+					second_end-second_beg);
+				break;
+			case DEV_BUFIO:
+				words_consumed = read_BUFIO_attr(model, dev_ptr,
+					&line[next_beg], next_end-next_beg,
+					&line[second_beg],
+					second_end-second_beg);
+				break;
+			case DEV_BSCAN:
+				words_consumed = read_BSCAN_attr(model, dev_ptr,
 					&line[next_beg], next_end-next_beg,
 					&line[second_beg],
 					second_end-second_beg);

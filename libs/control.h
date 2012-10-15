@@ -18,13 +18,17 @@ const char* fpga_iob_sitename(struct fpga_model* model, int y, int x,
 // 2. The index of the device within devices of the same type in the tile.
 //
 
+// If index is past the last device of that type,
+// y is returned as -1.
+int fdev_enum(struct fpga_model* model, enum fpgadev_type type, int enum_i,
+	int *y, int *x, int *type_idx);
+
 const char* fdev_type2str(enum fpgadev_type type);
 enum fpgadev_type fdev_str2type(const char* str, int len);
 
 // returns 0 if device not found
 struct fpga_device* fdev_p(struct fpga_model* model,
 	int y, int x, enum fpgadev_type type, dev_type_idx_t type_idx);
-
 // Looks up a device index based on the type index.
 // returns NO_DEV (-1) if not found
 dev_idx_t fpga_dev_idx(struct fpga_model* model,
@@ -93,6 +97,9 @@ int fdev_iob_slew(struct fpga_model* model, int y, int x,
 	int type_idx, int slew);
 int fdev_iob_drive(struct fpga_model* model, int y, int x,
 	int type_idx, int drive_strength);
+
+int fdev_bufgmux(struct fpga_model* model, int y, int x,
+	int type_idx, int clk, int disable_attr, int s_inv);
 
 int fdev_set_required_pins(struct fpga_model* model, int y, int x, int type,
 	int type_idx);

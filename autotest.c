@@ -1681,6 +1681,57 @@ fail:
 	return rc;
 }
 
+static int test_bufg_config(struct test_state* tstate)
+{
+	int dev_y, dev_x, dev_tidx, i, rc;
+
+	tstate->diff_to_null = 1;
+// todo: not implemented
+return 0;
+	i = 0;
+	while (1) {
+		rc = fdev_enum(tstate->model, DEV_BUFGMUX, i++,
+			&dev_y, &dev_x, &dev_tidx);
+		if (rc) FAIL(EINVAL);
+		if (dev_y == -1) break;
+
+		rc = fdev_bufgmux(tstate->model, dev_y, dev_x, dev_tidx,
+			BUFG_CLK_ASYNC, BUFG_DISATTR_LOW, BUFG_SINV_Y);
+		if (rc) FAIL(rc);
+
+		// stub nets for required pins? s-pin?
+		if ((rc = diff_printf(tstate))) FAIL(rc);
+		fdev_delete(tstate->model, dev_y, dev_x, DEV_BUFGMUX, dev_tidx);
+	}
+	return 0;
+fail:
+	return rc;
+}
+
+static int test_bufio_config(struct test_state* tstate)
+{
+// todo: not implemented
+	return 0;
+}
+
+static int test_pll_config(struct test_state* tstate)
+{
+// todo: not implemented
+	return 0;
+}
+
+static int test_dcm_config(struct test_state* tstate)
+{
+// todo: not implemented
+	return 0;
+}
+
+static int test_bscan_config(struct test_state* tstate)
+{
+// todo: not implemented
+	return 0;
+}
+
 #define DEFAULT_DIFF_EXEC "./autotest_diff.sh"
 
 static void printf_help(const char* argv_0, const char** available_tests)
@@ -1711,7 +1762,9 @@ int main(int argc, char** argv)
 	char param[1024], cmdline_test[1024];
 	int i, param_skip, rc;
 	const char* available_tests[] =
-		{ "logic_cfg", "routing_sw", "io_sw", "iob_cfg", "lut_encoding", 0 };
+		{ "logic_cfg", "routing_sw", "io_sw", "iob_cfg",
+		  "lut_encoding", "bufg_cfg", "bufio_cfg", "pll_cfg",
+		  "dcm_cfg", "bscan_cfg", 0 };
 
 	// flush after every line is better for the autotest
 	// output, tee, etc.
@@ -1838,6 +1891,26 @@ int main(int argc, char** argv)
 	}
 	if (!strcmp(cmdline_test, "lut_encoding")) {
 		rc = test_lut_encoding(&tstate);
+		if (rc) FAIL(rc);
+	}
+	if (!strcmp(cmdline_test, "bufg_cfg")) {
+		rc = test_bufg_config(&tstate);
+		if (rc) FAIL(rc);
+	}
+	if (!strcmp(cmdline_test, "bufio_cfg")) {
+		rc = test_bufio_config(&tstate);
+		if (rc) FAIL(rc);
+	}
+	if (!strcmp(cmdline_test, "pll_cfg")) {
+		rc = test_pll_config(&tstate);
+		if (rc) FAIL(rc);
+	}
+	if (!strcmp(cmdline_test, "dcm_cfg")) {
+		rc = test_dcm_config(&tstate);
+		if (rc) FAIL(rc);
+	}
+	if (!strcmp(cmdline_test, "bscan_cfg")) {
+		rc = test_bscan_config(&tstate);
 		if (rc) FAIL(rc);
 	}
 

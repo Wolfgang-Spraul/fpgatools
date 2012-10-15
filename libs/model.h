@@ -343,7 +343,7 @@ typedef int dev_type_idx_t;
 #define FPGA_DEV(model, y, x, dev_idx)	(&YX_TILE(model, y, x)->devs[dev_idx])
 
 //
-// logic device
+// DEV_LOGIC
 //
 
 // M and L device is always at type index 0, X device
@@ -444,7 +444,7 @@ struct fpgadev_logic
 };
 
 //
-// iob device
+// DEV_IOB
 //
 
 enum { IOBM = 1, IOBS };
@@ -494,6 +494,47 @@ struct fpgadev_iob
 };
 
 //
+// DEV_BUFGMUX
+//
+
+enum { BUFG_CLK_ASYNC = 1, BUFG_CLK_SYNC };
+enum { BUFG_DISATTR_LOW = 1, BUFG_DISATTR_HIGH };
+enum { BUFG_SINV_N = 1, BUFG_SINV_Y };
+
+struct fpgadev_bufgmux
+{
+	int clk;
+	int disable_attr;
+	int s_inv;
+};
+
+//
+// DEV_BUFIO
+//
+
+enum { BUFIO_DIVIDEBP_N = 1, BUFIO_DIVIDEBP_Y };
+enum { BUFIO_IINV_N = 1, BUFIO_IINV_Y };
+
+struct fpgadev_bufio
+{
+	int divide;
+	int divide_bypass;
+	int i_inv;
+};
+
+//
+// DEV_BSCAN
+//
+
+enum { BSCAN_JTAG_TEST_N = 1, BSCAN_JTAG_TEST_Y };
+
+struct fpgadev_bscan
+{
+	int jtag_chain; // 1-4
+	int jtag_test;
+};
+
+//
 // fpga_device
 //
 
@@ -526,6 +567,9 @@ struct fpga_device
 	union {
 		struct fpgadev_logic logic;
 		struct fpgadev_iob iob;
+		struct fpgadev_bufgmux bufgmux;
+		struct fpgadev_bufio bufio;
+		struct fpgadev_bscan bscan;
 	} u;
 };
 
