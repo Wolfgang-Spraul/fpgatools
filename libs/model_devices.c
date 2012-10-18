@@ -58,6 +58,29 @@ int init_devices(struct fpga_model* model)
 	if ((rc = add_dev(model, y, x, DEV_SLAVE_SPI, 0))) goto fail;
 	if ((rc = add_dev(model, y, x, DEV_SUSPEND_SYNC, 0))) goto fail;
 
+	// OCT_CALIBRATE
+	x = LEFT_IO_DEVS;
+	if ((rc = add_dev(model, TOP_IO_TILES, x, DEV_OCT_CALIBRATE, 0)))
+		FAIL(rc);
+	if ((rc = add_dev(model, TOP_IO_TILES, x, DEV_OCT_CALIBRATE, 0)))
+		FAIL(rc);
+	if ((rc = add_dev(model, model->y_height-BOT_IO_TILES-1, x,
+		DEV_OCT_CALIBRATE, 0))) FAIL(rc);
+	if ((rc = add_dev(model, model->y_height-BOT_IO_TILES-1, x,
+		DEV_OCT_CALIBRATE, 0))) FAIL(rc);
+
+	// DNA, PMV
+	x = LEFT_IO_DEVS;
+	y = TOP_IO_TILES;
+	if ((rc = add_dev(model, y, x, DEV_DNA, 0))) FAIL(rc);
+	if ((rc = add_dev(model, y, x, DEV_PMV, 0))) FAIL(rc);
+
+	// PCILOGIC_SE
+	if ((rc = add_dev(model, model->center_y, LEFT_IO_ROUTING,
+		DEV_PCILOGIC_SE, 0))) FAIL(rc);
+	if ((rc = add_dev(model, model->center_y, model->x_width
+		- RIGHT_IO_DEVS_O, DEV_PCILOGIC_SE, 0))) FAIL(rc);
+
 	// BUFGMUX
 	y = model->center_y;
 	x = model->center_x;

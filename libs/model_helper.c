@@ -749,6 +749,7 @@ const char* fpga_wire2str(enum extra_wires wire)
  	enum { NUM_BUFS = 8, BUF_SIZE = 64 };
 	static char buf[NUM_BUFS][BUF_SIZE];
 	static int last_buf = 0;
+	int flags;
 
 	switch (wire) {
 		case GFAN0: return "GFAN0";
@@ -781,7 +782,6 @@ const char* fpga_wire2str(enum extra_wires wire)
 		snprintf(buf[last_buf], sizeof(buf[0]), "GCLK%i", wire-GCLK0);
 	else if (wire >= DW && wire <= DW_LAST) {
 		char beg_end;
-		int flags;
 
 		wire -= DW;
 		flags = wire & DIR_FLAGS;
@@ -804,7 +804,92 @@ const char* fpga_wire2str(enum extra_wires wire)
 		else if ((wire&(~LD1)) >= LO_FIRST && (wire&(~LD1)) <= LO_LAST)
 			snprintf(buf[last_buf], sizeof(buf[0]), "LOGICOUT%i", fdev_logic_outbit(wire));
 		else HERE();
+	} else if (wire >= BW && wire <= BW_LAST) {
+		const char* bram_pref;
+		int bram_w;
+
+		wire -= BW;
+		flags = wire & BW_FLAGS;
+		bram_w = wire & ~BW_FLAGS;
+		if (flags & B8_0)
+			bram_pref = "RAMB8BWER_0_";
+		else if (flags & B8_1)
+			bram_pref = "RAMB8BWER_1_";
+		else
+			bram_pref = "RAMB16BWER_";
+
+		if (bram_w >= BI_ADDRA0 && bram_w <= BI_ADDRA13) {
+			snprintf(buf[last_buf], sizeof(buf[0]), "%sADDRA%i", bram_pref, bram_w-BI_ADDRA0);
+		} else if (bram_w >= BI_ADDRB0 && bram_w <= BI_ADDRB13) {
+			snprintf(buf[last_buf], sizeof(buf[0]), "%sADDRB%i", bram_pref, bram_w-BI_ADDRB0);
+		} else if (bram_w >= BI_DIA0 && bram_w <= BI_DIA31) {
+			snprintf(buf[last_buf], sizeof(buf[0]), "%sDIA%i", bram_pref, bram_w-BI_DIA0);
+		} else if (bram_w >= BI_DIB0 && bram_w <= BI_DIB31) {
+			snprintf(buf[last_buf], sizeof(buf[0]), "%sDIB%i", bram_pref, bram_w-BI_DIB0);
+		} else if (bram_w >= BI_DIPA0 && bram_w <= BI_DIPA3) {
+			snprintf(buf[last_buf], sizeof(buf[0]), "%sDIPA%i", bram_pref, bram_w-BI_DIPA0);
+		} else if (bram_w >= BI_DIPB0 && bram_w <= BI_DIPB3) {
+			snprintf(buf[last_buf], sizeof(buf[0]), "%sDIPB%i", bram_pref, bram_w-BI_DIPB0);
+
+		} else if (bram_w >= BO_DOA0 && bram_w <= BO_DOA31) {
+			snprintf(buf[last_buf], sizeof(buf[0]), "%sDOA%i", bram_pref, bram_w-BO_DOA0);
+		} else if (bram_w >= BO_DOB0 && bram_w <= BO_DOB31) {
+			snprintf(buf[last_buf], sizeof(buf[0]), "%sDOB%i", bram_pref, bram_w-BO_DOB0);
+		} else if (bram_w >= BO_DOPA0 && bram_w <= BO_DOPA3) {
+			snprintf(buf[last_buf], sizeof(buf[0]), "%sDOPA%i", bram_pref, bram_w-BO_DOPA0);
+		} else if (bram_w >= BO_DOPB0 && bram_w <= BO_DOPB3) {
+			snprintf(buf[last_buf], sizeof(buf[0]), "%sDOPB%i", bram_pref, bram_w-BO_DOPB0);
+
+		} else if (bram_w >= BI_WEA0 && bram_w <= BI_WEA3) {
+			snprintf(buf[last_buf], sizeof(buf[0]), "%sWEA%i", bram_pref, bram_w-BI_WEA0);
+		} else if (bram_w >= BI_WEB0 && bram_w <= BI_WEB3) {
+			snprintf(buf[last_buf], sizeof(buf[0]), "%sWEB%i", bram_pref, bram_w-BI_WEB0);
+		} else if (bram_w == BI_REGCEA) {
+			snprintf(buf[last_buf], sizeof(buf[0]), "%sREGCEA", bram_pref);
+		} else if (bram_w == BI_REGCEB) {
+			snprintf(buf[last_buf], sizeof(buf[0]), "%sREGCEB", bram_pref);
+		} else if (bram_w == BI_ENA) {
+			snprintf(buf[last_buf], sizeof(buf[0]), "%sENA", bram_pref);
+		} else if (bram_w == BI_ENB) {
+			snprintf(buf[last_buf], sizeof(buf[0]), "%sENB", bram_pref);
+		} else HERE();
+	} else if (wire >= MW && wire <= MW_LAST) {
+		int macc_w = wire - MW;
+		if (macc_w >= MI_A0 && macc_w <= MI_A17)
+			snprintf(buf[last_buf], sizeof(buf[0]), "A%i_DSP48A1_SITE", macc_w-MI_A0);
+		else if (macc_w >= MI_B0 && macc_w <= MI_B17)
+			snprintf(buf[last_buf], sizeof(buf[0]), "B%i_DSP48A1_SITE", macc_w-MI_B0);
+		else if (macc_w >= MI_C0 && macc_w <= MI_C47)
+			snprintf(buf[last_buf], sizeof(buf[0]), "C%i_DSP48A1_SITE", macc_w-MI_C0);
+		else if (macc_w >= MI_D0 && macc_w <= MI_D17)
+			snprintf(buf[last_buf], sizeof(buf[0]), "D%i_DSP48A1_SITE", macc_w-MI_D0);
+		else if (macc_w >= MI_OPMODE0 && macc_w <= MI_OPMODE7)
+			snprintf(buf[last_buf], sizeof(buf[0]), "OPMODE%i_DSP48A1_SITE", macc_w-MI_OPMODE0);
+		else if (macc_w >= MO_P0 && macc_w <= MO_P47)
+			snprintf(buf[last_buf], sizeof(buf[0]), "P%i_DSP48A1_SITE", macc_w-MO_P0);
+		else if (macc_w >= MO_M0 && macc_w <= MO_M35)
+			snprintf(buf[last_buf], sizeof(buf[0]), "M%i_DSP48A1_SITE", macc_w-MO_M0);
+		else if (macc_w == MI_CEA)
+			snprintf(buf[last_buf], sizeof(buf[0]), "CEA_DSP48A1_SITE");
+		else if (macc_w == MI_CEB)
+			snprintf(buf[last_buf], sizeof(buf[0]), "CEB_DSP48A1_SITE");
+		else if (macc_w == MI_CEC)
+			snprintf(buf[last_buf], sizeof(buf[0]), "CEC_DSP48A1_SITE");
+		else if (macc_w == MI_CED)
+			snprintf(buf[last_buf], sizeof(buf[0]), "CED_DSP48A1_SITE");
+		else if (macc_w == MI_CEM)
+			snprintf(buf[last_buf], sizeof(buf[0]), "CEM_DSP48A1_SITE");
+		else if (macc_w == MI_CEP)
+			snprintf(buf[last_buf], sizeof(buf[0]), "CEP_DSP48A1_SITE");
+		else if (macc_w == MI_CE_OPMODE)
+			snprintf(buf[last_buf], sizeof(buf[0]), "CEOPMODE_DSP48A1_SITE");
+		else if (macc_w == MI_CE_CARRYIN)
+			snprintf(buf[last_buf], sizeof(buf[0]), "CECARRYIN_DSP48A1_SITE");
+		else if (macc_w == MO_CARRYOUT)
+			snprintf(buf[last_buf], sizeof(buf[0]), "CARRYOUTF_DSP48A1_SITE");
+		else HERE();
 	} else HERE();
+
 	return buf[last_buf];
 }
 
@@ -1063,4 +1148,433 @@ int fdev_logic_outbit(pinw_idx_t idx)
 	}
 	HERE();
 	return -1;
+}
+
+void fdev_bram_inbit(enum extra_wires wire, int* tile0_to_3, int* wire0_to_62)
+{
+	const int ramb16_map[4*63] = {
+		// tile #3 (topmost)
+		 /* 0*/ 0, BW+BI_DIB25, 0, BW+BI_DIB24, 
+		 /* 4*/ BW+BI_DIB22, 0, 0, 0,
+		 /* 8*/ BW+BI_DIB31, BW+BI_DIB29, BW+BI_WEA0, 0, 
+		 /*12*/ 0, 0, 0, 0, 
+		 /*16*/ 0, 0, 0, BW+BI_DIB26, 
+		 /*20*/ 0, 0, 0, BW+BI_DIB19, 
+		 /*24*/ BW+BI_ADDRB13, BW+BI_REGCEB, BW+BI_DIPB2, BW+BI_DIB27, 
+		 /*28*/ 0, 0, BW+BI_WEA1, 0,
+		 /*32*/ 0, 0, 0, 0,
+		 /*36*/ 0, 0, BW+BI_DIB18, BW+BI_DIB30,
+		 /*40*/ 0, BW+BI_DIPB3, 0, 0,
+		 /*44*/ BW+BI_WEA3, 0, 0, BW+BI_DIB17, 
+		 /*48*/ 0, 0, 0, 0,
+		 /*52*/ 0, 0, BW+BI_DIB20, BW+BI_DIB23,
+		 /*56*/ 0, BW+BI_DIB21, BW+BI_WEA2, BW+BI_DIB28, 
+		 /*60*/ 0, 0, BW+BI_DIB16,
+
+		// tile #2
+		 /* 0*/ 0, 0, 0, BW+BI_DIA27,
+		 /* 4*/ BW+BI_ADDRB10, BW+BI_ADDRB2, 0, BW+BI_DIA17,
+		 /* 8*/ 0, BW+BI_DIA31, BW+BI_ADDRB12, 0,
+		 /*12*/ BW+BI_ADDRB3, 0, 0, BW+BI_DIA16,
+		 /*16*/ BW+BI_DIA19, BW+BI_ADDRB7, 0, BW+BI_DIA28,
+		 /*20*/ BW+BI_DIA20, 0, 0, BW+BI_DIA22,
+		 /*24*/ BW+BI_ADDRB0, BW+BI_ADDRB9, BW+BI_DIA24, BW+BI_DIA30,
+		 /*28*/ BW+BI_DIA29, 0, BW+BI_DIA25, 0,
+		 /*32*/ BW+BI_REGCEA, 0, 0, 0,
+		 /*36*/ BW+BI_DIA18, 0, BW+BI_DIA21, 0,
+		 /*40*/ 0, BW+BI_DIA26, BW+BI_ADDRB1, 0,
+		 /*44*/ BW+BI_DIPA2, BW+BI_ADDRB6, 0, BW+BI_ADDRB5,
+		 /*48*/ BW+BI_DIA23, 0, 0, 0,
+		 /*52*/ 0, 0, BW+BI_ENB, BW+BI_DIPA3,
+		 /*56*/ 0, BW+BI_ADDRB8, BW+BI_ADDRB11, 0,
+		 /*60*/ 0, 0, BW+BI_ADDRB4,
+
+		// tile #1
+		 /* 0*/ 0, BW+BI_ADDRA5, BW+BI_DIB13, BW+BI_DIB8,
+		 /* 4*/ BW+BI_DIB5, 0, 0, 0,
+		 /* 8*/ BW+BI_ADDRA11, BW+BI_ADDRA8, BW+BI_ADDRA3, 0,
+		 /*12*/ BW+BI_DIB0, 0, BW+BI_DIB14, 0,
+		 /*16*/ 0, 0, 0, BW+BI_DIB9,
+		 /*20*/ 0, 0, 0, BW+BI_DIB3,
+		 /*24*/ 0, 0, BW+BI_DIB7, BW+BI_ADDRA6,
+		 /*28*/ BW+BI_DIB10, BW+BI_DIB11, BW+BI_DIPB1, BW+BI_ADDRA12,
+		 /*32*/ BW+BI_ADDRA7, 0, BW+BI_ADDRA0, 0,
+		 /*36*/ 0, BW+BI_DIB15, BW+BI_DIB2, BW+BI_ADDRA10,
+		 /*40*/ 0, BW+BI_DIPB0, 0, 0,
+		 /*44*/ BW+BI_ADDRA2, 0, 0, BW+BI_DIB1,
+		 /*48*/ BW+BI_ENA, 0, 0, 0,
+		 /*52*/ BW+BI_ADDRA9, 0, BW+BI_ADDRA1, BW+BI_DIB6,
+		 /*56*/ 0, BW+BI_DIB4, BW+BI_ADDRA4, BW+BI_DIB12,
+		 /*60*/ 0, 0, 0,
+
+		// tile #0 (bottommost)
+		 /* 0*/ 0, 0, 0, BW+BI_DIA11,
+		 /* 4*/ BW+BI_WEB0, 0, 0, BW+BI_DIA1,
+		 /* 8*/ 0, BW+BI_DIA15, BW+BI_DIA10, 0,
+		 /*12*/ 0, 0, 0, BW+BI_DIA0,
+		 /*16*/ BW+BI_DIA3, 0, 0, BW+BI_DIA12,
+		 /*20*/ BW+BI_DIA4, 0, 0, BW+BI_DIA6,
+		 /*24*/ 0, BW+BI_WEB1, BW+BI_DIA8, BW+BI_DIA13,
+		 /*28*/ 0, 0, BW+BI_DIA9, BW+BI_ADDRA13,
+		 /*32*/ BW+BI_DIA14, 0, BW+BI_WEB3, 0,
+		 /*36*/ BW+BI_DIA2, 0, BW+BI_DIA5, 0,
+		 /*40*/ 0, 0, 0, 0,
+		 /*44*/ 0, 0, 0, 0,
+		 /*48*/ BW+BI_DIA7, 0, 0, 0,
+		 /*52*/ 0, 0, BW+BI_WEB2, BW+BI_DIPA1,
+		 /*56*/ 0, BW+BI_DIPA0, 0, 0,
+		 /*60*/ 0, 0, 0 };
+
+	const int ramb8_map[4*63] = {
+		// tile #3 (topmost)
+		 /* 0*/ 0, BW+(B8_1|BI_DIB9), 0, BW+(B8_1|BI_DIB8),
+		 /* 4*/ BW+(B8_1|BI_DIB6), BW+(B8_1|BI_ADDRB4), 0, BW+(B8_1|BI_ADDRB2),
+		 /* 8*/ BW+(B8_1|BI_DIB15), BW+(B8_1|BI_DIB13), BW+(B8_0|BI_WEA0), 0,
+		 /*12*/ BW+(B8_1|BI_ADDRB6), 0, 0, BW+(B8_1|BI_ADDRB1),
+		 /*16*/ BW+(B8_1|BI_ADDRB8), BW+(B8_1|BI_ADDRB10), 0, BW+(B8_1|BI_DIB10),
+		 /*20*/ BW+(B8_1|BI_ADDRB7), 0, 0, BW+(B8_1|BI_DIB3),
+		 /*24*/ BW+(B8_1|BI_ADDRB0), BW+(B8_0|BI_REGCEB), BW+(B8_1|BI_DIPB0), BW+(B8_1|BI_DIB11),
+		 /*28*/ 0, 0, BW+(B8_0|BI_WEA1), 0,
+		 /*32*/ 0, 0, BW+(B8_1|BI_ADDRB11), 0,
+		 /*36*/ BW+(B8_1|BI_ADDRB5), 0, BW+(B8_1|BI_DIB2), BW+(B8_1|BI_DIB14),
+		 /*40*/ 0, BW+(B8_1|BI_DIPB1), BW+(B8_1|BI_ADDRB3), 0,
+		 /*44*/ BW+(B8_1|BI_WEA1), BW+(B8_1|BI_ADDRB9), 0, BW+(B8_1|BI_DIB1),
+		 /*48*/ BW+(B8_1|BI_ADDRB12), 0, 0, 0,
+		 /*52*/ 0, 0, BW+(B8_1|BI_DIB4), BW+(B8_1|BI_DIB7),
+		 /*56*/ 0, BW+(B8_1|BI_DIB5), BW+(B8_1|BI_WEA0), BW+(B8_1|BI_DIB12),
+		 /*60*/ 0, 0, BW+(B8_1|BI_DIB0),
+
+		// tile #2
+		 /* 0*/ 0, 0, 0, BW+(B8_1|BI_DIA11),
+		 /* 4*/ BW+(B8_0|BI_ADDRB10), BW+(B8_0|BI_ADDRB2), 0, BW+(B8_1|BI_DIA1),
+		 /* 8*/ 0, BW+(B8_1|BI_DIA15), BW+(B8_0|BI_ADDRB12), 0,
+		 /*12*/ BW+(B8_0|BI_ADDRB3), 0, 0, BW+(B8_1|BI_DIA0),
+		 /*16*/ BW+(B8_1|BI_DIA3), BW+(B8_0|BI_ADDRB7), 0, BW+(B8_1|BI_DIA12),
+		 /*20*/ BW+(B8_1|BI_DIA4), 0, 0, BW+(B8_1|BI_DIA6),
+		 /*24*/ BW+(B8_0|BI_ADDRB0), BW+(B8_0|BI_ADDRB9), BW+(B8_1|BI_DIA8), BW+(B8_1|BI_DIA14),
+		 /*28*/ BW+(B8_1|BI_DIA13), BW+(B8_1|BI_REGCEA), BW+(B8_1|BI_DIA9), 0,
+		 /*32*/ BW+(B8_0|BI_REGCEA), 0, BW+(B8_1|BI_ENB), 0,
+		 /*36*/ BW+(B8_1|BI_DIA2), 0, BW+(B8_1|BI_DIA5), 0,
+		 /*40*/ 0, BW+(B8_1|BI_DIA10), BW+(B8_0|BI_ADDRB1), 0,
+		 /*44*/ BW+(B8_1|BI_DIPA0), BW+(B8_0|BI_ADDRB6), 0, BW+(B8_0|BI_ADDRB5),
+		 /*48*/ BW+(B8_1|BI_DIA7), 0, 0, 0,
+		 /*52*/ 0, 0, BW+(B8_0|BI_ENB), BW+(B8_1|BI_DIPA1),
+		 /*56*/ 0, BW+(B8_0|BI_ADDRB8), BW+(B8_0|BI_ADDRB11), BW+(B8_1|BI_REGCEB),
+		 /*60*/ 0, 0, BW+(B8_0|BI_ADDRB4),
+
+		// tile #1
+		 /* 0*/ 0, BW+(B8_0|BI_ADDRA5), BW+(B8_0|BI_DIB13), BW+(B8_0|BI_DIB8),
+		 /* 4*/ BW+(B8_0|BI_DIB5), 0, 0, 0,
+		 /* 8*/ BW+(B8_0|BI_ADDRA11), BW+(B8_0|BI_ADDRA8), BW+(B8_0|BI_ADDRA3), 0,
+		 /*12*/ BW+(B8_0|BI_DIB0), 0, BW+(B8_0|BI_DIB14), 0,
+		 /*16*/ 0, 0, 0, BW+(B8_0|BI_DIB9),
+		 /*20*/ 0, 0, 0, BW+(B8_0|BI_DIB3),
+		 /*24*/ 0, BW+(B8_1|BI_ENA), BW+(B8_0|BI_DIB7), BW+(B8_0|BI_ADDRA6),
+		 /*28*/ BW+(B8_0|BI_DIB10), BW+(B8_0|BI_DIB11), BW+(B8_0|BI_DIPB1), BW+(B8_0|BI_ADDRA12),
+		 /*32*/ BW+(B8_0|BI_ADDRA7), 0, BW+(B8_0|BI_ADDRA0), 0,
+		 /*36*/ 0, BW+(B8_0|BI_DIB15), BW+(B8_0|BI_DIB2), BW+(B8_0|BI_ADDRA10),
+		 /*40*/ 0, BW+(B8_0|BI_DIPB0), 0, 0,
+		 /*44*/ BW+(B8_0|BI_ADDRA2), 0, 0, BW+(B8_0|BI_DIB1),
+		 /*48*/ BW+(B8_0|BI_ENA), 0, 0, 0,
+		 /*52*/ BW+(B8_0|BI_ADDRA9), 0, BW+(B8_0|BI_ADDRA1), BW+(B8_0|BI_DIB6),
+		 /*56*/ 0, BW+(B8_0|BI_DIB4), BW+(B8_0|BI_ADDRA4), BW+(B8_0|BI_DIB12),
+		 /*60*/ 0, 0, 0,
+
+		// tile #0 (bottommost)
+		 /* 0*/ 0, BW+(B8_1|BI_ADDRA3), BW+(B8_1|BI_ADDRA8), BW+(B8_0|BI_DIA11),
+		 /* 4*/ BW+(B8_0|BI_WEB0), 0, 0, BW+(B8_0|BI_DIA1),
+		 /* 8*/ BW+(B8_1|BI_ADDRA12), BW+(B8_0|BI_DIA15), BW+(B8_0|BI_DIA10), 0,
+		 /*12*/ 0, 0, BW+(B8_1|BI_ADDRA9), BW+(B8_0|BI_DIA0),
+		 /*16*/ BW+(B8_0|BI_DIA3), 0, 0, BW+(B8_0|BI_DIA12),
+		 /*20*/ BW+(B8_0|BI_DIA4), 0, 0, BW+(B8_0|BI_DIA6),
+		 /*24*/ 0, BW+(B8_0|BI_WEB1), BW+(B8_0|BI_DIA8), BW+(B8_0|BI_DIA13),
+		 /*28*/ BW+(B8_1|BI_ADDRA4), BW+(B8_1|BI_ADDRA5), BW+(B8_0|BI_DIA9), BW+(B8_1|BI_ADDRA0),
+		 /*32*/ BW+(B8_0|BI_DIA14), 0, BW+(B8_1|BI_WEB1), 0,
+		 /*36*/ BW+(B8_0|BI_DIA2), BW+(B8_1|BI_ADDRA11), BW+(B8_0|BI_DIA5), BW+(B8_1|BI_ADDRA10),
+		 /*40*/ 0, BW+(B8_1|BI_ADDRA1), 0, 0,
+		 /*44*/ 0, 0, 0, 0,
+		 /*48*/ BW+(B8_0|BI_DIA7), 0, 0, 0,
+		 /*52*/ BW+(B8_1|BI_ADDRA7), 0, BW+(B8_1|BI_WEB0), BW+(B8_0|BI_DIPA1),
+		 /*56*/ 0, BW+(B8_0|BI_DIPA0), BW+(B8_1|BI_ADDRA2), BW+(B8_1|BI_ADDRA6),
+		 /*60*/ 0, 0, 0 };
+
+	const int *search_map;
+	int i;
+
+	if (wire < BW || wire > BW_LAST) {
+		HERE();
+		*tile0_to_3 = -1;
+		return;
+	}
+	search_map = ((wire-BW) & BW_FLAGS) ? ramb8_map : ramb16_map;
+	for (i = 0; i < 4*63; i++) {
+		if (search_map[i] == wire) {
+			*tile0_to_3 = 3-(i/63);
+			*wire0_to_62 = i%63;
+			return;
+		}
+	}
+	fprintf(stderr, "#E %s:%i unknown wire %i\n",
+		__FILE__, __LINE__, wire);
+	*tile0_to_3 = -1;
+}
+
+void fdev_bram_outbit(enum extra_wires wire, int* tile0_to_3, int* wire0_to_23)
+{
+	const int ramb16_map[4*24] = {
+		// tile #3 (topmost)
+		 /* 0*/ 0, BW+BO_DOPB3, 0, BW+BO_DOB27,
+		 /* 4*/ BW+BO_DOA29, BW+BO_DOA25, BW+BO_DOB29, BW+BO_DOA24,
+		 /* 8*/ BW+BO_DOPA3, BW+BO_DOB31, BW+BO_DOB25, BW+BO_DOA31,
+		 /*12*/ BW+BO_DOB24, 0, 0, BW+BO_DOA27,
+		 /*16*/ BW+BO_DOA30, BW+BO_DOA26, BW+BO_DOA28, 0,
+		 /*20*/ BW+BO_DOB28, BW+BO_DOB30, BW+BO_DOB26, 0,
+
+		// tile #2
+		 /* 0*/ BW+BO_DOA18, BW+BO_DOB20, BW+BO_DOA16, BW+BO_DOPB2,
+		 /* 4*/ BW+BO_DOA23, BW+BO_DOB18, BW+BO_DOB22, 0,
+		 /* 8*/ BW+BO_DOA20, 0, BW+BO_DOA19, 0,
+		 /*12*/ BW+BO_DOB17, BW+BO_DOA22, BW+BO_DOA17, 0,
+		 /*16*/ BW+BO_DOB23, BW+BO_DOB19, BW+BO_DOA21, BW+BO_DOB16,
+		 /*20*/ BW+BO_DOB21, 0, BW+BO_DOPA2, 0,
+
+		// tile #1
+		 /* 0*/ BW+BO_DOB8, BW+BO_DOPA1, 0, BW+BO_DOA11,
+		 /* 4*/ BW+BO_DOB13, BW+BO_DOA9, BW+BO_DOA13, 0,
+		 /* 8*/ BW+BO_DOB11, BW+BO_DOB15, BW+BO_DOB9, BW+BO_DOA15,
+		 /*12*/ BW+BO_DOA8, BW+BO_DOB12, 0, 0,
+		 /*16*/ BW+BO_DOA14, BW+BO_DOA10, BW+BO_DOPB1, 0,
+		 /*20*/ BW+BO_DOA12, BW+BO_DOB14, BW+BO_DOB10, 0,
+
+		// tile #0 (bottommost)
+		 /* 0*/ BW+BO_DOA2, BW+BO_DOB4, BW+BO_DOA0, BW+BO_DOPB0,
+		 /* 4*/ BW+BO_DOB6, BW+BO_DOB2, BW+BO_DOA6, BW+BO_DOA1,
+		 /* 8*/ BW+BO_DOA4, 0, BW+BO_DOA3, 0,
+		 /*12*/ BW+BO_DOB1, BW+BO_DOB5, BW+BO_DOB0, BW+BO_DOPA0,
+		 /*16*/ BW+BO_DOA7, BW+BO_DOB3, BW+BO_DOA5, 0,
+		 /*20*/ 0, BW+BO_DOB7, 0, 0
+		};
+	const int ramb8_map[4*24] = {
+		// tile #3 (topmost)
+		 /* 0*/ 0, BW+(BO_DOPB1|B8_1), 0, BW+(BO_DOB11|B8_1),
+		 /* 4*/ BW+(BO_DOA13|B8_1), BW+(BO_DOA9|B8_1), BW+(BO_DOB13|B8_1), BW+(BO_DOA8|B8_1),
+		 /* 8*/ BW+(BO_DOPA1|B8_1), BW+(BO_DOB15|B8_1), BW+(BO_DOB9|B8_1), BW+(BO_DOA15|B8_1),
+		 /*12*/ BW+(BO_DOB8|B8_1), 0, 0, BW+(BO_DOA11|B8_1),
+		 /*16*/ BW+(BO_DOA14|B8_1), BW+(BO_DOA10|B8_1), BW+(BO_DOA12|B8_1), 0,
+		 /*20*/ BW+(BO_DOB12|B8_1), BW+(BO_DOB14|B8_1), BW+(BO_DOB10|B8_1), 0,
+
+		// tile #2
+		 /* 0*/ BW+(BO_DOA2|B8_1), BW+(BO_DOB4|B8_1), BW+(BO_DOA0|B8_1), BW+(BO_DOPB0|B8_1),
+		 /* 4*/ BW+(BO_DOA7|B8_1), BW+(BO_DOB2|B8_1), BW+(BO_DOB6|B8_1), 0,
+		 /* 8*/ BW+(BO_DOA4|B8_1), 0, BW+(BO_DOA3|B8_1), 0,
+		 /*12*/ BW+(BO_DOB1|B8_1), BW+(BO_DOA6|B8_1), BW+(BO_DOA1|B8_1), 0,
+		 /*16*/ BW+(BO_DOB7|B8_1), BW+(BO_DOB3|B8_1), BW+(BO_DOA5|B8_1), BW+(BO_DOB0|B8_1),
+		 /*20*/ BW+(BO_DOB5|B8_1), 0, BW+(BO_DOPA0|B8_1), 0,
+
+		// tile #1
+		 /* 0*/ BW+(BO_DOB8|B8_0), BW+(BO_DOPA1|B8_0), 0, BW+(BO_DOA11|B8_0),
+		 /* 4*/ BW+(BO_DOB13|B8_0), BW+(BO_DOA9|B8_0), BW+(BO_DOA13|B8_0), 0,
+		 /* 8*/ BW+(BO_DOB11|B8_0), BW+(BO_DOB15|B8_0), BW+(BO_DOB9|B8_0), BW+(BO_DOA15|B8_0),
+		 /*12*/ BW+(BO_DOA8|B8_0), BW+(BO_DOB12|B8_0), 0, 0,
+		 /*16*/ BW+(BO_DOA14|B8_0), BW+(BO_DOA10|B8_0), BW+(BO_DOPB1|B8_0), 0,
+		 /*20*/ BW+(BO_DOA12|B8_0), BW+(BO_DOB14|B8_0), BW+(BO_DOB10|B8_0), 0,
+
+		// tile #0 (bottommost)
+		 /* 0*/ BW+(BO_DOA2|B8_0), BW+(BO_DOB4|B8_0), BW+(BO_DOA0|B8_0), BW+(BO_DOPB0|B8_0),
+		 /* 4*/ BW+(BO_DOB6|B8_0), BW+(BO_DOB2|B8_0), BW+(BO_DOA6|B8_0), BW+(BO_DOA1|B8_0),
+		 /* 8*/ BW+(BO_DOA4|B8_0), 0, BW+(BO_DOA3|B8_0), 0,
+		 /*12*/ BW+(BO_DOB1|B8_0), BW+(BO_DOB5|B8_0), BW+(BO_DOB0|B8_0), BW+(BO_DOPA0|B8_0),
+		 /*16*/ BW+(BO_DOA7|B8_0), BW+(BO_DOB3|B8_0), BW+(BO_DOA5|B8_0), 0,
+		 /*20*/ 0, BW+(BO_DOB7|B8_0), 0, 0
+		};
+
+	const int *search_map;
+	int i;
+
+	if (wire < BW || wire > BW_LAST) {
+		HERE();
+		*tile0_to_3 = -1;
+		return;
+	}
+	search_map = ((wire-BW) & BW_FLAGS) ? ramb8_map : ramb16_map;
+	for (i = 0; i < 4*24; i++) {
+		if (search_map[i] == wire) {
+			*tile0_to_3 = 3-(i/24);
+			*wire0_to_23 = i%24;
+			return;
+		}
+	}
+	fprintf(stderr, "#E %s:%i unknown wire %i\n",
+		__FILE__, __LINE__, wire);
+	*tile0_to_3 = -1;
+}
+
+int fdev_is_bram8_inwire(int bi_wire)
+{
+	if (bi_wire == BI_ADDRA13 || bi_wire == BI_ADDRB13)
+		return 0;
+	if (bi_wire == BI_WEA2 || bi_wire == BI_WEA3
+	    || bi_wire == BI_WEB2 || bi_wire == BI_WEB3)
+		return 0;
+	if (bi_wire == BI_DIPA2 || bi_wire == BI_DIPA3
+	    || bi_wire == BI_DIPB2 || bi_wire == BI_DIPB3)
+		return 0;
+	if ((bi_wire >= BI_DIA16 && bi_wire <= BI_DIA31)
+	    || (bi_wire >= BI_DIB16 && bi_wire <= BI_DIB31))
+		return 0;
+	return 1;
+}
+
+int fdev_is_bram8_outwire(int bo_wire)
+{
+	if (bo_wire == BO_DOPA2 || bo_wire == BO_DOPA3
+	    || bo_wire == BO_DOPB2 || bo_wire == BO_DOPB3)
+		return 0;
+	if ((bo_wire >= BO_DOA16 && bo_wire <= BO_DOA31)
+	    || (bo_wire >= BO_DOB16 && bo_wire <= BO_DOB31))
+		return 0;
+	return 1;
+}
+
+void fdev_macc_inbit(enum extra_wires wire, int* tile0_to_3, int* wire0_to_62)
+{
+	const int map[4*63] = {
+		// tile #3 (topmost)
+		 /* 0*/ 0, MW+MI_A12, 0, MW+MI_C43,
+		 /* 4*/ MW+MI_C40, 0, 0, MW+MI_A6,
+		 /* 8*/ MW+MI_A17, 0, MW+MI_C42, 0,
+		 /*12*/ 0, 0, MW+MI_A16, MW+MI_A5,
+		 /*16*/ MW+MI_A7, MW+MI_C38, 0, MW+MI_A13,
+		 /*20*/ 0, 0, 0, MW+MI_A8,
+		 /*24*/ 0, 0, MW+MI_A10, MW+MI_C44,
+		 /*28*/ 0, MW+MI_A14, MW+MI_A11, 0,
+		 /*32*/ MW+MI_C45, 0, 0, 0,
+		 /*36*/ MW+MI_C36, MW+MI_C47, 0, MW+MI_C46,
+		 /*40*/ 0, 0, 0, 0,
+		 /*44*/ MW+MI_A9, 0, 0, MW+MI_C37,
+		 /*48*/ 0, 0, 0, 0,
+		 /*52*/ MW+MI_A15, 0, 0, MW+MI_C41,
+		 /*56*/ 0, MW+MI_C39, 0, 0,
+		 /*60*/ 0, 0, 0,
+
+		// tile #2
+		 /* 0*/ 0, 0, 0, MW+MI_C31,
+		 /* 4*/ MW+MI_C28, 0, 0, MW+MI_D16,
+		 /* 8*/ MW+MI_A4, 0, MW+MI_C30, 0,
+		 /*12*/ MW+MI_D17, 0, MW+MI_C34, MW+MI_OPMODE3,
+		 /*16*/ MW+MI_C24, MW+MI_CED, 0, MW+MI_A0,
+		 /*20*/ MW+MI_C25, 0, 0, MW+MI_C26,
+		 /*24*/ MW+MI_OPMODE7, 0, MW+MI_C29, MW+MI_C32,
+		 /*28*/ 0, MW+MI_A1, MW+MI_CEA, MW+MI_C35,
+		 /*32*/ 0, 0, MW+MI_CE_CARRYIN, 0,
+		 /*36*/ MW+MI_B16, 0, 0, MW+MI_A3,
+		 /*40*/ 0, MW+MI_CEB, MW+MI_OPMODE2, 0,
+		 /*44*/ MW+MI_CEP, 0, 0, MW+MI_B17,
+		 /*48*/ MW+MI_C27, 0, 0, 0,
+		 /*52*/ MW+MI_A2, 0, 0, MW+MI_CE_OPMODE,
+		 /*56*/ 0, MW+MI_CEC, MW+MI_CEM, MW+MI_C33,
+		 /*60*/ 0, 0, MW+MI_OPMODE5,
+
+		// tile #1
+		 /* 0*/ 0, MW+MI_B12, MW+MI_D14, 0,
+		 /* 4*/ MW+MI_D11, MW+MI_OPMODE4, 0, 0,
+		 /* 8*/ MW+MI_OPMODE1, MW+MI_C23, MW+MI_D12, 0,
+		 /*12*/ 0, 0, MW+MI_D15, MW+MI_C12,
+		 /*16*/ MW+MI_OPMODE6, MW+MI_C15, 0, MW+MI_C21,
+		 /*20*/ 0, 0, 0, MW+MI_D10,
+		 /*24*/ 0, 0, MW+MI_C18, MW+MI_B13,
+		 /*28*/ MW+MI_D13, 0, 0, MW+MI_OPMODE0,
+		 /*32*/ MW+MI_C22, 0, MW+MI_B9, 0,
+		 /*36*/ MW+MI_C13, 0, 0, MW+MI_B15,
+		 /*40*/ 0, MW+MI_C19, 0, 0,
+		 /*44*/ MW+MI_C17, MW+MI_D9, 0, MW+MI_C14,
+		 /*48*/ MW+MI_C16, 0, 0, 0,
+		 /*52*/ MW+MI_B14, 0, 0, MW+MI_B11,
+		 /*56*/ 0, MW+MI_B10, MW+MI_C20, 0,
+		 /*60*/ 0, 0, 0,
+
+		// tile #0 (bottommost)
+		 /* 0*/ 0, MW+MI_D5, 0, MW+MI_C8,
+		 /* 4*/ MW+MI_C5, 0, 0, MW+MI_D0,
+		 /* 8*/ MW+MI_D8, 0, 0, 0,
+		 /*12*/ 0, 0, MW+MI_C11, MW+MI_C0,
+		 /*16*/ 0, MW+MI_C3, 0, 0,
+		 /*20*/ MW+MI_C2, 0, 0, MW+MI_C4,
+		 /*24*/ 0, MW+MI_D2, MW+MI_D4, 0,
+		 /*28*/ MW+MI_C9, MW+MI_B6, MW+MI_B4, MW+MI_B8,
+		 /*32*/ MW+MI_C10, 0, MW+MI_B2, 0,
+		 /*36*/ 0, MW+MI_B7, MW+MI_B1, MW+MI_D7,
+		 /*40*/ 0, MW+MI_C7, MW+MI_B0, 0,
+		 /*44*/ MW+MI_B3, 0, 0, MW+MI_D1,
+		 /*48*/ 0, 0, 0, 0,
+		 /*52*/ 0, 0, 0, MW+MI_C6,
+		 /*56*/ 0, MW+MI_D3, MW+MI_B5, MW+MI_D6,
+		 /*60*/ 0, 0, MW+MI_C1 };
+	int i;
+
+	if (wire < MW || wire > MW_LAST) {
+		HERE();
+		*tile0_to_3 = -1;
+		return;
+	}
+	for (i = 0; i < 4*63; i++) {
+		if (map[i] == wire) {
+			*tile0_to_3 = 3-(i/63);
+			*wire0_to_62 = i%63;
+			return;
+		}
+	}
+	fprintf(stderr, "#E %s:%i unknown wire %i\n",
+		__FILE__, __LINE__, wire);
+	*tile0_to_3 = -1;
+}
+
+void fdev_macc_outbit(enum extra_wires wire, int* tile0_to_3, int* wire0_to_23)
+{
+	const int map[4*24] = {
+		// tile #3 (topmost)
+		 /* 0*/ MW+MO_P37, MW+MO_M33, MW+MO_P35, MW+MO_P41,
+		 /* 4*/ MW+MO_M34, MW+MO_P38, MW+MO_P44, MW+MO_M29,
+		 /* 8*/ MW+MO_M32, MW+MO_CARRYOUT, MW+MO_M30, MW+MO_P47,
+		 /*12*/ MW+MO_P36, 0, 0, MW+MO_P40,
+		 /*16*/ MW+MO_M35, MW+MO_M31, MW+MO_P42, MW+MO_M28,
+		 /*20*/ MW+MO_P43, MW+MO_P45, MW+MO_P39, MW+MO_P46,
+		// tile #2
+		 /* 0*/ MW+MO_M21, MW+MO_P29, MW+MO_M18, MW+MO_M23,
+		 /* 4*/ MW+MO_P32, 0, MW+MO_P31, MW+MO_P24,
+		 /* 8*/ MW+MO_P28, MW+MO_P34, MW+MO_P25, MW+MO_M27,
+		 /*12*/ MW+MO_M20, MW+MO_M25, MW+MO_M19, MW+MO_M22,
+		 /*16*/ 0, MW+MO_P26, MW+MO_P30, 0,
+		 /*20*/ MW+MO_M24, MW+MO_P33, MW+MO_P27, MW+MO_M26,
+		// tile #1
+		 /* 0*/ MW+MO_M11, MW+MO_P19, MW+MO_P12, MW+MO_M14,
+		 /* 4*/ MW+MO_P21, MW+MO_M12, 0, MW+MO_P13,
+		 /* 8*/ MW+MO_P18, 0, MW+MO_P15, MW+MO_P23,
+		 /*12*/ MW+MO_P14, MW+MO_P20, MW+MO_M9, MW+MO_M13,
+		 /*16*/ MW+MO_P22, MW+MO_P16, MW+MO_M15, MW+MO_M10,
+		 /*20*/ MW+MO_M16, 0, MW+MO_P17, MW+MO_M17,
+		// tile #0 (bottommost)
+		 /* 0*/ MW+MO_P2, MW+MO_P6, 0, MW+MO_M3,
+		 /* 4*/ MW+MO_P9, MW+MO_P3, MW+MO_M6, MW+MO_P1,
+		 /* 8*/ MW+MO_M4, MW+MO_P11, MW+MO_M1, 0,
+		 /*12*/ MW+MO_M0, MW+MO_M5, MW+MO_P0, MW+MO_P5,
+		 /*16*/ MW+MO_P10, MW+MO_M2, MW+MO_P7, 0,
+		 /*20*/ MW+MO_P8, MW+MO_M7, MW+MO_P4, MW+MO_M8 };
+	int i;
+
+	if (wire < MW || wire > MW_LAST) {
+		HERE();
+		*tile0_to_3 = -1;
+		return;
+	}
+	for (i = 0; i < 4*24; i++) {
+		if (map[i] == wire) {
+			*tile0_to_3 = 3-(i/24);
+			*wire0_to_23 = i%24;
+			return;
+		}
+	}
+	fprintf(stderr, "#E %s:%i unknown wire %i\n",
+		__FILE__, __LINE__, wire);
+	*tile0_to_3 = -1;
 }

@@ -84,6 +84,49 @@ static int connect_logic_carry(struct fpga_model* model)
 						if ((rc = add_conn_bi(model, y, x, "M_COUT_N", y-1, x, "M_CIN"))) goto xout;
 					}
 				}
+				else if (has_device_type(model, y, x, DEV_LOGIC, LOGIC_L)) {
+					if (is_aty(Y_CHIP_HORIZ_REGS, model, y-1)) {
+						if (x == model->center_x - CENTER_LOGIC_O) {
+							struct w_net net = {
+								0,
+								{{ "L_CIN",			0, y-3, x },
+								 { "INT_INTERFACE_COUT",	0, y-2, x },
+								 { "REGC_CLE_COUT",		0, y-1, x },
+								 { "XL_COUT_N",			0,   y, x },
+								 { "" }}};
+							if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) goto xout;
+						} else {
+							struct w_net net = {
+								0,
+								{{ "L_CIN",		0, y-2, x },
+								 { "REGH_CLEXL_COUT",	0, y-1, x },
+								 { "XL_COUT_N",		0,   y, x },
+								 { "" }}};
+							if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) goto xout;
+						}
+					} else if (is_aty(Y_ROW_HORIZ_AXSYMM, model, y-1)) {
+						struct w_net net = {
+							0,
+							{{ "L_CIN",		0, y-2, x },
+							 { "HCLK_CLEXL_COUT",	0, y-1, x },
+							 { "XL_COUT_N",		0,   y, x },
+							 { "" }}};
+						if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) goto xout;
+					} else if (is_aty(Y_ROW_HORIZ_AXSYMM, model, y-2)
+						   && (x == model->center_x - CENTER_LOGIC_O)) {
+						struct w_net net = {
+							0,
+							{{ "L_CIN",			0, y-4, x },
+							 { "INT_INTERFACE_COUT",	0, y-3, x },
+							 { "HCLK_CLEXL_COUT",		0, y-2, x },
+							 { "INT_INTERFACE_COUT_BOT",	0, y-1, x },
+							 { "XL_COUT_N",			0,   y, x },
+							 { "" }}};
+						if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) goto xout;
+					} else if (has_device_type(model, y-1, x, DEV_LOGIC, LOGIC_L)) {
+						if ((rc = add_conn_bi(model, y, x, "XL_COUT_N", y-1, x, "L_CIN"))) goto xout;
+					}
+				}
 			}
 		}
 	}

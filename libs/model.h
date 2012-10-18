@@ -317,7 +317,8 @@ enum fpgadev_type
 	DEV_BUFH, DEV_BUFIO, DEV_BUFIO_FB, DEV_BUFPLL, DEV_BUFPLL_MCB,
 	DEV_BUFGMUX, DEV_BSCAN, DEV_DCM, DEV_PLL, DEV_ICAP,
 	DEV_POST_CRC_INTERNAL, DEV_STARTUP, DEV_SLAVE_SPI,
-	DEV_SUSPEND_SYNC, DEV_OCT_CALIBRATE, DEV_SPI_ACCESS };
+	DEV_SUSPEND_SYNC, DEV_OCT_CALIBRATE, DEV_SPI_ACCESS,
+	DEV_DNA, DEV_PMV, DEV_PCILOGIC_SE };
 #define FPGA_DEV_STR \
 	{ 0, \
 	  "LOGIC", "TIEOFF", "MACC", "IOB", \
@@ -325,7 +326,8 @@ enum fpgadev_type
 	  "BUFH", "BUFIO", "BUFIO_FB", "BUFPLL", "BUFPLL_MCB", \
 	  "BUFGMUX", "BSCAN", "DCM", "PLL", "ICAP", \
 	  "POST_CRC_INTERNAL", "STARTUP", "SLAVE_SPI", \
-	  "SUSPEND_SYNC", "OCT_CALIBRATE", "SPI_ACCESS" }
+	  "SUSPEND_SYNC", "OCT_CALIBRATE", "SPI_ACCESS", \
+	  "DNA", "PMV", "PCILOGIC_SE" }
 
 // We use two types of device indices, one is a flat index
 // into the tile->devs array (dev_idx_t), the other
@@ -532,6 +534,133 @@ struct fpgadev_bscan
 {
 	int jtag_chain; // 1-4
 	int jtag_test;
+};
+
+//
+// DEV_BRAM
+//
+
+// B8_0 or B8_1 can be or'ed into the BI/BO values
+// to designate the first and second BRAM8 device,
+// instead of the default BRAM16 device.
+#define B8_0 0x100
+#define B8_1 0x200
+#define BW_FLAGS (B8_0|B8_1)
+
+enum {
+	// input:
+	BI_FIRST = 0,
+
+	// port A
+	BI_ADDRA0 = BI_FIRST, BI_ADDRA1, BI_ADDRA2, BI_ADDRA3, BI_ADDRA4, BI_ADDRA5,
+	BI_ADDRA6, BI_ADDRA7, BI_ADDRA8, BI_ADDRA9, BI_ADDRA10, BI_ADDRA11,
+	BI_ADDRA12, BI_ADDRA13,
+
+	BI_DIA0, BI_DIA1, BI_DIA2, BI_DIA3, BI_DIA4, BI_DIA5,
+	BI_DIA6, BI_DIA7, BI_DIA8, BI_DIA9, BI_DIA10, BI_DIA11,
+	BI_DIA12, BI_DIA13, BI_DIA14, BI_DIA15, BI_DIA16, BI_DIA17,
+	BI_DIA18, BI_DIA19, BI_DIA20, BI_DIA21, BI_DIA22, BI_DIA23,
+	BI_DIA24, BI_DIA25, BI_DIA26, BI_DIA27, BI_DIA28, BI_DIA29,
+	BI_DIA30, BI_DIA31,
+
+	BI_DIPA0, BI_DIPA1, BI_DIPA2, BI_DIPA3,
+	BI_WEA0, BI_WEA1, BI_WEA2, BI_WEA3,
+	BI_REGCEA,
+	BI_ENA,
+
+	// port B
+	BI_ADDRB0, BI_ADDRB1, BI_ADDRB2, BI_ADDRB3, BI_ADDRB4, BI_ADDRB5,
+	BI_ADDRB6, BI_ADDRB7, BI_ADDRB8, BI_ADDRB9, BI_ADDRB10, BI_ADDRB11,
+	BI_ADDRB12, BI_ADDRB13,
+
+	BI_DIB0, BI_DIB1, BI_DIB2, BI_DIB3, BI_DIB4, BI_DIB5,
+	BI_DIB6, BI_DIB7, BI_DIB8, BI_DIB9, BI_DIB10, BI_DIB11,
+	BI_DIB12, BI_DIB13, BI_DIB14, BI_DIB15, BI_DIB16, BI_DIB17,
+	BI_DIB18, BI_DIB19, BI_DIB20, BI_DIB21, BI_DIB22, BI_DIB23,
+	BI_DIB24, BI_DIB25, BI_DIB26, BI_DIB27, BI_DIB28, BI_DIB29,
+	BI_DIB30, BI_DIB31,
+
+	BI_DIPB0, BI_DIPB1, BI_DIPB2, BI_DIPB3,
+	BI_WEB0, BI_WEB1, BI_WEB2, BI_WEB3,
+	BI_REGCEB,
+	BI_ENB,
+
+	BI_LAST = BI_ENB,
+
+	// output:
+	BO_FIRST,
+
+	// port A
+	BO_DOA0 = BO_FIRST, BO_DOA1, BO_DOA2, BO_DOA3, BO_DOA4, BO_DOA5,
+	BO_DOA6, BO_DOA7, BO_DOA8, BO_DOA9, BO_DOA10, BO_DOA11,
+	BO_DOA12, BO_DOA13, BO_DOA14, BO_DOA15, BO_DOA16, BO_DOA17,
+	BO_DOA18, BO_DOA19, BO_DOA20, BO_DOA21, BO_DOA22, BO_DOA23,
+	BO_DOA24, BO_DOA25, BO_DOA26, BO_DOA27, BO_DOA28, BO_DOA29,
+	BO_DOA30, BO_DOA31,
+
+	BO_DOPA0, BO_DOPA1, BO_DOPA2, BO_DOPA3,
+
+	// port B
+	BO_DOB0, BO_DOB1, BO_DOB2, BO_DOB3, BO_DOB4, BO_DOB5,
+	BO_DOB6, BO_DOB7, BO_DOB8, BO_DOB9, BO_DOB10, BO_DOB11,
+	BO_DOB12, BO_DOB13, BO_DOB14, BO_DOB15, BO_DOB16, BO_DOB17,
+	BO_DOB18, BO_DOB19, BO_DOB20, BO_DOB21, BO_DOB22, BO_DOB23,
+	BO_DOB24, BO_DOB25, BO_DOB26, BO_DOB27, BO_DOB28, BO_DOB29,
+	BO_DOB30, BO_DOB31,
+
+	BO_DOPB0, BO_DOPB1, BO_DOPB2, BO_DOPB3,
+
+	BO_LAST = BO_DOPB3
+};
+
+//
+// DEV_MACC
+//
+
+enum {
+	// input:
+	MI_FIRST = 0,
+
+	MI_CEA = MI_FIRST, MI_CEB, MI_CEC, MI_CED, MI_CEM, MI_CEP,
+	MI_CE_OPMODE, MI_CE_CARRYIN,
+	MI_OPMODE0, MI_OPMODE1, MI_OPMODE2, MI_OPMODE3,
+	MI_OPMODE4, MI_OPMODE5, MI_OPMODE6, MI_OPMODE7,
+	MI_A0, MI_A1, MI_A2, MI_A3, MI_A4, MI_A5, MI_A6, MI_A7,
+	MI_A8, MI_A9, MI_A10, MI_A11, MI_A12, MI_A13, MI_A14, MI_A15,
+	MI_A16, MI_A17,
+	MI_B0, MI_B1, MI_B2, MI_B3, MI_B4, MI_B5, MI_B6, MI_B7,
+	MI_B8, MI_B9, MI_B10, MI_B11, MI_B12, MI_B13, MI_B14, MI_B15,
+	MI_B16, MI_B17,
+	MI_C0, MI_C1, MI_C2, MI_C3, MI_C4, MI_C5, MI_C6, MI_C7,
+	MI_C8, MI_C9, MI_C10, MI_C11, MI_C12, MI_C13, MI_C14, MI_C15,
+	MI_C16, MI_C17, MI_C18, MI_C19, MI_C20, MI_C21, MI_C22, MI_C23,
+	MI_C24, MI_C25, MI_C26, MI_C27, MI_C28, MI_C29, MI_C30, MI_C31,
+	MI_C32, MI_C33, MI_C34, MI_C35, MI_C36, MI_C37, MI_C38, MI_C39,
+	MI_C40, MI_C41, MI_C42, MI_C43, MI_C44, MI_C45, MI_C46, MI_C47,
+	MI_D0, MI_D1, MI_D2, MI_D3, MI_D4, MI_D5, MI_D6, MI_D7,
+	MI_D8, MI_D9, MI_D10, MI_D11, MI_D12, MI_D13, MI_D14, MI_D15,
+	MI_D16, MI_D17,
+
+	MI_LAST = MI_D17,
+
+	// output:
+	MO_FIRST,
+
+	MO_CARRYOUT = MO_FIRST,
+	MO_P0, MO_P1, MO_P2, MO_P3, MO_P4, MO_P5, MO_P6, MO_P7,
+	MO_P8, MO_P9, MO_P10, MO_P11, MO_P12, MO_P13, MO_P14, MO_P15,
+	MO_P16, MO_P17, MO_P18, MO_P19, MO_P20, MO_P21, MO_P22, MO_P23,
+	MO_P24, MO_P25, MO_P26, MO_P27, MO_P28, MO_P29, MO_P30, MO_P31,
+	MO_P32, MO_P33, MO_P34, MO_P35, MO_P36, MO_P37, MO_P38, MO_P39,
+	MO_P40, MO_P41, MO_P42, MO_P43, MO_P44, MO_P45, MO_P46, MO_P47,
+
+	MO_M0, MO_M1, MO_M2, MO_M3, MO_M4, MO_M5, MO_M6, MO_M7,
+	MO_M8, MO_M9, MO_M10, MO_M11, MO_M12, MO_M13, MO_M14, MO_M15,
+	MO_M16, MO_M17, MO_M18, MO_M19, MO_M20, MO_M21, MO_M22, MO_M23,
+	MO_M24, MO_M25, MO_M26, MO_M27, MO_M28, MO_M29, MO_M30, MO_M31,
+	MO_M32, MO_M33, MO_M34, MO_M35,
+
+	MO_LAST = MO_M35
 };
 
 //
@@ -851,10 +980,10 @@ enum extra_wires {
 	FAN_B,
 	GFAN0,
 	GFAN1,
-	CLK0,
-	CLK1,
-	SR0,
-	SR1,
+	CLK0, // == clka for bram
+	CLK1, // == clkb for bram
+	SR0, // == rsta for bram
+	SR1, // == rstb for bram
 	LOGICIN20,
 	LOGICIN21,
 	LOGICIN44,
@@ -883,7 +1012,15 @@ enum extra_wires {
 	LW,
 	// logic wires are encoded here as LOGIC_BEG+LI_A1. LD1 (0x100)
 	// can be OR'ed to the LI or LO value.
-	LW_LAST = 1999
+	LW_LAST = 1999,
+
+	// bram wires are BW + (BI_/BO_, ORed with B8_0(0x100) or B8_1(0x200))
+	BW,
+	BW_LAST = 2999,
+
+	// macc wires are MW + MI_/MO_
+	MW,
+	MW_LAST = 3499,
 };
 
 const char* fpga_wire2str(enum extra_wires wire);
@@ -891,3 +1028,13 @@ str16_t fpga_wire2str_i(struct fpga_model* model, enum extra_wires wire);
 enum extra_wires fpga_str2wire(const char* str);
 int fdev_logic_inbit(pinw_idx_t idx);
 int fdev_logic_outbit(pinw_idx_t idx);
+
+// physically, tile3 is at the top, tile0 at the bottom
+// errors are returned as -1 in tile0_to_3
+void fdev_bram_inbit(enum extra_wires wire, int* tile0_to_3, int* wire0_to_62);
+void fdev_bram_outbit(enum extra_wires wire, int* tile0_to_3, int* wire0_to_23);
+int fdev_is_bram8_inwire(int bi_wire); // direct BI_ value
+int fdev_is_bram8_outwire(int bo_wire); // direct BO_ value
+
+void fdev_macc_inbit(enum extra_wires wire, int* tile0_to_3, int* wire0_to_62);
+void fdev_macc_outbit(enum extra_wires wire, int* tile0_to_3, int* wire0_to_23);

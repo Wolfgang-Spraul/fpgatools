@@ -15,6 +15,11 @@ static int init_routing_switches(struct fpga_model* model);
 static int init_north_south_dirwire_term(struct fpga_model* model);
 static int init_iologic_switches(struct fpga_model* model);
 static int init_logic_switches(struct fpga_model* model);
+static int init_center_switches(struct fpga_model* model);
+static int init_hclk_switches(struct fpga_model* model);
+static int init_logicout_fw_switches(struct fpga_model* model);
+static int init_bram_switches(struct fpga_model* model);
+static int init_macc_switches(struct fpga_model* model);
 
 int init_switches(struct fpga_model* model, int routing_sw)
 {
@@ -22,26 +27,41 @@ int init_switches(struct fpga_model* model, int routing_sw)
 
 	if (routing_sw) {
 		rc = init_routing_switches(model);
-		if (rc) goto xout;
+		if (rc) FAIL(rc);
 	}
 
 	rc = init_logic_switches(model);
-	if (rc) goto xout;
+	if (rc) FAIL(rc);
 
    	rc = init_iologic_switches(model);
-	if (rc) goto xout;
+	if (rc) FAIL(rc);
 
    	rc = init_north_south_dirwire_term(model);
-	if (rc) goto xout;
+	if (rc) FAIL(rc);
 
    	rc = init_ce_clk_switches(model);
-	if (rc) goto xout;
+	if (rc) FAIL(rc);
 
 	rc = init_io_switches(model);
-	if (rc) goto xout;
+	if (rc) FAIL(rc);
+
+	rc = init_center_switches(model);
+	if (rc) FAIL(rc);
+
+	rc = init_hclk_switches(model);
+	if (rc) FAIL(rc);
+
+	rc = init_logicout_fw_switches(model);
+	if (rc) FAIL(rc);
+
+	rc = init_bram_switches(model);
+	if (rc) FAIL(rc);
+
+	rc = init_macc_switches(model);
+	if (rc) FAIL(rc);
 
 	return 0;
-xout:
+fail:
 	return rc;
 }
 
@@ -1136,6 +1156,343 @@ int replicate_routing_switches(struct fpga_model* model)
 			rc = replicate_switches_and_names(model,
 				first_y, first_x, y, x);
 			if (rc) FAIL(rc);
+		}
+	}
+	return 0;
+fail:
+	return rc;
+}
+
+static int init_center_switches(struct fpga_model* model)
+{
+	int i, j, rc;
+
+	{ const char* pairs[] =
+		{ "CLKC_CKLR%i",	"CLKC_GCLK%i",
+		  "CLKC_CKTB%i",	"CLKC_GCLK%i",
+		  "CLKC_PLL_L%i",	"CLKC_GCLK%i",
+		  "CLKC_PLL_U%i",	"CLKC_GCLK%i",
+		  "CLKC_SEL%i_PLL",	"S_GCLK_SITE%i",
+		  "I0_GCLK_SITE%i",	"O_GCLK_SITE%i",
+		  "O_GCLK_SITE%i",	"CLKC_GCLK_MAIN%i" };
+	 int i_dest[2][16] =
+		{{ 0,1,2,4,3,5,6,7,8,9,10,12,11,13,14,15 },
+		 { 1,0,3,5,2,4,7,6,9,8,11,13,10,12,15,14 }};
+
+	for (i = 0; i < sizeof(pairs)/sizeof(*pairs)/2; i++) {
+		for (j = 0; j <= 15; j++) {
+			if ((rc = add_switch(model, model->center_y, model->center_x,
+				pf(pairs[i*2], j), pf(pairs[i*2+1], j),
+				/*bidir*/ 0))) FAIL(rc);
+		}
+	}
+	for (j = 0; j <= 15; j++) {
+		if ((rc = add_switch(model, model->center_y, model->center_x,
+			pf("CLKC_GCLK%i", j), pf("I0_GCLK_SITE%i", i_dest[0][j]),
+			/*bidir*/ 0))) FAIL(rc);
+		if ((rc = add_switch(model, model->center_y, model->center_x,
+			pf("CLKC_GCLK%i", j), pf("I1_GCLK_SITE%i", i_dest[1][j]),
+			/*bidir*/ 0))) FAIL(rc);
+	}}
+
+	{ const char *to[] = {
+		"CLK_PLL_LOCK_LT0", "CLK_PLL_LOCK_LT1",
+		"CLK_PLL_LOCK_RT0", "CLK_PLL_LOCK_RT1" };
+	 const char *from[] = {
+		"PLL_LOCK_BOT0", "PLL_LOCK_BOT1",
+		"PLL_LOCK_TOP0", "PLL_LOCK_TOP1" };
+	for (i = 0; i < sizeof(to)/sizeof(*to); i++) {
+		for (j = 0; j < sizeof(from)/sizeof(*from); j++) {
+			if ((rc = add_switch(model, model->center_y,
+				model->center_x-CENTER_CMTPLL_O,
+				from[j], to[i], /*bidir*/ 0))) FAIL(rc);
+		}
+	}}
+
+	{ const char* pairs[] = {
+		"PLL_LOCK_BOT0", "PLL_LOCK_TOP2",
+		"PLL_LOCK_BOT1", "PLL_LOCK_TOP2",
+		"PLL_LOCK_TOP0", "PLL_LOCK_BOT2",
+		"PLL_LOCK_TOP1", "PLL_LOCK_BOT2" };
+
+	for (i = 0; i < sizeof(pairs)/sizeof(*pairs)/2; i++) {
+		if ((rc = add_switch(model, model->center_y,
+			model->center_x-CENTER_CMTPLL_O,
+			pairs[i*2], pairs[i*2+1],
+			/*bidir*/ 0))) FAIL(rc);
+	}}
+
+	{ const char *to[] = {
+		"REGC_CLKPLL_IO_LT0", "REGC_CLKPLL_IO_LT1",
+		"REGC_CLKPLL_IO_RT0", "REGC_CLKPLL_IO_RT1",
+		"REGC_PLLCLK_UP_OUT0", "REGC_PLLCLK_UP_OUT1" };
+	for (i = 0; i <= 3; i++) {
+		for (j = 0; j < sizeof(to)/sizeof(*to); j++) {
+			if ((rc = add_switch(model, model->center_y,
+				model->center_x-CENTER_CMTPLL_O,
+				pf("REGC_PLLCLK_DN_IN%i", i), to[j],
+				/*bidir*/ 0))) FAIL(rc);
+		}
+	}}
+	{ const char *to[] = {
+		"REGC_CLKPLL_IO_LT0", "REGC_CLKPLL_IO_LT1",
+		"REGC_CLKPLL_IO_RT0", "REGC_CLKPLL_IO_RT1",
+		"REGC_PLLCLK_DN_OUT0", "REGC_PLLCLK_DN_OUT1" };
+	for (i = 0; i <= 3; i++) {
+		for (j = 0; j < sizeof(to)/sizeof(*to); j++) {
+			if ((rc = add_switch(model, model->center_y,
+				model->center_x-CENTER_CMTPLL_O,
+				pf("REGC_PLLCLK_UP_IN%i", i), to[j],
+				/*bidir*/ 0))) FAIL(rc);
+		}
+	}}
+	return 0;
+fail:
+	return rc;
+}
+
+static int init_hclk_switches(struct fpga_model* model)
+{
+	int x, y, i, rc;
+
+	for (x = 0; x < model->x_width; x++) {
+		if (!is_atx(X_ROUTING_COL, model, x))
+			continue;
+		for (y = TOP_IO_TILES; y < model->y_height-BOT_IO_TILES; y++) {
+			if (!is_aty(Y_ROW_HORIZ_AXSYMM, model, y))
+				continue;
+			for (i = 0; i <= 15; i++) {
+				if ((rc = add_switch(model, y, x,
+					pf("HCLK_GCLK%i_INT", i), pf("HCLK_GCLK%i", i),
+					/*bidir*/ 0))) FAIL(rc);
+				if ((rc = add_switch(model, y, x,
+					pf("HCLK_GCLK%i_INT", i), pf("HCLK_GCLK_UP%i", i),
+					/*bidir*/ 0))) FAIL(rc);
+			}
+		}
+	}
+	return 0;
+fail:
+	return rc;
+}
+
+static int init_logicout_fw_switches(struct fpga_model *model)
+{
+	int i, x, y, rc;
+
+	for (x = 0; x < model->x_width; x++) {
+		if (is_atx(X_FABRIC_BRAM_VIA_COL|X_FABRIC_MACC_VIA_COL, model, x)) {
+			for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
+				if (is_aty(Y_CHIP_HORIZ_REGS|Y_ROW_HORIZ_AXSYMM, model, y))
+					continue;
+				for (i = 0; i <= 23; i++) {
+					if ((rc = add_switch(model, y, x,
+						pf("INT_INTERFACE_LOGICOUT_%i", i), pf("INT_INTERFACE_LOGICOUT%i", i),
+						/*bidir*/ 0))) FAIL(rc);
+				}
+			}
+			continue;
+		}
+		if (is_atx(X_CENTER_ROUTING_COL, model, x)) {
+			for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
+				if (!is_aty(Y_ROW_HORIZ_AXSYMM, model, y))
+					continue;
+				for (i = 0; i <= 23; i++) {
+					if ((rc = add_switch(model, y-1, model->center_x-CENTER_LOGIC_O,
+						pf("INT_INTERFACE_LOGICOUT_%i", i), pf("INT_INTERFACE_LOGICOUT%i", i),
+						/*bidir*/ 0))) FAIL(rc);
+					if ((rc = add_switch(model, y+1, model->center_x-CENTER_LOGIC_O,
+						pf("INT_INTERFACE_LOGICOUT_%i", i), pf("INT_INTERFACE_LOGICOUT%i", i),
+						/*bidir*/ 0))) FAIL(rc);
+				}
+			}
+			continue;
+		}
+		if (is_atx(X_LEFT_IO_DEVS_COL, model, x)) {
+			for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
+				if (is_aty(Y_CHIP_HORIZ_REGS|Y_ROW_HORIZ_AXSYMM, model, y)
+				    || has_device(model, y, LEFT_IO_DEVS, DEV_ILOGIC))
+					continue;
+				if (has_device(model, y, LEFT_IO_DEVS, DEV_OCT_CALIBRATE)) {
+					for (i = 0; i <= 23; i++) {
+						if ((rc = add_switch(model, y, x,
+							pf("INT_INTERFACE_LOCAL_LOGICOUT_%i", i), pf("INT_INTERFACE_LOCAL_LOGICOUT%i", i),
+							/*bidir*/ 0))) FAIL(rc);
+					}
+					continue;
+				}
+				// todo: this is probably not right...
+				if (y == model->center_y-1 || y == model->center_y-2
+				    || y < TOP_IO_TILES + HALF_ROW
+				    || y == model->y_height-BOT_INNER_IO)
+					continue;
+				for (i = 0; i <= 23; i++) {
+					if ((rc = add_switch(model, y, x,
+						pf("INT_INTERFACE_LOGICOUT_%i", i), pf("INT_INTERFACE_LOGICOUT%i", i),
+						/*bidir*/ 0))) FAIL(rc);
+				}
+			}
+			continue;
+		}
+		if (is_atx(X_RIGHT_IO_DEVS_COL, model, x)) {
+			for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
+				if (is_aty(Y_CHIP_HORIZ_REGS|Y_ROW_HORIZ_AXSYMM, model, y)
+				    || has_device(model, y, model->x_width-RIGHT_IO_DEVS_O, DEV_ILOGIC))
+					continue;
+				if (has_device(model, y, model->x_width-RIGHT_IO_DEVS_O, DEV_BSCAN)
+				    || has_device(model, y, model->x_width-RIGHT_IO_DEVS_O, DEV_ICAP)
+				    || has_device(model, y, model->x_width-RIGHT_IO_DEVS_O, DEV_SLAVE_SPI)) {
+					for (i = 0; i <= 23; i++) {
+						if ((rc = add_switch(model, y, x,
+							pf("INT_INTERFACE_LOCAL_LOGICOUT_%i", i), pf("INT_INTERFACE_LOCAL_LOGICOUT%i", i),
+							/*bidir*/ 0))) FAIL(rc);
+					}
+					continue;
+				}
+				// todo: this is probably not right...
+				if (y == model->center_y-1 || y == model->center_y-2
+				    || y < TOP_IO_TILES + HALF_ROW)
+					continue;
+				for (i = 0; i <= 23; i++) {
+					if ((rc = add_switch(model, y, x,
+						pf("INT_INTERFACE_LOGICOUT_%i", i), pf("INT_INTERFACE_LOGICOUT%i", i),
+						/*bidir*/ 0))) FAIL(rc);
+				}
+			}
+			continue;
+		}
+	}
+	return 0;
+fail:
+	return rc;
+}
+
+static int init_bram_switches(struct fpga_model* model)
+{
+	int i, x, y, tile0_to_3, wire_num, rc;
+
+	for (x = 0; x < model->x_width; x++) {
+		if (!is_atx(X_FABRIC_BRAM_COL, model, x))
+			continue;
+		for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
+			if (!has_device(model, y, x, DEV_BRAM16))
+				continue;
+			{ const char* pairs[] = {
+				"BRAM_CLK%c_INT1", "RAMB16BWER_CLK%c",
+				"BRAM_CLK%c_INT1", "RAMB8BWER_0_CLK%c",
+				"BRAM_CLK%c_INT2", "RAMB8BWER_1_CLK%c" };
+			for (i = 0; i < sizeof(pairs)/sizeof(*pairs)/2; i++) {
+				if ((rc = add_switch(model, y, x,
+					pf(pairs[i*2], '0'+0), pf(pairs[i*2+1], 'A'+0),
+					/*bidir*/ 0))) FAIL(rc);
+				if ((rc = add_switch(model, y, x,
+					pf(pairs[i*2], '0'+1), pf(pairs[i*2+1], 'A'+1),
+					/*bidir*/ 0))) FAIL(rc);
+			}}
+			{ const char *s[] = {
+				"BRAM_SR0_INT1", "RAMB16BWER_RSTA",
+				"BRAM_SR0_INT1", "RAMB8BWER_0_RSTA",
+				"BRAM_SR0_INT2", "RAMB8BWER_1_RSTA",
+				"BRAM_SR1_INT1", "RAMB16BWER_RSTB",
+				"BRAM_SR1_INT1", "RAMB8BWER_0_RSTB",
+				"BRAM_SR1_INT2", "RAMB8BWER_1_RSTB" };
+			for (i = 0; i < sizeof(s)/sizeof(*s)/2; i++) {
+				if ((rc = add_switch(model, y, x, s[i*2],
+					s[i*2+1], /*bidir*/ 0))) FAIL(rc);
+			}}
+			for (i = BI_FIRST; i <= BI_LAST; i++) {
+				fdev_bram_inbit(BW+i, &tile0_to_3, &wire_num);
+				if (tile0_to_3 == -1) { HERE(); continue; }
+				if ((rc = add_switch(model, y, x,
+					pf("BRAM_LOGICINB%i_INT%i", wire_num, tile0_to_3),
+					fpga_wire2str(BW+i),
+					/*bidir*/ 0))) FAIL(rc);
+				if (fdev_is_bram8_inwire(i)) {
+					fdev_bram_inbit(BW+(B8_0|i), &tile0_to_3, &wire_num);
+					if (tile0_to_3 == -1) { HERE(); continue; }
+					if ((rc = add_switch(model, y, x,
+						pf("BRAM_LOGICINB%i_INT%i", wire_num, tile0_to_3),
+						fpga_wire2str(BW+(B8_0|i)),
+						/*bidir*/ 0))) FAIL(rc);
+
+					fdev_bram_inbit(BW+(B8_1|i), &tile0_to_3, &wire_num);
+					if (tile0_to_3 == -1) { HERE(); continue; }
+					if ((rc = add_switch(model, y, x,
+						pf("BRAM_LOGICINB%i_INT%i", wire_num, tile0_to_3),
+						fpga_wire2str(BW+(B8_1|i)),
+						/*bidir*/ 0))) FAIL(rc);
+				}
+			}
+			for (i = BO_FIRST; i <= BO_LAST; i++) {
+				fdev_bram_outbit(BW+i, &tile0_to_3, &wire_num);
+				if (tile0_to_3 == -1) { HERE(); continue; }
+				if ((rc = add_switch(model, y, x,
+					fpga_wire2str(BW+i),
+					pf("BRAM_LOGICOUT%i_INT%i", wire_num, tile0_to_3),
+					/*bidir*/ 0))) FAIL(rc);
+				if (fdev_is_bram8_outwire(i)) {
+					fdev_bram_outbit(BW+(B8_0|i), &tile0_to_3, &wire_num);
+					if (tile0_to_3 == -1) { HERE(); continue; }
+					if ((rc = add_switch(model, y, x,
+						fpga_wire2str(BW+(B8_0|i)),
+						pf("BRAM_LOGICOUT%i_INT%i", wire_num, tile0_to_3),
+						/*bidir*/ 0))) FAIL(rc);
+
+					fdev_bram_outbit(BW+(B8_1|i), &tile0_to_3, &wire_num);
+					if (tile0_to_3 == -1) { HERE(); continue; }
+					if ((rc = add_switch(model, y, x,
+						fpga_wire2str(BW+(B8_1|i)),
+						pf("BRAM_LOGICOUT%i_INT%i", wire_num, tile0_to_3),
+						/*bidir*/ 0))) FAIL(rc);
+				}
+			}
+		}
+	}
+	return 0;
+fail:
+	return rc;
+}
+
+static int init_macc_switches(struct fpga_model* model)
+{
+	int i, x, y, tile0_to_3, wire_num, rc;
+
+	for (x = 0; x < model->x_width; x++) {
+		if (!is_atx(X_FABRIC_MACC_COL, model, x))
+			continue;
+		for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
+			if (!has_device(model, y, x, DEV_MACC))
+				continue;
+			{ const char *s[] = {
+				"MACC_SR0_INT0", "RSTD_DSP48A1_SITE",
+				"MACC_SR0_INT1", "RSTP_DSP48A1_SITE",
+				"MACC_SR0_INT2", "RSTC_DSP48A1_SITE",
+				"MACC_SR0_INT3", "RSTA_DSP48A1_SITE",
+				"MACC_SR1_INT0", "RSTCARRYIN_DSP48A1_SITE",
+				"MACC_SR1_INT1", "RSTOPMODE_DSP48A1_SITE",
+				"MACC_SR1_INT2", "RSTM_DSP48A1_SITE",
+				"MACC_SR1_INT3", "RSTB_DSP48A1_SITE",
+				"MACC_CLK0_INT2", "CLK_DSP48A1_SITE" };
+			for (i = 0; i < sizeof(s)/sizeof(*s)/2; i++) {
+				if ((rc = add_switch(model, y, x, s[i*2],
+					s[i*2+1], /*bidir*/ 0))) FAIL(rc);
+			}}
+			for (i = MI_FIRST; i <= MI_LAST; i++) {
+				fdev_macc_inbit(MW+i, &tile0_to_3, &wire_num);
+				if (tile0_to_3 == -1) { HERE(); continue; }
+				if ((rc = add_switch(model, y, x,
+					pf("MACC_LOGICINB%i_INT%i", wire_num, tile0_to_3),
+					fpga_wire2str(MW+i),
+					/*bidir*/ 0))) FAIL(rc);
+			}
+			for (i = MO_FIRST; i <= MO_LAST; i++) {
+				fdev_macc_outbit(MW+i, &tile0_to_3, &wire_num);
+				if (tile0_to_3 == -1) { HERE(); continue; }
+				if ((rc = add_switch(model, y, x,
+					fpga_wire2str(MW+i),
+					pf("MACC_LOGICOUT%i_INT%i", wire_num, tile0_to_3),
+					/*bidir*/ 0))) FAIL(rc);
+			}
 		}
 	}
 	return 0;

@@ -762,7 +762,7 @@ static int printf_BUFIO(FILE* f, struct fpga_model* model,
 			type_count++;
 			continue;
 		}
-		snprintf(pref, sizeof(pref), "dev y%02i x%02i BUFGMUX %i",
+		snprintf(pref, sizeof(pref), "dev y%02i x%02i BUFIO %i",
 			y, x, type_count++);
 		if (!config_only)
 			fprintf(f, "%s\n", pref);
@@ -841,7 +841,7 @@ static int printf_BSCAN(FILE* f, struct fpga_model* model,
 			type_count++;
 			continue;
 		}
-		snprintf(pref, sizeof(pref), "dev y%02i x%02i BUFGMUX %i",
+		snprintf(pref, sizeof(pref), "dev y%02i x%02i BSCAN %i",
 			y, x, type_count++);
 		if (!config_only)
 			fprintf(f, "%s\n", pref);

@@ -150,7 +150,7 @@ compare_%.ftest: compare_%.fcr
 	@if test ! -e test.gold/$(*F).fco; then echo Gold test.gold/$(*F).fco does not exist, aborting.; false; fi;
 	@diff -u test.gold/$(*F).fco $< >$@ || true
 
-%.fce: %.fco
+%.fce: %.fcd
 	@cat $< | grep ^+[^+] >$@ || true
 
 compare_%_tiles.fco: compare_%.fp
