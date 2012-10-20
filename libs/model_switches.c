@@ -9,57 +9,92 @@
 #include "model.h"
 #include "parts.h"
 
-static int init_ce_clk_switches(struct fpga_model* model);
-static int init_io_switches(struct fpga_model* model);
-static int init_routing_switches(struct fpga_model* model);
+static int init_ce_clk(struct fpga_model* model);
+static int init_io(struct fpga_model* model);
+static int init_routing(struct fpga_model* model);
 static int init_north_south_dirwire_term(struct fpga_model* model);
-static int init_iologic_switches(struct fpga_model* model);
-static int init_logic_switches(struct fpga_model* model);
-static int init_center_switches(struct fpga_model* model);
-static int init_hclk_switches(struct fpga_model* model);
-static int init_logicout_fw_switches(struct fpga_model* model);
-static int init_bram_switches(struct fpga_model* model);
-static int init_macc_switches(struct fpga_model* model);
+static int init_east_west_dirwire_term(struct fpga_model* model);
+static int init_iologic(struct fpga_model* model);
+static int init_logic(struct fpga_model* model);
+static int init_center(struct fpga_model* model);
+static int init_hclk(struct fpga_model* model);
+static int init_logicout_fw(struct fpga_model* model);
+static int init_bram(struct fpga_model* model);
+static int init_macc(struct fpga_model* model);
+static int init_topbot_tterm_gclk(struct fpga_model* model);
+static int init_bufio(struct fpga_model* model);
+static int init_bscan(struct fpga_model* model);
+static int init_dcm(struct fpga_model* model);
+static int init_pll(struct fpga_model* model);
+static int init_center_hclk(struct fpga_model* model);
+static int init_center_midbuf(struct fpga_model* model);
+static int init_center_reg_tblr(struct fpga_model* model);
 
 int init_switches(struct fpga_model* model, int routing_sw)
 {
 	int rc;
 
 	if (routing_sw) {
-		rc = init_routing_switches(model);
+		rc = init_routing(model);
 		if (rc) FAIL(rc);
 	}
 
-	rc = init_logic_switches(model);
+	rc = init_logic(model);
 	if (rc) FAIL(rc);
 
-   	rc = init_iologic_switches(model);
+   	rc = init_iologic(model);
 	if (rc) FAIL(rc);
 
    	rc = init_north_south_dirwire_term(model);
 	if (rc) FAIL(rc);
 
-   	rc = init_ce_clk_switches(model);
+   	rc = init_east_west_dirwire_term(model);
 	if (rc) FAIL(rc);
 
-	rc = init_io_switches(model);
+   	rc = init_ce_clk(model);
 	if (rc) FAIL(rc);
 
-	rc = init_center_switches(model);
+	rc = init_io(model);
 	if (rc) FAIL(rc);
 
-	rc = init_hclk_switches(model);
+	rc = init_center(model);
 	if (rc) FAIL(rc);
 
-	rc = init_logicout_fw_switches(model);
+	rc = init_hclk(model);
 	if (rc) FAIL(rc);
 
-	rc = init_bram_switches(model);
+	rc = init_logicout_fw(model);
 	if (rc) FAIL(rc);
 
-	rc = init_macc_switches(model);
+	rc = init_bram(model);
 	if (rc) FAIL(rc);
 
+	rc = init_macc(model);
+	if (rc) FAIL(rc);
+
+	rc = init_topbot_tterm_gclk(model);
+	if (rc) FAIL(rc);
+
+	rc = init_bufio(model);
+	if (rc) FAIL(rc);
+
+	rc = init_bscan(model);
+	if (rc) FAIL(rc);
+
+	rc = init_dcm(model);
+	if (rc) FAIL(rc);
+
+	rc = init_pll(model);
+	if (rc) FAIL(rc);
+
+	rc = init_center_hclk(model);
+	if (rc) FAIL(rc);
+
+	rc = init_center_midbuf(model);
+	if (rc) FAIL(rc);
+
+	rc = init_center_reg_tblr(model);
+	if (rc) FAIL(rc);
 	return 0;
 fail:
 	return rc;
@@ -152,7 +187,7 @@ xout:
 	return rc;
 }
 
-static int init_logic_switches(struct fpga_model* model)
+static int init_logic(struct fpga_model* model)
 {
 	int x, y, rc;
 
@@ -546,7 +581,7 @@ xout:
 	return rc;
 }
 
-static int init_iologic_switches(struct fpga_model* model)
+static int init_iologic(struct fpga_model* model)
 {
 	int x, y, rc;
 
@@ -661,7 +696,45 @@ xout:
 	return rc;
 }
 
-static int init_ce_clk_switches(struct fpga_model* model)
+static int init_east_west_dirwire_term(struct fpga_model* model)
+{
+	int y, rc;
+
+	for (y = TOP_IO_TILES; y < model->y_height-BOT_IO_TILES; y++) {
+		if (is_aty(Y_ROW_HORIZ_AXSYMM|Y_CHIP_HORIZ_REGS, model, y))
+			continue;
+		// left
+		{ const char* s[] = {
+			"NE4C", "NW4M", "SW4C", "SE4E", "SW4M", "SE4C",
+			"WW4A", "EE4M", "WW4B", "EE4A", "WW4C", "EE4E", "WW4M", "EE4C",
+			"NW4C", "NE4E",
+			"WW2B", "EE2M", "WW2M", "EE2E", "NW2M", "NE2E",
+			"WL1B", "EL1E", "WR1B", "ER1E", "" };
+		if ((rc = add_switch_set(model, y, LEFT_INNER_COL,
+			"LTERM_", s, /*inc*/ 3))) FAIL(rc); }
+		{ const char* s[] = { "SW2M", "SE2E", "" };
+		if ((rc = add_switch_set(model, y, LEFT_INNER_COL,
+			"LTERM_", s, /*inc*/ 2))) FAIL(rc); }
+		rc = add_switch(model, y, LEFT_INNER_COL,
+			"LTERM_SW2M3", "LTERM_SE2M3", 0 /* bidir */);
+		if (rc) FAIL(rc);
+
+		// right
+		{ const char* s[] = {
+			"EE4A", "WW4M", "EE4B", "WW4A", "EE4C", "WW4E", "EE4M", "WW4C",
+			"SE4C", "SW4E", "SE4M", "SW4C",
+			"NE4C", "NW4E", "NE4M", "NW4C",
+			"NE2M", "NW2E", "EE2B", "WW2M", "EE2M", "WW2E", "SE2M", "SW2E",
+			"EL1B", "WL1E", "ER1B", "WR1E", "" };
+		if ((rc = add_switch_set(model, y, model->x_width-RIGHT_INNER_O,
+			"RTERM_", s, /*inc*/ 3))) FAIL(rc); }
+	}
+	return 0;
+fail:
+	return rc;
+}
+
+static int init_ce_clk(struct fpga_model* model)
 {
 	int x, y, i, rc;
 
@@ -862,7 +935,7 @@ xout:
 	return rc;
 }
 
-static int init_io_switches(struct fpga_model* model)
+static int init_io(struct fpga_model* model)
 {
 	int x, y, rc;
 
@@ -1104,7 +1177,7 @@ fail:
 	return rc;
 }
 
-static int init_routing_switches(struct fpga_model* model)
+static int init_routing(struct fpga_model* model)
 {
 	int x, y, rc;
 
@@ -1163,7 +1236,7 @@ fail:
 	return rc;
 }
 
-static int init_center_switches(struct fpga_model* model)
+static int init_center(struct fpga_model* model)
 {
 	int i, j, rc;
 
@@ -1251,7 +1324,7 @@ fail:
 	return rc;
 }
 
-static int init_hclk_switches(struct fpga_model* model)
+static int init_hclk(struct fpga_model* model)
 {
 	int x, y, i, rc;
 
@@ -1276,7 +1349,7 @@ fail:
 	return rc;
 }
 
-static int init_logicout_fw_switches(struct fpga_model *model)
+static int init_logicout_fw(struct fpga_model *model)
 {
 	int i, x, y, rc;
 
@@ -1367,7 +1440,7 @@ fail:
 	return rc;
 }
 
-static int init_bram_switches(struct fpga_model* model)
+static int init_bram(struct fpga_model* model)
 {
 	int i, x, y, tile0_to_3, wire_num, rc;
 
@@ -1453,7 +1526,7 @@ fail:
 	return rc;
 }
 
-static int init_macc_switches(struct fpga_model* model)
+static int init_macc(struct fpga_model* model)
 {
 	int i, x, y, tile0_to_3, wire_num, rc;
 
@@ -1493,8 +1566,881 @@ static int init_macc_switches(struct fpga_model* model)
 					pf("MACC_LOGICOUT%i_INT%i", wire_num, tile0_to_3),
 					/*bidir*/ 0))) FAIL(rc);
 			}
+			if (y != TOP_IO_TILES+3) { // exclude topmost macc dev 
+				if ((rc = add_switch(model, y, x,
+					"CARRYOUT_DSP48A1_SITE", "CARRYOUT_DSP48A1_B_SITE",
+					/*bidir*/ 0))) FAIL(rc);
+				for (i = 0; i <= 17; i++) {
+					if ((rc = add_switch(model, y, x,
+						pf("BCOUT%i_DSP48A1_SITE", i), pf("BCOUT%i_DSP48A1_B_SITE", i),
+						/*bidir*/ 0))) FAIL(rc);
+				}
+				for (i = 0; i <= 47; i++) {
+					if ((rc = add_switch(model, y, x,
+						pf("PCOUT%i_DSP48A1_SITE", i), pf("PCOUT%i_DSP48A1_B_SITE", i),
+						/*bidir*/ 0))) FAIL(rc);
+				}
+			}
 		}
 	}
+	return 0;
+fail:
+	return rc;
+}
+
+static int init_topbot_tterm_gclk(struct fpga_model* model)
+{
+	int i, rc;
+
+	for (i = 0; i <= 15; i++) {
+		if ((rc = add_switch(model, TOP_INNER_ROW, model->center_x + CENTER_X_PLUS_1, pf("IOI_TTERM_GCLK%i", i),
+			"BUFPLL_TOP_GCLK0", /*bidir*/ 0))) FAIL(rc);
+		if ((rc = add_switch(model, TOP_INNER_ROW, model->center_x + CENTER_X_PLUS_1, pf("IOI_TTERM_GCLK%i", i),
+			"BUFPLL_TOP_GCLK1", /*bidir*/ 0))) FAIL(rc);
+		if ((rc = add_switch(model, model->y_height - BOT_INNER_ROW, model->center_x + CENTER_X_PLUS_1, pf("IOI_BTERM_GCLK%i", i),
+			"BUFPLL_BOT_GCLK0", /*bidir*/ 0))) FAIL(rc);
+		if ((rc = add_switch(model, model->y_height - BOT_INNER_ROW, model->center_x + CENTER_X_PLUS_1, pf("IOI_BTERM_GCLK%i", i),
+			"BUFPLL_BOT_GCLK1", /*bidir*/ 0))) FAIL(rc);
+	}
+	return 0;
+fail:
+	return rc;
+}
+
+static int init_bufio_tile(struct fpga_model* model, int y, int x, const char *s1, const char *s2)
+{
+	int i, j, rc;
+
+	{ static const char *s[] = {
+		"I_BUFIO2_%s_SITE%i", "O_BUFIO2_%s_SITE%i",
+		"I_BUFIO2_%s_SITE%i", "ODIV_BUFIO2_%s_SITE%i",
+		"IFB_BUFIO2FB_%s_SITE%i", "OFB_BUFIO2FB_%s_SITE%i" };
+	for (i = 0; i < sizeof(s)/sizeof(*s)/2; i++) {
+		for (j = 0; j <= 7; j++) {
+			if ((rc = add_switch(model, y, x, pf(s[i*2], s2, j),
+				pf(s[i*2+1], s2, j), /*bidir*/ 0))) FAIL(rc);
+		}
+	}}
+	{ static const char *s[] = {
+		"O_BUFIO2_%s_SITE%i", "%s_IOCLKOUT%i",
+		"ODIV_BUFIO2_%s_SITE%i", "%s_CKPIN_OUT%i",
+		"OE_BUFIO2_%s_SITE%i", "%s_IOCEOUT%i",
+		"OFB_BUFIO2FB_%s_SITE%i", "%s_CLK_FEEDBACK%i" };
+	for (i = 0; i < sizeof(s)/sizeof(*s)/2; i++) {
+		for (j = 0; j <= 7; j++) {
+			if ((rc = add_switch(model, y, x, pf(s[i*2], s2, j),
+				pf(s[i*2+1], s1, j), /*bidir*/ 0))) FAIL(rc);
+		}
+	}}
+	{ static const char *s[] = {
+		"%s_CFB%i", "IFB_BUFIO2FB_%s_SITE%i",
+		"%s_CFB1_%i", "IB_BUFIO2FB_%s_SITE%i",
+		"%s_DFB%i", "IFB_BUFIO2FB_%s_SITE%i",
+		"%s_DFB%i", "I_BUFIO2_%s_SITE%i",
+		"%s_GTPFB%i", "IFB_BUFIO2FB_%s_SITE%i",
+		"%s_CLKPIN%i", "IB_BUFIO2_%s_SITE%i",
+		"%s_CLKPIN%i", "I_BUFIO2_%s_SITE%i" };
+	for (i = 0; i < sizeof(s)/sizeof(*s)/2; i++) {
+		for (j = 0; j <= 7; j++) {
+			if ((rc = add_switch(model, y, x, pf(s[i*2], s1, j),
+				pf(s[i*2+1], s2, j), /*bidir*/ 0))) FAIL(rc);
+		}
+	}}
+	for (j = 0; j <= 7; j++) {
+		if ((rc = add_switch(model, y, x, pf("%s_VCC", s1),
+			pf("IB_BUFIO2_%s_SITE%i", s2, j),
+			/*bidir*/ 0))) FAIL(rc);
+	}
+	{ int n[] = { 1, 0, 3, 2, 5, 4, 7, 6 };
+	  const char *s[] = {
+		"%s_CLKPIN%i", "IFB_BUFIO2FB_%s_SITE%i",
+		"%s_DFB%i", "IB_BUFIO2_%s_SITE%i" };
+	for (i = 0; i < sizeof(s)/sizeof(*s)/2; i++) {
+		for (j = 0; j <= 7; j++) {
+			if ((rc = add_switch(model, y, x, pf(s[i*2], s1, j),
+				pf(s[i*2+1], s2, n[j]),
+				/*bidir*/ 0))) FAIL(rc);
+		}
+	}}
+	{ int n1[] = { 1, 0, 3, 2, 0, 0, 2, 2};
+	  int n2[] = { 4, 4, 6, 6, 1, 1, 3, 3};
+	  int n3[] = { 5, 5, 7, 7, 5, 4, 7, 6};
+	  const char *s[] = {
+		"%s_CLKPIN%i", "IB_BUFIO2_%s_SITE%i",
+		"%s_CLKPIN%i", "I_BUFIO2_%s_SITE%i" };
+	for (i = 0; i < sizeof(s)/sizeof(*s)/2; i++) {
+		for (j = 0; j <= 7; j++) {
+			if ((rc = add_switch(model, y, x, pf(s[i*2], s1, j),
+				pf(s[i*2+1], s2, n1[j]),
+				/*bidir*/ 0))) FAIL(rc);
+			if ((rc = add_switch(model, y, x, pf(s[i*2], s1, j),
+				pf(s[i*2+1], s2, n2[j]),
+				/*bidir*/ 0))) FAIL(rc);
+			if ((rc = add_switch(model, y, x, pf(s[i*2], s1, j),
+				pf(s[i*2+1], s2, n3[j]),
+				/*bidir*/ 0))) FAIL(rc);
+		}
+	}}
+	return 0;
+fail:
+	return rc;
+}
+
+static int init_bufio(struct fpga_model* model)
+{
+	int y, x, j, rc;
+	const char *s1, *s2;
+	const int lr_n[] = { 0, 0, 2, 2, 4, 5, 6, 7 };
+
+	y = TOP_OUTER_ROW;
+	x = model->center_x-CENTER_CMTPLL_O;
+	s1 = "REGT";
+	s2 = "TOP";
+	rc = init_bufio_tile(model, y, x, s1, s2);
+	if (rc) FAIL(rc);
+	for (j = 0; j <= 7; j++) {
+		if ((rc = add_switch(model, y, x, pf("%s_GTPCLK%i", s1, j),
+			pf("I_BUFIO2_%s_SITE%i", s2, j), /*bidir*/ 0))) FAIL(rc);
+	}
+
+	y = model->center_y;
+	x = LEFT_OUTER_COL;
+	s1 = "REGL";
+	s2 = "LEFT";
+	rc = init_bufio_tile(model, y, x, s1, s2);
+	if (rc) FAIL(rc);
+	for (j = 0; j <= 7; j++) {
+		if ((rc = add_switch(model, y, x, pf("%s_GTPCLK%i", s1, lr_n[j]),
+			pf("I_BUFIO2_%s_SITE%i", s2, j), /*bidir*/ 0))) FAIL(rc);
+	}
+
+	y = model->center_y;
+	x = model->x_width-RIGHT_OUTER_O;
+	s1 = "REGR";
+	s2 = "RIGHT";
+	rc = init_bufio_tile(model, y, x, s1, s2);
+	if (rc) FAIL(rc);
+	for (j = 0; j <= 7; j++) {
+		if ((rc = add_switch(model, y, x, pf("%s_GTPCLK%i", s1, lr_n[j]),
+			pf("I_BUFIO2_%s_SITE%i", s2, j), /*bidir*/ 0))) FAIL(rc);
+	}
+
+	y = model->y_height-BOT_OUTER_ROW;
+	x = model->center_x-CENTER_CMTPLL_O;
+	s1 = "REGB";
+	s2 = "BOT";
+	rc = init_bufio_tile(model, y, x, s1, s2);
+	if (rc) FAIL(rc);
+	for (j = 0; j <= 7; j++) {
+		if ((rc = add_switch(model, y, x, pf("%s_GTPCLK%i", s1, j),
+			pf("I_BUFIO2_%s_SITE%i", s2, j), /*bidir*/ 0))) FAIL(rc);
+	}
+	return 0;
+fail:
+	return rc;
+}
+
+static int init_bscan(struct fpga_model* model)
+{
+	int y, x, num_bscan_devs, i, j, rc;
+	const char *s[] = {
+		"BSCAN%i_CAPTURE_PINWIRE",
+		"BSCAN%i_DRCK_PINWIRE",
+		"BSCAN%i_RESET_PINWIRE",
+		"BSCAN%i_RUNTEST_PINWIRE",
+		"BSCAN%i_SHIFT_PINWIRE",
+		"BSCAN%i_TCK_PINWIRE",
+		"BSCAN%i_TDI_PINWIRE",
+		"BSCAN%i_TMS_PINWIRE",
+		"BSCAN%i_UPDATE_PINWIRE",
+		"BSCAN%i_SEL_PINWIRE" };
+
+	x = model->x_width-RIGHT_IO_DEVS_O;
+	for (y = TOP_IO_TILES; y < model->y_height-BOT_IO_TILES; y++) {
+		num_bscan_devs = has_device(model, y, x, DEV_BSCAN);
+		if (!num_bscan_devs) continue;
+		if (num_bscan_devs != 2) {
+			HERE();
+			continue;
+		}
+		for (i = 0; i <= 1; i++) {
+			for (j = 0; j < sizeof(s)/sizeof(*s); j++) {
+				if ((rc = add_switch(model, y, x, pf(s[j], i+1),
+					pf("INT_INTERFACE_LOCAL_LOGICOUT_%i", i*10+j), /*bidir*/ 0))) FAIL(rc);
+			}
+			if ((rc = add_switch(model, y, x, pf("INT_INTERFACE_LOCAL_LOGICBIN%i", i+1), 
+				pf("BSCAN%i_TDO_PINWIRE", i+1), /*bidir*/ 0))) FAIL(rc);
+		}
+	}
+	return 0;
+fail:
+	return rc;
+}
+
+static int init_dcm(struct fpga_model* model)
+{
+	int y, x, i, j, k, num_devs, rc;
+
+	x = model->center_x-CENTER_CMTPLL_O;
+	for (y = TOP_IO_TILES; y < model->y_height-BOT_IO_TILES; y++) {
+		num_devs = has_device(model, y, x, DEV_DCM);
+		if (!num_devs) continue;
+		if (num_devs != 2) {
+			HERE();
+			continue;
+		}
+		for (i = 0; i <= 1; i++) { // 2 dcm devs
+			for (j = 0; j <= 9; j++) { // 10 clk outs
+				for (k = 0; k <= 15; k++) { // 16 hclk dests
+					if ((rc = add_switch(model, y, x,
+						pf("DCM%i_CLKOUT%i", i+1, j),
+						pf("DCM_HCLK%i", k), 
+						/*bidir*/ 0))) FAIL(rc);
+				}
+			}
+		}
+		for (k = 0; k <= 15; k++) { // 16 hclk dests
+			if ((rc = add_switch(model, y, x,
+				pf("DCM_FABRIC_CLK%i", k), pf("DCM_HCLK%i", k),
+				/*bidir*/ 0))) FAIL(rc);
+			if ((rc = add_switch(model, y, x,
+				pf("DCM_HCLK%i", k), pf("DCM_HCLK%i_N", k),
+				/*bidir*/ 0))) FAIL(rc);
+			if (y > model->center_y) { // lower half
+				if ((rc = add_switch(model, y, x,
+					pf("DCM_HCLK%i_N", k), pf("PLL_CLK_CASC_TOP%i", k), 
+					/*bidir*/ 0))) FAIL(rc);
+				if ((rc = add_switch(model, y, x,
+					pf("PLL_CLK_CASC_BOT%i", k), pf("PLL_CLK_CASC_TOP%i", k), 
+					/*bidir*/ 0))) FAIL(rc);
+			} else { // upper half
+				if ((rc = add_switch(model, y, x,
+					pf("DCM_HCLK%i_N", k), pf("PLL_CLK_CASC_BOT%i", k), 
+					/*bidir*/ 0))) FAIL(rc);
+				if ((rc = add_switch(model, y, x,
+					pf("PLL_CLK_CASC_TOP%i", k), pf("PLL_CLK_CASC_BOT%i", k), 
+					/*bidir*/ 0))) FAIL(rc);
+			}
+		}
+		for (i = 0; i <= 7; i++) { // 8 wires
+			for (j = 1; j <= 2; j++) { // dcm 1 and 2
+				if ((rc = add_switch(model, y, x,
+					pf("DCM_CLK_FEEDBACK_LR_TOP%i", i), pf("DCM%i_CLKFB", j), 
+					/*bidir*/ 0))) FAIL(rc);
+				if ((rc = add_switch(model, y, x,
+					pf("DCM_CLK_FEEDBACK_TB_BOT%i", i), pf("DCM%i_CLKFB", j), 
+					/*bidir*/ 0))) FAIL(rc);
+				if ((rc = add_switch(model, y, x,
+					pf("DCM_CLK_INDIRECT_LR_TOP%i", i), pf("DCM%i_CLKIN", j), 
+					/*bidir*/ 0))) FAIL(rc);
+				if ((rc = add_switch(model, y, x,
+					pf("DCM_CLK_INDIRECT_TB_BOT%i", i), pf("DCM%i_CLKIN", j), 
+					/*bidir*/ 0))) FAIL(rc);
+			}
+		}
+		// logicin
+		{ const char *clb1_in0_to_62[] = {
+			/* 0*/ 0, 0, 0, 0, 0, "DCM2_STSADRS3", 0, 0,
+			/* 8*/ 0, 0, 0, 0, "DCM2_STSADRS2", 0, 0, "DCM2_PSINCDEC",
+			/*16*/ "DCM2_STSADRS0", 0, 0, 0, 0, 0, 0, 0,
+			/*24*/ "DCM2_PSEN", "DCM2_SE_CLK_IN1", 0, 0, 0, 0, 0, 0,
+			/*32*/ 0, 0, "DCM2_CTLOSC2", 0, "DCM2_STSADRS4", 0, 0, 0,
+			/*40*/ 0, 0, "DCM2_FREEZEDFS", 0, 0, 0, 0, "DCM2_RST",
+			/*48*/ 0, 0, 0, 0, 0, 0, "DCM2_CTLOSC1", 0,
+			/*56*/ 0, "DCM2_SE_CLK_IN0", 0, 0, 0, 0, "DCM2_STSADRS1" };
+		  const char *clb2_in0_to_62[] = {
+			/* 0*/ 0, 0, "DCM_FABRIC_CLK13", "DCM_FABRIC_CLK5", 0, "DCM1_STSADRS3", 0, 0,
+			/* 8*/ "DCM_FABRIC_CLK15", 0, 0, 0, "DCM1_STSADRS2", 0, 0, "DCM1_PSINCDEC",
+			/*16*/ "DCM1_STSADRS0", 0, 0, "DCM_FABRIC_CLK7", 0, 0, 0, 0,
+			/*24*/ "DCM1_PSEN", "DCM1_SE_CLK_IN1", "DCM_FABRIC_CLK2", 0, "DCM_FABRIC_CLK8", "DCM_FABRIC_CLK9", "DCM_FABRIC_CLK3", 0,
+			/*32*/ "DCM_FABRIC_CLK10", 0, "DCM1_CTLOSC2", 0, "DCM1_STSADRS4", 0, 0, "DCM_FABRIC_CLK14",
+			/*40*/ 0, "DCM_FABRIC_CLK4", "DCM1_FREEZEDFS", 0, "DCM_FABRIC_CLK0", 0, 0, "DCM1_RST",
+			/*48*/ 0, 0, 0, 0, "DCM_FABRIC_CLK12", 0, "DCM1_CTLOSC1", "DCM_FABRIC_CLK1",
+			/*56*/ 0, "DCM1_SE_CLK_IN0", "DCM_FABRIC_CLK6", "DCM_FABRIC_CLK11", 0, 0, "DCM1_STSADRS1" };
+		for (i = 0; i < 63; i++) {
+			if (clb1_in0_to_62[i])
+				if ((rc = add_switch(model, y, x,
+					pf("DCM_CLB1_LOGICINB%i", i), clb1_in0_to_62[i], 
+					/*bidir*/ 0))) FAIL(rc);
+			if (clb2_in0_to_62[i])
+				if ((rc = add_switch(model, y, x,
+					pf("DCM_CLB2_LOGICINB%i", i), clb2_in0_to_62[i], 
+					/*bidir*/ 0))) FAIL(rc);
+		}}
+		// logicout
+		for (i = 0; i <= 7; i++) {
+			if ((rc = add_switch(model, y, x,
+				pf("DCM1_STATUS%i", i), pf("DCM_CLB2_LOGICOUT%i", 16+i),
+				/*bidir*/ 0))) FAIL(rc);
+			if ((rc = add_switch(model, y, x,
+				pf("DCM2_STATUS%i", i), pf("DCM_CLB1_LOGICOUT%i", 16+i),
+				/*bidir*/ 0))) FAIL(rc);
+		}
+		if ((rc = add_switch(model, y, x, "DCM1_LOCKED",
+			"DCM_CLB2_LOGICOUT14", /*bidir*/ 0))) FAIL(rc);
+		if ((rc = add_switch(model, y, x, "DCM1_PSDONE",
+			"DCM_CLB2_LOGICOUT15", /*bidir*/ 0))) FAIL(rc);
+		if ((rc = add_switch(model, y, x, "DCM2_LOCKED",
+			"DCM_CLB1_LOGICOUT14", /*bidir*/ 0))) FAIL(rc);
+		if ((rc = add_switch(model, y, x, "DCM2_PSDONE",
+			"DCM_CLB1_LOGICOUT15", /*bidir*/ 0))) FAIL(rc);
+
+		{ const char *s[] = {
+			"CLK0", "CLK90", "CLK180", "CLK270", "CLK2X",
+			"CLK2X180", "CLKDV", "CLKFX", "CLKFX180", "CONCUR" };
+		for (i = 0; i < sizeof(s)/sizeof(*s); i++) {
+			for (j = 1; j <= 2; j++) { // dcm1 and dcm2
+				if ((rc = add_switch(model, y, x, pf("DCM%i_%s", j, s[i]),
+					pf("DCM%i_CLKOUT%i", j, i), /*bidir*/ 0))) FAIL(rc);
+				if ((rc = add_switch(model, y, x, pf("DCM%i_%s", j, s[i]),
+					pf("DCM%i_CLK_TO_PLL", j), /*bidir*/ 0))) FAIL(rc);
+				if ((rc = add_switch(model, y, x, pf("DCM%i_%s", j, s[i]),
+					pf("DCM%i_%s_TEST", j, s[i]), /*bidir*/ 0))) FAIL(rc);
+				if ((rc = add_switch(model, y, x, pf("DCM%i_%s_TEST", j, s[i]),
+					pf("DCM_%i_TESTCLK_PINWIRE", j==1?1:0), /*bidir*/ 0))) FAIL(rc);
+			}
+		}}
+
+		{ const char *s[] = {
+			"CMT_DCM_LOCK_UP0", "CMT_DCM_LOCK_DN0",
+			"CMT_DCM_LOCK_UP1", "CMT_DCM_LOCK_DN1",
+			"DCM_IOCLK_UP0", "DCM_IOCLK_DOWN0",
+			"DCM_IOCLK_UP1", "DCM_IOCLK_DOWN1",
+			"DCM_IOCLK_UP2", "DCM_IOCLK_DOWN2",
+			"DCM_IOCLK_UP3", "DCM_IOCLK_DOWN3",
+			"DCM1_CLK_TO_PLL", "DCM_1_MUXED_CLK_PINWIRE",
+			"DCM2_CLK_TO_PLL", "DCM_0_MUXED_CLK_PINWIRE",
+			"DCM_CLB1_CLK0", "DCM2_CLK_FROM_BUFG0",
+			"DCM_CLB1_CLK1", "DCM2_CLK_FROM_BUFG1",
+			"DCM_CLB2_CLK0", "DCM1_CLK_FROM_BUFG0",
+			"DCM_CLB2_CLK1", "DCM1_CLK_FROM_BUFG1",
+			"DCM1_GFAN1", "DCM2_PSCLK",
+			"DCM2_GFAN1", "DCM1_PSCLK" };
+		for (i = 0; i < sizeof(s)/sizeof(*s)/2; i++) {
+			if ((rc = add_switch(model, y, x, s[i*2], s[i*2+1],
+				/*bidir*/ 0))) FAIL(rc);
+		}}
+		{ const char *s[] = {
+			"DCM%i_CLK_FROM_BUFG0", "DCM%i_CLKFB",
+			"DCM%i_CLK_FROM_BUFG1", "DCM%i_CLKIN",
+			"DCM%i_CLK_FROM_PLL", "DCM%i_CLKIN",
+			"DCM%i_SE_CLK_IN0", "DCM%i_CLKFB",
+			"DCM%i_SE_CLK_IN1", "DCM%i_CLKIN" };
+		for (j = 1; j <= 2; j++) { // dcm1 and dcm2
+			for (i = 0; i < sizeof(s)/sizeof(*s)/2; i++) {
+				if ((rc = add_switch(model, y, x, pf(s[i*2], j), pf(s[i*2+1], j),
+					/*bidir*/ 0))) FAIL(rc);
+			}
+		}}
+		if (y > model->center_y) { // lower half
+			const char *s[] = {
+				"CMT_DCM_LOCK_UP2", "CMT_DCM_LOCK_DN2",
+				"DCM_IOCLK_UP4", "DCM_IOCLK_DOWN4",
+				"DCM_IOCLK_UP5", "DCM_IOCLK_DOWN5" };
+			for (i = 0; i < sizeof(s)/sizeof(*s)/2; i++) {
+				if ((rc = add_switch(model, y, x, s[i*2], s[i*2+1],
+					/*bidir*/ 0))) FAIL(rc);
+			}
+		} else { // upper half
+			const char *s[] = {
+				"CMT_DCM_LOCK_DN2", "CMT_DCM_LOCK_UP2",
+				"DCM_IOCLK_DOWN4", "DCM_IOCLK_UP4",
+				"DCM_IOCLK_DOWN5", "DCM_IOCLK_UP5" };
+			for (i = 0; i < sizeof(s)/sizeof(*s)/2; i++) {
+				if ((rc = add_switch(model, y, x, s[i*2], s[i*2+1],
+					/*bidir*/ 0))) FAIL(rc);
+			}
+		}
+	}
+	return 0;
+fail:
+	return rc;
+}
+
+static int init_pll(struct fpga_model* model)
+{
+	int y, x, i, j, num_devs, rc;
+
+	x = model->center_x-CENTER_CMTPLL_O;
+	for (y = TOP_IO_TILES; y < model->y_height-BOT_IO_TILES; y++) {
+		num_devs = has_device(model, y, x, DEV_PLL);
+		if (!num_devs) continue;
+		if (num_devs != 1) {
+			HERE();
+			continue;
+		}
+		for (i = 0; i <= 5; i++) { // 6 clk outs
+			for (j = 0; j <= 15; j++) { // 16 hclk dests
+				if ((rc = add_switch(model, y, x,
+					pf("CMT_PLL_CLKOUT%i", i),
+					pf("CMT_PLL_HCLK%i", j), 
+					/*bidir*/ 0))) FAIL(rc);
+			}
+		}
+		for (i = 0; i <= 15; i++) {
+			if ((rc = add_switch(model, y, x,
+				"CMT_CLKFB",
+				pf("CMT_PLL_HCLK%i", i), 
+				/*bidir*/ 0))) FAIL(rc);
+			if ((rc = add_switch(model, y, x,
+				"CMT_SE_CLK_OUT",
+				pf("CMT_PLL_HCLK%i", i), 
+				/*bidir*/ 0))) FAIL(rc);
+			if ((rc = add_switch(model, y, x,
+				pf("CMT_FABRIC_CLK%i", i),
+				pf("CMT_PLL_HCLK%i", i), 
+				/*bidir*/ 0))) FAIL(rc);
+			if ((rc = add_switch(model, y, x,
+				pf("CMT_PLL_HCLK%i", i),
+				pf("CMT_PLL_HCLK%i_E", i), 
+				/*bidir*/ 0))) FAIL(rc);
+			if (y < model->center_y) {
+				if ((rc = add_switch(model, y, x,
+					pf("CMT_PLL_HCLK%i_E", i),
+					pf("CLK_PLLCASC_OUT%i", i), 
+					/*bidir*/ 0))) FAIL(rc);
+				if ((rc = add_switch(model, y, x,
+					pf("PLL_CLK_CASC_IN%i", i),
+					pf("CLK_PLLCASC_OUT%i", i), 
+					/*bidir*/ 0))) FAIL(rc);
+			} else {
+				if ((rc = add_switch(model, y, x,
+					pf("CMT_PLL_HCLK%i_E", i),
+					pf("PLL_CLK_CASC_IN%i", i), 
+					/*bidir*/ 0))) FAIL(rc);
+			}
+		}
+		for (i = 0; i <= 7; i++) {
+			if ((rc = add_switch(model, y, x,
+				pf("CMT_PLL_CLK_FEEDBACK_LRBOT%i", i),
+				"CMT_CLKMUX_CLKFB",
+				/*bidir*/ 0))) FAIL(rc);
+			if ((rc = add_switch(model, y, x,
+				pf("PLL_CLK_FEEDBACK_TB%i", i),
+				"CMT_CLKMUX_CLKFB",
+				/*bidir*/ 0))) FAIL(rc);
+		}
+		for (i = 0; i <= 7; i++) {
+			const char *to = i < 4 ? "CMT_CLKMUX_CLKREF" : "CMT_CLKMUX_CLKIN2";
+			if ((rc = add_switch(model, y, x,
+				pf("CMT_PLL_CLK_INDIRECT_LRBOT%i", i), to,
+				/*bidir*/ 0))) FAIL(rc);
+			if ((rc = add_switch(model, y, x,
+				pf("PLL_CLK_INDIRECT_TB%i", i), to,
+				/*bidir*/ 0))) FAIL(rc);
+		}
+		for (i = 0; i <= 5; i++) {
+			if ((rc = add_switch(model, y, x,
+				pf("CMT_PLL_CLKOUTDCM%i", i),
+				"CMT_CLK_TO_DCM1",
+				/*bidir*/ 0))) FAIL(rc);
+			if ((rc = add_switch(model, y, x,
+				pf("CMT_PLL_CLKOUTDCM%i", i),
+				"CMT_CLK_TO_DCM2",
+				/*bidir*/ 0))) FAIL(rc);
+		}
+		{ const char *s[] = {
+			"CMT_CLKFB", "CMT_CLKMUX_CLKFB",
+			"CMT_CLK_FROM_BUFG0", "CMT_CLKMUX_CLKREF",
+			"CMT_CLK_FROM_BUFG1", "CMT_CLKMUX_CLKIN2",
+			"CMT_CLK_FROM_BUFG2", "CMT_CLKMUX_CLKFB",
+			"CMT_CLK_FROM_DCM1", "CMT_CLKMUX_CLKIN2",
+			"CMT_CLK_FROM_DCM2", "CMT_CLKMUX_CLKIN2",
+			"CMT_CLKMUX_CLKFB", "CMT_CLKMUX_CLKFB_TEST",
+			"CMT_CLKMUX_CLKFB", "CMT_PLL_CLKFBIN",
+			"CMT_CLKMUX_CLKIN2", "CMT_PLL_CLKIN2",
+			"CMT_CLKMUX_CLKREF", "CMT_CLKMUX_CLKREF_TEST",
+			"CMT_CLKMUX_CLKREF", "CMT_PLL_CLKIN1",
+			"CMT_CLK_TO_DCM1", "CMT_PLL_SKEWCLKIN1",
+			"CMT_CLK_TO_DCM2", "CMT_PLL_SKEWCLKIN2",
+			"CMT_PLL_CLKFB", "CMT_CLKFB",
+			"CMT_PLL_CLKFBDCM", "CMT_CLKMUX_CLKFB",
+			"CMT_PLL_CLKFBDCM", "CMT_PLL_CLKFBDCM_TEST",
+			"CMT_PLL_CLKOUT0", "CMT_CLKMUX_CLKFB",
+			"CMT_PLL_CLKOUT0", "PLLCASC_CLKOUT0",
+			"CMT_PLL_CLKOUT1", "PLLCASC_CLKOUT1",
+			"CMT_PLL_LOCKED", "CMT_PLL_LOCK_DN1",
+			"CMT_PLL_LOCKED", "CMT_PLL_LOCK_UP1",
+			"CMT_SE_CLKIN0", "CMT_CLKMUX_CLKIN2",
+			"CMT_SE_CLKIN1", "CMT_CLKMUX_CLKFB",
+			"CMT_TEST_CLK", "CMT_SE_CLK_OUT",
+			"PLLCASC_CLKOUT0", "PLL_IOCLK_DN2",
+			"PLLCASC_CLKOUT0", "PLL_IOCLK_UP2",
+			"PLLCASC_CLKOUT1", "PLL_IOCLK_DN3",
+			"PLLCASC_CLKOUT1", "PLL_IOCLK_UP3",
+			"PLL_LOCKED", "CMT_PLL_LOCKED",
+			"PLL_LOCKED", "PLL_CLB1_LOGICOUT18",
+			"PLL_VCC", "PLL_REL",
+			"PLL_CLB1_CLK0", "CMT_CLK_FROM_BUFG0",
+			"PLL_CLB1_CLK1", "CMT_CLK_FROM_BUFG1",
+			"PLL_CLB2_CLK0", "CMT_CLK_FROM_BUFG2",
+			"PLL_CLB2_GFAN1", "PLL_DCLK" };
+		for (i = 0; i < sizeof(s)/sizeof(*s)/2; i++) {
+			if ((rc = add_switch(model, y, x,
+				s[i*2], s[i*2+1], /*bidir*/ 0))) FAIL(rc);
+		}}
+		// logicin
+		{ const char *clb1_in0_to_62[] = {
+			/* 0*/ 0, 0, "13", "6", "1", 0, 0, 0,
+			/* 8*/ "15", 0, 0, 0, 0, 0, 0, 0,
+			/*16*/ 0, 0, 0, "7", 0, 0, 0, 0,
+			/*24*/ 0, 0, "3", 0, "8", "9", "4", 0,
+			/*32*/ "10", 0, 0, 0, 0, 0, 0, "14",
+			/*40*/ 0, "5", 0, 0, "0", 0, 0, 0,
+			/*48*/ 0, 0, 0, 0, "12", 0, 0, "2",
+			/*56*/ 0, 0, 0, "11", 0, 0, 0 };
+		  const char *clb2_in0_to_62[] = {
+			/* 0*/ 0, "PLL_DI14", 0, 0, 0, "PLL_DADDR3", 0, "PLL_DADDR1",
+			/* 8*/ 0, 0, 0, 0, "PLL_DI0", 0, 0, "PLL_DADDR0",
+			/*16*/ 0, "PLL_DI4", 0, "PLL_DI12", 0, 0, 0, 0,
+			/*24*/ "PLL_DEN", "PLL_DI2", "PLL_DI8", "PLL_DI13", "CMT_SE_CLKIN0", 0, "PLL_DI10", 0,
+			/*32*/ "PLL_DI15", 0, "PLL_DI1", 0, "PLL_DADDR4", "PLL_CLKINSEL", "PLL_DI3", 0,
+			/*40*/ 0, "PLL_DI11", "PLL_DADDR2", 0, "PLL_DI5", 0, 0, 0,
+			/*48*/ "PLL_DI9", 0, 0, 0, "PLL_RST", 0, 0, "PLL_DI6",
+			/*56*/ 0, "PLL_DI7", "PLL_DWE", "CMT_SE_CLKIN1", 0, 0, 0 };
+		for (i = 0; i < 63; i++) {
+			if (clb1_in0_to_62[i])
+				if ((rc = add_switch(model, y, x,
+					pf("PLL_CLB1_LOGICINB%i", i),
+					pf("CMT_FABRIC_CLK%s", clb1_in0_to_62[i]), 
+					/*bidir*/ 0))) FAIL(rc);
+			if (clb2_in0_to_62[i])
+				if ((rc = add_switch(model, y, x,
+					pf("PLL_CLB2_LOGICINB%i", i), clb2_in0_to_62[i], 
+					/*bidir*/ 0))) FAIL(rc);
+		}}
+		// logicout
+		for (i = 0; i <= 15; i++) {
+			if ((rc = add_switch(model, y, x,
+				pf("PLL_DO%i", i),
+				pf("PLL_CLB1_LOGICOUT%i", i),
+				/*bidir*/ 0))) FAIL(rc);
+		}
+		if ((rc = add_switch(model, y, x, "PLL_DRDY",
+			"PLL_CLB1_LOGICOUT16", /*bidir*/ 0))) FAIL(rc);
+	}
+	return 0;
+fail:
+	return rc;
+}
+
+static int init_center_hclk(struct fpga_model* model)
+{
+	int y, x, i, rc;
+
+	x = model->center_x;
+	for (y = TOP_IO_TILES; y < model->y_height-BOT_IO_TILES; y++) {
+		if (!is_aty(Y_ROW_HORIZ_AXSYMM, model, y))
+			continue;
+		for (i = 0; i <= 15; i++) {
+			if ((rc = add_switch(model, y, x,
+				pf("CLKV_GCLKH_L%i", i),
+				pf("I_BUFH_LEFT_SITE%i", i),
+				/*bidir*/ 0))) FAIL(rc);
+			if ((rc = add_switch(model, y, x,
+				pf("CLKV_GCLKH_R%i", i),
+				pf("I_BUFH_RIGHT_SITE%i", i),
+				/*bidir*/ 0))) FAIL(rc);
+			if ((rc = add_switch(model, y, x,
+				pf("CLKV_GCLKH_MAIN%i_FOLD", i),
+				pf("CLKV_GCLKH_L%i", i),
+				/*bidir*/ 0))) FAIL(rc);
+			if ((rc = add_switch(model, y, x,
+				pf("CLKV_GCLKH_MAIN%i_FOLD", i),
+				pf("CLKV_GCLKH_R%i", i),
+				/*bidir*/ 0))) FAIL(rc);
+			if ((rc = add_switch(model, y, x,
+				pf("I_BUFH_LEFT_SITE%i", i),
+				pf("O_BUFH_LEFT_SITE%i", i),
+				/*bidir*/ 0))) FAIL(rc);
+			if ((rc = add_switch(model, y, x,
+				pf("I_BUFH_RIGHT_SITE%i", i),
+				pf("O_BUFH_RIGHT_SITE%i", i),
+				/*bidir*/ 0))) FAIL(rc);
+			if ((rc = add_switch(model, y, x,
+				pf("O_BUFH_LEFT_SITE%i", i),
+				pf("CLKV_BUFH_LEFT_L%i", i),
+				/*bidir*/ 0))) FAIL(rc);
+			if ((rc = add_switch(model, y, x,
+				pf("O_BUFH_RIGHT_SITE%i", i),
+				pf("CLKV_BUFH_RIGHT_R%i", i),
+				/*bidir*/ 0))) FAIL(rc);
+			if ((rc = add_switch(model, y, x,
+				pf("REGV_PLL_HCLK%i", i),
+				pf("CLKV_GCLKH_L%i", i),
+				/*bidir*/ 0))) FAIL(rc);
+			if ((rc = add_switch(model, y, x,
+				pf("REGV_PLL_HCLK%i", i),
+				pf("CLKV_GCLKH_R%i", i),
+				/*bidir*/ 0))) FAIL(rc);
+		}
+	}
+	return 0;
+fail:
+	return rc;
+}
+
+static int init_center_midbuf(struct fpga_model* model)
+{
+	int y, x, i, rc;
+
+	x = model->center_x;
+	for (y = TOP_IO_TILES; y < model->y_height-BOT_IO_TILES; y++) {
+		if (!is_atyx(YX_CENTER_MIDBUF, model, y, x))
+			continue;
+		if (y < model->center_y) {
+			for (i = 0; i <= 7; i++) {
+				if ((rc = add_switch(model, y-1, x,
+					pf("CLKV_CKPIN_BUF%i", i),
+					pf("CLKV_MIDBUF_TOP_CKPIN%i", i),
+					/*bidir*/ 0))) FAIL(rc);
+			}
+		} else {
+			for (i = 0; i <= 7; i++) {
+				if ((rc = add_switch(model, y+1, x,
+					pf("CLKV_MIDBUF_BOT_CKPIN%i", i),
+					pf("CLKV_CKPIN_BOT_BUF%i", i),
+					/*bidir*/ 0))) FAIL(rc);
+			}
+		}
+		for (i = 0; i <= 15; i++) {
+			if ((rc = add_switch(model, y, x,
+				pf("CLKV_GCLK_MAIN%i", i),
+				pf("CLKV_MIDBUF_GCLK%i", i),
+				/*bidir*/ 0))) FAIL(rc);
+			if ((rc = add_switch(model, y, x,
+				pf("CLKV_MIDBUF_GCLK%i", i),
+				pf("CLKV_GCLK_MAIN%i_BUF", i),
+				/*bidir*/ 0))) FAIL(rc);
+		}
+	}
+	return 0;
+fail:
+	return rc;
+}
+
+static int init_center_reg_tile(struct fpga_model* model, int y, int x, const char *s1, const char *s2)
+{
+	int i, j, rc;
+
+	{ static const char *s[] = {
+		"%s_CKPIN_OUT%i", "%s_CKPIN%i",
+		"%s_CKPIN_OUT%i", "%s_CLK_INDIRECT%i",
+		"%s_GND", "%s_IOCLKOUT%i",
+		"%s_VCC", "%s_CKPIN%i",
+		"%s_VCC", "%s_CLK_FEEDBACK%i",
+		"%s_VCC", "%s_CLK_INDIRECT%i" };
+	for (i = 0; i < sizeof(s)/sizeof(*s)/2; i++) {
+		for (j = 0; j <= 7; j++) {
+			if ((rc = add_switch(model, y, x, pf(s[i*2], s1, j),
+				pf(s[i*2+1], s1, j), /*bidir*/ 0))) FAIL(rc);
+		}
+	}}
+	return 0;
+fail:
+	return rc;
+}
+
+static int init_center_reg_tblr(struct fpga_model* model)
+{
+	int y, x, i, j, rc;
+	const char *s1, *s2;
+
+	//
+	// top
+	//
+
+	y = TOP_OUTER_ROW;
+	x = model->center_x-CENTER_CMTPLL_O;
+	s1 = "REGT";
+	s2 = "TOP";
+	rc = init_center_reg_tile(model, y, x, s1, s2);
+	if (rc) FAIL(rc);
+	for (i = 0; i <= 5; i++) {
+		for (j = 0; j <= 1; j++) {
+			if ((rc = add_switch(model, y, x, pf("REGT_PLL_IOCLK_UP%i", i),
+				pf("PLLIN_BUFPLL%i_TOP_SITE", j), /*bidir*/ 0))) FAIL(rc);
+			if (i < 3) {
+				if ((rc = add_switch(model, y, x, pf("REGT_LOCKIN%i", i),
+					pf("LOCKED_BUFPLL%i_TOP_SITE", j), /*bidir*/ 0))) FAIL(rc);
+			}
+		}
+	}
+	{ const char *s[] = {
+		"REGT_VCC", "REGT_PLLCLK0",
+		"REGT_VCC", "REGT_PLLCLK1",
+		"IOCLK_BUFPLL0_TOP_SITE", "REGT_PLLCLK0",
+		"IOCLK_BUFPLL1_TOP_SITE", "REGT_PLLCLK1",
+		"LOCK_BUFPLL0_TOP_SITE", "REGT_LOCK0",
+		"LOCK_BUFPLL1_TOP_SITE", "REGT_LOCK1",
+		"REGT_GCLK0", "GCLK_BUFPLL0_TOP_SITE",
+		"REGT_GCLK1", "GCLK_BUFPLL1_TOP_SITE",
+		"SERDESSTROBE_BUFPLL0_TOP_SITE", "REGT_CEOUT0",
+		"SERDESSTROBE_BUFPLL1_TOP_SITE", "REGT_CEOUT1" };
+	for (i = 0; i < sizeof(s)/sizeof(*s)/2; i++) {
+		if ((rc = add_switch(model, y, x, pf(s[i*2]),
+			pf(s[i*2+1]), /*bidir*/ 0))) FAIL(rc);
+	}}
+	// y+1
+	for (i = 0; i <= 7; i++) {
+		if ((rc = add_switch(model, y+1, x, pf("REGT_TTERM_CLKPIN%i", i),
+			pf("REGT_TTERM_CKPIN%i", i), /*bidir*/ 0))) FAIL(rc);
+	}
+	{ const char *s[] = {
+		"REGT_TTERM_PLL_CEOUT0_N", "REGT_TTERM_PLL_CEOUT0",
+		"REGT_TTERM_PLL_CEOUT1_N", "REGT_TTERM_PLL_CEOUT1",
+		"REGT_TTERM_PLL_CLKOUT0_N", "REGT_TTERM_PLL_CLKOUT0",
+		"REGT_TTERM_PLL_CLKOUT1_N", "REGT_TTERM_PLL_CLKOUT1" };
+	for (i = 0; i < sizeof(s)/sizeof(*s)/2; i++) {
+		if ((rc = add_switch(model, y+1, x, pf(s[i*2]),
+			pf(s[i*2+1]), /*bidir*/ 0))) FAIL(rc);
+	}}
+
+	//
+	// left
+	//
+
+	y = model->center_y;
+	x = LEFT_OUTER_COL;
+	s1 = "REGL";
+	s2 = "LEFT";
+	rc = init_center_reg_tile(model, y, x, s1, s2);
+	if (rc) FAIL(rc);
+	{ const char *s[] = {
+		"REGL_VCC", "REGL_PLL_CLKOUT0_LEFT",
+		"REGL_VCC", "REGL_PLL_CLKOUT1_LEFT",
+		"IOCLK_BUFPLL0_LEFT_SITE", "REGL_PLL_CLKOUT0_LEFT",
+		"IOCLK_BUFPLL1_LEFT_SITE", "REGL_PLL_CLKOUT1_LEFT",
+		"LOCK_BUFPLL0_LEFT_SITE", "REGL_LOCK0",
+		"LOCK_BUFPLL1_LEFT_SITE", "REGL_LOCK1",
+		"REGL_CLKPLL0", "PLLIN_BUFPLL0_LEFT_SITE",
+		"REGL_CLKPLL1", "PLLIN_BUFPLL1_LEFT_SITE",
+		"REGL_GCLK0", "GCLK_BUFPLL0_LEFT_SITE",
+		"REGL_GCLK1", "GCLK_BUFPLL1_LEFT_SITE",
+		"REGL_GCLK2", "PLLIN_BUFPLL0_LEFT_SITE",
+		"REGL_GCLK3", "PLLIN_BUFPLL1_LEFT_SITE",
+		"REGL_LOCKED0", "LOCKED_BUFPLL0_LEFT_SITE",
+		"REGL_LOCKED1", "LOCKED_BUFPLL1_LEFT_SITE",
+		"REGL_PCI_IRDY_IOB", "REGL_PCI_IRDY_PINW",
+		"REGL_PCI_TRDY_IOB", "REGL_PCI_TRDY_PINW",
+		"SERDESSTROBE_BUFPLL0_LEFT_SITE", "REGL_PLL_CEOUT0_LEFT",
+		"SERDESSTROBE_BUFPLL1_LEFT_SITE", "REGL_PLL_CEOUT1_LEFT" };
+	for (i = 0; i < sizeof(s)/sizeof(*s)/2; i++) {
+		if ((rc = add_switch(model, y, x, pf(s[i*2]),
+			pf(s[i*2+1]), /*bidir*/ 0))) FAIL(rc);
+	}}
+	// x+1
+	for (i = 0; i <= 7; i++) {
+		if ((rc = add_switch(model, y, x+1, pf("REGH_LTERM_CLKPIN%i", i),
+			pf("REGH_LTERM_CKPIN%i", i), /*bidir*/ 0))) FAIL(rc);
+	}
+	{ const char *s[] = {
+		"REGH_LTERM_PLL_CEOUT0_W", "REGH_LTERM_PLL_CEOUT0",
+		"REGH_LTERM_PLL_CEOUT1_W", "REGH_LTERM_PLL_CEOUT1",
+		"REGH_LTERM_PLL_CLKOUT0_W", "REGH_LTERM_PLL_CLKOUT0",
+		"REGH_LTERM_PLL_CLKOUT1_W", "REGH_LTERM_PLL_CLKOUT1" };
+	for (i = 0; i < sizeof(s)/sizeof(*s)/2; i++) {
+		if ((rc = add_switch(model, y, x+1, pf(s[i*2]),
+			pf(s[i*2+1]), /*bidir*/ 0))) FAIL(rc);
+	}}
+
+	//
+	// right
+	//
+
+	y = model->center_y;
+	x = model->x_width-RIGHT_OUTER_O;
+	s1 = "REGR";
+	s2 = "RIGHT";
+	rc = init_center_reg_tile(model, y, x, s1, s2);
+	if (rc) FAIL(rc);
+	{ const char *s[] = {
+		"REGR_VCC", "REGR_PLLCLK0",
+		"REGR_VCC", "REGR_PLLCLK1",
+		"IOCLK_BUFPLL0_RIGHT_SITE", "REGR_PLLCLK0",
+		"IOCLK_BUFPLL1_RIGHT_SITE", "REGR_PLLCLK1",
+		"LOCK_BUFPLL0_RIGHT_SITE", "REGR_LOCK0",
+		"LOCK_BUFPLL1_RIGHT_SITE", "REGR_LOCK1",
+		"REGR_CLKPLL0", "PLLIN_BUFPLL0_RIGHT_SITE",
+		"REGR_CLKPLL1", "PLLIN_BUFPLL1_RIGHT_SITE",
+		"REGR_GCLK0", "GCLK_BUFPLL0_RIGHT_SITE",
+		"REGR_GCLK1", "GCLK_BUFPLL1_RIGHT_SITE",
+		"REGR_GCLK2", "PLLIN_BUFPLL0_RIGHT_SITE",
+		"REGR_GCLK3", "PLLIN_BUFPLL1_RIGHT_SITE",
+		"REGR_LOCKED0", "LOCKED_BUFPLL0_RIGHT_SITE",
+		"REGR_LOCKED1", "LOCKED_BUFPLL1_RIGHT_SITE",
+		"REGR_PCI_IRDY_IOB", "REGR_PCI_IRDY_PINW",
+		"REGR_PCI_TRDY_IOB", "REGR_PCI_TRDY_PINW",
+		"SERDESSTROBE_BUFPLL0_RIGHT_SITE", "REGR_CEOUT0",
+		"SERDESSTROBE_BUFPLL1_RIGHT_SITE", "REGR_CEOUT1" };
+	for (i = 0; i < sizeof(s)/sizeof(*s)/2; i++) {
+		if ((rc = add_switch(model, y, x, pf(s[i*2]),
+			pf(s[i*2+1]), /*bidir*/ 0))) FAIL(rc);
+	}}
+	// x-1
+	for (i = 0; i <= 7; i++) {
+		if ((rc = add_switch(model, y, x-1, pf("REGH_RTERM_CLKPIN%i", i),
+			pf("REGH_RTERM_CKPIN%i", i), /*bidir*/ 0))) FAIL(rc);
+	}
+	{ const char *s[] = {
+		"REGH_RTERM_PLL_CEOUT0_E", "REGH_RTERM_PLL_CEOUT0",
+		"REGH_RTERM_PLL_CEOUT1_E", "REGH_RTERM_PLL_CEOUT1",
+		"REGH_RTERM_PLL_CLKOUT0_E", "REGH_RTERM_PLL_CLKOUT0",
+		"REGH_RTERM_PLL_CLKOUT1_E", "REGH_RTERM_PLL_CLKOUT1" };
+	for (i = 0; i < sizeof(s)/sizeof(*s)/2; i++) {
+		if ((rc = add_switch(model, y, x-1, pf(s[i*2]),
+			pf(s[i*2+1]), /*bidir*/ 0))) FAIL(rc);
+	}}
+
+	//
+	// bottom
+	//
+
+	y = model->y_height-BOT_OUTER_ROW;
+	x = model->center_x-CENTER_CMTPLL_O;
+	s1 = "REGB";
+	s2 = "BOT";
+	rc = init_center_reg_tile(model, y, x, s1, s2);
+	if (rc) FAIL(rc);
+	for (i = 0; i <= 5; i++) {
+		for (j = 0; j <= 1; j++) {
+			if ((rc = add_switch(model, y, x, pf("REGB_PLL_IOCLK_DOWN%i", i),
+				pf("PLLIN_BUFPLL%i_BOT_SITE", j), /*bidir*/ 0))) FAIL(rc);
+			if (i < 3) {
+				if ((rc = add_switch(model, y, x, pf("REGB_LOCKIN%i", i),
+					pf("LOCKED_BUFPLL%i_BOT_SITE", j), /*bidir*/ 0))) FAIL(rc);
+			}
+		}
+	}
+	{ const char *s[] = {
+		"REGB_VCC", "REGB_PLLCLK0",
+		"REGB_VCC", "REGB_PLLCLK1",
+		"IOCLK_BUFPLL0_BOT_SITE", "REGB_PLLCLK0",
+		"IOCLK_BUFPLL1_BOT_SITE", "REGB_PLLCLK1",
+		"LOCK_BUFPLL0_BOT_SITE", "REGB_LOCK0",
+		"LOCK_BUFPLL1_BOT_SITE", "REGB_LOCK1",
+		"REGB_GCLK0", "GCLK_BUFPLL0_BOT_SITE",
+		"REGB_GCLK1", "GCLK_BUFPLL1_BOT_SITE",
+		"SERDESSTROBE_BUFPLL0_BOT_SITE", "REGB_CEOUT0",
+		"SERDESSTROBE_BUFPLL1_BOT_SITE", "REGB_CEOUT1" };
+	for (i = 0; i < sizeof(s)/sizeof(*s)/2; i++) {
+		if ((rc = add_switch(model, y, x, pf(s[i*2]),
+			pf(s[i*2+1]), /*bidir*/ 0))) FAIL(rc);
+	}}
+	// y-1
+	for (i = 0; i <= 7; i++) {
+		if ((rc = add_switch(model, y-1, x, pf("REGB_BTERM_CLKPIN%i", i),
+			pf("REGB_BTERM_CKPIN%i", i), /*bidir*/ 0))) FAIL(rc);
+	}
+	{ const char *s[] = {
+		"REGB_BTERM_PLL_CEOUT0_S", "REGB_BTERM_PLL_CEOUT0",
+		"REGB_BTERM_PLL_CEOUT1_S", "REGB_BTERM_PLL_CEOUT1",
+		"REGB_BTERM_PLL_CLKOUT0_S", "REGB_BTERM_PLL_CLKOUT0",
+		"REGB_BTERM_PLL_CLKOUT1_S", "REGB_BTERM_PLL_CLKOUT1" };
+	for (i = 0; i < sizeof(s)/sizeof(*s)/2; i++) {
+		if ((rc = add_switch(model, y-1, x, pf(s[i*2]),
+			pf(s[i*2+1]), /*bidir*/ 0))) FAIL(rc);
+	}}
 	return 0;
 fail:
 	return rc;

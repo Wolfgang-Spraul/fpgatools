@@ -126,33 +126,28 @@ int add_connpt_name(struct fpga_model* model, int y, int x,
 int has_device(struct fpga_model* model, int y, int x, int dev)
 {
 	struct fpga_tile* tile = YX_TILE(model, y, x);
-	int i;
+	int i, type_count;
 
+	type_count = 0;
 	for (i = 0; i < tile->num_devs; i++) {
 		if (tile->devs[i].type == dev)
-			return 1;
+			type_count++;
 	}
-	return 0;
+	return type_count;
 }
 
 int has_device_type(struct fpga_model* model, int y, int x, int dev, int subtype)
 {
 	struct fpga_tile* tile = YX_TILE(model, y, x);
-	int i;
+	int i, type_subtype_count;
 
+	type_subtype_count = 0;
 	for (i = 0; i < tile->num_devs; i++) {
-		if (tile->devs[i].type == dev) {
-			switch (dev) {
-				case DEV_LOGIC:
-				case DEV_IOB:
-					if (tile->devs[i].subtype == subtype)
-						return 1;
-					break;
-				default: EXIT(1);
-			}
-		}
+		if (tile->devs[i].type == dev
+		    && tile->devs[i].subtype == subtype)
+			type_subtype_count++;
 	}
-	return 0;
+	return type_subtype_count;
 }
 
 int add_connpt_2(struct fpga_model* model, int y, int x,
@@ -417,6 +412,7 @@ int add_switch_set(struct fpga_model* model, int y, int x, const char* prefix,
 	int i, j, from_len, to_len, rc;
 	char from[64], to[64];
 
+	if (!prefix) prefix = "";
 	for (i = 0; pairs[i*2][0]; i++) {
 		snprintf(from, sizeof(from), "%s%s", prefix, pairs[i*2]);
 		snprintf(to, sizeof(to), "%s%s", prefix, pairs[i*2+1]);
@@ -592,6 +588,7 @@ int is_atyx(int check, struct fpga_model* model, int y, int x)
 	if (check & YX_DEV_OLOGIC && has_device(model, y, x, DEV_OLOGIC)) return 1;
 	if (check & YX_DEV_LOGIC && has_device(model, y, x, DEV_LOGIC)) return 1;
 	if (check & YX_DEV_IOB && has_device(model, y, x, DEV_IOB)) return 1;
+	if (check & YX_CENTER_MIDBUF && tile->flags & TF_CENTER_MIDBUF) return 1;
 	return 0;
 }
 

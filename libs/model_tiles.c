@@ -289,17 +289,19 @@ int init_tiles(struct fpga_model* model)
 						if (l == 15) {
 							if (k == model->cfg_rows*3/4)
 								model->tiles[(row_top_y+l+1)*tile_columns + i + 3].type = REGV_MIDBUF_T;
-							else if (k == model->cfg_rows/4)
+							else if (k == model->cfg_rows/4) {
+								model->tiles[(row_top_y+l+1)*tile_columns + i + 3].flags |= TF_CENTER_MIDBUF;
 								model->tiles[(row_top_y+l+1)*tile_columns + i + 3].type = REGV_HCLKBUF_B;
-							else
+							} else
 								model->tiles[(row_top_y+l+1)*tile_columns + i + 3].type = REGV_BRK;
 						} else if (l == 0 && k == model->cfg_rows*3/4-1) {
+							model->tiles[(row_top_y+l)*tile_columns + i + 3].flags |= TF_CENTER_MIDBUF;
 							model->tiles[(row_top_y+l)*tile_columns + i + 3].type = REGV_HCLKBUF_T;
-						} else if (l == 0 && k == model->cfg_rows/4-1) {
+						} else if (l == 0 && k == model->cfg_rows/4-1)
 							model->tiles[(row_top_y+l)*tile_columns + i + 3].type = REGV_MIDBUF_B;
-						} else if (l == 8) {
+						else if (l == 8)
 							model->tiles[(row_top_y+l+1)*tile_columns + i + 3].type = (k<model->cfg_rows/2) ? REGV_B : REGV_T;
-						} else
+						else
 							model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + i + 3].type = REGV;
 					}
 					model->tiles[(row_top_y+8)*tile_columns + i].type = HCLK_ROUTING_XL;

@@ -169,8 +169,9 @@ enum fpga_tile_type
 #define LAST_POS_IN_ROW		16 // including hclk at 8
 #define ROW_SIZE		(HALF_ROW+1+HALF_ROW)
 
-#define CENTER_TOP_IOB_O	3 // deduct from center_x
-#define CENTER_BOT_IOB_O	1 // add to center_x
+#define CENTER_X_PLUS_1		1 // logic col adjacent to center
+#define CENTER_TOP_IOB_O	3 // deduct from center_y
+#define CENTER_BOT_IOB_O	1 // add to center_y
 
 // Some offsets that are being deducted from their origin
 #define BOT_IO_TILES		2
@@ -214,6 +215,7 @@ enum fpga_tile_type
 // TF_WIRED is only set for x==0 on the left side or x==x_width-1
 // on the right side.
 #define TF_WIRED			0x00008000
+#define TF_CENTER_MIDBUF		0x00010000
 
 #define Y_INNER_TOP		0x0001
 #define Y_INNER_BOTTOM		0x0002
@@ -295,6 +297,7 @@ int is_atx(int check, struct fpga_model* model, int x);
 #define YX_DEV_OLOGIC		0x0010
 #define YX_DEV_LOGIC		0x0020
 #define YX_DEV_IOB		0x0040
+#define YX_CENTER_MIDBUF	0x0080
 
 int is_atyx(int check, struct fpga_model* model, int y, int x);
 
@@ -789,8 +792,11 @@ int add_connpt_name(struct fpga_model* model, int y, int x,
 	const char* connpt_name, int warn_if_duplicate, uint16_t* name_i,
 	int* conn_point_o);
 
+// has_device() and has_device_type() return the number of devices
+// for the given type or type/subtype.
 int has_device(struct fpga_model* model, int y, int x, int dev);
 int has_device_type(struct fpga_model* model, int y, int x, int dev, int subtype);
+
 int add_connpt_2(struct fpga_model* model, int y, int x,
 	const char* connpt_name, const char* suffix1, const char* suffix2,
 	int dup_warn);
