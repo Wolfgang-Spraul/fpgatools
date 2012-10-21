@@ -1,38 +1,23 @@
-Collecting links which may be helpful later
+panta rhei
 
-http://en.wikipedia.org/wiki/Wikipedia:WikiProject_Electronics/Programs
-http://qfsm.sourceforge.net/about.html
-http://www.texample.net/tikz/examples/timing-diagram/
-http://smithsonianchips.si.edu/ice/s4.htm
+knowledge
+ http://www.hottconsultants.com/techtips/pcb-stack-up-3.html
+ http://smithsonianchips.si.edu/ice/s4.htm
+ http://www.texample.net/tikz/examples/timing-diagram/
 
-http://www.hottconsultants.com/techtips/pcb-stack-up-3.html
-
-Andrew's redtin logic analyzer
+software
+ http://en.wikipedia.org/wiki/Wikipedia:WikiProject_Electronics/Programs
+ http://qfsm.sourceforge.net/about.html
  http://code.google.com/p/red-tin-logic-analyzer
-
-gtkwave wave viewer
+                   Andrew's redtin logic analyzer
  http://gtkwave.sourceforge.net
-
-cores
+                   gtkwave wave viewer
  https://github.com/openrisc/mor1kx
  https://github.com/milkymist
-
-Fedora Electronic Lab tool overview
  http://spins.fedoraproject.org/fel/#portfolio
  http://chitlesh.fedorapeople.org/FEL/list.html
-
- with links to magic, toped, qucs, iverilog, alliance, etc.
-
-chip makers
- www.xilinx.com		FPGA
- www.altera.com		FPGA
- Murata
- Peregrine
- TriQuint
- Maxim
- Avago
- Skyworks
- Analog Devices
+                   Fedora Electronic Lab tool overview
+                   with links to magic, toped, qucs, iverilog, alliance, etc.
 
 standards
  IEEE 1149.1 Boundary Scan/JTAG
@@ -40,27 +25,43 @@ standards
 
  http://www.xilinx.com/products/design_resources/config_sol/isp_standards_specs.htm
 
-materials
- www.injectorall.com   photoresist
- www.dudadiesel.com    NaOH, KOH
- www.mtixtl.com        individual 6'' wafers
- www.unitednuclear.com
- www.tedpella.com/gold_html/Nanotubes.htm
-                       Carbon Nanotubes
- www.tubedevices.com/alek/pwl/pwl_e.htm
-                       Private Tube Manufacture-PWL vacuum tubes
+physical goods
+ - chips
+  * fpga
+   www.xilinx.com
+   www.altera.com
+  * other
+   Murata
+   Peregrine
+   TriQuint
+   Maxim
+   Avago
+   Skyworks
+   Analog Devices
 
-wafer makers
- www.oci.co.kr/eng/    OCI (South Korea)
- www.gcl-poly.com      GCL-Poly (China)
- www.hscpoly.com       Hemlock (USA)
- www.wacker.com/cms/de/wacker_group/divisions/polysilicon/polysilicon.jsp
-                       Wacker (EU)
+ - wafers
+  www.oci.co.kr/eng/    OCI (South Korea)
+  www.gcl-poly.com      GCL-Poly (China)
+  www.hscpoly.com       Hemlock (USA)
+  www.wacker.com/cms/de/wacker_group/divisions/polysilicon/polysilicon.jsp
+                        Wacker (EU)
 
-semiconductor supplies
- www.asml.com          lithography systems
- www.kns.com           assembly equipment
+ - foundry equipment
+  www.asml.com          lithography systems
+  www.kns.com           assembly equipment
 
-foundries
- http://cmp.imag.fr/products/ic/?p=prices	CMP
- www.lfoundry.com      analog and mixed signal
+ - materials
+  www.injectorall.com   photoresist
+  www.dudadiesel.com    NaOH, KOH
+  www.mtixtl.com        individual 6'' wafers
+  www.unitednuclear.com
+  www.tedpella.com/gold_html/Nanotubes.htm
+                        Carbon Nanotubes
+  www.tubedevices.com/alek/pwl/pwl_e.htm
+                        Private Tube Manufacture-PWL vacuum tubes
+
+services
+ - foundry
+  http://cmp.imag.fr/products/ic/?p=prices
+                        CMP
+  www.lfoundry.com      analog and mixed signal
