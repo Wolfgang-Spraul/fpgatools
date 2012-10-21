@@ -169,7 +169,8 @@ enum fpga_tile_type
 #define LAST_POS_IN_ROW		16 // including hclk at 8
 #define ROW_SIZE		(HALF_ROW+1+HALF_ROW)
 
-#define CENTER_X_PLUS_1		1 // logic col adjacent to center
+#define CENTER_X_PLUS_1		1 // routing col adjacent to center
+#define CENTER_X_PLUS_2		2 // logic col adjacent to center
 #define CENTER_TOP_IOB_O	3 // deduct from center_y
 #define CENTER_BOT_IOB_O	1 // add to center_y
 
