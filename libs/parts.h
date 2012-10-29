@@ -85,6 +85,8 @@ const struct xc_info* xc_info(int idcode);
 #define XC6_HCLK_BYTES		2
 #define XC6_HCLK_BITS		(XC6_HCLK_BYTES*8)
 
+#define XC6_MCB_YPOS		20
+
 #define XC6_IOB_MASK_IO				0x00FF00FFFF000000
 #define XC6_IOB_MASK_IN_TYPE			0x000000000000F000
 #define XC6_IOB_MASK_SLEW			0x0000000000FF0000

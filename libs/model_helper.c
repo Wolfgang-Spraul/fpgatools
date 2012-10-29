@@ -7,6 +7,7 @@
 
 #include <stdarg.h>
 #include "model.h"
+#include "parts.h"
 
 #define NUM_PF_BUFS	16
 
@@ -29,8 +30,10 @@ const char* wpref(struct fpga_model* model, int y, int x, const char* wire_name)
 {
 	static char buf[8][128];
 	static int last_buf = 0;
-	char* prefix;
+	const char *prefix;
+	int i;
 
+	prefix = "";
 	if (is_aty(Y_CHIP_HORIZ_REGS, model, y)) {
 		prefix = is_atx(X_CENTER_REGS_COL, model, x+3)
 			? "REGC_INT_" : "REGH_";
@@ -40,13 +43,54 @@ const char* wpref(struct fpga_model* model, int y, int x, const char* wire_name)
 		prefix = "IOI_TTERM_";
 	else if (is_aty(Y_INNER_BOTTOM, model, y))
 		prefix = "IOI_BTERM_";
-	else
-		prefix = "";
+	else {
+		if (is_atx(X_FABRIC_LOGIC_COL|X_CENTER_LOGIC_COL
+			   |X_RIGHT_IO_DEVS_COL|X_LEFT_IO_DEVS_COL
+			   |X_FABRIC_BRAM_VIA_COL|X_FABRIC_MACC_VIA_COL,
+				model, x)) {
+
+			if (has_device_type(model, y, x, DEV_LOGIC, LOGIC_M))
+				prefix = "CLEXM_";
+			else if (has_device_type(model, y, x, DEV_LOGIC, LOGIC_L))
+				prefix = "CLEXL_";
+			else if (has_device(model, y, x, DEV_ILOGIC))
+				prefix = "IOI_";
+			else if (is_atx(X_CENTER_LOGIC_COL, model, x)
+				 && is_aty(Y_CHIP_HORIZ_REGS, model, y+1))
+				prefix = "INT_INTERFACE_REGC_";
+			else
+				prefix = "INT_INTERFACE_";
+		}
+		else if (is_atx(X_CENTER_CMTPLL_COL, model, x))
+			prefix = "CMT_PLL_";
+		else if (is_atx(X_RIGHT_MCB|X_LEFT_MCB, model, x)) {
+			if (y == XC6_MCB_YPOS)
+				prefix = "MCB_";
+			else {
+				const int mui_pos[] = {41, 44, 48, 51, 54, 57, 60, 64};
+				for (i = 0; i < sizeof(mui_pos)/sizeof(*mui_pos); i++) {
+					if (y == mui_pos[i]) {
+						prefix = "MCB_MUI_";
+						break;
+					}
+				}
+				if (i >= sizeof(mui_pos)/sizeof(*mui_pos))
+					prefix = "MCB_INT_";
+			}
+		} else if (is_atx(X_INNER_RIGHT, model, x))
+			prefix = "RTERM_";
+		else if (is_atx(X_INNER_LEFT, model, x))
+			prefix = "LTERM_";
+		else if (is_atx(X_CENTER_REGS_COL, model, x))
+			prefix = "CLKV_";
+		else if (is_atx(X_FABRIC_BRAM_COL, model, x))
+			prefix = "BRAMSITE_";
+		else if (is_atx(X_FABRIC_MACC_COL, model, x))
+			prefix = "MACCSITE_";
+	}
 
 	last_buf = (last_buf+1)%8;
-	buf[last_buf][0] = 0;
-	strcpy(buf[last_buf], prefix);
-	strcat(buf[last_buf], wire_name);
+	snprintf(buf[last_buf], sizeof(*buf), "%s%s", prefix, wire_name);
 	return buf[last_buf];
 }
 
@@ -286,25 +330,26 @@ int add_conn_range(struct fpga_model* model, add_conn_f add_conn_func, int y1, i
 	return 0;
 }
 
-int add_conn_net(struct fpga_model* model, add_conn_f add_conn_func, struct w_net* net)
+int add_conn_net(struct fpga_model* model, add_conn_f add_conn_func, const struct w_net *net)
 {
 	int i, j, rc;
 
-	for (i = 0; net->pts[i].name[0] && i < sizeof(net->pts)/sizeof(net->pts[0]); i++) {
-		for (j = i+1; net->pts[j].name[0] && j < sizeof(net->pts)/sizeof(net->pts[0]); j++) {
+	if (net->num_pts < 2) FAIL(EINVAL);
+	for (i = 0; i < net->num_pts; i++) {
+		for (j = i+1; j < net->num_pts; j++) {
 			rc = add_conn_range(model, add_conn_func,
-				net->pts[i].y, net->pts[i].x,
-				net->pts[i].name,
-				net->pts[i].start_count,
-				net->pts[i].start_count + net->last_inc,
-				net->pts[j].y, net->pts[j].x,
-				net->pts[j].name,
-				net->pts[j].start_count);
-			if (rc) goto xout;
+				net->pt[i].y, net->pt[i].x,
+				net->pt[i].name,
+				net->pt[i].start_count,
+				net->pt[i].start_count + net->last_inc,
+				net->pt[j].y, net->pt[j].x,
+				net->pt[j].name,
+				net->pt[j].start_count);
+			if (rc) FAIL(rc);
 		}
 	}
 	return 0;
-xout:
+fail:
 	return rc;
 }
 

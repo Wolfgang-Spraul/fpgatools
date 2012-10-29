@@ -4,6 +4,7 @@ knowledge
  http://www.hottconsultants.com/techtips/pcb-stack-up-3.html
  http://smithsonianchips.si.edu/ice/s4.htm
  http://www.texample.net/tikz/examples/timing-diagram/
+ http://www.siliconpr0n.org/
 
 software
  http://en.wikipedia.org/wiki/Wikipedia:WikiProject_Electronics/Programs
@@ -47,21 +48,25 @@ physical goods
                         Wacker (EU)
 
  - foundry equipment
-  www.asml.com          lithography systems
-  www.kns.com           assembly equipment
+  www.asml.com           lithography systems
+  www.kns.com            assembly equipment
 
  - materials
-  www.injectorall.com   photoresist
-  www.dudadiesel.com    NaOH, KOH
-  www.mtixtl.com        individual 6'' wafers
+  www.sciencecompany.com ACS grade solvents
+  www.injectorall.com    photoresist
+  www.dudadiesel.com     NaOH, KOH
+  www.mtixtl.com         individual 6'' wafers
   www.unitednuclear.com
   www.tedpella.com/gold_html/Nanotubes.htm
-                        Carbon Nanotubes
+                         Carbon Nanotubes
   www.tubedevices.com/alek/pwl/pwl_e.htm
-                        Private Tube Manufacture-PWL vacuum tubes
+                         Private Tube Manufacture-PWL vacuum tubes
 
 services
  - foundry
   http://cmp.imag.fr/products/ic/?p=prices
-                        CMP
-  www.lfoundry.com      analog and mixed signal
+                         CMP
+  www.lfoundry.com       analog and mixed signal
+ - pcb
+  http://www.oshpark.com used for 2 and 4-layers
+  http://www.pcbcart.com Chinese corp in Hangzhou

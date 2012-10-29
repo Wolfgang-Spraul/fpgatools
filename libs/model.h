@@ -322,7 +322,7 @@ enum fpgadev_type
 	DEV_BUFGMUX, DEV_BSCAN, DEV_DCM, DEV_PLL, DEV_ICAP,
 	DEV_POST_CRC_INTERNAL, DEV_STARTUP, DEV_SLAVE_SPI,
 	DEV_SUSPEND_SYNC, DEV_OCT_CALIBRATE, DEV_SPI_ACCESS,
-	DEV_DNA, DEV_PMV, DEV_PCILOGIC_SE };
+	DEV_DNA, DEV_PMV, DEV_PCILOGIC_SE, DEV_MCB };
 #define FPGA_DEV_STR \
 	{ 0, \
 	  "LOGIC", "TIEOFF", "MACC", "IOB", \
@@ -331,7 +331,7 @@ enum fpgadev_type
 	  "BUFGMUX", "BSCAN", "DCM", "PLL", "ICAP", \
 	  "POST_CRC_INTERNAL", "STARTUP", "SLAVE_SPI", \
 	  "SUSPEND_SYNC", "OCT_CALIBRATE", "SPI_ACCESS", \
-	  "DNA", "PMV", "PCILOGIC_SE" }
+	  "DNA", "PMV", "PCILOGIC_SE", "MCB" }
 
 // We use two types of device indices, one is a flat index
 // into the tile->devs array (dev_idx_t), the other
@@ -847,10 +847,11 @@ struct w_net
 	// the %i in the name from 0:last_inc, for a total
 	// of last_inc+1 wires.
 	int last_inc;
-	struct w_point pts[40];
+	int num_pts;
+	struct w_point pt[40];
 };
 
-int add_conn_net(struct fpga_model* model, add_conn_f add_conn_func, struct w_net* net);
+int add_conn_net(struct fpga_model* model, add_conn_f add_conn_func, const struct w_net *net);
 
 int add_switch(struct fpga_model* model, int y, int x, const char* from,
 	const char* to, int is_bidirectional);
