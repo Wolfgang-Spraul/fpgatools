@@ -290,34 +290,40 @@ xout:
 	return rc;
 }
 
-int add_conn_uni_pref(struct fpga_model* model, int y1, int x1, const char* name1, int y2, int x2, const char* name2)
+int add_conn_uni_pref(struct fpga_model* model,
+	int y1, int x1, const char* name1,
+	int y2, int x2, const char* name2)
 {
 	return add_conn_uni(model,
 		y1, x1, wpref(model, y1, x1, name1),
 		y2, x2, wpref(model, y2, x2, name2));
 }
 
-int add_conn_bi(struct fpga_model* model, int y1, int x1, const char* name1, int y2, int x2, const char* name2)
+int add_conn_bi(struct fpga_model* model,
+	int y1, int x1, const char* name1,
+	int y2, int x2, const char* name2)
 {
 	int rc = add_conn_uni(model, y1, x1, name1, y2, x2, name2);
 	if (rc) return rc;
 	return add_conn_uni(model, y2, x2, name2, y1, x1, name1);
 }
 
-int add_conn_bi_pref(struct fpga_model* model, int y1, int x1, const char* name1, int y2, int x2, const char* name2)
+int add_conn_bi_pref(struct fpga_model* model,
+	int y1, int x1, const char* name1,
+	int y2, int x2, const char* name2)
 {
 	return add_conn_bi(model,
 		y1, x1, wpref(model, y1, x1, name1),
 		y2, x2, wpref(model, y2, x2, name2));
 }
 
-int add_conn_range(struct fpga_model* model, add_conn_f add_conn_func, int y1, int x1, const char* name1, int start1, int last1, int y2, int x2, const char* name2, int start2)
+int add_conn_range(struct fpga_model* model, add_conn_f add_conn_func,
+	int y1, int x1, const char* name1, int start1, int last1,
+	int y2, int x2, const char* name2, int start2)
 {
 	char buf1[128], buf2[128];
 	int rc, i;
 
-	if (last1 <= start1)
-		return (*add_conn_func)(model, y1, x1, name1, y2, x2, name2);
 	for (i = start1; i <= last1; i++) {
 		snprintf(buf1, sizeof(buf1), name1, i);
 		if (start2 & COUNT_DOWN)
@@ -337,6 +343,13 @@ int add_conn_net(struct fpga_model* model, add_conn_f add_conn_func, const struc
 	if (net->num_pts < 2) FAIL(EINVAL);
 	for (i = 0; i < net->num_pts; i++) {
 		for (j = i+1; j < net->num_pts; j++) {
+			// We are buildings nets like a NN2 B-M-E net where
+			// we add the _S0 wire at the end, at the same x/y
+			// coordinate as the M point. Here we skip such
+			// connections back to the start tile.
+			if (net->pt[j].y == net->pt[i].y
+			    && net->pt[j].x == net->pt[i].x)
+				continue;
 			rc = add_conn_range(model, add_conn_func,
 				net->pt[i].y, net->pt[i].x,
 				net->pt[i].name,
@@ -542,14 +555,17 @@ char last_major(const char* str, int cur_o)
 int is_aty(int check, struct fpga_model* model, int y)
 {
 	if (y < 0) return 0;
+	if (check & Y_OUTER_TOP && y == TOP_OUTER_ROW) return 1;
 	if (check & Y_INNER_TOP && y == TOP_INNER_ROW) return 1;
 	if (check & Y_INNER_BOTTOM && y == model->y_height-BOT_INNER_ROW) return 1;
+	if (check & Y_OUTER_BOTTOM && y == model->y_height-BOT_OUTER_ROW) return 1;
 	if (check & Y_CHIP_HORIZ_REGS && y == model->center_y) return 1;
-	if (check & (Y_ROW_HORIZ_AXSYMM|Y_BOTTOM_OF_ROW)) {
+	if (check & (Y_ROW_HORIZ_AXSYMM|Y_BOTTOM_OF_ROW|Y_REGULAR_ROW)) {
 		int row_pos;
 		is_in_row(model, y, 0 /* row_num */, &row_pos);
 		if (check & Y_ROW_HORIZ_AXSYMM && row_pos == 8) return 1;
 		if (check & Y_BOTTOM_OF_ROW && row_pos == 16) return 1;
+		if (check & Y_REGULAR_ROW && ((row_pos >= 0 && row_pos < 8) || (row_pos > 8 && row_pos <= 16))) return 1;
 	}
 	if (check & Y_LEFT_WIRED && model->tiles[y*model->x_width].flags & TF_WIRED) return 1;
 	if (check & Y_RIGHT_WIRED && model->tiles[y*model->x_width + model->x_width-RIGHT_OUTER_O].flags & TF_WIRED) return 1;
@@ -615,6 +631,7 @@ int is_atyx(int check, struct fpga_model* model, int y, int x)
 	struct fpga_tile* tile;
 
 	if (y < 0 || x < 0) return 0;
+	// todo: YX_ROUTING_TILE could be implemented using X_ROUTING_COL and Y_REGULAR_ROW ?
 	if (check & YX_ROUTING_TILE
 	    && (model->tiles[x].flags & TF_FABRIC_ROUTING_COL
 	        || x == LEFT_IO_ROUTING || x == model->x_width-5
@@ -634,6 +651,9 @@ int is_atyx(int check, struct fpga_model* model, int y, int x)
 	if (check & YX_DEV_LOGIC && has_device(model, y, x, DEV_LOGIC)) return 1;
 	if (check & YX_DEV_IOB && has_device(model, y, x, DEV_IOB)) return 1;
 	if (check & YX_CENTER_MIDBUF && tile->flags & TF_CENTER_MIDBUF) return 1;
+	if (check & YX_OUTER_TERM
+	    && (is_atx(X_OUTER_LEFT|X_OUTER_RIGHT, model, x)
+		|| is_aty(Y_OUTER_TOP|Y_OUTER_BOTTOM, model, y))) return 1;
 	return 0;
 }
 
@@ -673,6 +693,14 @@ int pos_in_row(int y, struct fpga_model* model)
 	int result;
 	is_in_row(model, y, 0 /* row_num */, &result);
 	return result;
+}
+
+int regular_row_pos(int y, struct fpga_model* model)
+{
+	int row_pos = pos_in_row(y, model);
+	if (row_pos == -1 || row_pos == HCLK_POS) return -1;
+	if (row_pos > HCLK_POS) row_pos--;
+	return row_pos;
 }
 
 const char* logicin_s(int wire, int routing_io)

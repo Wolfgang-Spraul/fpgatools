@@ -1002,7 +1002,8 @@ const char* wire_base(enum wire_type w)
 		case W_WW4: return "WW4";
 		case W_NW4: return "NW4";
 	}
-	EXIT(1);
+	HERE();
+	return "";
 }
 
 enum wire_type base2wire(const char* str)

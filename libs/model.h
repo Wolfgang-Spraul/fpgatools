@@ -218,20 +218,23 @@ enum fpga_tile_type
 #define TF_WIRED			0x00008000
 #define TF_CENTER_MIDBUF		0x00010000
 
-#define Y_INNER_TOP		0x0001
-#define Y_INNER_BOTTOM		0x0002
-#define Y_CHIP_HORIZ_REGS	0x0004
-#define Y_ROW_HORIZ_AXSYMM	0x0008
-#define Y_BOTTOM_OF_ROW		0x0010
-#define Y_LEFT_WIRED		0x0020
-#define Y_RIGHT_WIRED		0x0040
+#define Y_OUTER_TOP		0x0001
+#define Y_INNER_TOP		0x0002
+#define Y_INNER_BOTTOM		0x0004
+#define Y_OUTER_BOTTOM		0x0008
+#define Y_CHIP_HORIZ_REGS	0x0010
+#define Y_ROW_HORIZ_AXSYMM	0x0020
+#define Y_BOTTOM_OF_ROW		0x0040
+#define Y_LEFT_WIRED		0x0080
+#define Y_RIGHT_WIRED		0x0100
 // Y_TOPBOT_IO_RANGE checks if y points to the top or bottom outer or
-// inner rows.
-#define Y_TOPBOT_IO_RANGE	0x0080
-#define Y_TOP_OUTER_IO		0x0100
-#define Y_TOP_INNER_IO		0x0200
-#define Y_BOT_INNER_IO		0x0400
-#define Y_BOT_OUTER_IO		0x0800
+// inner rows. todo: same as TOP_OUTER|TOP_INNER|BOT_INNER|BOT_OUTER?
+#define Y_TOPBOT_IO_RANGE	0x0200
+#define Y_TOP_OUTER_IO		0x0400
+#define Y_TOP_INNER_IO		0x0800
+#define Y_BOT_INNER_IO		0x1000
+#define Y_BOT_OUTER_IO		0x2000
+#define Y_REGULAR_ROW		0x4000
 
 // multiple checks are combined with OR logic
 int is_aty(int check, struct fpga_model* model, int y);
@@ -299,6 +302,7 @@ int is_atx(int check, struct fpga_model* model, int x);
 #define YX_DEV_LOGIC		0x0020
 #define YX_DEV_IOB		0x0040
 #define YX_CENTER_MIDBUF	0x0080
+#define YX_OUTER_TERM		0x0100
 
 int is_atyx(int check, struct fpga_model* model, int y, int x);
 
@@ -311,6 +315,8 @@ void is_in_row(const struct fpga_model* model, int y,
 // which_row() and pos_in_row() return -1 if y is outside of a row
 int which_row(int y, struct fpga_model* model);
 int pos_in_row(int y, struct fpga_model* model);
+// regular_row_pos() returns the index (0..15) without hclk, or -1 if y is a hclk.
+int regular_row_pos(int y, struct fpga_model* model);
 
 const char* logicin_s(int wire, int routing_io);
 
@@ -844,8 +850,7 @@ struct w_net
 {
 	// if !last_inc, no incrementing will happen (NO_INCREMENT)
 	// if last_inc > 0, incrementing will happen to
-	// the %i in the name from 0:last_inc, for a total
-	// of last_inc+1 wires.
+	// the %i in the name from pt.start_count:last_inc
 	int last_inc;
 	int num_pts;
 	struct w_point pt[40];
