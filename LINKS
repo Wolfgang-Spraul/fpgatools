@@ -68,5 +68,10 @@ services
                          CMP
   www.lfoundry.com       analog and mixed signal
  - pcb
-  http://www.oshpark.com used for 2 and 4-layers
   http://www.pcbcart.com Chinese corp in Hangzhou
+  - ref Andrew Zonenberg:
+  http://www.oshpark.com     used for 2 and 4-layers
+  http://www.4pcb.com        Advanced Circuits
+  http://www.sunstone.com    Sunstone Circuits
+  http://www.saecircuits.com SAE Circuits
+  http://www.rjrinc.com      RJR Circuits

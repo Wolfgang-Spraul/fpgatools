@@ -162,6 +162,7 @@ enum fpga_tile_type
 //       TOP_INNER_ROW to TOP_INNER_TERM?
 #define TOP_OUTER_ROW		0
 #define TOP_INNER_ROW		1
+#define TOP_FIRST_REGULAR	2
 #define TOP_OUTER_IO		2
 #define TOP_INNER_IO		3
 #define HALF_ROW		8
@@ -180,6 +181,7 @@ enum fpga_tile_type
 //       to BOT_INNER_TERM?
 #define BOT_OUTER_ROW		1
 #define BOT_INNER_ROW		2
+#define BOT_LAST_REGULAR_O	3
 #define BOT_OUTER_IO		3
 #define BOT_INNER_IO		4
 #define RIGHT_OUTER_O		1
@@ -303,6 +305,11 @@ int is_atx(int check, struct fpga_model* model, int x);
 #define YX_DEV_IOB		0x0040
 #define YX_CENTER_MIDBUF	0x0080
 #define YX_OUTER_TERM		0x0100
+#define YX_INNER_TERM		0x0200
+// outside_of_routing is true for anything outside of the outer
+// boundary of the regular routing area.
+#define YX_OUTSIDE_OF_ROUTING	0x0400
+#define YX_ROUTING_BOUNDARY	0x0800
 
 int is_atyx(int check, struct fpga_model* model, int y, int x);
 

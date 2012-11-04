@@ -1720,10 +1720,110 @@ xout:
 	return rc;
 }
 
+static int net_includes_routing(struct fpga_model *model, const struct w_net *net)
+{
+	int i;
+	for (i = 0; i < net->num_pts; i++)
+		if (is_atyx(YX_ROUTING_TILE, model, net->pt[i].y, net->pt[i].x))
+			return 1;
+	return 0;
+}
+
+static int y_to_regular(struct fpga_model *model, int y)
+{
+	if (y < TOP_FIRST_REGULAR)
+		return TOP_FIRST_REGULAR;
+	if (is_aty(Y_ROW_HORIZ_AXSYMM|Y_CHIP_HORIZ_REGS, model, y))
+		return y-1;
+	if (y > model->y_height-BOT_LAST_REGULAR_O)
+		return model->y_height-BOT_LAST_REGULAR_O;
+	return y;
+}
+
+static char dirwire_next_bamce(enum wire_type wire, char bamce)
+{
+	if (W_IS_LEN4(wire)) {
+		// len-4 goes from B to A to M to C to E
+		if (bamce == 'B') return 'A';
+		if (bamce == 'A') return 'M';
+		if (bamce == 'M') return 'C';
+		if (bamce == 'C') return 'E';
+		if (bamce == 'E') return 'B';
+	} else if (W_IS_LEN2(wire)) {
+		// len-2 goes from B to M to E
+		if (bamce == 'B') return 'M';
+		if (bamce == 'M') return 'E';
+		if (bamce == 'E') return 'B';
+	} else if (W_IS_LEN1(wire)) {
+		// len-1 goes from B to E
+		if (bamce == 'B') return 'E';
+		if (bamce == 'E') return 'B';
+	}
+	HERE();
+	return bamce;
+}
+
+static void dirwire_next_hop(struct fpga_model *model, enum wire_type wire, char bamce, int *y, int *x)
+{
+	if (wire == W_NN4 || wire == W_NN2 || wire == W_NL1 || wire == W_NR1)
+		(*y)--;
+	else if (wire == W_SS4 || wire == W_SS2 || wire == W_SL1 || wire == W_SR1)
+		(*y)++;
+	else if (wire == W_EE4 || wire == W_EE2 || wire == W_EL1 || wire == W_ER1)
+		(*x)++;
+	else if (wire == W_WW4 || wire == W_WW2 || wire == W_WL1 || wire == W_WR1)
+		(*x)--;
+	else if (wire == W_NW4 || wire == W_NW2) {
+		if (bamce == 'B' || bamce == 'A')
+			(*y)--;
+		else if (bamce == 'M') {
+			if (is_aty(Y_INNER_BOTTOM|Y_ROW_HORIZ_AXSYMM|Y_CHIP_HORIZ_REGS, model, *y))
+				(*y)--;
+			else
+				(*x)--;
+		} else if (bamce == 'C' || bamce == 'E')
+			(*x)--;
+		else HERE();
+	} else if (wire == W_NE4 || wire == W_NE2) {
+		if (bamce == 'B' || bamce == 'A')
+			(*y)--;
+		else if (bamce == 'M') {
+			if (is_aty(Y_INNER_BOTTOM|Y_ROW_HORIZ_AXSYMM|Y_CHIP_HORIZ_REGS, model, *y))
+				(*y)--;
+			else
+				(*x)++;
+		} else if (bamce == 'C' || bamce == 'E')
+			(*x)++;
+		else HERE();
+	} else if (wire == W_SW4 || wire == W_SW2) {
+		if (bamce == 'B' || bamce == 'A')
+			(*y)++;
+		else if (bamce == 'M') {
+			if (is_aty(Y_INNER_TOP, model, *y))
+				(*y)++;
+			else
+				(*x)--;
+		} else if (bamce == 'C' || bamce == 'E')
+			(*x)--;
+		else HERE();
+	} else if (wire == W_SE4 || wire == W_SE2) {
+		if (bamce == 'B' || bamce == 'A')
+			(*y)++;
+		else if (bamce == 'M') {
+			if (is_aty(Y_INNER_TOP, model, *y))
+				(*y)++;
+			else
+				(*x)++;
+		} else if (bamce == 'C' || bamce == 'E')
+			(*x)++;
+		else HERE();
+	} else HERE();
+}
+
 static int set_BAMCE_point(struct fpga_model *model, struct w_net *net,
 	enum wire_type wire, char bamce, int num_0to3, int *cur_y, int *cur_x)
 {
-	int y_dist_to_dev, row_pos, i, rc;
+	int y_dist_to_dev, row_pos, i;
 
 	while (1) {
 		net->pt[net->num_pts].start_count = 0;
@@ -1731,25 +1831,31 @@ static int set_BAMCE_point(struct fpga_model *model, struct w_net *net,
 		net->pt[net->num_pts].x = *cur_x;
 		if (is_atx(X_FABRIC_BRAM_COL|X_FABRIC_MACC_COL, model, *cur_x)) {
 			row_pos = regular_row_pos(*cur_y, model);
-			if (row_pos == -1) FAIL(EINVAL);
-			y_dist_to_dev = 3-(row_pos%4);
-			if (y_dist_to_dev) {
-				net->pt[net->num_pts].y += y_dist_to_dev;
-				net->pt[net->num_pts].name = pf("%s%c%i_%i", wire_base(wire), bamce, num_0to3, y_dist_to_dev);
-			} else
+			if (row_pos == -1) {
 				net->pt[net->num_pts].name = pf("%s%c%i", wire_base(wire), bamce, num_0to3);
+			} else {
+				y_dist_to_dev = 3-(row_pos%4);
+				if (y_dist_to_dev) {
+					net->pt[net->num_pts].y += y_dist_to_dev;
+					net->pt[net->num_pts].name = pf("%s%c%i_%i", wire_base(wire), bamce, num_0to3, y_dist_to_dev);
+				} else
+					net->pt[net->num_pts].name = pf("%s%c%i", wire_base(wire), bamce, num_0to3);
+			}
 		} else if (is_atx(X_CENTER_CMTPLL_COL, model, *cur_x)) {
 			row_pos = regular_row_pos(*cur_y, model);
-			if (row_pos == -1) FAIL(EINVAL);
-			y_dist_to_dev = 7-row_pos;
-			if (y_dist_to_dev > 0) {
-				net->pt[net->num_pts].y += y_dist_to_dev;
-				net->pt[net->num_pts].name = pf("%s%c%i_%i", wire_base(wire), bamce, num_0to3, y_dist_to_dev);
-			} else if (!y_dist_to_dev)
+			if (row_pos == -1)
 				net->pt[net->num_pts].name = pf("%s%c%i", wire_base(wire), bamce, num_0to3);
-			else { // y_dist_to_dev < 0
-				net->pt[net->num_pts].y += y_dist_to_dev - /*hclk*/ 1;
-				net->pt[net->num_pts].name = pf("%s%c%i_%i", wire_base(wire), bamce, num_0to3, 16+y_dist_to_dev);
+			else {
+				y_dist_to_dev = 7-row_pos;
+				if (y_dist_to_dev > 0) {
+					net->pt[net->num_pts].y += y_dist_to_dev;
+					net->pt[net->num_pts].name = pf("%s%c%i_%i", wire_base(wire), bamce, num_0to3, y_dist_to_dev);
+				} else if (!y_dist_to_dev)
+					net->pt[net->num_pts].name = pf("%s%c%i", wire_base(wire), bamce, num_0to3);
+				else { // y_dist_to_dev < 0
+					net->pt[net->num_pts].y += y_dist_to_dev - /*hclk*/ 1;
+					net->pt[net->num_pts].name = pf("%s%c%i_%i", wire_base(wire), bamce, num_0to3, 16+y_dist_to_dev);
+				}
 			}
 		} else if (is_atx(X_LEFT_MCB|X_RIGHT_MCB, model, *cur_x)) {
 			if (*cur_y > XC6_MCB_YPOS-6 && *cur_y <= XC6_MCB_YPOS+6 ) {
@@ -1767,282 +1873,117 @@ static int set_BAMCE_point(struct fpga_model *model, struct w_net *net,
 				if (i >= sizeof(mui_pos)/sizeof(*mui_pos))
 					net->pt[net->num_pts].name = pf("%s%c%i", wire_base(wire), bamce, num_0to3);
 			}
-		} else
-			net->pt[net->num_pts].name = pf("%s%c%i", wire_base(wire), bamce, num_0to3);
+		} else {
+			if (is_atx(X_INNER_LEFT, model, *cur_x) && wire == W_SE2 && bamce == 'E' && num_0to3 == 3)
+				net->pt[net->num_pts].name = "SE2M3";
+			else
+				net->pt[net->num_pts].name = pf("%s%c%i", wire_base(wire), bamce, num_0to3);
+		}
 		net->num_pts++;
 
-		if (wire == W_EE4 || wire == W_EE2 || wire == W_EL1 || wire == W_ER1) {
-			// stop conditions:
-			// 1. for 'E' endpoint: if current pos is routing
-			// 2. for others: if next is non-first routing or outer border
-			if (bamce == 'E' && is_atx(X_ROUTING_COL, model, (*cur_x))) {
-				if (wire == W_EL1 && num_0to3 == 0) {
-					// add EL1E_S0
+		if (bamce == 'E') {
+			if (is_atyx(YX_ROUTING_TILE, model, *cur_y, *cur_x)) {
+				 if ((wire == W_EL1 || wire == W_NE2 || wire == W_NW4 || wire == W_NW2 || wire == W_WW4 || wire == W_WR1) && num_0to3 == 0) {
+					// add _S0
 					net->pt[net->num_pts].start_count = 0;
 					net->pt[net->num_pts].y = (*cur_y)+1;
 					net->pt[net->num_pts].x = *cur_x;
 					if (is_aty(Y_INNER_BOTTOM, model, (*cur_y)+1)) {
-						// no EL1E0 termination in bram cols
 						if (!is_atx(X_FABRIC_BRAM_ROUTING_COL, model, *cur_x)) {
-							net->pt[net->num_pts].name = "EL1E0";
+							net->pt[net->num_pts].name = pf("%sE0", wire_base(wire));
 							net->num_pts++;
 						}
 					} else if (is_aty(Y_ROW_HORIZ_AXSYMM|Y_CHIP_HORIZ_REGS, model, (*cur_y)+1)) {
-						net->pt[net->num_pts].name = "EL1E0";
+						net->pt[net->num_pts].name = pf("%sE0", wire_base(wire));
 						net->num_pts++;
 						net->pt[net->num_pts].start_count = 0;
 						net->pt[net->num_pts].y = (*cur_y)+2;
 						net->pt[net->num_pts].x = *cur_x;
-						net->pt[net->num_pts].name = "EL1E_S0";
+						net->pt[net->num_pts].name = pf("%sE_S0", wire_base(wire));
 						net->num_pts++;
 					} else {
-						net->pt[net->num_pts].name = "EL1E_S0";
+						net->pt[net->num_pts].name = pf("%sE_S0", wire_base(wire));
 						net->num_pts++;
 					}
-				} else if (wire == W_ER1 && num_0to3 == 3) {
+				} else if ((wire == W_NN2 || wire == W_NL1) && num_0to3 == 0) {
+					// add _S0
+					net->pt[net->num_pts].start_count = 0;
+					net->pt[net->num_pts].y = (*cur_y)+1;
+					net->pt[net->num_pts].x = *cur_x;
+					if (is_aty(Y_INNER_BOTTOM, model, (*cur_y)+1)) {
+						net->pt[net->num_pts].name = pf("%sE_S0", wire_base(wire));
+						net->num_pts++;
+					} else if (is_aty(Y_ROW_HORIZ_AXSYMM|Y_CHIP_HORIZ_REGS, model, (*cur_y)+1)) {
+						net->pt[net->num_pts].name = pf("%sE_S0", wire_base(wire));
+						net->num_pts++;
+						net->pt[net->num_pts].start_count = 0;
+						net->pt[net->num_pts].y = (*cur_y)+2;
+						net->pt[net->num_pts].x = *cur_x;
+						net->pt[net->num_pts].name = pf("%sE_S0", wire_base(wire));
+						net->num_pts++;
+					} else {
+						net->pt[net->num_pts].name = pf("%sE_S0", wire_base(wire));
+						net->num_pts++;
+					}
+				} else if ((wire == W_SW4 || wire == W_SW2 || wire == W_ER1 || wire == W_WW2 || wire == W_WL1) && num_0to3 == 3) {
+					// add _N3
 					net->pt[net->num_pts].start_count = 0;
 					net->pt[net->num_pts].y = (*cur_y)-1;
 					net->pt[net->num_pts].x = *cur_x;
 					if (is_aty(Y_INNER_TOP, model, (*cur_y)-1)) {
-						net->pt[net->num_pts].name = "ER1E3";
+						net->pt[net->num_pts].name = pf("%sE3", wire_base(wire));
 						net->num_pts++;
 					} else if (is_aty(Y_ROW_HORIZ_AXSYMM|Y_CHIP_HORIZ_REGS, model, (*cur_y)-1)) {
-						net->pt[net->num_pts].name = "ER1E_N3";
+						net->pt[net->num_pts].name = pf("%sE_N3", wire_base(wire));
 						net->num_pts++;
 						net->pt[net->num_pts].start_count = 0;
 						net->pt[net->num_pts].y = (*cur_y)-2;
 						net->pt[net->num_pts].x = *cur_x;
-						net->pt[net->num_pts].name = "ER1E_N3";
+						net->pt[net->num_pts].name = pf("%sE_N3", wire_base(wire));
 						net->num_pts++;
 					} else {
-						net->pt[net->num_pts].name = "ER1E_N3";
+						net->pt[net->num_pts].name = pf("%sE_N3", wire_base(wire));
+						net->num_pts++;
+					}
+				} else if ((wire == W_SS4 || wire == W_SS2 || wire == W_SR1) && num_0to3 == 3) {
+					// add _N3
+					net->pt[net->num_pts].start_count = 0;
+					net->pt[net->num_pts].y = (*cur_y)-1;
+					net->pt[net->num_pts].x = *cur_x;
+					if (is_aty(Y_INNER_TOP, model, (*cur_y)-1)) {
+						net->pt[net->num_pts].name = pf("%sE_N3", wire_base(wire));
+						net->num_pts++;
+					} else if (is_aty(Y_ROW_HORIZ_AXSYMM|Y_CHIP_HORIZ_REGS, model, (*cur_y)-1)) {
+						net->pt[net->num_pts].name = pf("%sE_N3", wire_base(wire));
+						net->num_pts++;
+						net->pt[net->num_pts].start_count = 0;
+						net->pt[net->num_pts].y = (*cur_y)-2;
+						net->pt[net->num_pts].x = *cur_x;
+						net->pt[net->num_pts].name = pf("%sE_N3", wire_base(wire));
+						net->num_pts++;
+					} else {
+						net->pt[net->num_pts].name = pf("%sE_N3", wire_base(wire));
 						net->num_pts++;
 					}
 				}
 				break;
 			}
-			(*cur_x)++;
-			if (bamce != 'E' && is_atx(X_FABRIC_ROUTING_COL|X_CENTER_ROUTING_COL|X_RIGHT_IO_ROUTING_COL, model, *cur_x))
-				break;
-		} else if (wire == W_WW4 || wire == W_WW2 || wire == W_WL1 || wire == W_WR1) {
-			if (is_atx(X_ROUTING_COL, model, *cur_x)) {
-				if (bamce == 'E') {
-					if ((wire == W_WW4 || wire == W_WR1) && num_0to3 == 0) {
-						// add _S0
-						net->pt[net->num_pts].start_count = 0;
-						net->pt[net->num_pts].y = (*cur_y)+1;
-						net->pt[net->num_pts].x = *cur_x;
-						if (is_aty(Y_INNER_BOTTOM, model, (*cur_y)+1)) {
-							// no WW4E0 termination in bram cols
-							if (!is_atx(X_FABRIC_BRAM_ROUTING_COL, model, *cur_x)) {
-								net->pt[net->num_pts].name = pf("%sE0", wire_base(wire));
-								net->num_pts++;
-							}
-						} else if (is_aty(Y_ROW_HORIZ_AXSYMM|Y_CHIP_HORIZ_REGS, model, (*cur_y)+1)) {
-							net->pt[net->num_pts].name = pf("%sE0", wire_base(wire));
-							net->num_pts++;
-							net->pt[net->num_pts].start_count = 0;
-							net->pt[net->num_pts].y = (*cur_y)+2;
-							net->pt[net->num_pts].x = *cur_x;
-							net->pt[net->num_pts].name = pf("%sE_S0", wire_base(wire));
-							net->num_pts++;
-						} else {
-							net->pt[net->num_pts].name = pf("%sE_S0", wire_base(wire));
-							net->num_pts++;
-						}
-					} else if ((wire == W_WW2 || wire == W_WL1) && num_0to3 == 3) {
-						// add _N3
-						net->pt[net->num_pts].start_count = 0;
-						net->pt[net->num_pts].y = (*cur_y)-1;
-						net->pt[net->num_pts].x = *cur_x;
-						if (is_aty(Y_INNER_TOP, model, (*cur_y)-1)) {
-							net->pt[net->num_pts].name = pf("%sE3", wire_base(wire));
-							net->num_pts++;
-						} else if (is_aty(Y_ROW_HORIZ_AXSYMM|Y_CHIP_HORIZ_REGS, model, (*cur_y)-1)) {
-							net->pt[net->num_pts].name = pf("%sE_N3", wire_base(wire));
-							net->num_pts++;
-							net->pt[net->num_pts].start_count = 0;
-							net->pt[net->num_pts].y = (*cur_y)-2;
-							net->pt[net->num_pts].x = *cur_x;
-							net->pt[net->num_pts].name = pf("%sE_N3", wire_base(wire));
-							net->num_pts++;
-						} else {
-							net->pt[net->num_pts].name = pf("%sE_N3", wire_base(wire));
-							net->num_pts++;
-						}
-					}
+			dirwire_next_hop(model, wire, bamce, cur_y, cur_x);
+		} else {
+			int prior_x_major = model->x_major[*cur_x];
+			int prior_y_regular = y_to_regular(model, *cur_y);
+			dirwire_next_hop(model, wire, bamce, cur_y, cur_x);
+			if (net_includes_routing(model, net)) {
+				if (prior_x_major != model->x_major[*cur_x])
 					break;
-				}
-				(*cur_x)--;
-				// when reaching the inner termination, wire
-				// up one more into the termination
-				if (!is_atx(X_INNER_LEFT, model, (*cur_x)))
-					break;
-			} else
-				(*cur_x)--;
-		} else if (wire == W_NN4 || wire == W_NN2 || wire == W_NL1 || wire == W_NR1) {
-			if (is_aty(Y_REGULAR_ROW, model, *cur_y)) {
-				if (bamce == 'E') {
-					if ((wire == W_NN2 || wire == W_NL1) && num_0to3 == 0) {
-						// add _S0
-						net->pt[net->num_pts].start_count = 0;
-						net->pt[net->num_pts].y = (*cur_y)+1;
-						net->pt[net->num_pts].x = *cur_x;
-						if (is_aty(Y_INNER_BOTTOM, model, (*cur_y)+1)) {
-							net->pt[net->num_pts].name = pf("%sE_S0", wire_base(wire));
-							net->num_pts++;
-						} else if (is_aty(Y_ROW_HORIZ_AXSYMM|Y_CHIP_HORIZ_REGS, model, (*cur_y)+1)) {
-							net->pt[net->num_pts].name = pf("%sE_S0", wire_base(wire));
-							net->num_pts++;
-							net->pt[net->num_pts].start_count = 0;
-							net->pt[net->num_pts].y = (*cur_y)+2;
-							net->pt[net->num_pts].x = *cur_x;
-							net->pt[net->num_pts].name = pf("%sE_S0", wire_base(wire));
-							net->num_pts++;
-						} else {
-							net->pt[net->num_pts].name = pf("%sE_S0", wire_base(wire));
-							net->num_pts++;
-						}
-					}
-					break;
-				}
-				(*cur_y)--;
-				if (!is_aty(Y_INNER_TOP, model, (*cur_y)))
-					break;
-			} else
-				(*cur_y)--;
-		} else if (wire == W_SS4 || wire == W_SS2 || wire == W_SL1 || wire == W_SR1) {
-			if (bamce == 'E') {
-				if (is_aty(Y_REGULAR_ROW, model, *cur_y)) {
-					if ((wire == W_SS2 || wire == W_SS4 || wire == W_SR1) && num_0to3 == 3) {
-						// add _N3
-						net->pt[net->num_pts].start_count = 0;
-						net->pt[net->num_pts].y = (*cur_y)-1;
-						net->pt[net->num_pts].x = *cur_x;
-						if (is_aty(Y_INNER_TOP, model, (*cur_y)-1)) {
-							net->pt[net->num_pts].name = pf("%sE_N3", wire_base(wire));
-							net->num_pts++;
-						} else if (is_aty(Y_ROW_HORIZ_AXSYMM|Y_CHIP_HORIZ_REGS, model, (*cur_y)-1)) {
-							net->pt[net->num_pts].name = pf("%sE_N3", wire_base(wire));
-							net->num_pts++;
-							net->pt[net->num_pts].start_count = 0;
-							net->pt[net->num_pts].y = (*cur_y)-2;
-							net->pt[net->num_pts].x = *cur_x;
-							net->pt[net->num_pts].name = pf("%sE_N3", wire_base(wire));
-							net->num_pts++;
-						} else {
-							net->pt[net->num_pts].name = pf("%sE_N3", wire_base(wire));
-							net->num_pts++;
-						}
-					}
-					break;
-				}
-				(*cur_y)++;
-			} else {
-				(*cur_y)++;
-				if (!is_aty(Y_INNER_TOP, model, (*cur_y)-1)
-				    && is_aty(Y_REGULAR_ROW, model, *cur_y))
+				if (prior_y_regular != y_to_regular(model, *cur_y))
 					break;
 			}
-		} else FAIL(EINVAL);
+		}
 		if (is_atyx(YX_OUTER_TERM, model, *cur_y, *cur_x))
 			break;
 	}
 	return 0;
-fail:
-	return rc;
-}
-
-static int add_dirwire_net(struct fpga_model *model, add_conn_f add_conn_func, const struct w_net *net)
-{
-	int i, rc;
-
-	rc = add_conn_net(model, add_conn_func, net);
-	if (rc) FAIL(rc);
-	// wire _S0 from top termination
-	for (i = 0; i < net->num_pts; i++) {
-		if (is_atx(X_ROUTING_COL, model, net->pt[i].x)
-		    && is_aty(Y_INNER_TOP, model, net->pt[i].y-1)) {
-			if (!strcmp(net->pt[i].name, "WW4E0")) {
-				rc = add_conn_func(model, net->pt[i].y, net->pt[i].x, "WW4E_S0",
-					net->pt[i].y-1, net->pt[i].x, "WW4E_S0");
-				if (rc) FAIL(rc);
-				break;
-			}
-			if (!strcmp(net->pt[i].name, "EL1E0")) {
-				rc = add_conn_func(model, net->pt[i].y, net->pt[i].x, "EL1E_S0",
-					net->pt[i].y-1, net->pt[i].x, "EL1E_S0");
-				if (rc) FAIL(rc);
-				break;
-			}
-			if (!strcmp(net->pt[i].name, "WR1E0")) {
-				rc = add_conn_func(model, net->pt[i].y, net->pt[i].x, "WR1E_S0",
-					net->pt[i].y-1, net->pt[i].x, "WR1E_S0");
-				if (rc) FAIL(rc);
-				break;
-			}
-			if (!strcmp(net->pt[i].name, "NN2E0")) {
-				rc = add_conn_func(model, net->pt[i].y, net->pt[i].x, "NN2E_S0",
-					net->pt[i].y-1, net->pt[i].x, "NN2E_S0");
-				if (rc) FAIL(rc);
-				break;
-			}
-			if (!strcmp(net->pt[i].name, "NL1E0")) {
-				rc = add_conn_func(model, net->pt[i].y, net->pt[i].x, "NL1E_S0",
-					net->pt[i].y-1, net->pt[i].x, "NL1E_S0");
-				if (rc) FAIL(rc);
-				break;
-			}
-		}
-	}
-	// wire _N3 from bottom termination
-	for (i = 0; i < net->num_pts; i++) {
-		// in all routing cols but bram routing
-		if (is_atx(X_FABRIC_LOGIC_ROUTING_COL|X_FABRIC_MACC_ROUTING_COL
-			   |X_CENTER_ROUTING_COL|X_LEFT_IO_ROUTING_COL
-			   |X_RIGHT_IO_ROUTING_COL, model, net->pt[i].x)
-		    && is_aty(Y_INNER_BOTTOM, model, net->pt[i].y+1)) {
-			if (!strcmp(net->pt[i].name, "WW2E3")) {
-				rc = add_conn_func(model, net->pt[i].y, net->pt[i].x, "WW2E_N3",
-					net->pt[i].y+1, net->pt[i].x, "WW2E_N3");
-				if (rc) FAIL(rc);
-				break;
-			}
-			if (!strcmp(net->pt[i].name, "ER1E3")) {
-				rc = add_conn_func(model, net->pt[i].y, net->pt[i].x, "ER1E_N3",
-					net->pt[i].y+1, net->pt[i].x, "ER1E_N3");
-				if (rc) FAIL(rc);
-				break;
-			}
-			if (!strcmp(net->pt[i].name, "WL1E3")) {
-				rc = add_conn_func(model, net->pt[i].y, net->pt[i].x, "WL1E_N3",
-					net->pt[i].y+1, net->pt[i].x, "WL1E_N3");
-				if (rc) FAIL(rc);
-				break;
-			}
-			if (!strcmp(net->pt[i].name, "SS4E3")) {
-				rc = add_conn_func(model, net->pt[i].y, net->pt[i].x, "SS4E_N3",
-					net->pt[i].y+1, net->pt[i].x, "SS4E_N3");
-				if (rc) FAIL(rc);
-				break;
-			}
-			if (!strcmp(net->pt[i].name, "SS2E3")) {
-				rc = add_conn_func(model, net->pt[i].y, net->pt[i].x, "SS2E_N3",
-					net->pt[i].y+1, net->pt[i].x, "SS2E_N3");
-				if (rc) FAIL(rc);
-				break;
-			}
-			if (!strcmp(net->pt[i].name, "SR1E3")) {
-				rc = add_conn_func(model, net->pt[i].y, net->pt[i].x, "SR1E_N3",
-					net->pt[i].y+1, net->pt[i].x, "SR1E_N3");
-				if (rc) FAIL(rc);
-				break;
-			}
-		}
-	}
-	return 0;
-fail:
-	return rc;
 }
 
 static int run_dirwire(struct fpga_model *model, int start_y, int start_x,
@@ -2065,47 +2006,17 @@ static int run_dirwire(struct fpga_model *model, int start_y, int start_x,
 
 		if (cur_bamce == 'E' || outer_term_hit) {
 			if (net.num_pts < 2) FAIL(EINVAL);
-			if ((rc = add_dirwire_net(model, PREF_BI_F, &net))) FAIL(rc);
+			if ((rc = add_conn_net(model, PREF_BI_F, &net))) FAIL(rc);
 			net.num_pts = 0;
 			if (outer_term_hit)
 				break;
 			if (is_atx(X_FABRIC_BRAM_ROUTING_COL, model, cur_x)
 			    && ((wire == W_SS4 && cur_y >= model->y_height-BOT_INNER_ROW-4)
-			        || (wire == W_SS2 && cur_y >= model->y_height-BOT_INNER_ROW-2)
-			        || ((wire == W_SL1 || wire == W_SR1) && cur_y >= model->y_height-BOT_INNER_ROW-1)))
+			        || ((wire == W_SS2 || wire == W_SE4 || wire == W_SW4) && cur_y >= model->y_height-BOT_INNER_ROW-2)
+			        || ((wire == W_SL1 || wire == W_SR1 || wire == W_SE2 || wire == W_SW2) && cur_y >= model->y_height-BOT_INNER_ROW-1)))
 				break;
 		}
-
-		if (W_IS_LEN4(wire)) {
-			// len-4 goes from B to A to M to C to E
-			if (cur_bamce == 'B')
-				cur_bamce = 'A';
-			else if (cur_bamce == 'A')
-				cur_bamce = 'M';
-			else if (cur_bamce == 'M')
-				cur_bamce = 'C';
-			else if (cur_bamce == 'C')
-				cur_bamce = 'E';
-			else if (cur_bamce == 'E')
-				cur_bamce = 'B';
-			else FAIL(EINVAL);
-		} else if (W_IS_LEN2(wire)) {
-			// len-2 goes from B to M to E
-			if (cur_bamce == 'B')
-				cur_bamce = 'M';
-			else if (cur_bamce == 'M')
-				cur_bamce = 'E';
-			else if (cur_bamce == 'E')
-				cur_bamce = 'B';
-			else FAIL(EINVAL);
-		} else if (W_IS_LEN1(wire)) {
-			// len-1 goes from B to E
-			if (cur_bamce == 'B')
-				cur_bamce = 'E';
-			else if (cur_bamce == 'E')
-				cur_bamce = 'B';
-			else FAIL(EINVAL);
-		} else FAIL(EINVAL);
+		cur_bamce = dirwire_next_bamce(wire, cur_bamce);
 	}
 	return 0;
 fail:
@@ -2125,28 +2036,31 @@ fail:
 	return rc;
 }
 
-//
-// A EE4-wire goes through the chip from left to right like this:
-//
-// E/B  A   M   C  E/B  A   M   C  E/B
-//  C  E/B  A   M   C  E/B  A   M   C
-//  M   C  E/B  A   M   C  E/B  A   M
-//  A   M   C  E/B  A   M   C  E/B  A
-//
-// set_BAMCE_point() adds net entries for one such point, run_dirwire()
-// runs one wire through the chip, run_dirwires() goes through
-// all rows vertically.
-//
-
 static int run_dirwires(struct fpga_model* model)
 {
 	int y, x, i, rc;
 
+	//
+	// A EE4-wire goes through the chip from left to right like this:
+	//
+	// E/B  A   M   C  E/B  A   M   C  E/B
+	//  C  E/B  A   M   C  E/B  A   M   C
+	//  M   C  E/B  A   M   C  E/B  A   M
+	//  A   M   C  E/B  A   M   C  E/B  A
+	//
+	// set_BAMCE_point() adds net entries for one such point, run_dirwire()
+	// runs one wire through the chip, run_dirwires() goes through
+	// all rows vertically.
+	//
+
+	//
+	// EE4, EE2, EL1, ER1
+	// WW4, WW2, WL1, WR1
+	//
+
 	for (y = TOP_OUTER_IO; y <= model->y_height-BOT_OUTER_IO; y++) {
 		if (is_aty(Y_ROW_HORIZ_AXSYMM|Y_CHIP_HORIZ_REGS, model, y))
 			continue;
-
-		// EE4
 		rc = run_dirwire_0to3(model, y, LEFT_INNER_COL, W_EE4, 'E');
 		if (rc) FAIL(rc);
 		rc = run_dirwire_0to3(model, y, LEFT_INNER_COL, W_EE4, 'C');
@@ -2155,22 +2069,15 @@ static int run_dirwires(struct fpga_model* model)
 		if (rc) FAIL(rc);
 		rc = run_dirwire_0to3(model, y, LEFT_INNER_COL, W_EE4, 'A');
 		if (rc) FAIL(rc);
-
-		// EE2
 		rc = run_dirwire_0to3(model, y, LEFT_INNER_COL, W_EE2, 'E');
 		if (rc) FAIL(rc);
 		rc = run_dirwire_0to3(model, y, LEFT_INNER_COL, W_EE2, 'M');
 		if (rc) FAIL(rc);
-
-		// EL1
 		rc = run_dirwire_0to3(model, y, LEFT_INNER_COL, W_EL1, 'E');
 		if (rc) FAIL(rc);
-
-		// ER1
 		rc = run_dirwire_0to3(model, y, LEFT_INNER_COL, W_ER1, 'E');
 		if (rc) FAIL(rc);
 
-		// WW4
 		rc = run_dirwire_0to3(model, y, model->x_width-RIGHT_INNER_O, W_WW4, 'E');
 		if (rc) FAIL(rc);
 		rc = run_dirwire_0to3(model, y, model->x_width-RIGHT_INNER_O, W_WW4, 'C');
@@ -2179,47 +2086,63 @@ static int run_dirwires(struct fpga_model* model)
 		if (rc) FAIL(rc);
 		rc = run_dirwire_0to3(model, y, model->x_width-RIGHT_INNER_O, W_WW4, 'A');
 		if (rc) FAIL(rc);
-
-		// WW2
 		rc = run_dirwire_0to3(model, y, model->x_width-RIGHT_INNER_O, W_WW2, 'E');
 		if (rc) FAIL(rc);
 		rc = run_dirwire_0to3(model, y, model->x_width-RIGHT_INNER_O, W_WW2, 'M');
 		if (rc) FAIL(rc);
-
-		// WL1
 		rc = run_dirwire_0to3(model, y, model->x_width-RIGHT_INNER_O, W_WL1, 'E');
 		if (rc) FAIL(rc);
-
-		// WR1
 		rc = run_dirwire_0to3(model, y, model->x_width-RIGHT_INNER_O, W_WR1, 'E');
 		if (rc) FAIL(rc);
 	}
+	for (x = LEFT_IO_ROUTING; x <= model->x_width-RIGHT_IO_ROUTING_O; x++) {
+		if (!is_atx(X_ROUTING_COL, model, x))
+			continue;
+		if ((rc = add_conn_bi_pref(model, TOP_INNER_ROW, x, "WW4E_S0",
+			TOP_FIRST_REGULAR, x, "WW4E_S0"))) FAIL(rc);
+		if ((rc = add_conn_bi_pref(model, TOP_INNER_ROW, x, "EL1E_S0",
+			TOP_FIRST_REGULAR, x, "EL1E_S0"))) FAIL(rc);
+		if ((rc = add_conn_bi_pref(model, TOP_INNER_ROW, x, "WR1E_S0",
+			TOP_FIRST_REGULAR, x, "WR1E_S0"))) FAIL(rc);
+
+		if (!is_atx(X_FABRIC_BRAM_ROUTING_COL, model, x)) {
+			if ((rc = add_conn_bi_pref(model, model->y_height-BOT_INNER_ROW, x, "WW2E_N3",
+				model->y_height-BOT_LAST_REGULAR_O, x, "WW2E_N3"))) FAIL(rc);
+			if ((rc = add_conn_bi_pref(model, model->y_height-BOT_INNER_ROW, x, "ER1E_N3",
+				model->y_height-BOT_LAST_REGULAR_O, x, "ER1E_N3"))) FAIL(rc);
+			if ((rc = add_conn_bi_pref(model, model->y_height-BOT_INNER_ROW, x, "WL1E_N3",
+				model->y_height-BOT_LAST_REGULAR_O, x, "WL1E_N3"))) FAIL(rc);
+		}
+	}
+
+	//
+	// NN4, NN2, NL1, NR1
+	// SS4, SS2, SL1, SR1
+	//
 
 	for (x = LEFT_IO_ROUTING; x <= model->x_width-RIGHT_IO_ROUTING_O; x++) {
 		if (!is_atx(X_ROUTING_COL, model, x))
 			continue;
 
 		if (is_atx(X_FABRIC_BRAM_ROUTING_COL, model, x)) {
-			// NN4
 			for (i = 0; i <= 3; i++) {
 				rc = run_dirwire_0to3(model, model->y_height-BOT_INNER_ROW-1-i, x, W_NN4, 'B');
 				if (rc) FAIL(rc);
 			}
-
-			// NN2
 			rc = run_dirwire_0to3(model, model->y_height-BOT_INNER_ROW-1, x, W_NN2, 'B');
 			if (rc) FAIL(rc);
 			rc = run_dirwire_0to3(model, model->y_height-BOT_INNER_ROW-2, x, W_NN2, 'B');
 			if (rc) FAIL(rc);
+			if ((rc = add_conn_bi_pref(model,
+				model->y_height-BOT_INNER_ROW-2, x, "NN2E0",
+				model->y_height-BOT_INNER_ROW-1, x, "NN2E_S0"))) FAIL(rc);
 
-			// NL1
 			rc = run_dirwire_0to3(model, model->y_height-BOT_INNER_ROW-1, x, W_NL1, 'B');
 			if (rc) FAIL(rc);
-			// NR1
 			rc = run_dirwire_0to3(model, model->y_height-BOT_INNER_ROW-1, x, W_NR1, 'B');
 			if (rc) FAIL(rc);
+
 		} else {
-			// NN4
 			rc = run_dirwire_0to3(model, model->y_height-BOT_INNER_ROW, x, W_NN4, 'E');
 			if (rc) FAIL(rc);
 			rc = run_dirwire_0to3(model, model->y_height-BOT_INNER_ROW, x, W_NN4, 'C');
@@ -2228,21 +2151,16 @@ static int run_dirwires(struct fpga_model* model)
 			if (rc) FAIL(rc);
 			rc = run_dirwire_0to3(model, model->y_height-BOT_INNER_ROW, x, W_NN4, 'A');
 			if (rc) FAIL(rc);
-
-			// NN2
 			rc = run_dirwire_0to3(model, model->y_height-BOT_INNER_ROW, x, W_NN2, 'E');
 			if (rc) FAIL(rc);
 			rc = run_dirwire_0to3(model, model->y_height-BOT_INNER_ROW, x, W_NN2, 'M');
 			if (rc) FAIL(rc);
-
-			// NL1
 			rc = run_dirwire_0to3(model, model->y_height-BOT_INNER_ROW, x, W_NL1, 'E');
 			if (rc) FAIL(rc);
-			// NR1
 			rc = run_dirwire_0to3(model, model->y_height-BOT_INNER_ROW, x, W_NR1, 'E');
 			if (rc) FAIL(rc);
 		}
-		// SS4
+
 		rc = run_dirwire_0to3(model, TOP_INNER_ROW, x, W_SS4, 'E');
 		if (rc) FAIL(rc);
 		rc = run_dirwire_0to3(model, TOP_INNER_ROW, x, W_SS4, 'M');
@@ -2251,18 +2169,224 @@ static int run_dirwires(struct fpga_model* model)
 		if (rc) FAIL(rc);
 		rc = run_dirwire_0to3(model, TOP_INNER_ROW, x, W_SS4, 'A');
 		if (rc) FAIL(rc);
-
-		// SS2
 		rc = run_dirwire_0to3(model, TOP_INNER_ROW, x, W_SS2, 'E');
 		if (rc) FAIL(rc);
 		rc = run_dirwire_0to3(model, TOP_INNER_ROW, x, W_SS2, 'M');
 		if (rc) FAIL(rc);
-
-		// SL1
 		rc = run_dirwire_0to3(model, TOP_INNER_ROW, x, W_SL1, 'E');
 		if (rc) FAIL(rc);
-		// SR1
 		rc = run_dirwire_0to3(model, TOP_INNER_ROW, x, W_SR1, 'E');
+		if (rc) FAIL(rc);
+	}
+
+	for (x = LEFT_IO_ROUTING; x <= model->x_width-RIGHT_IO_ROUTING_O; x++) {
+		if (!is_atx(X_ROUTING_COL, model, x))
+			continue;
+		if ((rc = add_conn_bi_pref(model, TOP_INNER_ROW, x, "NN2E_S0",
+			TOP_FIRST_REGULAR, x, "NN2E_S0"))) FAIL(rc);
+		if ((rc = add_conn_bi_pref(model, TOP_INNER_ROW, x, "NL1E_S0",
+			TOP_FIRST_REGULAR, x, "NL1E_S0"))) FAIL(rc);
+		if (!is_atx(X_FABRIC_BRAM_ROUTING_COL, model, x)) {
+			if ((rc = add_conn_bi_pref(model, model->y_height-BOT_INNER_ROW, x, "SS4E_N3",
+				model->y_height-BOT_LAST_REGULAR_O, x, "SS4E_N3"))) FAIL(rc);
+			if ((rc = add_conn_bi_pref(model, model->y_height-BOT_INNER_ROW, x, "SS2E_N3",
+				model->y_height-BOT_LAST_REGULAR_O, x, "SS2E_N3"))) FAIL(rc);
+			if ((rc = add_conn_bi_pref(model, model->y_height-BOT_INNER_ROW, x, "SR1E_N3",
+				model->y_height-BOT_LAST_REGULAR_O, x, "SR1E_N3"))) FAIL(rc);
+		}
+	}
+
+	//
+	// SE4, SE2, SW4, SW2
+	//
+
+	for (x = LEFT_IO_ROUTING; x <= model->x_width-RIGHT_IO_ROUTING_O; x++) {
+		if (!is_atx(X_ROUTING_COL, model, x))
+			continue;
+		rc = run_dirwire_0to3(model, TOP_INNER_ROW, x, W_SE4, 'M');
+		if (rc) FAIL(rc);
+		rc = run_dirwire_0to3(model, TOP_INNER_ROW, x, W_SE4, 'A');
+		if (rc) FAIL(rc);
+		rc = run_dirwire_0to3(model, TOP_INNER_ROW, x, W_SE2, 'M');
+		if (rc) FAIL(rc);
+
+		rc = run_dirwire_0to3(model, TOP_INNER_ROW, x, W_SW4, 'M');
+		if (rc) FAIL(rc);
+		rc = run_dirwire_0to3(model, TOP_INNER_ROW, x, W_SW4, 'A');
+		if (rc) FAIL(rc);
+		rc = run_dirwire_0to3(model, TOP_INNER_ROW, x, W_SW2, 'M');
+		if (rc) FAIL(rc);
+
+		if (!is_atx(X_FABRIC_BRAM_ROUTING_COL, model, x)) {
+			if ((rc = add_conn_bi_pref(model, model->y_height-BOT_INNER_ROW, x, "SW4E_N3",
+				model->y_height-BOT_LAST_REGULAR_O, x, "SW4E_N3"))) FAIL(rc);
+			if ((rc = add_conn_bi_pref(model, model->y_height-BOT_INNER_ROW, x, "SW2E_N3",
+				model->y_height-BOT_LAST_REGULAR_O, x, "SW2E_N3"))) FAIL(rc);
+		}
+	}
+	for (y = TOP_OUTER_IO; y <= model->y_height-BOT_OUTER_IO; y++) {
+		if (is_aty(Y_ROW_HORIZ_AXSYMM|Y_CHIP_HORIZ_REGS, model, y))
+			continue;
+		rc = run_dirwire_0to3(model, y, LEFT_INNER_COL, W_SE4, 'E');
+		if (rc) FAIL(rc);
+		rc = run_dirwire_0to3(model, y, LEFT_INNER_COL, W_SE4, 'C');
+		if (rc) FAIL(rc);
+		rc = run_dirwire_0to3(model, y, LEFT_INNER_COL, W_SE2, 'E');
+		if (rc) FAIL(rc);
+
+		rc = run_dirwire_0to3(model, y, model->x_width-RIGHT_INNER_O, W_SW4, 'E');
+		if (rc) FAIL(rc);
+		rc = run_dirwire_0to3(model, y, model->x_width-RIGHT_INNER_O, W_SW4, 'C');
+		if (rc) FAIL(rc);
+		rc = run_dirwire_0to3(model, y, model->x_width-RIGHT_INNER_O, W_SW2, 'E');
+		if (rc) FAIL(rc);
+	}
+
+	//
+	// NE4, NE2
+	//
+
+	for (x = LEFT_IO_ROUTING; x <= model->x_width-RIGHT_IO_ROUTING_O; x++) {
+		if (!is_atx(X_ROUTING_COL, model, x))
+			continue;
+
+		if (is_atx(X_FABRIC_BRAM_ROUTING_COL, model, x)) {
+			// NE2B is one major right, NE4B is two majors right
+			int plus_one_major, plus_two_majors;
+			plus_one_major = x+1;
+			while (plus_one_major != -1
+			       && !is_atx(X_ROUTING_COL, model, plus_one_major)) {
+				if (++plus_one_major >= model->x_width)
+					plus_one_major = -1;
+			}
+			if (plus_one_major == -1)
+				plus_two_majors = -1;
+			else {
+				plus_two_majors = plus_one_major + 1;
+				while (plus_two_majors != -1
+				       && !is_atx(X_ROUTING_COL, model, plus_two_majors)) {
+					if (++plus_two_majors >= model->x_width)
+						plus_two_majors = -1;
+				}
+			}
+			if (plus_two_majors != -1) {
+				rc = run_dirwire_0to3(model, model->y_height-BOT_INNER_ROW-1, plus_two_majors, W_NE4, 'B');
+				if (rc) FAIL(rc);
+				rc = run_dirwire_0to3(model, model->y_height-BOT_INNER_ROW-2, plus_two_majors, W_NE4, 'B');
+				if (rc) FAIL(rc);
+			}
+			if (plus_one_major != -1) {
+				struct w_net net;
+
+				rc = run_dirwire_0to3(model, model->y_height-BOT_INNER_ROW-1, plus_one_major, W_NE2, 'B');
+				if (rc) FAIL(rc);
+
+				net.last_inc = 2;
+				net.num_pts = 0;
+				for (i = x; i <= plus_one_major; i++) {
+					net.pt[net.num_pts].start_count = 1;
+					net.pt[net.num_pts].y = model->y_height-BOT_INNER_ROW-1;
+					net.pt[net.num_pts].x = i;
+					net.pt[net.num_pts].name = (i == plus_one_major) ? "NE2E%i" : "NE2M%i";
+					net.num_pts++;
+				}
+				rc = add_conn_net(model, PREF_BI_F, &net);
+				if (rc) FAIL(rc);
+
+				if ((rc = add_conn_bi_pref(model,
+					model->y_height-BOT_INNER_ROW-1, plus_one_major, "NE2E0",
+					model->y_height-BOT_INNER_ROW, plus_one_major, "NE2E0"))) FAIL(rc);
+			}
+		} else {
+			rc = run_dirwire_0to3(model, model->y_height-BOT_INNER_ROW, x, W_NE4, 'M');
+			if (rc) FAIL(rc);
+			rc = run_dirwire_0to3(model, model->y_height-BOT_INNER_ROW, x, W_NE4, 'A');
+			if (rc) FAIL(rc);
+			rc = run_dirwire_0to3(model, model->y_height-BOT_INNER_ROW, x, W_NE2, 'M');
+			if (rc) FAIL(rc);
+		}
+		if ((rc = add_conn_bi_pref(model, TOP_INNER_ROW, x, "NE2E_S0",
+			TOP_FIRST_REGULAR, x, "NE2E_S0"))) FAIL(rc);
+	}
+	for (y = TOP_OUTER_IO; y <= model->y_height-BOT_OUTER_IO; y++) {
+		if (is_aty(Y_ROW_HORIZ_AXSYMM|Y_CHIP_HORIZ_REGS, model, y))
+			continue;
+		rc = run_dirwire_0to3(model, y, LEFT_INNER_COL, W_NE4, 'E');
+		if (rc) FAIL(rc);
+		rc = run_dirwire_0to3(model, y, LEFT_INNER_COL, W_NE4, 'C');
+		if (rc) FAIL(rc);
+		rc = run_dirwire_0to3(model, y, LEFT_INNER_COL, W_NE2, 'E');
+		if (rc) FAIL(rc);
+	}
+
+	//
+	// NW4, NW2
+	//
+
+	for (x = LEFT_IO_ROUTING; x <= model->x_width-RIGHT_IO_ROUTING_O; x++) {
+		if (!is_atx(X_ROUTING_COL, model, x))
+			continue;
+
+		if (is_atx(X_FABRIC_BRAM_ROUTING_COL, model, x)) {
+			// NW2B is one major left, NW4B is two majors left
+			int minus_one_major, minus_two_majors;
+			minus_one_major = x-1;
+			while (minus_one_major != -1
+			       && !is_atx(X_ROUTING_COL, model, minus_one_major)) {
+				if (--minus_one_major < LEFT_IO_ROUTING)
+					minus_one_major = -1;
+			}
+			if (minus_one_major == -1)
+				minus_two_majors = -1;
+			else {
+				minus_two_majors = minus_one_major - 1;
+				while (minus_two_majors != -1
+				       && !is_atx(X_ROUTING_COL, model, minus_two_majors)) {
+					if (--minus_two_majors < LEFT_IO_ROUTING)
+						minus_two_majors = -1;
+				}
+			}
+			if (minus_two_majors != -1) {
+				rc = run_dirwire_0to3(model, model->y_height-BOT_INNER_ROW-1, minus_two_majors, W_NW4, 'B');
+				if (rc) FAIL(rc);
+				rc = run_dirwire_0to3(model, model->y_height-BOT_INNER_ROW-2, minus_two_majors, W_NW4, 'B');
+				if (rc) FAIL(rc);
+
+				if ((rc = add_conn_bi_pref(model,
+					model->y_height-BOT_INNER_ROW-2, minus_two_majors, "NW4E0",
+					model->y_height-BOT_INNER_ROW-1, minus_two_majors, "NW4E_S0"))) FAIL(rc);
+				if ((rc = add_conn_bi_pref(model,
+					model->y_height-BOT_INNER_ROW-1, minus_two_majors, "NW4E0",
+					model->y_height-BOT_INNER_ROW, minus_two_majors, "NW4E0"))) FAIL(rc);
+			}
+			if (minus_one_major != -1) {
+				rc = run_dirwire_0to3(model, model->y_height-BOT_INNER_ROW-1, minus_one_major, W_NW2, 'B');
+				if (rc) FAIL(rc);
+				if ((rc = add_conn_bi_pref(model,
+					model->y_height-BOT_INNER_ROW-1, minus_one_major, "NW2E0",
+					model->y_height-BOT_INNER_ROW, minus_one_major, "NW2E0"))) FAIL(rc);
+			}
+		} else {
+			rc = run_dirwire_0to3(model, model->y_height-BOT_INNER_ROW, x, W_NW4, 'M');
+			if (rc) FAIL(rc);
+			rc = run_dirwire_0to3(model, model->y_height-BOT_INNER_ROW, x, W_NW4, 'A');
+			if (rc) FAIL(rc);
+			rc = run_dirwire_0to3(model, model->y_height-BOT_INNER_ROW, x, W_NW2, 'M');
+			if (rc) FAIL(rc);
+		}
+		if ((rc = add_conn_bi_pref(model, TOP_INNER_ROW, x, "NW4E_S0",
+			TOP_FIRST_REGULAR, x, "NW4E_S0"))) FAIL(rc);
+		if ((rc = add_conn_bi_pref(model, TOP_INNER_ROW, x, "NW2E_S0",
+			TOP_FIRST_REGULAR, x, "NW2E_S0"))) FAIL(rc);
+	}
+	for (y = TOP_OUTER_IO; y <= model->y_height-BOT_OUTER_IO; y++) {
+		if (is_aty(Y_ROW_HORIZ_AXSYMM|Y_CHIP_HORIZ_REGS, model, y))
+			continue;
+		rc = run_dirwire_0to3(model, y, model->x_width-RIGHT_INNER_O, W_NW4, 'E');
+		if (rc) FAIL(rc);
+		rc = run_dirwire_0to3(model, y, model->x_width-RIGHT_INNER_O, W_NW4, 'C');
+		if (rc) FAIL(rc);
+		rc = run_dirwire_0to3(model, y, model->x_width-RIGHT_INNER_O, W_NW2, 'E');
 		if (rc) FAIL(rc);
 	}
 	return 0;

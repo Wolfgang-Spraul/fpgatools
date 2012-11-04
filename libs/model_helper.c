@@ -634,8 +634,8 @@ int is_atyx(int check, struct fpga_model* model, int y, int x)
 	// todo: YX_ROUTING_TILE could be implemented using X_ROUTING_COL and Y_REGULAR_ROW ?
 	if (check & YX_ROUTING_TILE
 	    && (model->tiles[x].flags & TF_FABRIC_ROUTING_COL
-	        || x == LEFT_IO_ROUTING || x == model->x_width-5
-		|| x == model->center_x-3)) {
+	        || x == LEFT_IO_ROUTING || x == model->x_width-RIGHT_IO_ROUTING_O
+		|| x == model->center_x-CENTER_ROUTING_O)) {
 		int row_pos;
 		is_in_row(model, y, 0 /* row_num */, &row_pos);
 		if (row_pos >= 0 && row_pos != 8) return 1;
@@ -654,6 +654,18 @@ int is_atyx(int check, struct fpga_model* model, int y, int x)
 	if (check & YX_OUTER_TERM
 	    && (is_atx(X_OUTER_LEFT|X_OUTER_RIGHT, model, x)
 		|| is_aty(Y_OUTER_TOP|Y_OUTER_BOTTOM, model, y))) return 1;
+	if (check & YX_INNER_TERM
+	    && (is_atx(X_INNER_LEFT|X_INNER_RIGHT, model, x)
+		|| is_aty(Y_INNER_TOP|Y_INNER_BOTTOM, model, y))) return 1;
+	if (check & YX_OUTSIDE_OF_ROUTING
+	    && (x < LEFT_IO_ROUTING
+		|| x > model->x_width-RIGHT_IO_ROUTING_O
+		|| y <= TOP_INNER_ROW
+		|| y >= model->y_height-BOT_INNER_ROW )) return 1;
+	if (check & YX_ROUTING_BOUNDARY
+	    && is_atyx(YX_ROUTING_TILE, model, y, x)
+	    && (x == LEFT_IO_ROUTING || x == model->x_width-RIGHT_IO_ROUTING_O
+	        || y == TOP_FIRST_REGULAR || y == model->y_height-BOT_LAST_REGULAR_O)) return 1;
 	return 0;
 }
 
