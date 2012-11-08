@@ -10,6 +10,7 @@
 #include "model.h"
 #include "floorplan.h"
 #include "control.h"
+#include "parts.h"
 
 time_t g_start_time;
 #define TIME()		(time(0)-g_start_time)
@@ -1861,8 +1862,8 @@ int main(int argc, char** argv)
 	MEMUSAGE();
 
 	printf("O Building memory model...\n");
-	if ((rc = fpga_build_model(&model, XC6SLX9_ROWS, XC6SLX9_COLUMNS,
-			XC6SLX9_LEFT_WIRING, XC6SLX9_RIGHT_WIRING)))
+	if ((rc = fpga_build_model(&model, XC6SLX9, XC6SLX9_ROWS,
+		XC6SLX9_COLUMNS, XC6SLX9_LEFT_WIRING, XC6SLX9_RIGHT_WIRING)))
 		goto fail;
 	printf("O Done\n");
 	TIME_AND_MEM();

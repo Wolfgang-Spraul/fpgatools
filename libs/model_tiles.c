@@ -408,6 +408,7 @@ int init_tiles(struct fpga_model* model)
 			// +3
 			//
 			if (model->cfg_left_wiring[(model->cfg_rows-1-k)*16+l] == 'W') {
+				model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + 3].flags |= TF_IOLOGIC_DELAY_DEV;
 				model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + 3].type = ROUTING_IO_VIA_L;
 			} else { // unwired
 				if (k == model->cfg_rows-1 && !l) {
@@ -507,9 +508,10 @@ int init_tiles(struct fpga_model* model)
 			//
 			// -4
 			//
-			if (model->cfg_right_wiring[(model->cfg_rows-1-k)*16+l] == 'W')
+			if (model->cfg_right_wiring[(model->cfg_rows-1-k)*16+l] == 'W') {
+				model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + tile_columns - 4].flags |= TF_IOLOGIC_DELAY_DEV;
 				model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + tile_columns - 4].type = ROUTING_IO_VIA_R;
-			else {
+			} else {
 				if (k == model->cfg_rows-1 && l == 0)
 					model->tiles[(row_top_y+l)*tile_columns + tile_columns - 4].type = CORNER_TR_UPPER;
 				else if (k == model->cfg_rows-1 && l == 1)

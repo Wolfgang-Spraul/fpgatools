@@ -103,6 +103,7 @@ int xc_num_rows(int idcode)
 const struct xc_info* xc_info(int idcode)
 {
 	static const struct xc_info xc6slx9_info = {
+		.idcode = XC6SLX9,
 		.num_rows = 4,
 		.left_wiring =
 			/* row 3 */ "UWUWUWUW" "WWWWUUUU" \
@@ -361,7 +362,10 @@ const struct xc_info* xc_info(int idcode)
 			 [220] = { XC_T2_IOB_UNBONDED, 97 },
 			 [221] = { XC_T2_IOB_UNBONDED, 98 },
 			 [222] = { XC_T2_IOB_PAD, 75 },
-			 [223] = { XC_T2_IOB_PAD, 74 }}};
+			 [223] = { XC_T2_IOB_PAD, 74 }},
+		.mcb_ypos = 20,
+		.num_mui = 8,
+		.mui_pos = { 40, 43, 47, 50, 53, 56, 59, 63 }};
 	switch (idcode & IDCODE_MASK) {
 		case XC6SLX9: return &xc6slx9_info;
 	}

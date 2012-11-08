@@ -74,11 +74,18 @@ mid-term (6 months):
   - inter-tile wire connections (model_conns.c)
   - configure devices and route wires
 
+cleanup (whenever convenient):
+* use tile flags instead of tile names
+* model connections and switches together rather than separately
+* describe more wire names/meanings with integers instead of strings
+* move all part-specific static data into xc_info()
+
 long-term (>6 months):
 * auto-crc calculation in .bit file
 * support lm32 or openrisc core, either via libfpga or iverilog backend
 * ipv6 or vnc in hardware?
 * iverilog fpga backend
+* design fpga 'core' that uses high-speed icap/reconfig to process data
 
 ChangeLog
 

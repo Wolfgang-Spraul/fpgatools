@@ -56,6 +56,7 @@ struct fpga_model
 {
 	int rc; // if rc != 0, all function calls will immediately return
 
+	const struct xc_info *xci;
 	int cfg_rows;
 	char cfg_columns[512];
 	char cfg_left_wiring[1024], cfg_right_wiring[1024];
@@ -236,6 +237,8 @@ enum fpga_tile_type
 #define Y_TOP_INNER_IO		0x0800
 #define Y_BOT_INNER_IO		0x1000
 #define Y_BOT_OUTER_IO		0x2000
+#define Y_TOP_FIRST_REGULAR	Y_TOP_OUTER_IO
+#define Y_BOT_LAST_REGULAR	Y_BOT_OUTER_IO
 #define Y_REGULAR_ROW		0x4000
 
 // multiple checks are combined with OR logic
@@ -775,7 +778,7 @@ struct fpga_tile
 };
 
 int fpga_build_model(struct fpga_model* model,
-	int fpga_rows, const char* columns,
+	int idcode, int fpga_rows, const char* columns,
 	const char* left_wiring, const char* right_wiring);
 // returns model->rc (model itself will be memset to 0)
 int fpga_free_model(struct fpga_model* model);
@@ -853,6 +856,8 @@ struct w_point // wire point
 
 #define NO_INCREMENT 0
 
+#define MAX_NET_POINTS	128
+
 struct w_net
 {
 	// if !last_inc, no incrementing will happen (NO_INCREMENT)
@@ -860,7 +865,7 @@ struct w_net
 	// the %i in the name from pt.start_count:last_inc
 	int last_inc;
 	int num_pts;
-	struct w_point pt[40];
+	struct w_point pt[MAX_NET_POINTS];
 };
 
 int add_conn_net(struct fpga_model* model, add_conn_f add_conn_func, const struct w_net *net);
@@ -878,11 +883,12 @@ int replicate_switches_and_names(struct fpga_model* model,
 
 struct seed_data
 {
-	int x_flags;
+	int flags;
 	const char* str;
 };
 
-void seed_strx(struct fpga_model* model, struct seed_data* data);
+void seed_strx(struct fpga_model *model, struct seed_data *data);
+void seed_stry(struct fpga_model *model, struct seed_data *data);
 
 #define MAX_WIRENAME_LEN 64
 
@@ -1016,6 +1022,10 @@ enum extra_wires {
 	LOGICIN_S36,
 	LOGICIN_S44,
 	LOGICIN_S62,
+	IOCE,
+	IOCLK,
+	PLLCE,
+	PLLCLK,
 	VCC_WIRE = 150,
 	GND_WIRE,
 	GCLK0 = 200, GCLK1, GCLK2, GCLK3, GCLK4, GCLK5, GCLK6, GCLK7,

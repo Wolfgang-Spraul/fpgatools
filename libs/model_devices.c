@@ -60,8 +60,8 @@ int init_devices(struct fpga_model* model)
 	if ((rc = add_dev(model, y, x, DEV_SUSPEND_SYNC, 0))) goto fail;
 
 	// MCB
-	if ((rc = add_dev(model, XC6_MCB_YPOS, LEFT_MCB_COL, DEV_MCB, 0))) goto fail;
-	if ((rc = add_dev(model, XC6_MCB_YPOS, model->x_width-RIGHT_MCB_O, DEV_MCB, 0))) goto fail;
+	if ((rc = add_dev(model, model->xci->mcb_ypos, LEFT_MCB_COL, DEV_MCB, 0))) goto fail;
+	if ((rc = add_dev(model, model->xci->mcb_ypos, model->x_width-RIGHT_MCB_O, DEV_MCB, 0))) goto fail;
 
 	// OCT_CALIBRATE
 	x = LEFT_IO_DEVS;

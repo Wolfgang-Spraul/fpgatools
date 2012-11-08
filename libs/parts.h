@@ -25,6 +25,7 @@
 
 #define XC_MAX_MAJORS		400
 #define XC_MAX_TYPE2_ENTRIES	2000
+#define XC_MAX_MUI_POS		32
 
 #define XC_MAJ_ZERO		0x00000001
 #define XC_MAJ_LEFT		0x00000002
@@ -55,6 +56,7 @@ struct xc_type2_info
 
 struct xc_info
 {
+	int idcode;
 	int num_rows;
 	const char* left_wiring;
 	const char* right_wiring;
@@ -63,6 +65,9 @@ struct xc_info
 	struct xc_major_info majors[XC_MAX_MAJORS];
 	int num_type2;
 	struct xc_type2_info type2[XC_MAX_TYPE2_ENTRIES];
+	int mcb_ypos;
+	int num_mui;
+	int mui_pos[XC_MAX_MUI_POS];
 };
 
 const struct xc_info* xc_info(int idcode);
@@ -84,8 +89,6 @@ const struct xc_info* xc_info(int idcode);
 
 #define XC6_HCLK_BYTES		2
 #define XC6_HCLK_BITS		(XC6_HCLK_BYTES*8)
-
-#define XC6_MCB_YPOS		20
 
 #define XC6_IOB_MASK_IO				0x00FF00FFFF000000
 #define XC6_IOB_MASK_IN_TYPE			0x000000000000F000

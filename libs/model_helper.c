@@ -9,7 +9,7 @@
 #include "model.h"
 #include "parts.h"
 
-#define NUM_PF_BUFS	16
+#define NUM_PF_BUFS	32
 
 const char* pf(const char* fmt, ...)
 {
@@ -64,17 +64,16 @@ const char* wpref(struct fpga_model* model, int y, int x, const char* wire_name)
 		else if (is_atx(X_CENTER_CMTPLL_COL, model, x))
 			prefix = "CMT_PLL_";
 		else if (is_atx(X_RIGHT_MCB|X_LEFT_MCB, model, x)) {
-			if (y == XC6_MCB_YPOS)
+			if (y == model->xci->mcb_ypos)
 				prefix = "MCB_";
 			else {
-				const int mui_pos[] = {41, 44, 48, 51, 54, 57, 60, 64};
-				for (i = 0; i < sizeof(mui_pos)/sizeof(*mui_pos); i++) {
-					if (y == mui_pos[i]) {
+				for (i = 0; i < model->xci->num_mui; i++) {
+					if (y == model->xci->mui_pos[i]+1) {
 						prefix = "MCB_MUI_";
 						break;
 					}
 				}
-				if (i >= sizeof(mui_pos)/sizeof(*mui_pos))
+				if (i >= model->xci->num_mui)
 					prefix = "MCB_INT_";
 			}
 		} else if (is_atx(X_INNER_RIGHT, model, x))
@@ -524,14 +523,26 @@ fail:
 	return rc;
 }
 
-void seed_strx(struct fpga_model* model, struct seed_data* data)
+void seed_strx(struct fpga_model *model, struct seed_data *data)
 {
 	int x, i;
 	for (x = 0; x < model->x_width; x++) {
 		model->tmp_str[x] = 0;
-		for (i = 0; data[i].x_flags; i++) {
-			if (is_atx(data[i].x_flags, model, x))
+		for (i = 0; data[i].flags; i++) {
+			if (is_atx(data[i].flags, model, x))
 				model->tmp_str[x] = data[i].str;
+		}
+	}
+}
+
+void seed_stry(struct fpga_model *model, struct seed_data *data)
+{
+	int y, i;
+	for (y = 0; y < model->y_height; y++) {
+		model->tmp_str[y] = 0;
+		for (i = 0; data[i].flags; i++) {
+			if (is_aty(data[i].flags, model, y))
+				model->tmp_str[y] = data[i].str;
 		}
 	}
 }

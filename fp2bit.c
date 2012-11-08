@@ -8,6 +8,7 @@
 #include "model.h"
 #include "floorplan.h"
 #include "bit.h"
+#include "parts.h"
 
 int main(int argc, char** argv)
 {
@@ -40,8 +41,8 @@ int main(int argc, char** argv)
 		goto fail;
 	}
 
-	if ((rc = fpga_build_model(&model, XC6SLX9_ROWS, XC6SLX9_COLUMNS,
-			XC6SLX9_LEFT_WIRING, XC6SLX9_RIGHT_WIRING)))
+	if ((rc = fpga_build_model(&model, XC6SLX9, XC6SLX9_ROWS,
+		  XC6SLX9_COLUMNS, XC6SLX9_LEFT_WIRING, XC6SLX9_RIGHT_WIRING)))
 		goto fail;
 
 	if ((rc = read_floorplan(&model, fp))) goto fail;

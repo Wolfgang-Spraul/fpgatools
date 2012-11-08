@@ -8,6 +8,7 @@
 #include "model.h"
 #include "floorplan.h"
 #include "control.h"
+#include "parts.h"
 
 /*
    This C design corresponds to the following Verilog:
@@ -33,8 +34,9 @@ int main(int argc, char** argv)
 	net_idx_t inA_net, inB_net, out_net;
 	int rc;
 
-	if ((rc = fpga_build_model(&model, XC6SLX9_ROWS, XC6SLX9_COLUMNS,
-		XC6SLX9_LEFT_WIRING, XC6SLX9_RIGHT_WIRING))) FAIL(rc);
+	if ((rc = fpga_build_model(&model, XC6SLX9, XC6SLX9_ROWS,
+		XC6SLX9_COLUMNS, XC6SLX9_LEFT_WIRING, XC6SLX9_RIGHT_WIRING)))
+			FAIL(rc);
 
 	if ((rc = fpga_find_iob(&model, "P45", &iob_inA_y, &iob_inA_x,
 		&iob_inA_type_idx))) FAIL(rc);

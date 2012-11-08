@@ -11,12 +11,14 @@
 
 static int s_high_speed_replicate = 1;
 
-int fpga_build_model(struct fpga_model* model, int fpga_rows,
+int fpga_build_model(struct fpga_model* model, int idcode, int fpga_rows,
 	const char* columns, const char* left_wiring, const char* right_wiring)
 {
 	int rc;
 
 	memset(model, 0, sizeof(*model));
+	model->xci = xc_info(idcode);
+	if (!model->xci) FAIL(EINVAL);
 	model->cfg_rows = fpga_rows;
 	strncpy(model->cfg_columns, columns, sizeof(model->cfg_columns)-1);
 	strncpy(model->cfg_left_wiring, left_wiring,

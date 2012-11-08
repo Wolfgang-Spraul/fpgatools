@@ -18,6 +18,7 @@
 #include <libxml/xpathInternals.h>
 
 #include "model.h"
+#include "parts.h"
 
 #define VERT_TILE_SPACING	 45
 #define HORIZ_TILE_SPACING	160
@@ -46,7 +47,7 @@ int main(int argc, char** argv)
 // on the output for now
 
 	xmlInitParser();
-	if (fpga_build_model(&model, XC6SLX9_ROWS, XC6SLX9_COLUMNS,
+	if (fpga_build_model(&model, XC6SLX9, XC6SLX9_ROWS, XC6SLX9_COLUMNS,
 			XC6SLX9_LEFT_WIRING, XC6SLX9_RIGHT_WIRING))
 		goto fail;
 
