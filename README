@@ -53,7 +53,7 @@ Design Principles
 - automatic test suite
 - public domain software
 
-TODO (as of October, 2012)
+TODO (as of November, 2012)
 
 short-term (1 month):
 * example: blinking_led
@@ -65,7 +65,7 @@ short-term (1 month):
 mid-term (6 months):
 * support chips other than xc6slx9, maybe an ftg256 or fgg484-packaged
   xc6 or the xc7a100
-* more cases in switches (98% done) and inter-tile connections (15% done)
+* more cases in switches (98% done) and inter-tile connections (70% done)
 * more cases in logic block configuration
 * configuration of bram and macc blocks, bram initialization data
 * write standard design elements for libfpga-stdlib library
@@ -85,7 +85,7 @@ long-term (>6 months):
 * support lm32 or openrisc core, either via libfpga or iverilog backend
 * ipv6 or vnc in hardware?
 * iverilog fpga backend
-* design fpga 'core' that uses high-speed icap/reconfig to process data
+* design fpga core that uses high-speed icap/reconfig to process data
 
 ChangeLog
 

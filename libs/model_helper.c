@@ -523,7 +523,7 @@ fail:
 	return rc;
 }
 
-void seed_strx(struct fpga_model *model, struct seed_data *data)
+void seed_strx(struct fpga_model *model, const struct seed_data *data)
 {
 	int x, i;
 	for (x = 0; x < model->x_width; x++) {
@@ -535,7 +535,7 @@ void seed_strx(struct fpga_model *model, struct seed_data *data)
 	}
 }
 
-void seed_stry(struct fpga_model *model, struct seed_data *data)
+void seed_stry(struct fpga_model *model, const struct seed_data *data)
 {
 	int y, i;
 	for (y = 0; y < model->y_height; y++) {

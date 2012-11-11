@@ -256,6 +256,10 @@ int is_aty(int check, struct fpga_model* model, int y);
 					 |X_CENTER_ROUTING_COL \
 					 |X_LEFT_IO_ROUTING_COL \
 					 |X_RIGHT_IO_ROUTING_COL)
+#define X_CENTER_MAJOR			(X_CENTER_ROUTING_COL \
+					 |X_CENTER_LOGIC_COL \
+					 |X_CENTER_CMTPLL_COL \
+					 |X_CENTER_REGS_COL)
 
 // todo and realizations:
 // * maybe the center_logic and routing cols can also be
@@ -887,8 +891,8 @@ struct seed_data
 	const char* str;
 };
 
-void seed_strx(struct fpga_model *model, struct seed_data *data);
-void seed_stry(struct fpga_model *model, struct seed_data *data);
+void seed_strx(struct fpga_model *model, const struct seed_data *data);
+void seed_stry(struct fpga_model *model, const struct seed_data *data);
 
 #define MAX_WIRENAME_LEN 64
 
@@ -1026,6 +1030,9 @@ enum extra_wires {
 	IOCLK,
 	PLLCE,
 	PLLCLK,
+	CKPIN,
+	CLK_FEEDBACK,
+	CLK_INDIRECT,
 	VCC_WIRE = 150,
 	GND_WIRE,
 	GCLK0 = 200, GCLK1, GCLK2, GCLK3, GCLK4, GCLK5, GCLK6, GCLK7,

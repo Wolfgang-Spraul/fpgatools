@@ -15,7 +15,7 @@ static int term_to_io(struct fpga_model *model, enum extra_wires wire);
 static int pcice(struct fpga_model *model);
 static int clkpll(struct fpga_model *model);
 static int ckpin(struct fpga_model *model);
-static int clkindirect_feedback(struct fpga_model *model);
+static int clkindirect_feedback(struct fpga_model *model, enum extra_wires wire);
 static int run_gclk(struct fpga_model *model);
 static int run_gclk_horiz_regs(struct fpga_model *model);
 static int run_gclk_vert_regs(struct fpga_model *model);
@@ -40,7 +40,8 @@ int init_conns(struct fpga_model *model)
 
 	if ((rc = clkpll(model))) FAIL(rc);
 	if ((rc = ckpin(model))) FAIL(rc);
-	if ((rc = clkindirect_feedback(model))) FAIL(rc);
+	if ((rc = clkindirect_feedback(model, CLK_INDIRECT))) FAIL(rc);
+	if ((rc = clkindirect_feedback(model, CLK_FEEDBACK))) FAIL(rc);
 
 	if ((rc = pcice(model))) FAIL(rc);
 	if ((rc = run_gclk(model))) FAIL(rc);
@@ -581,11 +582,11 @@ fail:
 	return rc;
 }
 
-static int term_to_io(struct fpga_model *model, enum extra_wires wire)
+static int net_up_down(struct fpga_model *model, int hclk_y, int up_down_x,
+	enum extra_wires wire, struct w_net *up_net, struct w_net *down_net)
 {
-	struct w_net up_net, down_net;
 	const char *s1;
-	int last_inc, y, i, rc;
+	int last_inc, i, rc;
 
 	if (wire == IOCE) {
 		s1 = "IOCE";
@@ -601,7 +602,82 @@ static int term_to_io(struct fpga_model *model, enum extra_wires wire)
 		last_inc = 1;
 	} else FAIL(EINVAL);
 
+	up_net->last_inc = last_inc;
+	up_net->pt[0].name = pf("HCLK_IOIL_%s%%i_UP", s1);
+	up_net->pt[0].start_count = 0;
+	up_net->pt[0].y = hclk_y;
+	up_net->pt[0].x = up_down_x;
+	up_net->num_pts = 1;
+
+	down_net->last_inc = last_inc;
+	down_net->pt[0].name = pf("HCLK_IOIL_%s%%i_DOWN", s1);
+	down_net->pt[0].start_count = 0;
+	down_net->pt[0].y = hclk_y;
+	down_net->pt[0].x = up_down_x;
+	down_net->num_pts = 1;
+
+	for (i = 0; i < HALF_ROW; i++) {
+		if (has_device(model, hclk_y-1-i, up_down_x, DEV_IODELAY)) {
+			while (up_net->pt[up_net->num_pts-1].y > hclk_y-1-i+1) {
+				up_net->pt[up_net->num_pts].name = pf("INT_INTERFACE_%s%%i", s1);
+				up_net->pt[up_net->num_pts].start_count = 0;
+				up_net->pt[up_net->num_pts].y = up_net->pt[up_net->num_pts-1].y-1;
+				up_net->pt[up_net->num_pts].x = up_down_x;
+				up_net->num_pts++;
+			}
+			up_net->pt[up_net->num_pts].name = pf("%s_%s%%i",
+				up_down_x < model->center_x ? "IOI" : "RIOI", s1);
+			up_net->pt[up_net->num_pts].start_count = 0;
+			up_net->pt[up_net->num_pts].y = hclk_y-1-i;
+			up_net->pt[up_net->num_pts].x = up_down_x;
+			up_net->num_pts++;
+		}
+		if (has_device(model, hclk_y+1+i, up_down_x, DEV_IODELAY)) {
+			while (down_net->pt[down_net->num_pts-1].y < hclk_y+1+i-1) {
+				down_net->pt[down_net->num_pts].name = pf("INT_INTERFACE_%s%%i", s1);
+				down_net->pt[down_net->num_pts].start_count = 0;
+				down_net->pt[down_net->num_pts].y = down_net->pt[down_net->num_pts-1].y+1;
+				down_net->pt[down_net->num_pts].x = up_down_x;
+				down_net->num_pts++;
+			}
+			down_net->pt[down_net->num_pts].name = pf("%s_%s%%i",
+				up_down_x < model->center_x ? "IOI" : "RIOI", s1);
+			down_net->pt[down_net->num_pts].start_count = 0;
+			down_net->pt[down_net->num_pts].y = hclk_y+1+i;
+			down_net->pt[down_net->num_pts].x = up_down_x;
+			down_net->num_pts++;
+		}
+	}
+	return 0;
+fail:
+	return rc;
+}
+
+static int term_to_io(struct fpga_model *model, enum extra_wires wire)
+{
+	struct w_net up_net, down_net, net;
+	const char *s1;
+	int last_inc, y, i, rc;
+
 	// from termination into fabric via hclk
+	if (wire == IOCE) {
+		s1 = "IOCE";
+		last_inc = 3;
+	} else if (wire == IOCLK) {
+		s1 = "IOCLK";
+		last_inc = 3;
+	} else if (wire == PLLCE) {
+		s1 = "PLLCE";
+		last_inc = 1;
+	} else if (wire == PLLCLK) {
+		s1 = "PLLCLK";
+		last_inc = 1;
+	} else FAIL(EINVAL);
+
+	//
+	// left
+	//
+
 	for (y = TOP_FIRST_REGULAR; y <= model->y_height - BOT_LAST_REGULAR_O; y++) {
 		if (!is_aty(Y_ROW_HORIZ_AXSYMM, model, y))
 			continue;
@@ -643,48 +719,56 @@ static int term_to_io(struct fpga_model *model, enum extra_wires wire)
 		if ((rc = add_conn_net(model, NOPREF_BI_F, &n))) FAIL(rc); }
 
 		// wire up and down the row (8 each) to reach all io devices
-		up_net.last_inc = last_inc;
-		up_net.pt[0].name = pf("HCLK_IOIL_%s%%i_UP", s1);
-		up_net.pt[0].start_count = 0;
-		up_net.pt[0].y = y;
-		up_net.pt[0].x = LEFT_IO_DEVS;
-		up_net.num_pts = 1;
-		down_net.last_inc = last_inc;
-		down_net.pt[0].name = pf("HCLK_IOIL_%s%%i_DOWN", s1);
-		down_net.pt[0].start_count = 0;
-		down_net.pt[0].y = y;
-		down_net.pt[0].x = LEFT_IO_DEVS;
-		down_net.num_pts = 1;
-		for (i = 0; i < HALF_ROW; i++) {
-			if (has_device(model, y-1-i, LEFT_IO_DEVS, DEV_IODELAY)) {
-				while (up_net.pt[up_net.num_pts-1].y > y-1-i+1) {
-					up_net.pt[up_net.num_pts].name = pf("INT_INTERFACE_%s%%i", s1);
-					up_net.pt[up_net.num_pts].start_count = 0;
-					up_net.pt[up_net.num_pts].y = up_net.pt[up_net.num_pts-1].y-1;
-					up_net.pt[up_net.num_pts].x = LEFT_IO_DEVS;
-					up_net.num_pts++;
-				}
-				up_net.pt[up_net.num_pts].name = pf("IOI_%s%%i", s1);
-				up_net.pt[up_net.num_pts].start_count = 0;
-				up_net.pt[up_net.num_pts].y = y-1-i;
-				up_net.pt[up_net.num_pts].x = LEFT_IO_DEVS;
-				up_net.num_pts++;
+		if ((rc = net_up_down(model, y, LEFT_IO_DEVS,
+			wire, &up_net, &down_net))) FAIL(rc);
+		if (up_net.num_pts > 1
+		    && (rc = add_conn_net(model, NOPREF_BI_F, &up_net))) FAIL(rc);
+		if (down_net.num_pts > 1
+		    && (rc = add_conn_net(model, NOPREF_BI_F, &down_net))) FAIL(rc);
+	}
+
+	//
+	// right
+	//
+
+	for (y = TOP_FIRST_REGULAR; y <= model->y_height - BOT_LAST_REGULAR_O; y++) {
+		if (!is_aty(Y_ROW_HORIZ_AXSYMM, model, y))
+			continue;
+
+		if (wire == IOCE || wire == IOCLK) {
+			net.last_inc = 0;
+			net.num_pts = 3;
+			for (i = 0; i <= 3; i++) {
+				net.pt[0].name = pf("HCLK_IOI_RTERM_%s%i_W", s1, i);
+				net.pt[0].start_count = 0;
+				net.pt[0].y = y;
+				net.pt[0].x = model->x_width - RIGHT_INNER_O;
+				net.pt[1].name = pf("HCLK_MCB_%s%i_W", s1, i);
+				net.pt[1].start_count = 0;
+				net.pt[1].y = y;
+				net.pt[1].x = model->x_width - RIGHT_MCB_O;
+				net.pt[2].name = pf("HCLK_IOIL_%s%i", s1, 3-i);
+				net.pt[2].start_count = 0;
+				net.pt[2].y = y;
+				net.pt[2].x = model->x_width - RIGHT_IO_DEVS_O;
+				if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) FAIL(rc);
 			}
-			if (has_device(model, y+1+i, LEFT_IO_DEVS, DEV_IODELAY)) {
-				while (down_net.pt[down_net.num_pts-1].y < y+1+i-1) {
-					down_net.pt[down_net.num_pts].name = pf("INT_INTERFACE_%s%%i", s1);
-					down_net.pt[down_net.num_pts].start_count = 0;
-					down_net.pt[down_net.num_pts].y = down_net.pt[down_net.num_pts-1].y+1;
-					down_net.pt[down_net.num_pts].x = LEFT_IO_DEVS;
-					down_net.num_pts++;
-				}
-				down_net.pt[down_net.num_pts].name = pf("IOI_%s%%i", s1);
-				down_net.pt[down_net.num_pts].start_count = 0;
-				down_net.pt[down_net.num_pts].y = y+1+i;
-				down_net.pt[down_net.num_pts].x = LEFT_IO_DEVS;
-				down_net.num_pts++;
-			}
+		} else { // PLLCE/PLLCLK
+			struct w_net n = {
+				.last_inc = last_inc, .num_pts = 3, .pt =
+				{{ wire == PLLCE ? "HCLK_IOI_RTERM_PLLCEOUT%i_W"
+					: "HCLK_IOI_RTERM_PLLCLKOUT%i_W",
+					0, y, model->x_width - RIGHT_INNER_O },
+				 { wire == PLLCE ? "HCLK_MCB_PLLCEOUT%i_W"
+					: "HCLK_MCB_PLLCLKOUT%i_W",
+					0, y, model->x_width - RIGHT_MCB_O },
+				 { pf("HCLK_IOIL_%s%%i", s1), 0, y, model->x_width - RIGHT_IO_DEVS_O }}};
+			if ((rc = add_conn_net(model, NOPREF_BI_F, &n))) FAIL(rc);
 		}
+
+		// wire up and down the row (8 each) to reach all io devices
+		if ((rc = net_up_down(model, y, model->x_width - RIGHT_IO_DEVS_O,
+			wire, &up_net, &down_net))) FAIL(rc);
 		if (up_net.num_pts > 1
 		    && (rc = add_conn_net(model, NOPREF_BI_F, &up_net))) FAIL(rc);
 		if (down_net.num_pts > 1
@@ -796,111 +880,116 @@ fail:
 
 static int clkpll(struct fpga_model *model)
 {
-	int x, rc, left_half;
+	int x, rc;
+	struct w_net net;
 
 	//
 	// clk pll 0:1
 	//
 
-	{
-		struct seed_data clkpll_seeds[] = {
-			{ X_OUTER_LEFT, 		"REGL_CLKPLL%i" },
-			{ X_INNER_LEFT, 		"REGL_LTERM_CLKPLL%i" },
-			{ X_FABRIC_ROUTING_COL
-			  | X_LEFT_IO_ROUTING_COL
-			  | X_RIGHT_IO_ROUTING_COL, 	"INT_CLKPLL%i" },
-			{ X_LEFT_IO_DEVS_COL
-			  | X_FABRIC_BRAM_VIA_COL
-			  | X_FABRIC_MACC_VIA_COL
-			  | X_FABRIC_LOGIC_COL
-			  | X_RIGHT_IO_DEVS_COL, 	"CLE_CLKPLL%i" },
-			{ X_FABRIC_MACC_COL, 		"DSP_CLKPLL%i" },
-			{ X_CENTER_ROUTING_COL, 	"REGC_INT_CLKPLL_IO_RT%i" },
-			{ X_CENTER_LOGIC_COL, 		"REGC_CLECLKPLL_IO_LT%i" },
-			{ X_CENTER_REGS_COL, 		"CLKC_PLL_IO_RT%i" },
-			{ X_INNER_RIGHT, 		"REGR_RTERM_CLKPLL%i" },
-			{ X_OUTER_RIGHT, 		"REGR_CLKPLL%i" },
-			{ 0 }};
-	
-		left_half = 1;
-		seed_strx(model, clkpll_seeds);
+	// two nets - one for left side, one for right side
+	{ struct seed_data seeds[] = {
+		{ X_OUTER_LEFT, 		"REGL_CLKPLL%i" },
+		{ X_INNER_LEFT, 		"REGL_LTERM_CLKPLL%i" },
+		{ X_LEFT_MCB | X_RIGHT_MCB,	"MCB_CLKPLL%i" },
+		{ X_FABRIC_ROUTING_COL
+		  | X_LEFT_IO_ROUTING_COL
+		  | X_RIGHT_IO_ROUTING_COL
+		  | X_FABRIC_BRAM_COL,	 	"INT_CLKPLL%i" },
+		{ X_LEFT_IO_DEVS_COL
+		  | X_FABRIC_BRAM_VIA_COL
+		  | X_FABRIC_MACC_VIA_COL
+		  | X_FABRIC_LOGIC_COL
+		  | X_RIGHT_IO_DEVS_COL, 	"CLE_CLKPLL%i" },
+		{ X_FABRIC_MACC_COL, 		"DSP_CLKPLL%i" },
+		{ X_CENTER_ROUTING_COL, 	"REGC_INT_CLKPLL_IO_RT%i" },
+		{ X_CENTER_LOGIC_COL, 		"REGC_CLECLKPLL_IO_LT%i" },
+		{ X_CENTER_CMTPLL_COL, 		"REGC_CLKPLL_IO_LT%i" },
+		{ X_CENTER_REGS_COL, 		"CLKC_PLL_IO_RT%i" },
+		{ X_INNER_RIGHT, 		"REGR_RTERM_CLKPLL%i" },
+		{ X_OUTER_RIGHT, 		"REGR_CLKPLL%i" },
+		{ 0 }};
+	seed_strx(model, seeds);
+	net.last_inc = 1;
+	net.num_pts = 0;
+	for (x = 0; x < model->x_width; x++) {
+		ASSERT(model->tmp_str[x]);
+		ASSERT(net.num_pts < sizeof(net.pt)/sizeof(net.pt[0]));
 
-		for (x = 0; x < model->x_width; x++) {
-			if (x == model->left_gclk_sep_x
-			    || x == model->right_gclk_sep_x)
-				continue;
+		net.pt[net.num_pts].start_count = 0;
+		net.pt[net.num_pts].x = x;
+		net.pt[net.num_pts].y = model->center_y;
+		net.pt[net.num_pts].name = model->tmp_str[x];
+		net.num_pts++;
 
-			if (is_atx(X_CENTER_CMTPLL_COL, model, x))
-				model->tmp_str[x] = left_half
-				  ? "REGC_CLKPLL_IO_LT%i"
-				  : "REGC_CLKPLL_IO_RT%i";
-			if (!model->tmp_str[x])
-				continue;
+		if (is_atx(X_CENTER_CMTPLL_COL, model, x)) {
+			// left-side net
+			if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) FAIL(rc);
 
-			if ((rc = add_conn_range(model, NOPREF_BI_F,
-				model->center_y, x, model->tmp_str[x], 0, 1,
-				model->center_y,
-				left_half ? model->left_gclk_sep_x
-					: model->right_gclk_sep_x,
-				"INT_CLKPLL%i", 0))) FAIL(rc);
-			if (left_half && is_atx(X_CENTER_CMTPLL_COL, model, x)) {
-				left_half = 0;
-				x--; // wire up cmtpll col on right side as well
-			}
+			// start right side
+			net.pt[0].start_count = 0;
+			net.pt[0].x = x;
+			net.pt[0].y = model->center_y;
+			net.pt[0].name = "REGC_CLKPLL_IO_RT%i";
+			net.num_pts = 1;
 		}
 	}
+	// right-side net
+	if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) FAIL(rc); }
 
 	//
 	// clk pll lock 0:1
 	//
 
-	{
-		struct seed_data clkpll_lock_seeds[] = {
-			{ X_OUTER_LEFT, 		"REGL_LOCKED%i" },
-			{ X_INNER_LEFT, 		"REGH_LTERM_LOCKED%i" },
-			{ X_FABRIC_ROUTING_COL
-			  | X_LEFT_IO_ROUTING_COL
-			  | X_RIGHT_IO_ROUTING_COL, 	"INT_CLKPLL_LOCK%i" },
-			{ X_LEFT_IO_DEVS_COL
-			  | X_FABRIC_BRAM_VIA_COL
-			  | X_FABRIC_MACC_VIA_COL
-			  | X_FABRIC_LOGIC_COL
-			  | X_RIGHT_IO_DEVS_COL, 	"CLE_CLKPLL_LOCK%i" },
-			{ X_FABRIC_MACC_COL, 		"DSP_CLKPLL_LOCK%i" },
-			{ X_CENTER_ROUTING_COL, 	"REGC_INT_CLKPLL_LOCK_RT%i" },
-			{ X_CENTER_LOGIC_COL,	 	"REGC_CLECLKPLL_LOCK_LT%i" },
-			{ X_CENTER_REGS_COL, 		"CLKC_PLL_LOCK_RT%i" },
-			{ X_INNER_RIGHT, 		"REGH_RTERM_LOCKED%i" },
-			{ X_OUTER_RIGHT, 		"REGR_LOCKED%i" },
-			{ 0 }};
-	
-		left_half = 1;
-		seed_strx(model, clkpll_lock_seeds);
+	// two nets - one for left side, one for right side
+	{ struct seed_data seeds[] = {
+		{ X_OUTER_LEFT, 		"REGL_LOCKED%i" },
+		{ X_INNER_LEFT, 		"REGH_LTERM_LOCKED%i" },
+		{ X_LEFT_MCB | X_RIGHT_MCB,	"MCB_CLKPLL_LOCK%i" },
+		{ X_FABRIC_ROUTING_COL
+		  | X_LEFT_IO_ROUTING_COL
+		  | X_RIGHT_IO_ROUTING_COL
+		  | X_FABRIC_BRAM_COL,	 	"INT_CLKPLL_LOCK%i" },
+		{ X_LEFT_IO_DEVS_COL
+		  | X_FABRIC_BRAM_VIA_COL
+		  | X_FABRIC_MACC_VIA_COL
+		  | X_FABRIC_LOGIC_COL
+		  | X_RIGHT_IO_DEVS_COL, 	"CLE_CLKPLL_LOCK%i" },
+		{ X_FABRIC_MACC_COL, 		"DSP_CLKPLL_LOCK%i" },
+		{ X_CENTER_ROUTING_COL, 	"REGC_INT_CLKPLL_LOCK_RT%i" },
+		{ X_CENTER_LOGIC_COL,	 	"REGC_CLECLKPLL_LOCK_LT%i" },
+		{ X_CENTER_CMTPLL_COL, 		"CLK_PLL_LOCK_LT%i" },
+		{ X_CENTER_REGS_COL, 		"CLKC_PLL_LOCK_RT%i" },
+		{ X_INNER_RIGHT, 		"REGH_RTERM_LOCKED%i" },
+		{ X_OUTER_RIGHT, 		"REGR_LOCKED%i" },
+		{ 0 }};
+	seed_strx(model, seeds);
+	net.last_inc = 1;
+	net.num_pts = 0;
+	for (x = 0; x < model->x_width; x++) {
+		ASSERT(model->tmp_str[x]);
+		ASSERT(net.num_pts < sizeof(net.pt)/sizeof(net.pt[0]));
 
-		for (x = 0; x < model->x_width; x++) {
-			if (x == model->left_gclk_sep_x
-			    || x == model->right_gclk_sep_x)
-				continue;
+		net.pt[net.num_pts].start_count = 0;
+		net.pt[net.num_pts].x = x;
+		net.pt[net.num_pts].y = model->center_y;
+		net.pt[net.num_pts].name = model->tmp_str[x];
+		net.num_pts++;
 
-			if (is_atx(X_CENTER_CMTPLL_COL, model, x))
-				model->tmp_str[x] = left_half
-				  ? "CLK_PLL_LOCK_LT%i"
-				  : "CLK_PLL_LOCK_RT%i";
-			if (!model->tmp_str[x])
-				continue;
+		if (is_atx(X_CENTER_CMTPLL_COL, model, x)) {
+			// left-side net
+			if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) FAIL(rc);
 
-			if ((rc = add_conn_range(model, NOPREF_BI_F,
-				model->center_y, x, model->tmp_str[x], 0, 1,
-				model->center_y,
-				left_half ? model->left_gclk_sep_x
-					: model->right_gclk_sep_x,
-				"INT_CLKPLL_LOCK%i", 0))) FAIL(rc);
-			if (left_half && is_atx(X_CENTER_CMTPLL_COL, model, x)) {
-				left_half = 0;
-				x--; // wire up cmtpll col on right side as well
-			}
+			// start right side
+			net.pt[0].start_count = 0;
+			net.pt[0].x = x;
+			net.pt[0].y = model->center_y;
+			net.pt[0].name = "CLK_PLL_LOCK_RT%i";
+			net.num_pts = 1;
 		}
 	}
+	// right-side net
+	if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) FAIL(rc); }
 	return 0;
 fail:
 	return rc;
@@ -908,178 +997,493 @@ fail:
 
 static int ckpin(struct fpga_model *model)
 {
-	int x, rc, left_half, gclk_sep_pos, start1;
+	int y, x, rc;
+	struct w_net net;
 
 	//
-	// ckpin 0:7
+	// ckpin is made out of 8 nets.
+	//
+	// 4 vertical through center_x:
+	//	1. top edge to top midbuf
+	//	2. top midbuf to center
+	// 	3. center to bottom midbuf
+	//	4. bottom midbuf to bottom edge
+	// 4 horizontal through center_y:
+	//	1. left edge to left_gclk_sep_x
+	//	2. left_gclk_sep_x to center
+	//	3. center to right_gclk_sep_x
+	//	4. right_gclk_sep_x to right edge
 	//
 
-	{
-		struct seed_data ckpin_seeds[] = {
-			{ X_OUTER_LEFT,			"REGL_CKPIN%i" },
-			{ X_INNER_LEFT,			"REGH_LTERM_CKPIN%i" },
-			{ X_FABRIC_ROUTING_COL
-			  | X_LEFT_IO_ROUTING_COL
-			  | X_RIGHT_IO_ROUTING_COL,	"REGH_CKPIN%i_INT" },
-			{ X_LEFT_IO_DEVS_COL
-			  | X_FABRIC_BRAM_VIA_COL
-			  | X_FABRIC_MACC_VIA_COL
-			  | X_FABRIC_LOGIC_COL
-			  | X_RIGHT_IO_DEVS_COL,	"REGH_CKPIN%i_CLB" },
-			{ X_FABRIC_MACC_COL,		"REGH_CKPIN%i_DSP" },
-			{ X_CENTER_ROUTING_COL,		"REGC_INT_CKPIN%i_INT" },
-			{ X_CENTER_LOGIC_COL,		"REGC_CLECKPIN%i_CLB" },
-			{ X_CENTER_CMTPLL_COL,		"REGC_CMT_CKPIN%i" },
-			{ X_CENTER_REGS_COL,		"CLKC_CKLR%i" },
-			{ X_INNER_RIGHT,		"REGH_RTERM_CKPIN%i" },
-			{ X_OUTER_RIGHT,		"REGR_CKPIN%i" },
-			{ 0 }};
-		char* gclk_sep_str;
-	
-		left_half = 1;
-		seed_strx(model, ckpin_seeds);
-		for (x = 0; x < model->x_width; x++) {
-			if (x == model->left_gclk_sep_x
-			    || x == model->right_gclk_sep_x)
-				continue;
-			if (!model->tmp_str[x])
-				continue;
-	
-			if (is_atx(X_CENTER_ROUTING_COL|X_CENTER_LOGIC_COL|X_CENTER_CMTPLL_COL, model, x))
-				start1 = 8;
-			else if (is_atx(X_CENTER_REGS_COL, model, x))
-				start1 = left_half ? 8 : 0;
-			else
-				start1 = 0;
-	
-			gclk_sep_pos = left_half ? model->left_gclk_sep_x : model->right_gclk_sep_x;
-			gclk_sep_str = ((x > gclk_sep_pos) ^ left_half) ? "REGH_DSP_IN_CKPIN%i" : "REGH_DSP_OUT_CKPIN%i";
-			if ((rc = add_conn_range(model, NOPREF_BI_F,
-				model->center_y, x, model->tmp_str[x], start1, start1+7,
-				model->center_y, gclk_sep_pos,
-				gclk_sep_str, 0))) FAIL(rc);
-	
-			// In this loop we tie around the CENTER_REGS_COL, not the
-			// CENTER_CMTPLL_COL as before.
-			if (left_half && is_atx(X_CENTER_REGS_COL, model, x)) {
-				left_half = 0;
-				x--; // wire up center regs col on right side as well
-			}
+	// vertical
+	{ struct seed_data y_seeds[] = {
+		{ Y_INNER_TOP,		"REGV_TTERM_CKPIN%i" },
+		{ Y_ROW_HORIZ_AXSYMM,	"CLKV_HCLK_CKPIN%i" },
+		{ Y_CHIP_HORIZ_REGS,	"CLKC_CKTB%i" },
+		{ Y_INNER_BOTTOM,	"REGV_BTERM_CKPIN%i" },
+		{ Y_REGULAR_ROW,	"CLKV_CKPIN%i" },
+		{ 0 }};
+	seed_stry(model, y_seeds);
+
+	net.last_inc = 7;
+	net.pt[0].start_count = 0;
+	net.pt[0].x = model->center_x-CENTER_CMTPLL_O;
+	net.pt[0].y = TOP_OUTER_ROW;
+	net.pt[0].name = "REGT_CKPIN%i";
+	net.pt[1].start_count = 0;
+	net.pt[1].x = model->center_x-CENTER_CMTPLL_O;
+	net.pt[1].y = TOP_INNER_ROW;
+	net.pt[1].name = "REGT_TTERM_CKPIN%i";
+	net.num_pts = 2;
+
+	for (y = TOP_INNER_ROW; y <= model->y_height - BOT_INNER_ROW; y++) {
+		ASSERT(model->tmp_str[y]);
+		ASSERT(net.num_pts < sizeof(net.pt)/sizeof(net.pt[0]));
+
+		net.pt[net.num_pts].start_count = 0;
+		net.pt[net.num_pts].x = model->center_x;
+		net.pt[net.num_pts].y = y;
+		net.pt[net.num_pts].name = model->tmp_str[y];
+		net.num_pts++;
+
+		if (y < model->center_y
+		    && YX_TILE(model, y+1, model->center_x)->flags & TF_CENTER_MIDBUF) {
+			net.pt[net.num_pts-1].name = "CLKV_CKPIN_BUF%i";
+			if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) FAIL(rc);
+			net.pt[0].start_count = 0;
+			net.pt[0].x = model->center_x;
+			net.pt[0].y = y;
+			net.pt[0].name = "CLKV_MIDBUF_TOP_CKPIN%i";
+			net.num_pts = 1;
+		} else if (is_aty(Y_CHIP_HORIZ_REGS, model, y)) {
+			if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) FAIL(rc);
+			net.pt[0].start_count = 8;
+			net.pt[0].x = model->center_x;
+			net.pt[0].y = y;
+			net.pt[0].name = "CLKC_CKTB%i";
+			net.num_pts = 1;
+		} else if (y > model->center_y
+		    && YX_TILE(model, y-1, model->center_x)->flags & TF_CENTER_MIDBUF) {
+			net.pt[net.num_pts-1].name = "CLKV_CKPIN_BOT_BUF%i";
+			if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) FAIL(rc);
+			net.pt[0].start_count = 0;
+			net.pt[0].x = model->center_x;
+			net.pt[0].y = y;
+			net.pt[0].name = "CLKV_MIDBUF_BOT_CKPIN%i";
+			net.num_pts = 1;
 		}
 	}
+	net.pt[net.num_pts].start_count = 0;
+	net.pt[net.num_pts].x = model->center_x-CENTER_CMTPLL_O;
+	net.pt[net.num_pts].y = model->y_height-BOT_INNER_ROW;
+	net.pt[net.num_pts].name = "REGB_BTERM_CKPIN%i";
+	net.num_pts++;
+	net.pt[net.num_pts].start_count = 0;
+	net.pt[net.num_pts].x = model->center_x-CENTER_CMTPLL_O;
+	net.pt[net.num_pts].y = model->y_height-BOT_OUTER_ROW;
+	net.pt[net.num_pts].name = "REGB_CKPIN%i";
+	net.num_pts++;
+	if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) FAIL(rc); }
+
+	// horizontal
+	{ struct seed_data x_seeds[] = {
+		{ X_OUTER_LEFT,			"REGL_CKPIN%i" },
+		{ X_INNER_LEFT,			"REGH_LTERM_CKPIN%i" },
+		{ X_LEFT_MCB | X_RIGHT_MCB, 	"MCB_REGH_CKPIN%i" },
+		{ X_FABRIC_ROUTING_COL
+		  | X_LEFT_IO_ROUTING_COL
+		  | X_RIGHT_IO_ROUTING_COL
+		  | X_FABRIC_BRAM_COL,		"REGH_CKPIN%i_INT" },
+		{ X_LEFT_IO_DEVS_COL
+		  | X_FABRIC_BRAM_VIA_COL
+		  | X_FABRIC_MACC_VIA_COL
+		  | X_FABRIC_LOGIC_COL
+		  | X_RIGHT_IO_DEVS_COL,	"REGH_CKPIN%i_CLB" },
+		{ X_FABRIC_MACC_COL,		"REGH_CKPIN%i_DSP" },
+		{ X_CENTER_ROUTING_COL,		"REGC_INT_CKPIN%i_INT" },
+		{ X_CENTER_LOGIC_COL,		"REGC_CLECKPIN%i_CLB" },
+		{ X_CENTER_CMTPLL_COL,		"REGC_CMT_CKPIN%i" },
+		{ X_CENTER_REGS_COL,		"CLKC_CKLR%i" },
+		{ X_INNER_RIGHT,		"REGH_RTERM_CKPIN%i" },
+		{ X_OUTER_RIGHT,		"REGR_CKPIN%i" },
+		{ 0 }};
+	seed_strx(model, x_seeds);
+
+	net.last_inc = 7;
+	net.num_pts = 0;
+	for (x = 0; x < model->x_width; x++) {
+		ASSERT(model->tmp_str[x]);
+		ASSERT(net.num_pts < sizeof(net.pt)/sizeof(net.pt[0]));
+
+		net.pt[net.num_pts].start_count =
+			is_atx(X_CENTER_MAJOR, model, x) ? 8 : 0;
+		net.pt[net.num_pts].x = x;
+		net.pt[net.num_pts].y = model->center_y;
+		net.pt[net.num_pts].name = model->tmp_str[x];
+		net.num_pts++;
+
+		if (x == model->left_gclk_sep_x) {
+			net.pt[net.num_pts-1].name = "REGH_DSP_IN_CKPIN%i";
+			if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) FAIL(rc);
+			net.pt[0].start_count = 0;
+			net.pt[0].x = x;
+			net.pt[0].y = model->center_y;
+			net.pt[0].name = "REGH_DSP_OUT_CKPIN%i";
+			net.num_pts = 1;
+		} else if (x == model->center_x) {
+			if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) FAIL(rc);
+			net.pt[0].start_count = 0;
+			net.pt[0].x = x;
+			net.pt[0].y = model->center_y;
+			net.pt[0].name = "CLKC_CKLR%i";
+			net.num_pts = 1;
+		} else if (x == model->right_gclk_sep_x) {
+			net.pt[net.num_pts-1].name = "REGH_DSP_OUT_CKPIN%i";
+			if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) FAIL(rc);
+			net.pt[0].start_count = 0;
+			net.pt[0].x = x;
+			net.pt[0].y = model->center_y;
+			net.pt[0].name = "REGH_DSP_IN_CKPIN%i";
+			net.num_pts = 1;
+		}
+	}
+	if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) FAIL(rc); }
 	return 0;
 fail:
 	return rc;
 }
 
-static int clkindirect_feedback(struct fpga_model *model)
+static int clkindirect_feedback(struct fpga_model *model, enum extra_wires wire)
 {
-	int x, i, rc, left_half, start1, last1, start2;
+	const struct seed_data clk_indirect_seeds[] = {
+		{ X_OUTER_LEFT, 		"REGL_CLK_INDIRECT%i" },
+		{ X_INNER_LEFT, 		"REGH_LTERM_CLKINDIRECT%i" },
+		{ X_LEFT_MCB | X_RIGHT_MCB,	"MCB_REGH_CLKINDIRECT_LR%i" },
+		{ X_FABRIC_ROUTING_COL
+		  | X_LEFT_IO_ROUTING_COL
+		  | X_RIGHT_IO_ROUTING_COL
+		  | X_FABRIC_BRAM_COL,	 	"REGH_CLKINDIRECT_LR%i_INT" },
+		{ X_LEFT_IO_DEVS_COL
+		  | X_FABRIC_BRAM_VIA_COL
+		  | X_FABRIC_MACC_VIA_COL
+		  | X_FABRIC_LOGIC_COL
+		  | X_RIGHT_IO_DEVS_COL, 	"REGH_CLKINDIRECT_LR%i_CLB" },
+		{ X_FABRIC_MACC_COL, 		"REGH_CLKINDIRECT_LR%i_DSP" },
+		{ X_CENTER_ROUTING_COL, 	"REGC_INT_CLKINDIRECT_LR%i_INT" },
+		{ X_CENTER_LOGIC_COL, 		"REGC_CLECLKINDIRECT_LR%i_CLB" },
+		{ X_CENTER_CMTPLL_COL, 		"REGC_CMT_CLKINDIRECT_LR%i" },
+		{ X_CENTER_REGS_COL, 		"REGC_CLKINDIRECT_LR%i" },
+		{ X_INNER_RIGHT, 		"REGH_RTERM_CLKINDIRECT%i" },
+		{ X_OUTER_RIGHT, 		"REGR_CLK_INDIRECT%i" },
+		{ 0 }};
+	const struct seed_data clk_feedback_seeds[] = {
+		{ X_OUTER_LEFT, 		"REGL_CLK_FEEDBACK%i" },
+		{ X_INNER_LEFT, 		"REGH_LTERM_CLKFEEDBACK%i" },
+		{ X_LEFT_MCB | X_RIGHT_MCB,	"MCB_REGH_CLKFEEDBACK_LR%i" },
+		{ X_FABRIC_ROUTING_COL
+		  | X_LEFT_IO_ROUTING_COL
+		  | X_RIGHT_IO_ROUTING_COL
+		  | X_FABRIC_BRAM_COL,	 	"REGH_CLKFEEDBACK_LR%i_INT" },
+		{ X_LEFT_IO_DEVS_COL
+		  | X_FABRIC_BRAM_VIA_COL
+		  | X_FABRIC_MACC_VIA_COL
+		  | X_FABRIC_LOGIC_COL
+		  | X_RIGHT_IO_DEVS_COL, 	"REGH_CLKFEEDBACK_LR%i_CLB" },
+		{ X_FABRIC_MACC_COL, 		"REGH_CLKFEEDBACK_LR%i_DSP" },
+		{ X_CENTER_ROUTING_COL, 	"REGC_INT_CLKFEEDBACK_LR%i_INT" },
+		{ X_CENTER_LOGIC_COL, 		"REGC_CLECLKFEEDBACK_LR%i_CLB" },
+		{ X_CENTER_CMTPLL_COL, 		"REGC_CMT_CLKFEEDBACK_LR%i" },
+		{ X_CENTER_REGS_COL, 		"REGC_CLKFEEDBACK_LR%i" },
+		{ X_INNER_RIGHT, 		"REGH_RTERM_CLKFEEDBACK%i" },
+		{ X_OUTER_RIGHT, 		"REGR_CLK_FEEDBACK%i" },
+		{ 0 }};
+	int y, x, i, top_pll_y, top_dcm_y, bot_pll_y, bot_dcm_y;
+	int regular_pts, rc;
+	const char *wstr;
+	struct w_net net;
 
 	//
-	// clk indirect 0:7
-	// clk feedback 0:7
+	// clk_indirect and clk_feedback have 6 nets:
+	//
+	// 2 small nets - one for the top side, one for the bottom side, that
+	// connect the pll and dcm devices on each side to their termination
+	// tiles.
+	//
+	// Then 4 larger nets each covering one quarter of the chip (bottom-left,
+	// bottom-right, top-left and top-right). They connect together 4 wires
+	// of the dcm and pll devices on one side to the entire center_y row
+	// (separately for left and right columns). The bottom pll/dcm go to
+	// center row 0:3, the top pll/dcm go to center row 4:7.
 	//
 
-	{
-		struct seed_data clk_indirect_seeds[] = {
-			{ X_OUTER_LEFT, 		"REGL_CLK_INDIRECT%i" },
-			{ X_INNER_LEFT, 		"REGH_LTERM_CLKINDIRECT%i" },
-			{ X_FABRIC_ROUTING_COL
-			  | X_LEFT_IO_ROUTING_COL
-			  | X_RIGHT_IO_ROUTING_COL, 	"REGH_CLKINDIRECT_LR%i_INT" },
-			{ X_LEFT_IO_DEVS_COL
-			  | X_FABRIC_BRAM_VIA_COL
-			  | X_FABRIC_MACC_VIA_COL
-			  | X_FABRIC_LOGIC_COL
-			  | X_RIGHT_IO_DEVS_COL, 	"REGH_CLKINDIRECT_LR%i_CLB" },
-			{ X_FABRIC_MACC_COL, 		"REGH_CLKINDIRECT_LR%i_DSP" },
-			{ X_CENTER_ROUTING_COL, 	"REGC_INT_CLKINDIRECT_LR%i_INT" },
-			{ X_CENTER_LOGIC_COL, 		"REGC_CLECLKINDIRECT_LR%i_CLB" },
-			{ X_CENTER_CMTPLL_COL, 		"REGC_CMT_CLKINDIRECT_LR%i" },
-			{ X_CENTER_REGS_COL, 		"REGC_CLKINDIRECT_LR%i" },
-			{ X_INNER_RIGHT, 		"REGH_RTERM_CLKINDIRECT%i" },
-			{ X_OUTER_RIGHT, 		"REGR_CLK_INDIRECT%i" },
-			{ 0 }};
-		struct seed_data clk_feedback_seeds[] = {
-			{ X_OUTER_LEFT, 		"REGL_CLK_FEEDBACK%i" },
-			{ X_INNER_LEFT, 		"REGH_LTERM_CLKFEEDBACK%i" },
-			{ X_FABRIC_ROUTING_COL
-			  | X_LEFT_IO_ROUTING_COL
-			  | X_RIGHT_IO_ROUTING_COL, 	"REGH_CLKFEEDBACK_LR%i_INT" },
-			{ X_LEFT_IO_DEVS_COL
-			  | X_FABRIC_BRAM_VIA_COL
-			  | X_FABRIC_MACC_VIA_COL
-			  | X_FABRIC_LOGIC_COL
-			  | X_RIGHT_IO_DEVS_COL, 	"REGH_CLKFEEDBACK_LR%i_CLB" },
-			{ X_FABRIC_MACC_COL, 		"REGH_CLKFEEDBACK_LR%i_DSP" },
-			{ X_CENTER_ROUTING_COL, 	"REGC_INT_CLKFEEDBACK_LR%i_INT" },
-			{ X_CENTER_LOGIC_COL, 		"REGC_CLECLKFEEDBACK_LR%i_CLB" },
-			{ X_CENTER_CMTPLL_COL, 		"REGC_CMT_CLKFEEDBACK_LR%i" },
-			{ X_CENTER_REGS_COL, 		"REGC_CLKFEEDBACK_LR%i" },
-			{ X_INNER_RIGHT, 		"REGH_RTERM_CLKFEEDBACK%i" },
-			{ X_OUTER_RIGHT, 		"REGR_CLK_FEEDBACK%i" },
-			{ 0 }};
-		struct seed_data* seeds[2] = {clk_indirect_seeds, clk_feedback_seeds};
-		const char* gclk_sep_str[2] = {"REGH_CLKINDIRECT_LR%i_INT", "REGH_CLKFEEDBACK_LR%i_INT"};
+	if (wire == CLK_INDIRECT) {
+		seed_strx(model, clk_indirect_seeds);
+		wstr = "INDIRECT";
+	} else if (wire == CLK_FEEDBACK) {
+		seed_strx(model, clk_feedback_seeds);
+		wstr = "FEEDBACK";
+	} else FAIL(EINVAL);
 
-		for (i = 0; i <= 1; i++) { // indirect and feedback
-			left_half = 1;
-			seed_strx(model, seeds[i]);
-			for (x = 0; x < model->x_width; x++) {
-				if (x == model->left_gclk_sep_x
-				    || x == model->right_gclk_sep_x)
-					continue;
-				if (!model->tmp_str[x])
-					continue;
+	//
+	// 2 termination to pll/dcm nets (top and bottom side)
+	//
 
-				if (is_atx(X_CENTER_LOGIC_COL, model, x)) {
-					start1 = 8;
-					last1 = 15;
-					start2 = 0;
-				} else if (is_atx(X_CENTER_CMTPLL_COL, model, x)) {
-					if (left_half) {
-						start1 = 8;
-						last1 = 15;
-						start2 = 0;
-					} else {
-						start1 = 0;
-						last1 = 3;
-						start2 = 4;
-					}
-				} else if (is_atx(X_CENTER_REGS_COL|X_INNER_RIGHT|X_OUTER_RIGHT, model, x)) {
-					start1 = 0;
-					last1 = 3;
-					start2 = 4;
-				} else {
-					start1 = 0;
-					last1 = 7;
-					start2 = 0;
-				}
-	
-				if ((rc = add_conn_range(model, NOPREF_BI_F,
-					model->center_y, x, model->tmp_str[x], start1, last1,
-					model->center_y, left_half ? model->left_gclk_sep_x : model->right_gclk_sep_x,
-					gclk_sep_str[i], start2))) FAIL(rc);
-				if (last1 == 3) {
-					if (start1 || start2 != 4) {
-						fprintf(stderr, "Internal error in line %i.\n", __LINE__);
-						FAIL(rc);
-					}
-					if ((rc = add_conn_range(model, NOPREF_BI_F,
-						model->center_y, x, model->tmp_str[x], 4, 7,
-						model->center_y, left_half ? model->left_gclk_sep_x : model->right_gclk_sep_x,
-						gclk_sep_str[i], 0))) FAIL(rc);
-				}
+	top_pll_y = -1;
+	top_dcm_y = -1;
+	bot_pll_y = -1;
+	bot_dcm_y = -1;
 
-				if (left_half && is_atx(X_CENTER_CMTPLL_COL, model, x)) {
-					left_half = 0;
-					x--; // wire up cmtpll col on right side as well
-				}
-			}
+	net.last_inc = 7;
+	net.pt[0].name = pf("REGT_CLK_%s%%i", wstr);
+	net.pt[0].start_count = 0;
+	net.pt[0].y = TOP_OUTER_ROW;
+	net.pt[0].x = model->center_x - CENTER_CMTPLL_O;
+	net.pt[1].name = pf("REGT_TTERM_CLK%s%%i", wstr);
+	net.pt[1].start_count = 0;
+	net.pt[1].y = TOP_INNER_ROW;
+	net.pt[1].x = model->center_x - CENTER_CMTPLL_O;
+	net.num_pts = 2;
+	for (y = TOP_FIRST_REGULAR; y <= model->y_height - BOT_LAST_REGULAR_O; y++) {
+		if (y < model->center_y
+		    && has_device(model, y, model->center_x-CENTER_CMTPLL_O, DEV_PLL)) {
+			top_pll_y = y;
+			net.pt[net.num_pts].name = pf("PLL_CLK_%s_TB%%i", wstr);
+			net.pt[net.num_pts].start_count = 0;
+			net.pt[net.num_pts].y = y;
+			net.pt[net.num_pts].x = model->center_x - CENTER_CMTPLL_O;
+			net.num_pts++;
+		} else if (y < model->center_y
+		    && has_device(model, y, model->center_x-CENTER_CMTPLL_O, DEV_DCM)) {
+			top_dcm_y = y;
+			net.pt[net.num_pts].name = pf("DCM_CLK_%s_LR_TOP%%i", wstr);
+			net.pt[net.num_pts].start_count = 0;
+			net.pt[net.num_pts].y = y;
+			net.pt[net.num_pts].x = model->center_x - CENTER_CMTPLL_O;
+			net.num_pts++;
+		} else if (y == model->center_y) {
+			if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) FAIL(rc);
+			// start bottom side net
+			net.num_pts = 0;
+		} else if (y > model->center_y
+		    && has_device(model, y, model->center_x-CENTER_CMTPLL_O, DEV_PLL)) {
+			bot_pll_y = y;
+			net.pt[net.num_pts].name = pf("CMT_PLL_CLK_%s_LRBOT%%i", wstr);
+			net.pt[net.num_pts].start_count = 0;
+			net.pt[net.num_pts].y = y;
+			net.pt[net.num_pts].x = model->center_x - CENTER_CMTPLL_O;
+			net.num_pts++;
+		} else if (y > model->center_y
+		    && has_device(model, y, model->center_x-CENTER_CMTPLL_O, DEV_DCM)) {
+			bot_dcm_y = y;
+			net.pt[net.num_pts].name = pf("DCM_CLK_%s_TB_BOT%%i", wstr);
+			net.pt[net.num_pts].start_count = 0;
+			net.pt[net.num_pts].y = y;
+			net.pt[net.num_pts].x = model->center_x - CENTER_CMTPLL_O;
+			net.num_pts++;
 		}
 	}
+	net.pt[net.num_pts].name = pf("REGB_BTERM_CLK%s%%i", wstr);
+	net.pt[net.num_pts].start_count = 0;
+	net.pt[net.num_pts].y = model->y_height - BOT_INNER_ROW;
+	net.pt[net.num_pts].x = model->center_x - CENTER_CMTPLL_O;
+	net.num_pts++;
+	net.pt[net.num_pts].name = pf("REGB_CLK_%s%%i", wstr);
+	net.pt[net.num_pts].start_count = 0;
+	net.pt[net.num_pts].y = model->y_height - BOT_OUTER_ROW;
+	net.pt[net.num_pts].x = model->center_x - CENTER_CMTPLL_O;
+	net.num_pts++;
+	if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) FAIL(rc);
 
+	// todo: this function doesn't support more than one pll or dcm
+	//       tile per chip side right now.
+	ASSERT(top_pll_y != -1 && top_dcm_y != -1
+		&& bot_pll_y != -1 && bot_dcm_y != -1);
+
+	//
+	// 4 nets for each quarter of the chip
+	//
+	
+	net.last_inc = 3;
+	net.num_pts = 0;
+	for (x = LEFT_IO_ROUTING; x < model->x_width - RIGHT_INNER_O; x++) {
+		if (is_atx(X_CENTER_ROUTING_COL, model, x)) {
+
+			// finish bottom net on left side
+			for (i = 0; i < net.num_pts; i++)
+				net.pt[i].start_count = 0;
+			regular_pts = net.num_pts;
+			// pll and dcm
+			net.pt[net.num_pts].name = pf("PLL_CLK_%s_TB%%i", wstr);
+			net.pt[net.num_pts].start_count = 4;
+			net.pt[net.num_pts].y = bot_pll_y;
+			net.pt[net.num_pts].x = model->center_x - CENTER_CMTPLL_O;
+			net.num_pts++;
+			net.pt[net.num_pts].name = pf("DCM_CLK_%s_LR_TOP%%i", wstr);
+			net.pt[net.num_pts].start_count = 4;
+			net.pt[net.num_pts].y = bot_dcm_y;
+			net.pt[net.num_pts].x = model->center_x - CENTER_CMTPLL_O;
+			net.num_pts++;
+			// left termination
+			net.pt[net.num_pts].name = model->tmp_str[LEFT_OUTER_COL];
+			net.pt[net.num_pts].start_count = 0;
+			net.pt[net.num_pts].y = model->center_y;
+			net.pt[net.num_pts].x = LEFT_OUTER_COL;
+			net.num_pts++;
+			net.pt[net.num_pts].name = model->tmp_str[LEFT_INNER_COL];
+			net.pt[net.num_pts].start_count = 0;
+			net.pt[net.num_pts].y = model->center_y;
+			net.pt[net.num_pts].x = LEFT_INNER_COL;
+			net.num_pts++;
+			// 3 columns from center major
+			net.pt[net.num_pts].start_count = 0;
+			net.pt[net.num_pts].y = model->center_y;
+			net.pt[net.num_pts].x = model->center_x - CENTER_ROUTING_O;
+			net.pt[net.num_pts].name = model->tmp_str[net.pt[net.num_pts].x];
+			net.num_pts++;
+			net.pt[net.num_pts].start_count = 8;
+			net.pt[net.num_pts].y = model->center_y;
+			net.pt[net.num_pts].x = model->center_x - CENTER_LOGIC_O;
+			net.pt[net.num_pts].name = model->tmp_str[net.pt[net.num_pts].x];
+			net.num_pts++;
+			net.pt[net.num_pts].start_count = 8;
+			net.pt[net.num_pts].y = model->center_y;
+			net.pt[net.num_pts].x = model->center_x - CENTER_CMTPLL_O;
+			net.pt[net.num_pts].name = model->tmp_str[net.pt[net.num_pts].x];
+			net.num_pts++;
+			if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) FAIL(rc);
+
+			// finish top net on left side
+			net.num_pts = regular_pts;
+			for (i = 0; i < net.num_pts; i++)
+				net.pt[i].start_count = 4;
+			// pll and dcm
+			net.pt[net.num_pts].name = pf("CMT_PLL_CLK_%s_LRBOT%%i", wstr);
+			net.pt[net.num_pts].start_count = 4;
+			net.pt[net.num_pts].y = top_pll_y;
+			net.pt[net.num_pts].x = model->center_x - CENTER_CMTPLL_O;
+			net.num_pts++;
+			net.pt[net.num_pts].name = pf("DCM_CLK_%s_TB_BOT%%i", wstr);
+			net.pt[net.num_pts].start_count = 4;
+			net.pt[net.num_pts].y = top_dcm_y;
+			net.pt[net.num_pts].x = model->center_x - CENTER_CMTPLL_O;
+			net.num_pts++;
+			// left termination
+			net.pt[net.num_pts].name = model->tmp_str[LEFT_OUTER_COL];
+			net.pt[net.num_pts].start_count = 4;
+			net.pt[net.num_pts].y = model->center_y;
+			net.pt[net.num_pts].x = LEFT_OUTER_COL;
+			net.num_pts++;
+			net.pt[net.num_pts].name = model->tmp_str[LEFT_INNER_COL];
+			net.pt[net.num_pts].start_count = 4;
+			net.pt[net.num_pts].y = model->center_y;
+			net.pt[net.num_pts].x = LEFT_INNER_COL;
+			net.num_pts++;
+			// 3 colums from center major
+			net.pt[net.num_pts].start_count = 4;
+			net.pt[net.num_pts].y = model->center_y;
+			net.pt[net.num_pts].x = model->center_x - CENTER_ROUTING_O;
+			net.pt[net.num_pts].name = model->tmp_str[net.pt[net.num_pts].x];
+			net.num_pts++;
+			net.pt[net.num_pts].start_count = 12;
+			net.pt[net.num_pts].y = model->center_y;
+			net.pt[net.num_pts].x = model->center_x - CENTER_LOGIC_O;
+			net.pt[net.num_pts].name = model->tmp_str[net.pt[net.num_pts].x];
+			net.num_pts++;
+			net.pt[net.num_pts].start_count = 12;
+			net.pt[net.num_pts].y = model->center_y;
+			net.pt[net.num_pts].x = model->center_x - CENTER_CMTPLL_O;
+			net.pt[net.num_pts].name = model->tmp_str[net.pt[net.num_pts].x];
+			net.num_pts++;
+			if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) FAIL(rc);
+
+			// continue on right side
+			net.num_pts = 0;
+			x = model->center_x;
+			continue;
+		}
+		net.pt[net.num_pts].name = model->tmp_str[x];
+		net.pt[net.num_pts].y = model->center_y;
+		net.pt[net.num_pts].x = x;
+		net.num_pts++;
+	}
+
+	// finish bottom net on right side
+	for (i = 0; i < net.num_pts; i++)
+		net.pt[i].start_count = 0;
+	regular_pts = net.num_pts;
+	// pll and dcm
+	net.pt[net.num_pts].name = pf("PLL_CLK_%s_TB%%i", wstr);
+	net.pt[net.num_pts].start_count = 0;
+	net.pt[net.num_pts].y = bot_pll_y;
+	net.pt[net.num_pts].x = model->center_x - CENTER_CMTPLL_O;
+	net.num_pts++;
+	net.pt[net.num_pts].name = pf("DCM_CLK_%s_LR_TOP%%i", wstr);
+	net.pt[net.num_pts].start_count = 0;
+	net.pt[net.num_pts].y = bot_dcm_y;
+	net.pt[net.num_pts].x = model->center_x - CENTER_CMTPLL_O;
+	net.num_pts++;
+	// right termination
+	net.pt[net.num_pts].start_count = 4;
+	net.pt[net.num_pts].y = model->center_y;
+	net.pt[net.num_pts].x = model->x_width - RIGHT_OUTER_O;
+	net.pt[net.num_pts].name = model->tmp_str[net.pt[net.num_pts].x];
+	net.num_pts++;
+	net.pt[net.num_pts].start_count = 4;
+	net.pt[net.num_pts].y = model->center_y;
+	net.pt[net.num_pts].x = model->x_width - RIGHT_INNER_O;
+	net.pt[net.num_pts].name = model->tmp_str[net.pt[net.num_pts].x];
+	net.num_pts++;
+	// 2 columns from center major
+	net.pt[net.num_pts].start_count = 4;
+	net.pt[net.num_pts].y = model->center_y;
+	net.pt[net.num_pts].x = model->center_x - CENTER_CMTPLL_O;
+	net.pt[net.num_pts].name = model->tmp_str[net.pt[net.num_pts].x];
+	net.num_pts++;
+	net.pt[net.num_pts].start_count = 4;
+	net.pt[net.num_pts].y = model->center_y;
+	net.pt[net.num_pts].x = model->center_x;
+	net.pt[net.num_pts].name = model->tmp_str[net.pt[net.num_pts].x];
+	net.num_pts++;
+	if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) FAIL(rc);
+
+	// finish top net on right side
+	net.num_pts = regular_pts;
+	for (i = 0; i < net.num_pts; i++)
+		net.pt[i].start_count = 4;
+	// pll and dcm
+	net.pt[net.num_pts].name = pf("CMT_PLL_CLK_%s_LRBOT%%i", wstr);
+	net.pt[net.num_pts].start_count = 0;
+	net.pt[net.num_pts].y = top_pll_y;
+	net.pt[net.num_pts].x = model->center_x - CENTER_CMTPLL_O;
+	net.num_pts++;
+	net.pt[net.num_pts].name = pf("DCM_CLK_%s_TB_BOT%%i", wstr);
+	net.pt[net.num_pts].start_count = 0;
+	net.pt[net.num_pts].y = top_dcm_y;
+	net.pt[net.num_pts].x = model->center_x - CENTER_CMTPLL_O;
+	net.num_pts++;
+	// right termination
+	net.pt[net.num_pts].start_count = 0;
+	net.pt[net.num_pts].y = model->center_y;
+	net.pt[net.num_pts].x = model->x_width - RIGHT_OUTER_O;
+	net.pt[net.num_pts].name = model->tmp_str[net.pt[net.num_pts].x];
+	net.num_pts++;
+	net.pt[net.num_pts].start_count = 0;
+	net.pt[net.num_pts].y = model->center_y;
+	net.pt[net.num_pts].x = model->x_width - RIGHT_INNER_O;
+	net.pt[net.num_pts].name = model->tmp_str[net.pt[net.num_pts].x];
+	net.num_pts++;
+	// 2 columns from center major
+	net.pt[net.num_pts].start_count = 0;
+	net.pt[net.num_pts].y = model->center_y;
+	net.pt[net.num_pts].x = model->center_x - CENTER_CMTPLL_O;
+	net.pt[net.num_pts].name = model->tmp_str[net.pt[net.num_pts].x];
+	net.num_pts++;
+	net.pt[net.num_pts].start_count = 0;
+	net.pt[net.num_pts].y = model->center_y;
+	net.pt[net.num_pts].x = model->center_x;
+	net.pt[net.num_pts].name = model->tmp_str[net.pt[net.num_pts].x];
+	net.num_pts++;
+	if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) FAIL(rc);
 	return 0;
 fail:
 	return rc;
