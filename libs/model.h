@@ -262,16 +262,20 @@ int is_aty(int check, struct fpga_model* model, int y);
 					 |X_CENTER_REGS_COL)
 
 // todo and realizations:
-// * maybe the center_logic and routing cols can also be
-//   seen as just a regular xl logic and routing cols.
+// * is_at() which combines X_ Y_ and YX_ into 64-bit and adds a AT_AND
+//   to enable AND logic. then #define is_atx() and is_aty() onto is_at()
 // * maybe the many special cases for bram are better
-//   tied to no-io columns
+//   tied to no-io columns?
 #define X_OUTER_LEFT			0x00000001
 #define X_INNER_LEFT			0x00000002
 #define X_INNER_RIGHT			0x00000004
 #define X_OUTER_RIGHT			0x00000008
 #define X_ROUTING_NO_IO			0x00000010
 #define X_FABRIC_LOGIC_XM_ROUTING_COL	0x00000020 // logic-xm only
+//X_FABRIC_LOGIC_XL_ROUTING_IO
+//X_FABRIC_LOGIC_XL_ROUTING_NO_IO
+//X_FABRIC_LOGIC_XL_IO
+//X_FABRIC_LOGIC_XL_NO_IO
 #define X_FABRIC_LOGIC_XL_ROUTING_COL	0x00000040 // logic-xl only
 #define X_FABRIC_LOGIC_XM_COL		0x00000080
 #define X_FABRIC_LOGIC_XL_COL		0x00000100

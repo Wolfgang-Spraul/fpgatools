@@ -9,10 +9,11 @@
 #include "model.h"
 #include "parts.h"
 
+static int cfb_dfb(struct fpga_model *model);
+static int pcice(struct fpga_model *model);
 static int term_topbot(struct fpga_model *model);
 static int term_leftright(struct fpga_model *model);
 static int term_to_io(struct fpga_model *model, enum extra_wires wire);
-static int pcice(struct fpga_model *model);
 static int clkpll(struct fpga_model *model);
 static int ckpin(struct fpga_model *model);
 static int clkindirect_feedback(struct fpga_model *model, enum extra_wires wire);
@@ -30,6 +31,8 @@ int init_conns(struct fpga_model *model)
 {
 	int rc;
 
+	if ((rc = cfb_dfb(model))) FAIL(rc);
+	if ((rc = pcice(model))) FAIL(rc);
 	if ((rc = term_topbot(model))) FAIL(rc);
 	if ((rc = term_leftright(model))) FAIL(rc);
 
@@ -43,7 +46,6 @@ int init_conns(struct fpga_model *model)
 	if ((rc = clkindirect_feedback(model, CLK_INDIRECT))) FAIL(rc);
 	if ((rc = clkindirect_feedback(model, CLK_FEEDBACK))) FAIL(rc);
 
-	if ((rc = pcice(model))) FAIL(rc);
 	if ((rc = run_gclk(model))) FAIL(rc);
 	if ((rc = run_gclk_horiz_regs(model))) FAIL(rc);
 	if ((rc = run_gclk_vert_regs(model))) FAIL(rc);
@@ -55,6 +57,368 @@ int init_conns(struct fpga_model *model)
 	if ((rc = run_io_wires(model))) FAIL(rc);
 	if ((rc = run_logic_inout(model))) FAIL(rc);
 	if ((rc = run_dirwires(model))) FAIL(rc);
+	return 0;
+fail:
+	return rc;
+}
+
+static int cfb_dfb(struct fpga_model *model)
+{
+	int rc;
+	return 0;
+fail:
+	return rc;
+}
+
+#define DIR_LEFT -1
+#define DIR_RIGHT +1
+#define DIR_UP -1
+#define DIR_DOWN +1
+
+static int pcice_ew(struct fpga_model *model, int y);
+static int pcice_ew_run(struct fpga_model *model, int y, int start_x, int x_dir);
+static int pcice_ew_fill_net(struct fpga_model *model, int y, int *cur_x, int x_dir, struct w_net *net);
+static int pcice_left_right_io(struct fpga_model *model, int x);
+static int pcice_fill_net_io(struct fpga_model *model, struct w_net *net,
+	int hclk_start_y, const char *hclk_str, int y_range, int y_dir, int x);
+static int pcice_left_right_devs(struct fpga_model *model, int x);
+static int pcice_fill_net_devs(struct fpga_model *model, struct w_net *net,
+	int first_y, int last_y, int x);
+
+static int pcice(struct fpga_model *model)
+{
+	struct w_net net;
+	int x, rc;
+
+	rc = add_conn_bi(model,
+		model->center_y-3, LEFT_OUTER_COL, "LIOB_PCICE_TRDY_EXT",
+		model->center_y-2, LEFT_OUTER_COL, "LIOB_PCI_IT_RDY");
+	if (rc) FAIL(rc);
+	rc = add_conn_bi(model,
+		model->center_y-3, LEFT_OUTER_COL, "LIOB_PCICE_TRDY_EXT",
+		model->center_y-1, LEFT_OUTER_COL, "LIOB_PCI_IT_RDY");
+	if (rc) FAIL(rc);
+	rc = add_conn_bi(model,
+		model->center_y-3, LEFT_OUTER_COL, "LIOB_PCICE_TRDY_EXT",
+		model->center_y, LEFT_OUTER_COL, "REGL_PCI_IRDY_IOB");
+	if (rc) FAIL(rc);
+
+	rc = add_conn_bi(model,
+		model->center_y, LEFT_IO_ROUTING, "REGL_PCI_CE_PINW",
+		model->center_y, LEFT_IO_DEVS, "REGH_IOI_PCI_CE");
+	if (rc) FAIL(rc);
+
+	rc = pcice_left_right_io(model, LEFT_IO_DEVS);
+	if (rc) FAIL(rc);
+	rc = pcice_left_right_io(model, model->x_width - RIGHT_IO_DEVS_O);
+	if (rc) FAIL(rc);
+
+	rc = pcice_left_right_devs(model, LEFT_IO_DEVS);
+	if (rc) FAIL(rc);
+	rc = pcice_left_right_devs(model, model->x_width - RIGHT_IO_DEVS_O);
+	if (rc) FAIL(rc);
+
+	for (x = LEFT_SIDE_WIDTH; x < model->x_width - RIGHT_SIDE_WIDTH; x++) {
+		if (has_device(model, TOP_OUTER_IO, x, DEV_ILOGIC)) {
+			net.last_inc = 0;
+			net.pt[0].name = "TTERM_CLB_PCICE_S";
+			net.pt[0].start_count = 0;
+			net.pt[0].y = TOP_INNER_ROW;
+			net.pt[0].x = x;
+			net.pt[1].name = "IOI_PCI_CE";
+			net.pt[1].start_count = 0;
+			net.pt[1].y = TOP_OUTER_IO;
+			net.pt[1].x = x;
+			net.pt[2].name = "IOI_PCI_CE";
+			net.pt[2].start_count = 0;
+			net.pt[2].y = TOP_INNER_IO;
+			net.pt[2].x = x;
+			net.num_pts = 3;
+			if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) FAIL(rc);
+		}
+		if (has_device(model, model->y_height - BOT_OUTER_IO, x, DEV_ILOGIC)) {
+			net.last_inc = 0;
+			net.pt[0].name = "IOI_PCI_CE";
+			net.pt[0].start_count = 0;
+			net.pt[0].y = model->y_height - BOT_INNER_IO;
+			net.pt[0].x = x;
+			net.pt[1].name = "IOI_PCI_CE";
+			net.pt[1].start_count = 0;
+			net.pt[1].y = model->y_height - BOT_OUTER_IO;
+			net.pt[1].x = x;
+			net.pt[2].name = "BTERM_CLB_PCICE_N";
+			net.pt[2].start_count = 0;
+			net.pt[2].y = model->y_height - BOT_INNER_ROW;
+			net.pt[2].x = x;
+			net.num_pts = 3;
+			if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) FAIL(rc);
+		}
+	}
+
+	// top and bottom east-west wiring
+	rc = pcice_ew(model, TOP_INNER_ROW);
+	if (rc) FAIL(rc);
+	rc = pcice_ew(model, model->y_height - BOT_INNER_ROW);
+	if (rc) FAIL(rc);
+	return 0;
+fail:
+	return rc;
+}
+
+static int pcice_ew(struct fpga_model *model, int y)
+{
+	int rc;
+	const struct seed_data top_seeds[] = {
+		{ X_LEFT_IO_DEVS_COL
+		  | X_RIGHT_IO_DEVS_COL,	"IOI_PCICE_EW" },
+		{ X_LEFT_MCB
+		  | X_RIGHT_MCB,		"MCB_PCICE_EW" },
+		{ X_FABRIC_LOGIC_ROUTING_COL
+		  | X_CENTER_ROUTING_COL
+		  | X_RIGHT_IO_ROUTING_COL,	"IOI_TTERM_PCICE_EW" },
+		{ X_FABRIC_LOGIC_COL
+		  | X_CENTER_LOGIC_COL,		"TTERM_CLB_PCICE" },
+		{ X_FABRIC_BRAM_ROUTING_COL, 	"RAMB_TTERM_PCICE" },
+		{ X_FABRIC_BRAM_VIA_COL,	"BRAM_INTER_PCICE" },
+		{ X_FABRIC_MACC_ROUTING_COL,	"DSP_TTERM_PCICE" },
+		{ X_FABRIC_MACC_VIA_COL,	"DSP_INTER_PCICE" },
+		{ 0 }};
+	const struct seed_data bot_seeds[] = {
+		{ X_LEFT_IO_DEVS_COL
+		  | X_RIGHT_IO_DEVS_COL,	"IOI_PCICE_EW" },
+		{ X_LEFT_MCB
+		  | X_RIGHT_MCB,		"MCB_PCICE_EW" },
+		{ X_FABRIC_LOGIC_ROUTING_COL
+		  | X_CENTER_ROUTING_COL
+		  | X_RIGHT_IO_ROUTING_COL
+		  | X_FABRIC_MACC_ROUTING_COL,	"IOI_TTERM_PCICE_EW" },
+		{ X_FABRIC_LOGIC_COL
+		  | X_CENTER_LOGIC_COL
+		  | X_FABRIC_MACC_VIA_COL,	"BTERM_CLB_PCICE" },
+		{ X_FABRIC_BRAM_ROUTING_COL, 	"RAMB_TTERM_PCICE" },
+		{ X_FABRIC_BRAM_VIA_COL,	"BRAM_INTER_PCICE" },
+		{ 0 }};
+ 
+	if (y == TOP_INNER_ROW)
+		seed_strx(model, top_seeds);
+	else if (y == model->y_height - BOT_INNER_ROW)
+		seed_strx(model, bot_seeds);
+	else FAIL(EINVAL);
+
+	//
+	// PCICE east-west wiring
+	//
+	// Go from center leftwards and rightwards, connect nets at
+	// bram and macc columns.
+	//
+
+	rc = pcice_ew_run(model, y, model->center_x - CENTER_LOGIC_O, DIR_LEFT);
+	if (rc) FAIL(rc);
+	rc = pcice_ew_run(model, y, model->center_x + CENTER_X_PLUS_2, DIR_RIGHT);
+	if (rc) FAIL(rc);
+	return 0;
+fail:
+	return rc;
+}
+
+static int pcice_ew_run(struct fpga_model *model, int y, int start_x, int x_dir)
+{
+	int cur_x, rc;
+	struct w_net net;
+
+	cur_x = start_x;
+	do {
+		rc = pcice_ew_fill_net(model, y, &cur_x, x_dir, &net);
+		if (rc) FAIL(rc);
+		if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) FAIL(rc);
+	} while (cur_x != -1);
+	return 0;
+fail:
+	return rc;
+}
+
+static int pcice_ew_fill_net(struct fpga_model *model, int y, int *cur_x, int x_dir, struct w_net *net)
+{
+	net->last_inc = 0;
+	net->num_pts = 0;
+	if (is_atx(X_FABRIC_BRAM_COL|X_FABRIC_MACC_COL, model, *cur_x)) {
+		net->pt[net->num_pts].name = 
+			is_atx(X_FABRIC_BRAM_COL, model, *cur_x)
+			  ? "BRAM_TTERM_PCICE_IN" : "MACCSITE2_TTERM_PCICE_IN";
+		net->pt[net->num_pts].start_count = 0;
+		net->pt[net->num_pts].y = y;
+		net->pt[net->num_pts].x = *cur_x;
+		net->num_pts++;
+		*cur_x += x_dir;
+	}
+	while (1) {
+		if (is_atx(X_FABRIC_BRAM_COL|X_FABRIC_MACC_COL, model, *cur_x)) {
+			net->pt[net->num_pts].name = 
+				is_atx(X_FABRIC_BRAM_COL, model, *cur_x)
+				  ? "BRAM_TTERM_PCICE_OUT" : "MACCSITE2_TTERM_PCICE_OUT";
+			net->pt[net->num_pts].start_count = 0;
+			net->pt[net->num_pts].y = y;
+			net->pt[net->num_pts].x = *cur_x;
+			net->num_pts++;
+			break;
+		}
+		// todo: special case until is_at() system is better
+		if (y > model->center_y
+		    && is_atx(X_FABRIC_LOGIC_COL, model, *cur_x)
+		    && is_atx(X_ROUTING_NO_IO, model, (*cur_x)-1))
+			net->pt[net->num_pts].name = "CLB_EMP_TTERM_PCICE";
+		else
+			net->pt[net->num_pts].name = model->tmp_str[*cur_x];
+		net->pt[net->num_pts].start_count = 0;
+		net->pt[net->num_pts].y = y;
+		net->pt[net->num_pts].x = *cur_x;
+		net->num_pts++;
+		if (is_atx(X_LEFT_IO_DEVS_COL|X_RIGHT_IO_DEVS_COL, model, *cur_x)) {
+			*cur_x = -1;
+			break;
+		}
+		*cur_x += x_dir;
+	}
+	return 0;
+}
+
+static int pcice_left_right_io(struct fpga_model *model, int x)
+{
+	struct w_net net;
+	int rc;
+
+	// bottom-side
+	if ((rc = pcice_fill_net_io(model, &net, model->center_y + 1 + HCLK_POS,
+		"HCLK_PCI_CE_IN", HALF_ROW + ROW_SIZE, DIR_RIGHT, x))) FAIL(rc);
+	if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) FAIL(rc);
+	if ((rc = pcice_fill_net_io(model, &net, model->center_y + 1 + HCLK_POS,
+		"HCLK_PCI_CE_OUT", HALF_ROW, DIR_LEFT, x))) FAIL(rc);
+	if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) FAIL(rc);
+
+	// top-side
+	if ((rc = pcice_fill_net_io(model, &net, model->center_y - 1 - HCLK_POS,
+		"HCLK_PCI_CE_IN", HALF_ROW, DIR_RIGHT, x))) FAIL(rc);
+	if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) FAIL(rc);
+	if ((rc = pcice_fill_net_io(model, &net, model->center_y - 1 - HCLK_POS,
+		"HCLK_PCI_CE_OUT", HALF_ROW + ROW_SIZE, DIR_LEFT, x))) FAIL(rc);
+	if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) FAIL(rc);
+	return 0;
+fail:
+	return rc;
+}
+
+static int pcice_fill_net_io(struct fpga_model *model, struct w_net *net,
+	int hclk_start_y, const char *hclk_str, int y_range, int y_dir, int x)
+{
+	int i, wired_flag;
+
+	net->last_inc = 0;
+	net->pt[0].name = hclk_str;
+	net->pt[0].start_count = 0;
+	net->pt[0].y = hclk_start_y;
+	net->pt[0].x = x;
+	net->num_pts = 1;
+
+	wired_flag = (x < model->center_x) ? Y_LEFT_WIRED : Y_RIGHT_WIRED;
+	i = 0;
+	do {
+		i += y_dir;
+		if (is_aty(Y_ROW_HORIZ_AXSYMM, model, hclk_start_y+i)) {
+			net->pt[net->num_pts].name = "HCLK_PCI_CE_INOUT";
+			net->pt[net->num_pts].start_count = 0;
+			net->pt[net->num_pts].y = hclk_start_y+i;
+			net->pt[net->num_pts].x = x;
+			net->num_pts++;
+		} else if (is_aty(wired_flag, model, hclk_start_y+i)) {
+			while (net->pt[net->num_pts-1].y != hclk_start_y+i-1*y_dir) {
+				net->pt[net->num_pts].name = "EMP_IOI_PCI_CE";
+				net->pt[net->num_pts].start_count = 0;
+				net->pt[net->num_pts].y = net->pt[net->num_pts-1].y+y_dir;
+				net->pt[net->num_pts].x = x;
+				net->num_pts++;
+			}
+			net->pt[net->num_pts].name = "IOI_PCI_CE";
+			net->pt[net->num_pts].start_count = 0;
+			net->pt[net->num_pts].y = hclk_start_y+i;
+			net->pt[net->num_pts].x = x;
+			net->num_pts++;
+		}
+	} while (i != y_range*y_dir);
+	return 0;
+}
+
+static int pcice_left_right_devs(struct fpga_model *model, int x)
+{
+	int rc;
+	struct w_net net;
+
+	// Connect the left and right center upwards and downwards
+	// one half-row including the subsequent hclk.
+	rc = pcice_fill_net_devs(model, &net, model->center_y - HCLK_POS - 1, model->center_y + HCLK_POS + 1, x);
+	if (rc) FAIL(rc);
+	if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) FAIL(rc);
+	// top-side net
+	rc = pcice_fill_net_devs(model, &net, TOP_INNER_ROW, model->center_y - HCLK_POS - 1, x);
+	if (rc) FAIL(rc);
+	if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) FAIL(rc);
+	// bottom-side net
+	rc = pcice_fill_net_devs(model, &net, model->center_y + HCLK_POS + 1, model->y_height - BOT_INNER_ROW, x);
+	if (rc) FAIL(rc);
+	if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) FAIL(rc);
+	return 0;
+fail:
+	return rc;
+}
+
+static int pcice_fill_net_devs(struct fpga_model *model, struct w_net *net,
+	int first_y, int last_y, int x)
+{
+	int y, wired_flag, rc;
+
+	//
+	// rules for non-regular tiles:
+	//
+	//  term:		pcice_tb
+	//  if first y is hclk:	trunk_in
+	//  middle hclk:	ce_split
+	//  center regs:	pcice_tb
+	//  if last y is hclk:	trunk_out
+	//
+
+	net->last_inc = 0;
+	net->num_pts = 0;
+	wired_flag = (x < model->center_x) ? Y_LEFT_WIRED : Y_RIGHT_WIRED;
+
+	for (y = first_y; y <= last_y; y++) {
+		if (is_aty(Y_INNER_TOP | Y_INNER_BOTTOM, model, y))
+			net->pt[net->num_pts].name = "IOI_PCICE_TB";
+		else if (is_aty(Y_CHIP_HORIZ_REGS, model, y))
+			net->pt[net->num_pts].name = "REGH_IOI_PCICE_TB";
+		else if (is_aty(Y_ROW_HORIZ_AXSYMM, model, y)) {
+			if (y == first_y)
+				net->pt[net->num_pts].name = "HCLK_PCI_CE_TRUNK_IN";
+			else if (y == last_y)
+				net->pt[net->num_pts].name = "HCLK_PCI_CE_TRUNK_OUT";
+			else
+				net->pt[net->num_pts].name = "HCLK_PCI_CE_SPLIT";
+		} else {
+			ASSERT(is_aty(Y_REGULAR_ROW, model, y));
+			// todo: this logic also appears in run_logic_inout() and
+			//       may justify a better subfunc
+			if (has_device(model, y, x, DEV_BSCAN)
+			    || has_device(model, y, x, DEV_OCT_CALIBRATE)
+			    || has_device(model, y, x, DEV_STARTUP))
+				net->pt[net->num_pts].name = "EMP_IOI_PCI_CE";
+			else
+				net->pt[net->num_pts].name =
+					is_aty(wired_flag, model, y)
+						? "IOI_PCI_CE_THRU" : "EMP_IOI_PCI_CE_THRU";
+		}
+		net->pt[net->num_pts].start_count = 0;
+		net->pt[net->num_pts].y = y;
+		net->pt[net->num_pts].x = x;
+		net->num_pts++;
+	}
 	return 0;
 fail:
 	return rc;
@@ -90,12 +454,6 @@ static int term_topbot(struct fpga_model* model)
 				{{ "TTERM_CLB_IOCLK%i_S",  0,   y,   x },
 				 { "TIOI_IOCLK%i",	   0, y+1,   x },
 				 { "TIOI_INNER_IOCLK%i",   0, y+2,   x }}};
-			if ((rc = add_conn_net(model, NOPREF_BI_F, &n))) FAIL(rc); }
-			{struct w_net n = {
-				.last_inc = 0, .num_pts = 3, .pt =
-				{{ "TTERM_CLB_PCICE_S",    0,   y,   x },
-				 { "IOI_PCI_CE",	   0, y+1,   x },
-				 { "IOI_PCI_CE",	   0, y+2,   x }}};
 			if ((rc = add_conn_net(model, NOPREF_BI_F, &n))) FAIL(rc); }
 			{struct w_net n = {
 				.last_inc = 1, .num_pts = 3, .pt =
@@ -134,14 +492,6 @@ static int term_topbot(struct fpga_model* model)
 				{{ "BTERM_CLB_CLKOUT%i_N", 0,   y,   x },
 				 { "TIOI_IOCLK%i",	   0, y-1,   x },
 				 { "BIOI_INNER_IOCLK%i",   0, y-2,   x }}};
-			if ((rc = add_conn_net(model, NOPREF_BI_F, &n))) FAIL(rc); }
-
-			// PCI_CE
-			{struct w_net n = {
-				.last_inc = 0, .num_pts = 3, .pt =
-				{{ "BTERM_CLB_PCICE_N",    0,   y,   x },
-				 { "IOI_PCI_CE",	   0, y-1,   x },
-				 { "IOI_PCI_CE",	   0, y-2,   x }}};
 			if ((rc = add_conn_net(model, NOPREF_BI_F, &n))) FAIL(rc); }
 
 			// PLLCE
@@ -775,98 +1125,6 @@ static int term_to_io(struct fpga_model *model, enum extra_wires wire)
 		    && (rc = add_conn_net(model, NOPREF_BI_F, &down_net))) FAIL(rc);
 	}
 	return 0;
-fail:
-	return rc;
-}
-
-static int pcice_conn(struct fpga_model *model, int y, int x, int i);
-
-static int pcice(struct fpga_model *model)
-{
-	struct w_net net;
-	int x, y, i, rightmost_local_net, rc;
-
-	//
-	// PCICE east-west wiring
-	//
-	
-	// First find BRAM or MACC device columns which are the focal
-	// points of the east-west PCICE wiring.
-	rightmost_local_net = -1;
-	y = model->y_height - BOT_INNER_ROW;
-	for (x = LEFT_SIDE_WIDTH; x < model->x_width - RIGHT_SIDE_WIDTH; x++) {
-		if (is_atx(X_FABRIC_BRAM_COL|X_FABRIC_MACC_COL, model, x)) {
-			// From the BRAM/MACC focal points, search left and right
-			// for local east-west hubs
-			net.last_inc = 0;
-			net.num_pts = 0;
-			for (i = x-1; i >= LEFT_SIDE_WIDTH; i--) {
-				if (is_atx(X_FABRIC_BRAM_COL|X_FABRIC_MACC_COL|X_CENTER_REGS_COL, model, i))
-					break;
-				// center logic cannot be found when going left.
-				if ((is_atx(X_FABRIC_LOGIC_COL, model, i)
-				     && !is_atx(X_ROUTING_NO_IO, model, i-1))
-				    || is_atx(X_FABRIC_MACC_VIA_COL, model, i)) {
-					rc = pcice_conn(model, y, x, i);
-					if (rc) FAIL(rc);
-					net.pt[net.num_pts].start_count = 0;
-					net.pt[net.num_pts].x = i;
-					net.pt[net.num_pts].y = y;
-					net.pt[net.num_pts].name = "BTERM_CLB_PCICE";
-					net.num_pts++;
-				}
-			}
-			// TODO: there are more sub-cases here: all points in the
-			//       subnet must be connected to the x coords that are
-			//       not in the net... and some more cases on left and right
-			//       side...
-			if (net.num_pts && net.pt[0].x > rightmost_local_net) {
-				if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) FAIL(rc);
-			}
-
-			net.last_inc = 0;
-			net.num_pts = 0;
-			for (i = x+1; i < model->x_width - RIGHT_SIDE_WIDTH; i++) {
-				if (is_atx(X_FABRIC_BRAM_COL|X_FABRIC_MACC_COL|X_CENTER_CMTPLL_COL, model, i))
-					break;
-				if ((is_atx(X_FABRIC_LOGIC_COL|X_CENTER_LOGIC_COL, model, i)
-				     && !is_atx(X_ROUTING_NO_IO, model, i-1))
-				    || is_atx(X_FABRIC_MACC_VIA_COL, model, i)) {
-					rc = pcice_conn(model, y, x, i);
-					if (rc) FAIL(rc);
-					net.pt[net.num_pts].start_count = 0;
-					net.pt[net.num_pts].x = i;
-					net.pt[net.num_pts].y = y;
-					net.pt[net.num_pts].name = "BTERM_CLB_PCICE";
-					net.num_pts++;
-				}
-			}
-			if (net.num_pts) {
-				rightmost_local_net = net.pt[net.num_pts-1].x;
-				if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) FAIL(rc);
-			}
-		}
-	}
-	return 0;
-fail:
-	return rc;
-}
-
-static int pcice_conn(struct fpga_model *model, int y, int x, int i)
-{
-	static const char* src_str;
-	int to_center, rc;
-
-	to_center = (i < x) ^ (x < model->center_x);
-	if (is_atx(X_FABRIC_BRAM_COL, model, x))
-		src_str = to_center ?
-			"BRAM_TTERM_PCICE_OUT" : "BRAM_TTERM_PCICE_IN";
-	else if (is_atx(X_FABRIC_MACC_COL, model, x))
-		src_str = to_center ?
-			"MACCSITE2_TTERM_PCICE_OUT" : "MACCSITE2_TTERM_PCICE_IN";
-	else
-		FAIL(EINVAL);
-	return add_conn_bi(model, y, x, src_str, y, i, "BTERM_CLB_PCICE");
 fail:
 	return rc;
 }
