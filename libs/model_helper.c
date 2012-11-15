@@ -837,35 +837,289 @@ const char* logicout_str(enum logicout_wire w)
 	return 0;
 }
 
+const char *fpga_connpt_str(struct fpga_model *model, enum extra_wires wire,
+	int y, int x, int dest_y, int dest_x)
+{
+ 	enum { NUM_BUFS = 8, BUF_SIZE = MAX_WIRENAME_LEN };
+	static char buf[NUM_BUFS][BUF_SIZE];
+	static int last_buf = 0;
+
+	last_buf = (last_buf+1)%NUM_BUFS;
+	buf[last_buf][0] = 0;
+
+	if (wire >= CFB0 && wire <= CFB15) {
+		if (is_aty(Y_OUTER_TOP, model, y)) {
+			if (is_atx(X_CENTER_CMTPLL_COL, model, x))
+				snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					"REGT_%s", fpga_wire2str(wire));
+			else HERE();
+		} else if (is_aty(Y_INNER_TOP, model, y)) {
+			if (is_atx(X_CENTER_LOGIC_COL, model, x)) {
+				if ((wire >= CFB0 && wire <= CFB3)
+				    || (wire >= CFB8 && wire <= CFB11)) {
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+						"IOI_REGT_CFB%s_%c%i",
+						wire >= CFB8 ? "1" : "",
+						(wire-CFB0) % 2 ? 'S' : 'M',
+						((wire-CFB0)%4)/2+1);
+					if (is_atyx(YX_DEV_ILOGIC, model, dest_y, dest_x))
+						strcat(buf[last_buf], "_S");
+				} else HERE();
+			} else if (is_atx(X_CENTER_CMTPLL_COL, model, x))
+				snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					"REGT_TTERM_%s", fpga_wire2str(wire));
+			else if (is_atx(X_CENTER_REGS_COL, model, x))
+				snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					"REGV_TTERM_%s", fpga_wire2str(wire));
+			else if (x == model->center_x + CENTER_X_PLUS_1)
+				snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					"IOI_TTERM_%s", fpga_wire2str(wire));
+			else if (x == model->center_x + CENTER_X_PLUS_2) {
+				if ((wire >= CFB4 && wire <= CFB7)
+				    || (wire >= CFB12 && wire <= CFB15)) {
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+						"IOI_REGT_CFB%s_%c%i",
+						wire >= CFB8 ? "1" : "",
+						(wire-CFB0) % 2 ? 'S' : 'M',
+						((wire-CFB0)%4)/2+1);
+					if (is_atyx(YX_DEV_ILOGIC, model, dest_y, dest_x))
+						strcat(buf[last_buf], "_S");
+				} else HERE();
+			} else HERE();
+		} else if (is_aty(Y_TOP_OUTER_IO, model, y)) {
+			snprintf(buf[last_buf], sizeof(buf[last_buf]),
+				"TIOI_%s_CFB%s_%c%s",
+				(wire-CFB0)%4 < 2 ? "OUTER" : "INNER",
+				wire >= CFB8 ? "1" : "",
+				(wire-CFB0) % 2 ? 'S' : 'M',
+				((wire-CFB0)%4)/2 ? "_EXT" : "");
+		} else if (is_aty(Y_TOP_INNER_IO, model, y)) {
+			if ((wire-CFB0)%4 >= 2) {
+				snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					"TIOI_INNER_CFB%s_%c",
+					wire >= CFB8 ? "1" : "",
+					(wire-CFB0) % 2 ? 'S' : 'M');
+			} else HERE();
+		} else if (is_aty(Y_BOT_INNER_IO, model, y)) {
+			if ((wire-CFB0)%4 >= 2) {
+				snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					"BIOI_INNER_CFB%s_%c",
+					wire >= CFB8 ? "1" : "",
+					(wire-CFB0) % 2 ? 'S' : 'M');
+			} else HERE();
+		} else if (is_aty(Y_BOT_OUTER_IO, model, y)) {
+			snprintf(buf[last_buf], sizeof(buf[last_buf]),
+				"BIOI_%s_CFB%s_%c%s",
+				(wire-CFB0)%4 < 2 ? "OUTER" : "INNER",
+				wire >= CFB8 ? "1" : "",
+				(wire-CFB0) % 2 ? 'S' : 'M',
+				((wire-CFB0)%4)/2 ? "_EXT" : "");
+		} else if (is_aty(Y_INNER_BOTTOM, model, y)) {
+			if (is_atx(X_CENTER_LOGIC_COL, model, x)) {
+				if ((wire >= CFB4 && wire <= CFB7)
+				    || (wire >= CFB12 && wire <= CFB15)) {
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+						"BTERM_CLB_%s", fpga_wire2str(wire));
+					if (is_atyx(YX_DEV_ILOGIC, model, dest_y, dest_x))
+						strcat(buf[last_buf], "_N");
+				} else HERE();
+			} else if (is_atx(X_CENTER_CMTPLL_COL, model, x)) {
+				snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					"REGB_BTERM_%s", fpga_wire2str(wire));
+			} else if (is_atx(X_CENTER_REGS_COL, model, x)) {
+				if ((wire >= CFB0 && wire <= CFB3)
+				    || (wire >= CFB8 && wire <= CFB11)) {
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+						"REGV_BTERM_%s", fpga_wire2str(wire+4));
+				} else HERE();
+			} else if (x == model->center_x + CENTER_X_PLUS_1) {
+				if (wire >= CFB0 && wire <= CFB3)
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+						"IOI_BTERM_%s", fpga_wire2str(wire+4));
+				else if (wire >= CFB8 && wire <= CFB11)
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+						"IOI_BTERM_BUFPLL_%s", fpga_wire2str(wire+4));
+				else HERE();
+			} else if (x == model->center_x + CENTER_X_PLUS_2) {
+				if ((wire >= CFB0 && wire <= CFB3)
+				    || (wire >= CFB8 && wire <= CFB11)) {
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+						"BTERM_CLB_%s", fpga_wire2str(wire+4));
+					if (is_atyx(YX_DEV_ILOGIC, model, dest_y, dest_x))
+						strcat(buf[last_buf], "_N");
+				} else HERE();
+			} else HERE();
+		} else if (is_aty(Y_OUTER_BOTTOM, model, y)) {
+			if (is_atx(X_CENTER_CMTPLL_COL, model, x))
+				snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					"REGB_%s", fpga_wire2str(wire));
+			else HERE();
+		} else if (is_atx(X_OUTER_LEFT, model, x)) {
+			if (is_aty(Y_CHIP_HORIZ_REGS, model, y))
+				snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					"REGL_%s", fpga_wire2str(wire));
+			else HERE();
+		} else if (is_atx(X_INNER_LEFT, model, x)) {
+			if (is_aty(Y_CHIP_HORIZ_REGS, model, y)) {
+				snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					"REGH_LTERM_%s", fpga_wire2str(wire));
+			} else if (y == model->center_y + CENTER_Y_PLUS_1) {
+				if ((wire-CFB0)%8 < 4) {
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					  "IOI_LTERM_TOP_%s", fpga_wire2str(wire));
+					if (is_atx(X_LEFT_IO_ROUTING_COL|X_LEFT_IO_DEVS_COL, model, dest_x))
+						strcat(buf[last_buf], "_E");
+				} else HERE();
+			} else if (y == model->center_y + CENTER_Y_PLUS_2) {
+				if ((wire-CFB0)%8 < 2) {
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					  "IOI_LTERM_BOT_%s", fpga_wire2str(wire));
+					if (is_atx(X_LEFT_IO_ROUTING_COL|X_LEFT_IO_DEVS_COL, model, dest_x))
+						strcat(buf[last_buf], "_E");
+				} else HERE();
+			} else if (y == model->center_y - CENTER_Y_MINUS_1
+				   || y == model->center_y - CENTER_Y_MINUS_2) {
+				if ((wire-CFB0)%8 >= 4)
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					  "IOI_LTERM_%s_EXT", fpga_wire2str(wire-4));
+				else HERE();
+			} else if (y == model->center_y - CENTER_Y_MINUS_3) {
+				if ((wire-CFB0)%8 >= 4) {
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					  "IOI_LTERM_BOT_%s", fpga_wire2str(wire-4));
+					if (is_atx(X_LEFT_IO_ROUTING_COL|X_LEFT_IO_DEVS_COL, model, dest_x))
+						strcat(buf[last_buf], "_E");
+				} else HERE();
+			} else if (y == model->center_y - CENTER_Y_MINUS_4) {
+				if ((wire-CFB0)%8 >= 4) {
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					  "IOI_LTERM_TOP_%s", fpga_wire2str(wire-4));
+					if (is_atx(X_LEFT_IO_ROUTING_COL|X_LEFT_IO_DEVS_COL, model, dest_x))
+						strcat(buf[last_buf], "_E");
+				} else HERE();
+			} else HERE();
+		} else if (is_atx(X_LEFT_IO_ROUTING_COL, model, x)) {
+			snprintf(buf[last_buf], sizeof(buf[last_buf]),
+			  "INT_CFB%s_%c", wire >= CFB8 ? "1" : "",
+			  (wire-CFB0) % 2 ? 'S' : 'M');
+		} else if (is_atx(X_LEFT_IO_DEVS_COL, model, x)) {
+			snprintf(buf[last_buf], sizeof(buf[last_buf]),
+			  "LIOI_CFB%s_%c_ILOGIC", wire >= CFB8 ? "1" : "",
+			  (wire-CFB0) % 2 ? 'S' : 'M');
+		} else if (is_atx(X_RIGHT_IO_DEVS_COL, model, x)) {
+			snprintf(buf[last_buf], sizeof(buf[last_buf]),
+			  "RIOI_CFB%s_%c_ILOGIC", wire >= CFB8 ? "1" : "",
+			  (wire-CFB0) % 2 ? 'S' : 'M');
+		} else if (is_atx(X_INNER_RIGHT, model, x)) {
+			if (is_aty(Y_CHIP_HORIZ_REGS, model, y)) {
+				snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					"REGH_RTERM_%s", fpga_wire2str(wire));
+			} else if (y == model->center_y + CENTER_Y_PLUS_1) {
+				if ((wire-CFB0)%8 >= 4) {
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					  "IOI_RTERM_TOP_%s", fpga_wire2str(wire-4));
+					if (is_atx(X_RIGHT_IO_DEVS_COL, model, dest_x))
+						strcat(buf[last_buf], "_W");
+				} else HERE();
+			} else if (y == model->center_y + CENTER_Y_PLUS_2) {
+				if ((wire-CFB0)%8 >= 6) {
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					  "IOI_RTERM_BOT_%s", fpga_wire2str(wire-4));
+					if (is_atx(X_RIGHT_IO_DEVS_COL, model, dest_x))
+						strcat(buf[last_buf], "_W");
+				} else HERE();
+			} else if (y == model->center_y - CENTER_Y_MINUS_1
+				   || y == model->center_y - CENTER_Y_MINUS_2) {
+				if ((wire-CFB0)%8 < 4)
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					  "IOI_RTERM_%s%s", fpga_wire2str(wire),
+					  wire < CFB8 ? "_EXT" : "");
+				else HERE();
+			} else if (y == model->center_y - CENTER_Y_MINUS_3) {
+				if ((wire-CFB0)%8 < 4) {
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					  "IOI_RTERM_BOT_%s", fpga_wire2str(wire));
+					if (is_atx(X_RIGHT_IO_DEVS_COL, model, dest_x))
+						strcat(buf[last_buf], "_W");
+				} else HERE();
+			} else if (y == model->center_y - CENTER_Y_MINUS_4) {
+				if ((wire-CFB0)%8 < 4) {
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					  "IOI_RTERM_TOP_%s", fpga_wire2str(wire));
+					if (is_atx(X_RIGHT_IO_DEVS_COL, model, dest_x))
+						strcat(buf[last_buf], "_W");
+				} else HERE();
+			} else HERE();
+		} else if (is_atx(X_OUTER_RIGHT, model, x)) {
+			if (is_aty(Y_CHIP_HORIZ_REGS, model, y))
+				snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					"REGR_%s", fpga_wire2str(wire));
+			else HERE();
+		} else HERE();
+	} else HERE();
+	return buf[last_buf];
+}
+
 const char* fpga_wire2str(enum extra_wires wire)
 {
- 	enum { NUM_BUFS = 8, BUF_SIZE = 64 };
+ 	enum { NUM_BUFS = 8, BUF_SIZE = MAX_WIRENAME_LEN };
 	static char buf[NUM_BUFS][BUF_SIZE];
 	static int last_buf = 0;
 	int flags;
 
 	switch (wire) {
-		case GFAN0: return "GFAN0";
-		case GFAN1: return "GFAN1";
-		case CLK0: return "CLK0";
-		case CLK1: return "CLK1";
-		case SR0: return "SR0";
-		case SR1: return "SR1";
-		case GND_WIRE: return "GND_WIRE";
-		case VCC_WIRE: return "VCC_WIRE";
-		case FAN_B: return "FAN_B";
-		case LOGICIN20: return "LOGICIN20";
-		case LOGICIN21: return "LOGICIN21";
-		case LOGICIN44: return "LOGICIN44";
-		case LOGICIN52: return "LOGICIN52";
-		case LOGICIN_N21: return "LOGICIN_N21";
-		case LOGICIN_N28: return "LOGICIN_N28";
-		case LOGICIN_N52: return "LOGICIN_N52";
-		case LOGICIN_N60: return "LOGICIN_N60";
-		case LOGICIN_S20: return "LOGICIN_S20";
-		case LOGICIN_S36: return "LOGICIN_S36";
-		case LOGICIN_S44: return "LOGICIN_S44";
-		case LOGICIN_S62: return "LOGICIN_S62";
+		case GFAN0:		return "GFAN0";
+		case GFAN1:		return "GFAN1";
+		case CLK0:		return "CLK0";
+		case CLK1:		return "CLK1";
+		case SR0:		return "SR0";
+		case SR1:		return "SR1";
+		case GND_WIRE:		return "GND_WIRE";
+		case VCC_WIRE:		return "VCC_WIRE";
+		case FAN_B:		return "FAN_B";
+		case LOGICIN20:		return "LOGICIN20";
+		case LOGICIN21:		return "LOGICIN21";
+		case LOGICIN44:		return "LOGICIN44";
+		case LOGICIN52:		return "LOGICIN52";
+		case LOGICIN_N21:	return "LOGICIN_N21";
+		case LOGICIN_N28:	return "LOGICIN_N28";
+		case LOGICIN_N52:	return "LOGICIN_N52";
+		case LOGICIN_N60:	return "LOGICIN_N60";
+		case LOGICIN_S20:	return "LOGICIN_S20";
+		case LOGICIN_S36:	return "LOGICIN_S36";
+		case LOGICIN_S44:	return "LOGICIN_S44";
+		case LOGICIN_S62:	return "LOGICIN_S62";
+		case IOCE:		return "IOCE";
+		case IOCLK:		return "IOCLK";
+		case PLLCE:		return "PLLCE";
+		case PLLCLK:		return "PLLCLK";
+		case CKPIN:		return "CKPIN";
+		case CLK_FEEDBACK:	return "CLK_FEEDBACK";
+		case CLK_INDIRECT:	return "CLK_INDIRECT";
+		case CFB0:		return "CFB0";
+		case CFB1:		return "CFB1";
+		case CFB2:		return "CFB2";
+		case CFB3:		return "CFB3";
+		case CFB4:		return "CFB4";
+		case CFB5:		return "CFB5";
+		case CFB6:		return "CFB6";
+		case CFB7:		return "CFB7";
+		case CFB8:		return "CFB1_0";
+		case CFB9:		return "CFB1_1";
+		case CFB10:		return "CFB1_2";
+		case CFB11:		return "CFB1_3";
+		case CFB12:		return "CFB1_4";
+		case CFB13:		return "CFB1_5";
+		case CFB14:		return "CFB1_6";
+		case CFB15:		return "CFB1_7";
+		case DFB0:		return "DFB0";
+		case DFB1:		return "DFB1";
+		case DFB2:		return "DFB2";
+		case DFB3:		return "DFB3";
+		case DFB4:		return "DFB4";
+		case DFB5:		return "DFB5";
+		case DFB6:		return "DFB6";
+		case DFB7:		return "DFB7";
 		default: ;
 	}
 

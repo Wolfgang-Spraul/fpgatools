@@ -173,6 +173,14 @@ enum fpga_tile_type
 
 #define CENTER_X_PLUS_1		1 // routing col adjacent to center
 #define CENTER_X_PLUS_2		2 // logic col adjacent to center
+
+#define CENTER_Y_PLUS_1		1
+#define CENTER_Y_PLUS_2		2
+#define CENTER_Y_MINUS_1	1
+#define CENTER_Y_MINUS_2	2
+#define CENTER_Y_MINUS_3	3
+#define CENTER_Y_MINUS_4	4
+
 #define CENTER_TOP_IOB_O	3 // deduct from center_y
 #define CENTER_BOT_IOB_O	1 // add to center_y
 
@@ -850,33 +858,9 @@ int add_conn_range(struct fpga_model* model, add_conn_f add_conn_func,
 	int y1, int x1, const char* name1, int start1, int last1,
 	int y2, int x2, const char* name2, int start2);
 
-// COUNT_DOWN can be OR'ed to start_count to make
-// the enumerated wires count from start_count down.
-#define COUNT_DOWN		0x100
-#define COUNT_MASK		0xFF
-
-struct w_point // wire point
-{
-	const char* name;
-	int start_count; // if there is a %i in the name, this is the start number
-	int y, x;
-};
-
-#define NO_INCREMENT 0
-
-#define MAX_NET_POINTS	128
-
-struct w_net
-{
-	// if !last_inc, no incrementing will happen (NO_INCREMENT)
-	// if last_inc > 0, incrementing will happen to
-	// the %i in the name from pt.start_count:last_inc
-	int last_inc;
-	int num_pts;
-	struct w_point pt[MAX_NET_POINTS];
-};
-
-int add_conn_net(struct fpga_model* model, add_conn_f add_conn_func, const struct w_net *net);
+//
+// switches
+//
 
 int add_switch(struct fpga_model* model, int y, int x, const char* from,
 	const char* to, int is_bidirectional);
@@ -1002,6 +986,20 @@ enum wire_type wire_to_len(enum wire_type w, int first_len);
 #define DIR_N3	0x200
 #define DIR_FLAGS (DIR_BEG|DIR_S0|DIR_N3)
 
+// some more direction-related macros mostly to make code
+// more readable and not directly related to enum extra_wires.
+#define DIR_IN	0
+#define DIR_OUT	1
+
+#define DIR_POS		+1
+#define DIR_NEG		-1
+#define DIR_LEFT	DIR_NEG
+#define DIR_RIGHT	DIR_POS
+#define DIR_UP		DIR_NEG
+#define DIR_DOWN	DIR_POS
+
+enum { DIR_NORTH = 0, DIR_EAST, DIR_SOUTH, DIR_WEST };
+
 // The extra wires must not overlap with logicin_wire or logicout_wire
 // namespaces so that they can be combined with either of them.
 enum extra_wires {
@@ -1037,7 +1035,10 @@ enum extra_wires {
 	CKPIN,
 	CLK_FEEDBACK,
 	CLK_INDIRECT,
-	VCC_WIRE = 150,
+	CFB0, CFB1, CFB2, CFB3, CFB4, CFB5, CFB6, CFB7,
+	CFB8, CFB9, CFB10, CFB11, CFB12, CFB13, CFB14, CFB15,
+	DFB0, DFB1, DFB2, DFB3, DFB4, DFB5, DFB6, DFB7,
+	VCC_WIRE,
 	GND_WIRE,
 	GCLK0 = 200, GCLK1, GCLK2, GCLK3, GCLK4, GCLK5, GCLK6, GCLK7,
 	GCLK8, GCLK9, GCLK10, GCLK11, GCLK12, GCLK13, GCLK14, GCLK15,
@@ -1064,6 +1065,8 @@ enum extra_wires {
 	MW_LAST = 3499,
 };
 
+const char *fpga_connpt_str(struct fpga_model *model, enum extra_wires wire,
+	int y, int x, int dest_y, int dest_x);
 const char* fpga_wire2str(enum extra_wires wire);
 str16_t fpga_wire2str_i(struct fpga_model* model, enum extra_wires wire);
 enum extra_wires fpga_str2wire(const char* str);
@@ -1079,3 +1082,51 @@ int fdev_is_bram8_outwire(int bo_wire); // direct BO_ value
 
 void fdev_macc_inbit(enum extra_wires wire, int* tile0_to_3, int* wire0_to_62);
 void fdev_macc_outbit(enum extra_wires wire, int* tile0_to_3, int* wire0_to_23);
+
+//
+// integer-based net (w_net_i)
+//
+
+struct w_yx { int y, x; };
+#define MAX_NET_I_YX	128
+
+struct w_net_i
+{
+	enum extra_wires wire;
+	int wire_inc; // 0 = no-inc, 1 = wire+0 and wire+1, etc.
+	int num_yx;
+	struct w_yx yx[MAX_NET_I_YX];
+};
+
+int add_conn_net_i(struct fpga_model *model, const struct w_net_i *net);
+
+//
+// string-based net (w_net)
+//
+
+// COUNT_DOWN can be OR'ed to start_count to make
+// the enumerated wires count from start_count down.
+#define COUNT_DOWN		0x100
+#define COUNT_MASK		0xFF
+
+struct w_point // wire point
+{
+	const char* name;
+	int start_count; // if there is a %i in the name, this is the start number
+	int y, x;
+};
+
+#define NO_INCREMENT 0
+#define MAX_NET_POINTS	128
+
+struct w_net
+{
+	// if !last_inc, no incrementing will happen (NO_INCREMENT)
+	// if last_inc > 0, incrementing will happen to
+	// the %i in the name from pt.start_count:last_inc
+	int last_inc;
+	int num_pts;
+	struct w_point pt[MAX_NET_POINTS];
+};
+
+int add_conn_net(struct fpga_model* model, add_conn_f add_conn_func, const struct w_net *net);

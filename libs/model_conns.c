@@ -62,18 +62,271 @@ fail:
 	return rc;
 }
 
-static int cfb_dfb(struct fpga_model *model)
+int add_conn_net_i(struct fpga_model *model, const struct w_net_i *net)
 {
-	int rc;
+	int i, j, k, rc;
+	char i_str[MAX_WIRENAME_LEN], j_str[MAX_WIRENAME_LEN];
+
+	CHECK_RC(model);
+	if (net->num_yx < 2) FAIL(EINVAL);
+	for (i = 0; i < net->num_yx; i++) {
+		for (j = i+1; j < net->num_yx; j++) {
+			if (net->yx[j].y == net->yx[i].y
+			    && net->yx[j].x == net->yx[i].x)
+				continue;
+			for (k = 0; k <= net->wire_inc; k++) {
+				snprintf(i_str, sizeof(i_str), fpga_connpt_str(model, net->wire+k, net->yx[i].y, net->yx[i].x, net->yx[j].y, net->yx[j].x));
+				snprintf(j_str, sizeof(j_str), fpga_connpt_str(model, net->wire+k, net->yx[j].y, net->yx[j].x, net->yx[i].y, net->yx[i].x));
+				if (!i_str[0] || !j_str[0]) FAIL(EINVAL);
+				if ((rc = add_conn_bi(model,
+					net->yx[i].y, net->yx[i].x, i_str, 
+					net->yx[j].y, net->yx[j].x, j_str))) FAIL(rc);
+			}
+		}
+	}
 	return 0;
 fail:
 	return rc;
 }
 
-#define DIR_LEFT -1
-#define DIR_RIGHT +1
-#define DIR_UP -1
-#define DIR_DOWN +1
+static void net_mirror_y(struct fpga_model *model, struct w_net_i *net)
+{
+	int i;
+	for (i = 0; i < net->num_yx; i++)
+		net->yx[i].y = model->y_height - 1 - net->yx[i].y;
+}
+
+static void net_mirror_x(struct fpga_model *model, struct w_net_i *net)
+{
+	int i;
+	for (i = 0; i < net->num_yx; i++)
+		net->yx[i].x = model->x_width - 1 - net->yx[i].x;
+}
+
+static int cfb_dfb(struct fpga_model *model)
+{
+	CHECK_RC(model);
+
+	//
+	// left side of top and bottom center
+	//
+
+	// top term
+	{ struct w_net_i n = { .wire = CFB0, .wire_inc = 3, .num_yx = 3,
+		{{ .y = TOP_OUTER_ROW, .x = model->center_x-CENTER_CMTPLL_O },
+		 { .y = TOP_INNER_ROW, .x = model->center_x-CENTER_CMTPLL_O },
+		 { .y = TOP_INNER_ROW, .x = model->center_x-CENTER_LOGIC_O }}};
+	add_conn_net_i(model, &n);
+	n.wire = CFB8;
+	add_conn_net_i(model, &n);
+
+	// bottom term
+	net_mirror_y(model, &n);
+	n.wire = CFB4;
+	add_conn_net_i(model, &n);
+	n.wire = CFB12;
+	add_conn_net_i(model, &n); }
+
+	// top into outer io
+	{ struct w_net_i n = { .wire = CFB0, .wire_inc = 1, .num_yx = 2,
+		{{ .y = TOP_INNER_ROW, .x = model->center_x-CENTER_LOGIC_O },
+		 { .y = TOP_OUTER_IO, .x = model->center_x-CENTER_LOGIC_O }}};
+	add_conn_net_i(model, &n);
+	n.wire = CFB8;
+	add_conn_net_i(model, &n);
+
+	// bottom into outer io
+	net_mirror_y(model, &n);
+	n.wire = CFB4;
+	add_conn_net_i(model, &n);
+	n.wire = CFB12;
+	add_conn_net_i(model, &n); }
+
+	// top into inner io
+	{ struct w_net_i n = { .wire = CFB2, .wire_inc = 1, .num_yx = 3,
+		{{ .y = TOP_INNER_ROW, .x = model->center_x-CENTER_LOGIC_O },
+		 { .y = TOP_OUTER_IO, .x = model->center_x-CENTER_LOGIC_O },
+		 { .y = TOP_INNER_IO, .x = model->center_x-CENTER_LOGIC_O }}};
+	add_conn_net_i(model, &n);
+	n.wire = CFB10;
+	add_conn_net_i(model, &n);
+
+	// bottom into inner io
+	net_mirror_y(model, &n);
+	n.wire = CFB6;
+	add_conn_net_i(model, &n);
+	n.wire = CFB14;
+	add_conn_net_i(model, &n); }
+
+	//
+	// right side of top and bottom center
+	//
+
+	// top term
+	{ struct w_net_i n = { .wire = CFB4, .wire_inc = 3, .num_yx = 5,
+		{{ .y = TOP_OUTER_ROW, .x = model->center_x-CENTER_CMTPLL_O },
+		 { .y = TOP_INNER_ROW, .x = model->center_x-CENTER_CMTPLL_O },
+		 { .y = TOP_INNER_ROW, .x = model->center_x },
+		 { .y = TOP_INNER_ROW, .x = model->center_x+CENTER_X_PLUS_1 },
+		 { .y = TOP_INNER_ROW, .x = model->center_x+CENTER_X_PLUS_2 }}};
+	add_conn_net_i(model, &n);
+	n.wire = CFB12;
+	add_conn_net_i(model, &n);
+
+	// bottom term
+	net_mirror_y(model, &n);
+	n.wire = CFB0;
+	add_conn_net_i(model, &n);
+	n.wire = CFB8;
+	add_conn_net_i(model, &n); }
+
+	// top into outer io
+	{ struct w_net_i n = { .wire = CFB4, .wire_inc = 1, .num_yx = 2,
+		{{ .y = TOP_INNER_ROW, .x = model->center_x+CENTER_X_PLUS_2 },
+		 { .y = TOP_OUTER_IO, .x = model->center_x+CENTER_X_PLUS_2 }}};
+	add_conn_net_i(model, &n);
+	n.wire = CFB12;
+	add_conn_net_i(model, &n);
+
+	// bottom into outer io
+	net_mirror_y(model, &n);
+	n.wire = CFB0;
+	add_conn_net_i(model, &n);
+	n.wire = CFB8;
+	add_conn_net_i(model, &n); }
+
+	// top into inner io
+	{ struct w_net_i n = { .wire = CFB6, .wire_inc = 1, .num_yx = 3,
+		{{ .y = TOP_INNER_ROW, .x = model->center_x+CENTER_X_PLUS_2 },
+		 { .y = TOP_OUTER_IO, .x = model->center_x+CENTER_X_PLUS_2 },
+		 { .y = TOP_INNER_IO, .x = model->center_x+CENTER_X_PLUS_2 }}};
+	add_conn_net_i(model, &n);
+	n.wire = CFB14;
+	add_conn_net_i(model, &n);
+
+	// bottom into inner io
+	net_mirror_y(model, &n);
+	n.wire = CFB2;
+	add_conn_net_i(model, &n);
+	n.wire = CFB10;
+	add_conn_net_i(model, &n); }
+
+	//
+	// left and right center
+
+	// term: bottom side left center
+	{ struct w_net_i n = { .wire = CFB0, .wire_inc = 1, .num_yx = 4,
+		{{ .y = model->center_y, .x = LEFT_OUTER_COL },
+		 { .y = model->center_y, .x = LEFT_INNER_COL },
+		 { .y = model->center_y + CENTER_Y_PLUS_1, .x = LEFT_INNER_COL },
+		 { .y = model->center_y + CENTER_Y_PLUS_2, .x = LEFT_INNER_COL }}};
+	add_conn_net_i(model, &n);
+	n.wire = CFB8;
+	add_conn_net_i(model, &n);
+	n.num_yx--; // one less - remove CENTER_Y_PLUS_2
+	n.wire = CFB2;
+	add_conn_net_i(model, &n);
+	n.wire = CFB10;
+	add_conn_net_i(model, &n);
+
+	// term: bottom side right center
+	n.num_yx++;
+	net_mirror_x(model, &n);
+
+	n.wire = CFB6;
+	add_conn_net_i(model, &n);
+	n.wire = CFB14;
+	add_conn_net_i(model, &n);
+	n.num_yx--; // one less - remove CENTER_Y_PLUS_2
+	n.wire = CFB4;
+	add_conn_net_i(model, &n);
+	n.wire = CFB12;
+	add_conn_net_i(model, &n); }
+
+	// term: top side left center
+	{ struct w_net_i n = { .wire = CFB6, .wire_inc = 1, .num_yx = 6,
+		{{ .y = model->center_y, .x = LEFT_OUTER_COL },
+		 { .y = model->center_y, .x = LEFT_INNER_COL },
+		 { .y = model->center_y - CENTER_Y_MINUS_1, .x = LEFT_INNER_COL },
+		 { .y = model->center_y - CENTER_Y_MINUS_2, .x = LEFT_INNER_COL },
+		 { .y = model->center_y - CENTER_Y_MINUS_3, .x = LEFT_INNER_COL },
+		 { .y = model->center_y - CENTER_Y_MINUS_4, .x = LEFT_INNER_COL }}};
+	add_conn_net_i(model, &n);
+	n.wire = CFB14;
+	add_conn_net_i(model, &n);
+	n.num_yx--; // one less - remove CENTER_Y_MINUS_4
+	n.wire = CFB4;
+	add_conn_net_i(model, &n);
+	n.wire = CFB12;
+	add_conn_net_i(model, &n);
+
+	// term: top side right center
+	n.num_yx++;
+	net_mirror_x(model, &n);
+	n.wire = CFB0;
+	add_conn_net_i(model, &n);
+	n.wire = CFB8;
+	add_conn_net_i(model, &n);
+	n.num_yx--; // one less - remove CENTER_Y_MINUS_4
+	n.wire = CFB2;
+	add_conn_net_i(model, &n);
+	n.wire = CFB10;
+	add_conn_net_i(model, &n); }
+
+	// io devs: left
+	{ struct w_net_i n = { .wire = CFB0, .wire_inc = 1, .num_yx = 3,
+		{{ .y = model->center_y + CENTER_Y_PLUS_2, .x = LEFT_INNER_COL },
+		 { .y = model->center_y + CENTER_Y_PLUS_2, .x = LEFT_IO_ROUTING },
+		 { .y = model->center_y + CENTER_Y_PLUS_2, .x = LEFT_IO_DEVS }}};
+	add_conn_net_i(model, &n);
+	n.wire = CFB8;
+	add_conn_net_i(model, &n);
+
+	n.wire = CFB2;
+	n.yx[0].y = n.yx[1].y = n.yx[2].y = model->center_y + CENTER_Y_PLUS_1;
+	add_conn_net_i(model, &n);
+	n.wire = CFB10;
+	add_conn_net_i(model, &n);
+
+	n.wire = CFB4;
+	n.yx[0].y = n.yx[1].y = n.yx[2].y = model->center_y - CENTER_Y_MINUS_3;
+	add_conn_net_i(model, &n);
+	n.wire = CFB12;
+	add_conn_net_i(model, &n);
+
+	n.wire = CFB6;
+	n.yx[0].y = n.yx[1].y = n.yx[2].y = model->center_y - CENTER_Y_MINUS_4;
+	add_conn_net_i(model, &n);
+	n.wire = CFB14;
+	add_conn_net_i(model, &n); }
+
+	// io devs: right
+	{ struct w_net_i n = { .wire = CFB0, .wire_inc = 1, .num_yx = 2,
+		{{ .y = model->center_y - CENTER_Y_MINUS_4, .x = model->x_width - RIGHT_INNER_O },
+		 { .y = model->center_y - CENTER_Y_MINUS_4, .x = model->x_width - RIGHT_IO_DEVS_O }}};
+	add_conn_net_i(model, &n);
+	n.wire = CFB8;
+	add_conn_net_i(model, &n);
+
+	n.wire = CFB2;
+	n.yx[0].y = n.yx[1].y = model->center_y - CENTER_Y_MINUS_3;
+	add_conn_net_i(model, &n);
+	n.wire = CFB10;
+	add_conn_net_i(model, &n);
+
+	n.wire = CFB4;
+	n.yx[0].y = n.yx[1].y = model->center_y + CENTER_Y_PLUS_1;
+	add_conn_net_i(model, &n);
+	n.wire = CFB12;
+	add_conn_net_i(model, &n);
+
+	n.wire = CFB6;
+	n.yx[0].y = n.yx[1].y = model->center_y + CENTER_Y_PLUS_2;
+	add_conn_net_i(model, &n);
+	n.wire = CFB14;
+	add_conn_net_i(model, &n); }
+	return 0;
+}
 
 static int pcice_ew(struct fpga_model *model, int y);
 static int pcice_ew_run(struct fpga_model *model, int y, int start_x, int x_dir);
