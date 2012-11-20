@@ -603,7 +603,6 @@ fail:
 	return rc;
 }
 
-
 static int extract_logic(struct extract_state* es)
 {
 	int row, row_pos, x, y, i, byte_off, last_minor, lut5_used, rc;
@@ -1488,17 +1487,18 @@ static int extract_routing_switches(struct extract_state* es, int y, int x)
 	swidx_t sw_idx;
 	int i, is_set, rc;
 
+	RC_CHECK(es->model);
 	tile = YX_TILE(es->model, y, x);
 
 	for (i = 0; i < es->model->num_bitpos; i++) {
 		rc = bitpos_is_set(es, y, x, &es->model->sw_bitpos[i], &is_set);
-		if (rc) FAIL(rc);
+		if (rc) RC_FAIL(es->model, rc);
 		if (!is_set) continue;
 
 		sw_idx = fpga_switch_lookup(es->model, y, x,
 			fpga_wire2str_i(es->model, es->model->sw_bitpos[i].from),
 			fpga_wire2str_i(es->model, es->model->sw_bitpos[i].to));
-		if (sw_idx == NO_SWITCH) FAIL(EINVAL);
+		if (sw_idx == NO_SWITCH) RC_FAIL(es->model, EINVAL);
 		// todo: es->model->sw_bitpos[i].bidir handling
 
 		if (tile->switches[sw_idx] & SWITCH_BIDIRECTIONAL)
@@ -1506,17 +1506,15 @@ static int extract_routing_switches(struct extract_state* es, int y, int x)
 		if (tile->switches[sw_idx] & SWITCH_USED)
 			HERE();
 		if (es->num_yx_pos >= MAX_YX_SWITCHES)
-			{ FAIL(ENOTSUP); }
+			{ RC_FAIL(es->model, ENOTSUP); }
 		es->yx_pos[es->num_yx_pos].y = y;
 		es->yx_pos[es->num_yx_pos].x = x;
 		es->yx_pos[es->num_yx_pos].idx = sw_idx;
 		es->num_yx_pos++;
 		rc = bitpos_clear_bits(es, y, x, &es->model->sw_bitpos[i]);
-		if (rc) FAIL(rc);
+		if (rc) RC_FAIL(es->model, rc);
 	}
-	return 0;
-fail:
-	return rc;
+	RC_RETURN(es->model);
 }
 
 static int extract_logic_switches(struct extract_state* es, int y, int x)
@@ -1833,35 +1831,34 @@ int extract_model(struct fpga_model* model, struct fpga_bits* bits)
 	net_idx_t net_idx;
 	int i, rc;
 
+	RC_CHECK(model);
 	rc = construct_extract_state(&es, model);
-	if (rc) FAIL(rc);
+	if (rc) RC_FAIL(model, rc);
 	es.bits = bits;
 	for (i = 0; i < sizeof(s_default_bits)/sizeof(s_default_bits[0]); i++) {
 		if (!get_bitp(bits, &s_default_bits[i]))
-			FAIL(EINVAL);
+			RC_FAIL(model, EINVAL);
 		clear_bitp(bits, &s_default_bits[i]);
 	}
 
 	rc = extract_switches(&es);
-	if (rc) FAIL(rc);
+	if (rc) RC_FAIL(model, rc);
 	rc = extract_iobs(&es);
-	if (rc) FAIL(rc);
+	if (rc) RC_FAIL(model, rc);
 	rc = extract_logic(&es);
-	if (rc) FAIL(rc);
+	if (rc) RC_FAIL(model, rc);
 
 	// turn switches into nets
 	if (model->nets)
 		HERE(); // should be empty here
 	for (i = 0; i < es.num_yx_pos; i++) {
 		rc = fnet_new(model, &net_idx);
-		if (rc) FAIL(rc);
+		if (rc) RC_FAIL(model, rc);
 		rc = fnet_add_sw(model, net_idx, es.yx_pos[i].y,
 			es.yx_pos[i].x, &es.yx_pos[i].idx, 1);
-		if (rc) FAIL(rc);
+		if (rc) RC_FAIL(model, rc);
 	}
-	return 0;
-fail:
-	return rc;
+	RC_RETURN(model);
 }
 
 int printf_swbits(struct fpga_model* model)
@@ -1869,6 +1866,7 @@ int printf_swbits(struct fpga_model* model)
 	char bit_str[129];
 	int i, j, width;
 
+	RC_CHECK(model);
 	for (i = 0; i < model->num_bitpos; i++) {
 
 		width = (model->sw_bitpos[i].minor == 20) ? 64 : 128;
@@ -1887,7 +1885,7 @@ int printf_swbits(struct fpga_model* model)
 			fpga_wire2str(model->sw_bitpos[i].from),
 			model->sw_bitpos[i].bidir ? "<->" : "->");
 	}
-	return 0;
+	RC_RETURN(model);
 }
 
 static int find_bitpos(struct fpga_model* model, int y, int x, swidx_t sw)
@@ -2210,15 +2208,16 @@ int write_model(struct fpga_bits* bits, struct fpga_model* model)
 {
 	int i, rc;
 
+	RC_CHECK(model);
+
 	for (i = 0; i < sizeof(s_default_bits)/sizeof(s_default_bits[0]); i++)
 		set_bitp(bits, &s_default_bits[i]);
 	rc = write_switches(bits, model);
-	if (rc) FAIL(rc);
+	if (rc) RC_FAIL(model, rc);
 	rc = write_iobs(bits, model);
-	if (rc) FAIL(rc);
+	if (rc) RC_FAIL(model, rc);
 	rc = write_logic(bits, model);
-	if (rc) FAIL(rc);
-	return 0;
-fail:
-	return rc;
+	if (rc) RC_FAIL(model, rc);
+
+	RC_RETURN(model);
 }

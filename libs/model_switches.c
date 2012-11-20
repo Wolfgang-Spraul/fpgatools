@@ -33,75 +33,32 @@ static int init_center_topbot_cfb_dfb(struct fpga_model *model);
 
 int init_switches(struct fpga_model *model, int routing_sw)
 {
-	int rc;
+	RC_CHECK(model);
 
-	if (routing_sw) {
-		rc = init_routing(model);
-		if (rc) FAIL(rc);
-	}
+	if (routing_sw)
+		init_routing(model);
+	init_logic(model);
+   	init_iologic(model);
+   	init_north_south_dirwire_term(model);
+   	init_east_west_dirwire_term(model);
+   	init_ce_clk(model);
+	init_io(model);
+	init_center(model);
+	init_hclk(model);
+	init_logicout_fw(model);
+	init_bram(model);
+	init_macc(model);
+	init_topbot_tterm_gclk(model);
+	init_bufio(model);
+	init_bscan(model);
+	init_dcm(model);
+	init_pll(model);
+	init_center_hclk(model);
+	init_center_midbuf(model);
+	init_center_reg_tblr(model);
+	init_center_topbot_cfb_dfb(model);
 
-	rc = init_logic(model);
-	if (rc) FAIL(rc);
-
-   	rc = init_iologic(model);
-	if (rc) FAIL(rc);
-
-   	rc = init_north_south_dirwire_term(model);
-	if (rc) FAIL(rc);
-
-   	rc = init_east_west_dirwire_term(model);
-	if (rc) FAIL(rc);
-
-   	rc = init_ce_clk(model);
-	if (rc) FAIL(rc);
-
-	rc = init_io(model);
-	if (rc) FAIL(rc);
-
-	rc = init_center(model);
-	if (rc) FAIL(rc);
-
-	rc = init_hclk(model);
-	if (rc) FAIL(rc);
-
-	rc = init_logicout_fw(model);
-	if (rc) FAIL(rc);
-
-	rc = init_bram(model);
-	if (rc) FAIL(rc);
-
-	rc = init_macc(model);
-	if (rc) FAIL(rc);
-
-	rc = init_topbot_tterm_gclk(model);
-	if (rc) FAIL(rc);
-
-	rc = init_bufio(model);
-	if (rc) FAIL(rc);
-
-	rc = init_bscan(model);
-	if (rc) FAIL(rc);
-
-	rc = init_dcm(model);
-	if (rc) FAIL(rc);
-
-	rc = init_pll(model);
-	if (rc) FAIL(rc);
-
-	rc = init_center_hclk(model);
-	if (rc) FAIL(rc);
-
-	rc = init_center_midbuf(model);
-	if (rc) FAIL(rc);
-
-	rc = init_center_reg_tblr(model);
-	if (rc) FAIL(rc);
-
-	rc = init_center_topbot_cfb_dfb(model);
-	if (rc) FAIL(rc);
-	return 0;
-fail:
-	return rc;
+	RC_RETURN(model);
 }
 
 static int init_logic_tile(struct fpga_model *model, int y, int x)
@@ -109,27 +66,28 @@ static int init_logic_tile(struct fpga_model *model, int y, int x)
 	int rc, i, j, ml;
 	const char* xp;
 
+	RC_CHECK(model);
 	if (has_device_type(model, y, x, DEV_LOGIC, LOGIC_M)) {
 		ml = 'M';
 		xp = "X";
 	} else if (has_device_type(model, y, x, DEV_LOGIC, LOGIC_L)) {
 		ml = 'L';
 		xp = "XX";
-	} else EXIT(1);
+	} else RC_FAIL(model, EINVAL);
 
 	if ((rc = add_switch(model, y, x,
-		pf("CLEX%c_CLK0", ml), pf("%s_CLK", xp), 0 /* bidir */))) goto xout;
+		pf("CLEX%c_CLK0", ml), pf("%s_CLK", xp), 0 /* bidir */))) RC_FAIL(model, rc);
 	if ((rc = add_switch(model, y, x,
-		pf("CLEX%c_CLK1", ml), pf("%c_CLK", ml), 0 /* bidir */))) goto xout;
+		pf("CLEX%c_CLK1", ml), pf("%c_CLK", ml), 0 /* bidir */))) RC_FAIL(model, rc);
 	if ((rc = add_switch(model, y, x,
-		pf("CLEX%c_SR0", ml), pf("%s_SR", xp), 0 /* bidir */))) goto xout;
+		pf("CLEX%c_SR0", ml), pf("%s_SR", xp), 0 /* bidir */))) RC_FAIL(model, rc);
 	if ((rc = add_switch(model, y, x,
-		pf("CLEX%c_SR1", ml), pf("%c_SR", ml), 0 /* bidir */))) goto xout;
+		pf("CLEX%c_SR1", ml), pf("%c_SR", ml), 0 /* bidir */))) RC_FAIL(model, rc);
 	for (i = X_A1; i <= X_DX; i++) {
 		if ((rc = add_switch(model,y, x,
 			pf("CLEX%c_LOGICIN_B%i", ml, i),
 			pf("%s_%s", xp, logicin_str(i)),
-			0 /* bidir */))) goto xout;
+			0 /* bidir */))) RC_FAIL(model, rc);
 	}
 	for (i = M_A1; i <= M_WE; i++) {
 		if (ml == 'L' &&
@@ -139,75 +97,72 @@ static int init_logic_tile(struct fpga_model *model, int y, int x)
 		if ((rc = add_switch(model,y, x,
 			pf("CLEX%c_LOGICIN_B%i", ml, i),
 			pf("%c_%s", ml, logicin_str(i)),
-			0 /* bidir */))) goto xout;
+			0 /* bidir */))) RC_FAIL(model, rc);
 	}
 	for (i = X_A; i <= X_DQ; i++) {
 		if ((rc = add_switch(model, y, x,
 			pf("%s_%s", xp, logicout_str(i)),
 			pf("CLEX%c_LOGICOUT%i", ml, i),
-			0 /* bidir */))) goto xout;
+			0 /* bidir */))) RC_FAIL(model, rc);
 	}
 	for (i = M_A; i <= M_DQ; i++) {
 		if ((rc = add_switch(model, y, x,
 			pf("%c_%s", ml, logicout_str(i)),
 			pf("CLEX%c_LOGICOUT%i", ml, i),
-			0 /* bidir */))) goto xout;
+			0 /* bidir */))) RC_FAIL(model, rc);
 	}
 	for (i = 'A'; i <= 'D'; i++) {
 		for (j = 1; j <= 6; j++) {
 			if ((rc = add_switch(model, y, x,
 				pf("%c_%c%i", ml, i, j),
 				pf("%c_%c", ml, i),
-				0 /* bidir */))) goto xout;
+				0 /* bidir */))) RC_FAIL(model, rc);
 			if ((rc = add_switch(model, y, x,
 				pf("%s_%c%i", xp, i, j),
 				pf("%s_%c", xp, i),
-				0 /* bidir */))) goto xout;
+				0 /* bidir */))) RC_FAIL(model, rc);
 		}
 		if ((rc = add_switch(model, y, x,
 			pf("%c_%c", ml, i),
 			pf("%c_%cMUX", ml, i),
-			0 /* bidir */))) goto xout;
+			0 /* bidir */))) RC_FAIL(model, rc);
 	}
 	if (ml == 'L') {
 		if (has_connpt(model, y, x, "XL_COUT_N")) {
 			if ((rc = add_switch(model, y, x,
 				"XL_COUT", "XL_COUT_N",
-				0 /* bidir */))) goto xout;
+				0 /* bidir */))) RC_FAIL(model, rc);
 		}
 		if ((rc = add_switch(model, y, x,
-			"XL_COUT", "L_DMUX", 0 /* bidir */))) goto xout;
+			"XL_COUT", "L_DMUX", 0 /* bidir */))) RC_FAIL(model, rc);
 	} else {
 		if (has_connpt(model, y, x, "M_COUT_N")) {
 			if ((rc = add_switch(model, y, x,
 				"M_COUT", "M_COUT_N",
-				0 /* bidir */))) goto xout;
+				0 /* bidir */))) RC_FAIL(model, rc);
 		}
 		if ((rc = add_switch(model, y, x,
-			"M_COUT", "M_DMUX", 0 /* bidir */))) goto xout;
+			"M_COUT", "M_DMUX", 0 /* bidir */))) RC_FAIL(model, rc);
 	}
-	return 0;
-xout:
-	return rc;
+	RC_RETURN(model);
 }
 
 static int init_logic(struct fpga_model *model)
 {
 	int x, y, rc;
 
+	RC_CHECK(model);
 	for (x = LEFT_SIDE_WIDTH; x < model->x_width-RIGHT_SIDE_WIDTH; x++) {
 		if (!is_atx(X_FABRIC_LOGIC_COL|X_CENTER_LOGIC_COL, model, x))
 			continue;
 		for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
 			if (has_device(model, y, x, DEV_LOGIC)) {
 				rc = init_logic_tile(model, y, x);
-				if (rc) goto xout;
+				if (rc) RC_FAIL(model, rc);
 			}
 		}
 	}
-	return 0;
-xout:
-	return rc;
+	RC_RETURN(model);
 }
 
 static int init_iologic_tile(struct fpga_model *model, int y, int x)
@@ -215,6 +170,7 @@ static int init_iologic_tile(struct fpga_model *model, int y, int x)
 	int i, j, rc;
 	const char* io_prefix, *prefix, *prefix2;
 
+	RC_CHECK(model);
 	if (x < LEFT_SIDE_WIDTH) {
 		EXIT(x != LEFT_IO_DEVS);
 		io_prefix = "IOI_";
@@ -249,7 +205,7 @@ static int init_iologic_tile(struct fpga_model *model, int y, int x)
 	for (i = 0; i <= 23; i++) {
 		if ((rc = add_switch(model, y, x,
 			pf("IOI_INTER_LOGICOUT%i", i),
-			pf("IOI_LOGICOUT%i", i), 0 /* bidir */))) goto xout;
+			pf("IOI_LOGICOUT%i", i), 0 /* bidir */))) RC_FAIL(model, rc);
 	}
 	// switches going to IOI_INTER_LOGICOUT0:15
 	{ static const char* logicout_src[16] = {
@@ -266,7 +222,7 @@ static int init_iologic_tile(struct fpga_model *model, int y, int x)
 		if (logicout_src[i][0]) {
 			if ((rc = add_switch(model, y, x, logicout_src[i],
 				pf("IOI_INTER_LOGICOUT%i", i),
-				0 /* bidir */))) goto xout;
+				0 /* bidir */))) RC_FAIL(model, rc);
 		}
 	}}
 	// The 6 CE lines (4*IO_CE and 2*PLL_CE) can be switched
@@ -277,13 +233,13 @@ static int init_iologic_tile(struct fpga_model *model, int y, int x)
 			if ((rc = add_switch(model, y, x,
 				pf("%sIOCE%i", io_prefix, j),
 				pf("IOI_CLKDIST_IOCE%i%s",i/2,i%2?"_M":"_S"),
-				0 /* bidir */))) goto xout;
+				0 /* bidir */))) RC_FAIL(model, rc);
 		}
 		for (j = 0; j <= 1; j++) {
 			if ((rc = add_switch(model, y, x,
 				pf("%sPLLCE%i", io_prefix, j),
 				pf("IOI_CLKDIST_IOCE%i%s",i/2,i%2?"_M":"_S"),
-				0 /* bidir */))) goto xout;
+				0 /* bidir */))) RC_FAIL(model, rc);
 		}
 	}
 	// Incoming clocks and fan can be switched to intermediates
@@ -293,40 +249,40 @@ static int init_iologic_tile(struct fpga_model *model, int y, int x)
 		if ((rc = add_switch(model, y, x,
 			pf("IOI_CLK%i", i/2),
 			pf("IOI_CLK%iINTER%s",i%2,i<2?"_M":"_S"),
-			0 /* bidir */))) goto xout;
+			0 /* bidir */))) RC_FAIL(model, rc);
 		if ((rc = add_switch(model, y, x,
 			pf("IOI_GFAN%i", i/2),
 			pf("IOI_CLK%iINTER%s",i%2,i<2?"_M":"_S"),
-			0 /* bidir */))) goto xout;
+			0 /* bidir */))) RC_FAIL(model, rc);
 		if ((rc = add_switch(model, y, x,
 			pf("%sIOCLK%i", io_prefix, i),
 			pf("IOI_CLK%iINTER%s",i%2,i<2?"_M":"_S"),
-			0 /* bidir */))) goto xout;
+			0 /* bidir */))) RC_FAIL(model, rc);
 		if ((rc = add_switch(model, y, x,
 			pf("%sPLLCLK%i", io_prefix, i/2),
 			pf("IOI_CLK%iINTER%s",i/2,i%2?"_M":"_S"),
-			0 /* bidir */))) goto xout;
+			0 /* bidir */))) RC_FAIL(model, rc);
 		// only PLLCLK goes to CLK2 intermediate
 		if ((rc = add_switch(model, y, x,
 			pf("%sPLLCLK%i", io_prefix, i/2),
 			pf("IOI_CLK2INTER%s",i%2?"_S":"_M"),
-			0 /* bidir */))) goto xout;
+			0 /* bidir */))) RC_FAIL(model, rc);
 		// 2 sources each for IOI_CLKDIST_CLK1_M/_S
 		if ((rc = add_switch(model, y, x,
 			pf("IOI_CLK%iINTER%s", i%2, i<2?"_M":"_S"),
 			pf("IOI_CLKDIST_CLK1%s", i<2?"_M":"_S"),
-			0 /* bidir */))) goto xout;
+			0 /* bidir */))) RC_FAIL(model, rc);
 	}
 	// 3 sources each:
 	for (i = 0; i < 6; i++) {
 		if ((rc = add_switch(model, y, x,
 			pf("IOI_CLK%iINTER%s", i%3, i<3?"_M":"_S"),
 			pf("IOI_CLKDIST_CLK0_ILOGIC%s", i<3?"_M":"_S"),
-			0 /* bidir */))) goto xout;
+			0 /* bidir */))) RC_FAIL(model, rc);
 		if ((rc = add_switch(model, y, x,
 			pf("IOI_CLK%iINTER%s", i%3, i<3?"_M":"_S"),
 			pf("IOI_CLKDIST_CLK0_OLOGIC%s", i<3?"_M":"_S"),
-			0 /* bidir */))) goto xout;
+			0 /* bidir */))) RC_FAIL(model, rc);
 	}
 	// logicin wires
 	{
@@ -378,7 +334,7 @@ static int init_iologic_tile(struct fpga_model *model, int y, int x)
 			if (!iologic_logicin[i]) continue;
 			if ((rc = add_switch(model, y, x,
 				pf("IOI_LOGICINB%i", i),
-				iologic_logicin[i], /*bidir*/ 0))) goto xout;
+				iologic_logicin[i], /*bidir*/ 0))) RC_FAIL(model, rc);
 		}
 	}
 	// GND
@@ -389,7 +345,7 @@ static int init_iologic_tile(struct fpga_model *model, int y, int x)
 			if ((rc = add_switch(model, y, x,
 				pf("%sGND_TIEOFF", prefix),
 				pf("%s%s", s[i/2], i%2 ? "" : "_S"),
-				/*bidir*/ 0))) goto xout;
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 		}
 	}
 	// VCC
@@ -400,7 +356,7 @@ static int init_iologic_tile(struct fpga_model *model, int y, int x)
 			if ((rc = add_switch(model, y, x,
 				pf("%sVCC_TIEOFF", prefix),
 				pf("%s%s", s[i/2], i%2 ? "" : "_S"),
-				/*bidir*/ 0))) goto xout;
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 		}
 	}
 	// CLK
@@ -411,13 +367,13 @@ static int init_iologic_tile(struct fpga_model *model, int y, int x)
 			if ((rc = add_switch(model, y, x,
 				pf("IOI_CLK%i", !(i%2)),
 				pf("%s%s", s[i/2], i%2 ? "" : "_S"),
-				/*bidir*/ 0))) goto xout;
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 		}
 		for (i = 0; i < 4; i++) {
 			if ((rc = add_switch(model, y, x,
 				pf("CLK%i_ILOGIC_SITE%s", i/2, i%2 ? "_S" : ""),
 				pf("CFB%i_ILOGIC_SITE%s", i/2, i%2 ? "_S" : ""),
-				/*bidir*/ 0))) goto xout;
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 		}
 	}
 	// SR
@@ -428,7 +384,7 @@ static int init_iologic_tile(struct fpga_model *model, int y, int x)
 			if ((rc = add_switch(model, y, x,
 				pf("IOI_SR%i", !(i%2)),
 				pf("%s%s", s[i/2], i%2 ? "" : "_S"),
-				/*bidir*/ 0))) goto xout;
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 		}
 	}
 	// IOCLK
@@ -437,7 +393,7 @@ static int init_iologic_tile(struct fpga_model *model, int y, int x)
 			if ((rc = add_switch(model, y, x,
 				pf("%sIOCLK%i", io_prefix, i),
 				pf("IOI_CLK%iINTER%s", i%2, (i/2)?"_M":"_S"),
-				/*bidir*/ 0))) goto xout;
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 		}
 	}
 	{
@@ -459,30 +415,30 @@ static int init_iologic_tile(struct fpga_model *model, int y, int x)
 			if ((rc = add_switch(model, y, x,
 				pairs[i*2],
 				pairs[i*2+1],
-				/*bidir*/ 0))) goto xout;
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 			if ((rc = add_switch(model, y, x,
 				pf("%s%s", pairs[i*2], "_S"),
 				pf("%s%s", pairs[i*2+1], "_S"),
-				/*bidir*/ 0))) goto xout;
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 		}
 		if ((rc = add_switch(model, y, x,
 			"DATAOUT2_IODELAY_SITE", "DDLY2_ILOGIC_SITE",
-			/*bidir*/ 0))) goto xout;
+			/*bidir*/ 0))) RC_FAIL(model, rc);
 		if ((rc = add_switch(model, y, x,
 			"DATAOUT2_IODELAY2_SITE_S", "DDLY2_ILOGIC_SITE_S",
-			/*bidir*/ 0))) goto xout;
+			/*bidir*/ 0))) RC_FAIL(model, rc);
 	}
 	for (i = 0; i < 2; i++) {
 		if ((rc = add_switch(model, y, x, "IOI_PCI_CE",
 			pf("OCE_OLOGIC_SITE%s", i?"_S":""),
-			/*bidir*/ 0))) goto xout;
+			/*bidir*/ 0))) RC_FAIL(model, rc);
 	}
 	for (i = 0; i < 3; i++) {
 		// 3 because IBUF1 cannot be switched to non-_S
 		if ((rc = add_switch(model, y, x,
 			pf("%sIBUF%i", prefix2, i/2),
 			pf("D_ILOGIC_IDATAIN_IODELAY%s", !(i%2)?"_S":""),
-			/*bidir*/ 0))) goto xout;
+			/*bidir*/ 0))) RC_FAIL(model, rc);
 	}
 	{
 		const char* pairs[] = {
@@ -494,7 +450,7 @@ static int init_iologic_tile(struct fpga_model *model, int y, int x)
 			if ((rc = add_switch(model, y, x,
 				pf(pairs[(i/2)*2], i%2?"_S":""),
 				pf(pairs[(i/2)*2+1], prefix2, i%2),
-				/*bidir*/ 0))) goto xout;
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 		}
 	}
 	{
@@ -508,7 +464,7 @@ static int init_iologic_tile(struct fpga_model *model, int y, int x)
 		for (i = 0; i < sizeof(pairs)/sizeof(*pairs)/2; i++) {
 			if ((rc = add_switch(model, y, x,
 				pairs[i*2], pairs[i*2+1],
-				/*bidir*/ 0))) goto xout;
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 		}
 	}
 	{
@@ -526,7 +482,7 @@ static int init_iologic_tile(struct fpga_model *model, int y, int x)
 			if ((rc = add_switch(model, y, x,
 				pf(pairs[(i/2)*2], i%2?"_S":"_M"),
 				pf(pairs[(i/2)*2+1], i%2?"_S":""),
-				/*bidir*/ 0))) goto xout;
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 		}
 	}
 	{
@@ -541,7 +497,7 @@ static int init_iologic_tile(struct fpga_model *model, int y, int x)
 			if ((rc = add_switch(model, y, x,
 				pairs[(i/2)*2],
 				pf(pairs[(i/2)*2+1], i%2?"_S":""),
-				/*bidir*/ 0))) goto xout;
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 		}
 	}
 	{
@@ -561,65 +517,62 @@ static int init_iologic_tile(struct fpga_model *model, int y, int x)
 		for (i = 0; i < sizeof(pairs)/sizeof(*pairs)/2; i++) {
 			if ((rc = add_switch(model, y, x,
 				pairs[i*2], pairs[i*2+1],
-				/*bidir*/ 0))) goto xout;
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 		}
 	}
 	if (x < LEFT_SIDE_WIDTH
 	    || x >= model->x_width-RIGHT_SIDE_WIDTH) {
 		if ((rc = add_switch(model, y, x,
 			"AUXSDOIN_IODELAY_M", "AUXSDO_IODELAY_M",
-			/*bidir*/ 0))) goto xout;
+			/*bidir*/ 0))) RC_FAIL(model, rc);
 		if ((rc = add_switch(model, y, x,
 			"AUXSDOIN_IODELAY_S", "AUXSDO_IODELAY_S",
-			/*bidir*/ 0))) goto xout;
+			/*bidir*/ 0))) RC_FAIL(model, rc);
 	} else {
 		if ((rc = add_switch(model, y, x,
 			"AUXSDOIN_IODELAY_S_STUB", "AUXSDO_IODELAY_S_STUB",
-			/*bidir*/ 0))) goto xout;
+			/*bidir*/ 0))) RC_FAIL(model, rc);
 		if ((rc = add_switch(model, y, x,
 			"AUXSDOIN_IODELAY_STUB", "AUXSDO_IODELAY_STUB",
-			/*bidir*/ 0))) goto xout;
+			/*bidir*/ 0))) RC_FAIL(model, rc);
 	}
-	return 0;
-xout:
-	return rc;
+	RC_RETURN(model);
 }
 
 static int init_iologic(struct fpga_model *model)
 {
 	int x, y, rc;
 
+	RC_CHECK(model);
 	for (x = LEFT_SIDE_WIDTH; x < model->x_width - RIGHT_SIDE_WIDTH; x++) {
 		if (has_device(model, TOP_OUTER_IO, x, DEV_ILOGIC)) {
 			if ((rc = init_iologic_tile(model,
-				TOP_OUTER_IO, x))) goto xout;
+				TOP_OUTER_IO, x))) RC_FAIL(model, rc);
 		}
 		if (has_device(model, TOP_INNER_IO, x, DEV_ILOGIC)) {
 			if ((rc = init_iologic_tile(model,
-				TOP_INNER_IO, x))) goto xout;
+				TOP_INNER_IO, x))) RC_FAIL(model, rc);
 		}
 		if (has_device(model, model->y_height-BOT_INNER_IO, x, DEV_ILOGIC)) {
 			if ((rc = init_iologic_tile(model,
-				model->y_height-BOT_INNER_IO, x))) goto xout;
+				model->y_height-BOT_INNER_IO, x))) RC_FAIL(model, rc);
 		}
 		if (has_device(model, model->y_height-BOT_OUTER_IO, x, DEV_ILOGIC)) {
 			if ((rc = init_iologic_tile(model,
-				model->y_height-BOT_OUTER_IO, x))) goto xout;
+				model->y_height-BOT_OUTER_IO, x))) RC_FAIL(model, rc);
 		}
 	}
 	for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
 		if (has_device(model, y, LEFT_IO_DEVS, DEV_ILOGIC)) {
 			if ((rc = init_iologic_tile(model,
-				y, LEFT_IO_DEVS))) goto xout;
+				y, LEFT_IO_DEVS))) RC_FAIL(model, rc);
 		}
 		if (has_device(model, y, model->x_width-RIGHT_IO_DEVS_O, DEV_ILOGIC)) {
 			if ((rc = init_iologic_tile(model,
-				y, model->x_width-RIGHT_IO_DEVS_O))) goto xout;
+				y, model->x_width-RIGHT_IO_DEVS_O))) RC_FAIL(model, rc);
 		}
 	}
-	return 0;
-xout:
-	return rc;
+	RC_RETURN(model);
 }
 
 static int init_north_south_dirwire_term(struct fpga_model *model)
@@ -627,6 +580,7 @@ static int init_north_south_dirwire_term(struct fpga_model *model)
 	static const int logicin_pairs[] = {21,20, 28,36, 52,44, 60,62};
 	int x, i, rc;
 
+	RC_CHECK(model);
 	for (x = 0; x < model->x_width; x++) {
 		if (!is_atx(X_ROUTING_COL, model, x))
 			continue;
@@ -638,7 +592,7 @@ static int init_north_south_dirwire_term(struct fpga_model *model)
 				pf("IOI_TTERM_LOGICIN%i", logicin_pairs[i*2]),
 				pf("IOI_TTERM_LOGICIN_S%i", logicin_pairs[i*2+1]),
 				0 /* bidir */);
-			if (rc) goto xout;
+			if (rc) RC_FAIL(model, rc);
 		}
 		{ const char* s0_switches[] = {
 			"ER1E3",   "EL1E_S0",
@@ -650,7 +604,7 @@ static int init_north_south_dirwire_term(struct fpga_model *model)
 			"WL1E3",   "WR1E_S0",
 			"WW2E3",   "NW2E_S0", "" };
 		if ((rc = add_switch_set(model, TOP_INNER_ROW, x,
-			"IOI_TTERM_", s0_switches, /*inc*/ 0))) goto xout; }
+			"IOI_TTERM_", s0_switches, /*inc*/ 0))) RC_FAIL(model, rc); }
 		{ const char* dir[] = {
 			"NN4B", "SS4A", "NN4A", "SS4M", "NN4M", "SS4C", "NN4C", "SS4E",
 			"NN2B", "SS2M", "NN2M", "SS2E",
@@ -660,7 +614,7 @@ static int init_north_south_dirwire_term(struct fpga_model *model)
 			"NL1B", "SL1E",
 			"NR1B", "SR1E", "" };
 		if ((rc = add_switch_set(model, TOP_INNER_ROW, x,
-			"IOI_TTERM_", dir, /*inc*/ 3))) goto xout; }
+			"IOI_TTERM_", dir, /*inc*/ 3))) RC_FAIL(model, rc); }
 
 		// bottom
 		if (is_atx(X_FABRIC_BRAM_ROUTING_COL, model, x))
@@ -671,7 +625,7 @@ static int init_north_south_dirwire_term(struct fpga_model *model)
 				pf("IOI_BTERM_LOGICIN%i", logicin_pairs[i*2+1]),
 				pf("IOI_BTERM_LOGICIN_N%i", logicin_pairs[i*2]),
 				0 /* bidir */);
-			if (rc) goto xout;
+			if (rc) RC_FAIL(model, rc);
 		}
 		{ const char* n3_switches[] = {
 			"EL1E0",	"ER1E_N3",
@@ -683,7 +637,7 @@ static int init_north_south_dirwire_term(struct fpga_model *model)
 			"WR1E0",	"WL1E_N3",
 			"WW4E0",	"SW4E_N3", "" };
 		if ((rc = add_switch_set(model, model->y_height-BOT_INNER_ROW,
-			x, "IOI_BTERM_", n3_switches, /*inc*/ 0))) goto xout; }
+			x, "IOI_BTERM_", n3_switches, /*inc*/ 0))) RC_FAIL(model, rc); }
 		{ const char* dir[] = {
 			"SS4B", "NN4A", "SS4A", "NN4M", "SS4M", "NN4C", "SS4C", "NN4E",
 			"SS2B", "NN2M", "SS2M", "NN2E",
@@ -693,17 +647,16 @@ static int init_north_south_dirwire_term(struct fpga_model *model)
 			"NL1E", "SL1B",
 			"SR1B", "NR1E", "" };
 		if ((rc = add_switch_set(model, model->y_height-BOT_INNER_ROW,
-			x, "IOI_BTERM_", dir, /*inc*/ 3))) goto xout; }
+			x, "IOI_BTERM_", dir, /*inc*/ 3))) RC_FAIL(model, rc); }
 	}
-	return 0;
-xout:
-	return rc;
+	RC_RETURN(model);
 }
 
 static int init_east_west_dirwire_term(struct fpga_model *model)
 {
 	int y, rc;
 
+	RC_CHECK(model);
 	for (y = TOP_IO_TILES; y < model->y_height-BOT_IO_TILES; y++) {
 		if (is_aty(Y_ROW_HORIZ_AXSYMM|Y_CHIP_HORIZ_REGS, model, y))
 			continue;
@@ -715,13 +668,13 @@ static int init_east_west_dirwire_term(struct fpga_model *model)
 			"WW2B", "EE2M", "WW2M", "EE2E", "NW2M", "NE2E",
 			"WL1B", "EL1E", "WR1B", "ER1E", "" };
 		if ((rc = add_switch_set(model, y, LEFT_INNER_COL,
-			"LTERM_", s, /*inc*/ 3))) FAIL(rc); }
+			"LTERM_", s, /*inc*/ 3))) RC_FAIL(model, rc); }
 		{ const char* s[] = { "SW2M", "SE2E", "" };
 		if ((rc = add_switch_set(model, y, LEFT_INNER_COL,
-			"LTERM_", s, /*inc*/ 2))) FAIL(rc); }
+			"LTERM_", s, /*inc*/ 2))) RC_FAIL(model, rc); }
 		rc = add_switch(model, y, LEFT_INNER_COL,
 			"LTERM_SW2M3", "LTERM_SE2M3", 0 /* bidir */);
-		if (rc) FAIL(rc);
+		if (rc) RC_FAIL(model, rc);
 
 		// right
 		{ const char* s[] = {
@@ -731,17 +684,16 @@ static int init_east_west_dirwire_term(struct fpga_model *model)
 			"NE2M", "NW2E", "EE2B", "WW2M", "EE2M", "WW2E", "SE2M", "SW2E",
 			"EL1B", "WL1E", "ER1B", "WR1E", "" };
 		if ((rc = add_switch_set(model, y, model->x_width-RIGHT_INNER_O,
-			"RTERM_", s, /*inc*/ 3))) FAIL(rc); }
+			"RTERM_", s, /*inc*/ 3))) RC_FAIL(model, rc); }
 	}
-	return 0;
-fail:
-	return rc;
+	RC_RETURN(model);
 }
 
 static int init_ce_clk(struct fpga_model *model)
 {
 	int x, y, i, rc;
 
+	RC_CHECK(model);
 	// There are CE and CLK wires for IO and PLL that are going
 	// horizontally through the HCLK and vertically through the logic
 	// dev columns (except no-io).
@@ -755,24 +707,24 @@ static int init_ce_clk(struct fpga_model *model)
 					pf("HCLK_IOI_LTERM_IOCE%i", i), 
 					pf("HCLK_IOI_LTERM_IOCE%i_E", i),
 					0 /* bidir */);
-				if (rc) goto xout;
+				if (rc) RC_FAIL(model, rc);
 				rc = add_switch(model, y, LEFT_INNER_COL,
 					pf("HCLK_IOI_LTERM_IOCLK%i", i), 
 					pf("HCLK_IOI_LTERM_IOCLK%i_E", i),
 					0 /* bidir */);
-				if (rc) goto xout;
+				if (rc) RC_FAIL(model, rc);
 			}
 			for (i = 0; i <= 1; i++) {
 				rc = add_switch(model, y, LEFT_INNER_COL,
 					pf("HCLK_IOI_LTERM_PLLCE%i", i), 
 					pf("HCLK_IOI_LTERM_PLLCE%i_E", i),
 					0 /* bidir */);
-				if (rc) goto xout;
+				if (rc) RC_FAIL(model, rc);
 				rc = add_switch(model, y, LEFT_INNER_COL,
 					pf("HCLK_IOI_LTERM_PLLCLK%i", i), 
 					pf("HCLK_IOI_LTERM_PLLCLK%i_E", i),
 					0 /* bidir */);
-				if (rc) goto xout;
+				if (rc) RC_FAIL(model, rc);
 			}
 			// right
 			for (i = 0; i <= 3; i++) {
@@ -780,24 +732,24 @@ static int init_ce_clk(struct fpga_model *model)
 					pf("HCLK_IOI_RTERM_IOCE%i", i), 
 					pf("HCLK_IOI_RTERM_IOCE%i_W", 3-i),
 					0 /* bidir */);
-				if (rc) goto xout;
+				if (rc) RC_FAIL(model, rc);
 				rc = add_switch(model, y, model->x_width-RIGHT_INNER_O,
 					pf("HCLK_IOI_RTERM_IOCLK%i", i), 
 					pf("HCLK_IOI_RTERM_IOCLK%i_W", 3-i),
 					0 /* bidir */);
-				if (rc) goto xout;
+				if (rc) RC_FAIL(model, rc);
 			}
 			for (i = 0; i <= 1; i++) {
 				rc = add_switch(model, y, model->x_width-RIGHT_INNER_O,
 					pf("HCLK_IOI_RTERM_PLLCEOUT%i", i), 
 					pf("HCLK_IOI_RTERM_PLLCEOUT%i_W", i),
 					0 /* bidir */);
-				if (rc) goto xout;
+				if (rc) RC_FAIL(model, rc);
 				rc = add_switch(model, y, model->x_width-RIGHT_INNER_O,
 					pf("HCLK_IOI_RTERM_PLLCLKOUT%i", i), 
 					pf("HCLK_IOI_RTERM_PLLCLKOUT%i_W", i),
 					0 /* bidir */);
-				if (rc) goto xout;
+				if (rc) RC_FAIL(model, rc);
 			}
 		}
 	}
@@ -810,24 +762,24 @@ static int init_ce_clk(struct fpga_model *model)
 					pf("TTERM_CLB_IOCE%i", i), 
 					pf("TTERM_CLB_IOCE%i_S", i),
 					0 /* bidir */);
-				if (rc) goto xout;
+				if (rc) RC_FAIL(model, rc);
 				rc = add_switch(model, TOP_INNER_ROW, x,
 					pf("TTERM_CLB_IOCLK%i", i), 
 					pf("TTERM_CLB_IOCLK%i_S", i),
 					0 /* bidir */);
-				if (rc) goto xout;
+				if (rc) RC_FAIL(model, rc);
 			}
 			for (i = 0; i <= 1; i++) {
 				rc = add_switch(model, TOP_INNER_ROW, x,
 					pf("TTERM_CLB_PLLCE%i", i), 
 					pf("TTERM_CLB_PLLCE%i_S", i),
 					0 /* bidir */);
-				if (rc) goto xout;
+				if (rc) RC_FAIL(model, rc);
 				rc = add_switch(model, TOP_INNER_ROW, x,
 					pf("TTERM_CLB_PLLCLK%i", i), 
 					pf("TTERM_CLB_PLLCLK%i_S", i),
 					0 /* bidir */);
-				if (rc) goto xout;
+				if (rc) RC_FAIL(model, rc);
 			}
 			rc = add_switch(model, TOP_INNER_ROW, x,
 				"TTERM_CLB_PCICE", 
@@ -835,41 +787,39 @@ static int init_ce_clk(struct fpga_model *model)
 				0 /* bidir */);
 
 			// bottom
-			if (rc) goto xout;
+			if (rc) RC_FAIL(model, rc);
 			for (i = 0; i <= 3; i++) {
 				rc = add_switch(model, model->y_height - BOT_INNER_ROW, x,
 					pf("BTERM_CLB_CEOUT%i", i), 
 					pf("BTERM_CLB_CEOUT%i_N", i),
 					0 /* bidir */);
-				if (rc) goto xout;
+				if (rc) RC_FAIL(model, rc);
 				rc = add_switch(model, model->y_height - BOT_INNER_ROW, x,
 					pf("BTERM_CLB_CLKOUT%i", i), 
 					pf("BTERM_CLB_CLKOUT%i_N", i),
 					0 /* bidir */);
-				if (rc) goto xout;
+				if (rc) RC_FAIL(model, rc);
 			}
 			for (i = 0; i <= 1; i++) {
 				rc = add_switch(model, model->y_height - BOT_INNER_ROW, x,
 					pf("BTERM_CLB_PLLCEOUT%i", i), 
 					pf("BTERM_CLB_PLLCEOUT%i_N", i),
 					0 /* bidir */);
-				if (rc) goto xout;
+				if (rc) RC_FAIL(model, rc);
 				rc = add_switch(model, model->y_height - BOT_INNER_ROW, x,
 					pf("BTERM_CLB_PLLCLKOUT%i", i), 
 					pf("BTERM_CLB_PLLCLKOUT%i_N", i),
 					0 /* bidir */);
-				if (rc) goto xout;
+				if (rc) RC_FAIL(model, rc);
 			}
 			rc = add_switch(model, model->y_height - BOT_INNER_ROW, x,
 				"BTERM_CLB_PCICE", 
 				"BTERM_CLB_PCICE_N",
 				0 /* bidir */);
-			if (rc) goto xout;
+			if (rc) RC_FAIL(model, rc);
 		}
 	}
-	return 0;
-xout:
-	return rc;
+	RC_RETURN(model);
 }
 
 static int init_io_tile(struct fpga_model *model, int y, int x)
@@ -877,19 +827,20 @@ static int init_io_tile(struct fpga_model *model, int y, int x)
 	const char* prefix;
 	int i, num_devs, rc;
 
+	RC_CHECK(model);
 	if (!y) {
 		prefix = "TIOB";
 		rc = add_switch(model, y, x,
 			pf("%s_DIFFO_OUT2", prefix), 
 			pf("%s_DIFFO_IN3", prefix), 0 /* bidir */);
-		if (rc) goto xout;
+		if (rc) RC_FAIL(model, rc);
 		num_devs = 2;
 	} else if (y == model->y_height - BOT_OUTER_ROW) {
 		prefix = "BIOB";
 		rc = add_switch(model, y, x,
 			pf("%s_DIFFO_OUT3", prefix), 
 			pf("%s_DIFFO_IN2", prefix), 0 /* bidir */);
-		if (rc) goto xout;
+		if (rc) RC_FAIL(model, rc);
 		num_devs = 2;
 	} else if (!x) {
 		prefix = "LIOB";
@@ -904,26 +855,26 @@ static int init_io_tile(struct fpga_model *model, int y, int x)
 		rc = add_switch(model, y, x,
 			pf("%s_IBUF%i_PINW", prefix, i),
 			pf("%s_IBUF%i", prefix, i), 0 /* bidir */);
-		if (rc) goto xout;
+		if (rc) RC_FAIL(model, rc);
 		rc = add_switch(model, y, x,
 			pf("%s_O%i", prefix, i),
 			pf("%s_O%i_PINW", prefix, i), 0 /* bidir */);
-		if (rc) goto xout;
+		if (rc) RC_FAIL(model, rc);
 		rc = add_switch(model, y, x,
 			pf("%s_T%i", prefix, i),
 			pf("%s_T%i_PINW", prefix, i), 0 /* bidir */);
-		if (rc) goto xout;
+		if (rc) RC_FAIL(model, rc);
 	}
 	rc = add_switch(model, y, x,
 		pf("%s_DIFFO_OUT0", prefix),
 		pf("%s_DIFFO_IN1", prefix), 0 /* bidir */);
-	if (rc) goto xout;
+	if (rc) RC_FAIL(model, rc);
 	for (i = 0; i <= 1; i++) {
 		rc = add_switch(model, y, x,
 			pf("%s_PADOUT%i", prefix, i),
 			pf("%s_DIFFI_IN%i", prefix, 1-i),
 			0 /* bidir */);
-		if (rc) goto xout;
+		if (rc) RC_FAIL(model, rc);
 	}
 	if (num_devs > 1) {
 		for (i = 0; i <= 1; i++) {
@@ -931,45 +882,42 @@ static int init_io_tile(struct fpga_model *model, int y, int x)
 				pf("%s_PADOUT%i", prefix, i+2),
 				pf("%s_DIFFI_IN%i", prefix, 3-i),
 				0 /* bidir */);
-			if (rc) goto xout;
+			if (rc) RC_FAIL(model, rc);
 		}
 	}
-	return 0;
-xout:
-	return rc;
+	RC_RETURN(model);
 }
 
 static int init_io(struct fpga_model *model)
 {
 	int x, y, rc;
 
+	RC_CHECK(model);
 	for (x = 0; x < model->x_width; x++) {
 		if (has_device(model, /*y*/ 0, x, DEV_IOB)) {
 			rc = init_io_tile(model, 0, x);
-			if (rc) goto xout;
+			if (rc) RC_FAIL(model, rc);
 		}
 		if (has_device(model, model->y_height - BOT_OUTER_ROW, x,
 			DEV_IOB)) {
 			rc = init_io_tile(model,
 				model->y_height-BOT_OUTER_ROW, x);
-			if (rc) goto xout;
+			if (rc) RC_FAIL(model, rc);
 		}
 	}
 	for (y = 0; y < model->y_height; y++) {
 		if (has_device(model, y, /*x*/ 0, DEV_IOB)) {
 			rc = init_io_tile(model, y, 0);
-			if (rc) goto xout;
+			if (rc) RC_FAIL(model, rc);
 		}
 		if (has_device(model, y, model->x_width - RIGHT_OUTER_O,
 			DEV_IOB)) {
 			rc = init_io_tile(model,
 				y, model->x_width - RIGHT_OUTER_O);
-			if (rc) goto xout;
+			if (rc) RC_FAIL(model, rc);
 		}
 	}
-	return 0;
-xout:
-	return rc;
+	RC_RETURN(model);
 }
 
 const char* wire_base(enum wire_type w)
@@ -1035,6 +983,7 @@ enum wire_type base2wire(const char* str)
 	if (!strncmp(str, "WW4", 3)) return W_WW4;
 	if (!strncmp(str, "NW4", 3)) return W_NW4;
 
+	HERE();
 	return 0;
 }
 
@@ -1107,6 +1056,7 @@ static int init_routing_tile(struct fpga_model *model, int y, int x)
 	int i, routing_io, gclk_brk, from_wire, to_wire, is_bidir, rc;
 	struct fpga_tile* tile;
 
+	RC_CHECK(model);
 	tile = YX_TILE(model, y, x);
 	routing_io = (tile->type == IO_ROUTING || tile->type == ROUTING_IO_L);
 	gclk_brk = (tile->type == ROUTING_BRK || tile->type == BRAM_ROUTING_BRK);
@@ -1115,20 +1065,20 @@ static int init_routing_tile(struct fpga_model *model, int y, int x)
 	for (i = X_A1; i <= M_WE; i++) {
 		rc = add_switch(model, y, x, "KEEP1_WIRE",
 			logicin_s(i, routing_io), 0 /* bidir */);
-		if (rc) FAIL(rc);
+		if (rc) RC_FAIL(model, rc);
 	}
 	rc = add_switch(model, y, x, "KEEP1_WIRE", "FAN_B", 0 /* bidir */);
-	if (rc) FAIL(rc);
+	if (rc) RC_FAIL(model, rc);
 	for (i = 0; i <= 1; i++) {
 		rc = add_switch(model, y, x, "KEEP1_WIRE",
 			pf("CLK%i", i), 0 /* bidir */);
-		if (rc) FAIL(rc);
+		if (rc) RC_FAIL(model, rc);
 		rc = add_switch(model, y, x, "KEEP1_WIRE",
 			pf("SR%i", i), 0 /* bidir */);
-		if (rc) FAIL(rc);
+		if (rc) RC_FAIL(model, rc);
 		rc = add_switch(model, y, x,
 			"KEEP1_WIRE", routing_wirestr(GFAN0+i, routing_io, gclk_brk), 0 /* bidir */);
-		if (rc) FAIL(rc);
+		if (rc) RC_FAIL(model, rc);
 	}
 
 	for (i = 0; i < model->num_bitpos; i++) {
@@ -1146,13 +1096,13 @@ static int init_routing_tile(struct fpga_model *model, int y, int x)
 			routing_wirestr(from_wire, routing_io, gclk_brk),
 			routing_wirestr(to_wire, routing_io, gclk_brk),
 			is_bidir);
-		if (rc) FAIL(rc);
+		if (rc) RC_FAIL(model, rc);
 		if (is_bidir) {
 			rc = add_switch(model, y, x,
 				routing_wirestr(to_wire, routing_io, gclk_brk),
 				routing_wirestr(from_wire, routing_io, gclk_brk),
 				/* bidir */ 1);
-			if (rc) FAIL(rc);
+			if (rc) RC_FAIL(model, rc);
 		}
 	}
 	if (routing_io) {
@@ -1161,13 +1111,13 @@ static int init_routing_tile(struct fpga_model *model, int y, int x)
 		// fall back to regular unidir switches in the io tiles. Can
 		// be cleaned up one day.
 		rc = add_switch(model, y, x, "LOGICIN_B6", "INT_IOI_GFAN0", 0);
-		if (rc) FAIL(rc);
+		if (rc) RC_FAIL(model, rc);
 		rc = add_switch(model, y, x, "LOGICIN_B35", "INT_IOI_GFAN0", 0);
-		if (rc) FAIL(rc);
+		if (rc) RC_FAIL(model, rc);
 		rc = add_switch(model, y, x, "LOGICIN_B51", "INT_IOI_GFAN1", 0);
-		if (rc) FAIL(rc);
+		if (rc) RC_FAIL(model, rc);
 		rc = add_switch(model, y, x, "LOGICIN_B53", "INT_IOI_GFAN1", 0);
-		if (rc) FAIL(rc);
+		if (rc) RC_FAIL(model, rc);
 	}
 	{ const int logicin_b[] = {20, 21, 28, 36, 44, 52, 60, 62};
 	for (i = 0; i < sizeof(logicin_b)/sizeof(*logicin_b); i++) {
@@ -1175,17 +1125,16 @@ static int init_routing_tile(struct fpga_model *model, int y, int x)
 			pf("LOGICIN_B%i", logicin_b[i]),
 			pf("LOGICIN%i", logicin_b[i]),
 			/* bidir */ 0);
-		if (rc) FAIL(rc);
+		if (rc) RC_FAIL(model, rc);
 	}}
-	return 0;
-fail:
-	return rc;
+	RC_RETURN(model);
 }
 
 static int init_routing(struct fpga_model *model)
 {
 	int x, y, rc;
 
+	RC_CHECK(model);
 	for (x = 0; x < model->x_width; x++) {
 		if (!is_atx(X_ROUTING_COL, model, x))
 			continue;
@@ -1194,12 +1143,10 @@ static int init_routing(struct fpga_model *model)
 					model, y))
 				continue;
 			rc = init_routing_tile(model, y, x);
-			if (rc) FAIL(rc);
+			if (rc) RC_FAIL(model, rc);
 		}
 	}
-	return 0;
-fail:
-	return rc;
+	RC_RETURN(model);
 }
 
 int replicate_routing_switches(struct fpga_model *model)
@@ -1207,6 +1154,7 @@ int replicate_routing_switches(struct fpga_model *model)
 	struct fpga_tile* tile;
 	int x, y, first_y, first_x, rc;
 
+	RC_CHECK(model);
 	first_y = -1;
 	for (x = 0; x < model->x_width; x++) {
 		if (!is_atx(X_ROUTING_COL, model, x))
@@ -1221,30 +1169,29 @@ int replicate_routing_switches(struct fpga_model *model)
 			if (tile->type == IO_ROUTING || tile->type == ROUTING_IO_L
 			    || tile->type == ROUTING_BRK || tile->type == BRAM_ROUTING_BRK) {
 				rc = init_routing_tile(model, y, x);
-				if (rc) FAIL(rc);
+				if (rc) RC_FAIL(model, rc);
 				continue;
 			}
 			if (first_y == -1) {
 				first_y = y;
 				first_x = x;
 				rc = init_routing_tile(model, y, x);
-				if (rc) FAIL(rc);
+				if (rc) RC_FAIL(model, rc);
 				continue;
 			}
 			rc = replicate_switches_and_names(model,
 				first_y, first_x, y, x);
-			if (rc) FAIL(rc);
+			if (rc) RC_FAIL(model, rc);
 		}
 	}
-	return 0;
-fail:
-	return rc;
+	RC_RETURN(model);
 }
 
 static int init_center(struct fpga_model *model)
 {
 	int i, j, rc;
 
+	RC_CHECK(model);
 	{ const char* pairs[] =
 		{ "CLKC_CKLR%i",	"CLKC_GCLK%i",
 		  "CLKC_CKTB%i",	"CLKC_GCLK%i",
@@ -1261,16 +1208,16 @@ static int init_center(struct fpga_model *model)
 		for (j = 0; j <= 15; j++) {
 			if ((rc = add_switch(model, model->center_y, model->center_x,
 				pf(pairs[i*2], j), pf(pairs[i*2+1], j),
-				/*bidir*/ 0))) FAIL(rc);
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 		}
 	}
 	for (j = 0; j <= 15; j++) {
 		if ((rc = add_switch(model, model->center_y, model->center_x,
 			pf("CLKC_GCLK%i", j), pf("I0_GCLK_SITE%i", i_dest[0][j]),
-			/*bidir*/ 0))) FAIL(rc);
+			/*bidir*/ 0))) RC_FAIL(model, rc);
 		if ((rc = add_switch(model, model->center_y, model->center_x,
 			pf("CLKC_GCLK%i", j), pf("I1_GCLK_SITE%i", i_dest[1][j]),
-			/*bidir*/ 0))) FAIL(rc);
+			/*bidir*/ 0))) RC_FAIL(model, rc);
 	}}
 
 	{ const char *to[] = {
@@ -1283,7 +1230,7 @@ static int init_center(struct fpga_model *model)
 		for (j = 0; j < sizeof(from)/sizeof(*from); j++) {
 			if ((rc = add_switch(model, model->center_y,
 				model->center_x-CENTER_CMTPLL_O,
-				from[j], to[i], /*bidir*/ 0))) FAIL(rc);
+				from[j], to[i], /*bidir*/ 0))) RC_FAIL(model, rc);
 		}
 	}}
 
@@ -1297,7 +1244,7 @@ static int init_center(struct fpga_model *model)
 		if ((rc = add_switch(model, model->center_y,
 			model->center_x-CENTER_CMTPLL_O,
 			pairs[i*2], pairs[i*2+1],
-			/*bidir*/ 0))) FAIL(rc);
+			/*bidir*/ 0))) RC_FAIL(model, rc);
 	}}
 
 	{ const char *to[] = {
@@ -1309,7 +1256,7 @@ static int init_center(struct fpga_model *model)
 			if ((rc = add_switch(model, model->center_y,
 				model->center_x-CENTER_CMTPLL_O,
 				pf("REGC_PLLCLK_DN_IN%i", i), to[j],
-				/*bidir*/ 0))) FAIL(rc);
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 		}
 	}}
 	{ const char *to[] = {
@@ -1321,18 +1268,17 @@ static int init_center(struct fpga_model *model)
 			if ((rc = add_switch(model, model->center_y,
 				model->center_x-CENTER_CMTPLL_O,
 				pf("REGC_PLLCLK_UP_IN%i", i), to[j],
-				/*bidir*/ 0))) FAIL(rc);
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 		}
 	}}
-	return 0;
-fail:
-	return rc;
+	RC_RETURN(model);
 }
 
 static int init_hclk(struct fpga_model *model)
 {
 	int x, y, i, rc;
 
+	RC_CHECK(model);
 	for (x = 0; x < model->x_width; x++) {
 		if (!is_atx(X_ROUTING_COL, model, x))
 			continue;
@@ -1342,22 +1288,21 @@ static int init_hclk(struct fpga_model *model)
 			for (i = 0; i <= 15; i++) {
 				if ((rc = add_switch(model, y, x,
 					pf("HCLK_GCLK%i_INT", i), pf("HCLK_GCLK%i", i),
-					/*bidir*/ 0))) FAIL(rc);
+					/*bidir*/ 0))) RC_FAIL(model, rc);
 				if ((rc = add_switch(model, y, x,
 					pf("HCLK_GCLK%i_INT", i), pf("HCLK_GCLK_UP%i", i),
-					/*bidir*/ 0))) FAIL(rc);
+					/*bidir*/ 0))) RC_FAIL(model, rc);
 			}
 		}
 	}
-	return 0;
-fail:
-	return rc;
+	RC_RETURN(model);
 }
 
 static int init_logicout_fw(struct fpga_model *model)
 {
 	int i, x, y, rc;
 
+	RC_CHECK(model);
 	for (x = 0; x < model->x_width; x++) {
 		if (is_atx(X_FABRIC_BRAM_VIA_COL|X_FABRIC_MACC_VIA_COL, model, x)) {
 			for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
@@ -1366,7 +1311,7 @@ static int init_logicout_fw(struct fpga_model *model)
 				for (i = 0; i <= 23; i++) {
 					if ((rc = add_switch(model, y, x,
 						pf("INT_INTERFACE_LOGICOUT_%i", i), pf("INT_INTERFACE_LOGICOUT%i", i),
-						/*bidir*/ 0))) FAIL(rc);
+						/*bidir*/ 0))) RC_FAIL(model, rc);
 				}
 			}
 			continue;
@@ -1378,10 +1323,10 @@ static int init_logicout_fw(struct fpga_model *model)
 				for (i = 0; i <= 23; i++) {
 					if ((rc = add_switch(model, y-1, model->center_x-CENTER_LOGIC_O,
 						pf("INT_INTERFACE_LOGICOUT_%i", i), pf("INT_INTERFACE_LOGICOUT%i", i),
-						/*bidir*/ 0))) FAIL(rc);
+						/*bidir*/ 0))) RC_FAIL(model, rc);
 					if ((rc = add_switch(model, y+1, model->center_x-CENTER_LOGIC_O,
 						pf("INT_INTERFACE_LOGICOUT_%i", i), pf("INT_INTERFACE_LOGICOUT%i", i),
-						/*bidir*/ 0))) FAIL(rc);
+						/*bidir*/ 0))) RC_FAIL(model, rc);
 				}
 			}
 			continue;
@@ -1395,7 +1340,7 @@ static int init_logicout_fw(struct fpga_model *model)
 					for (i = 0; i <= 23; i++) {
 						if ((rc = add_switch(model, y, x,
 							pf("INT_INTERFACE_LOCAL_LOGICOUT_%i", i), pf("INT_INTERFACE_LOCAL_LOGICOUT%i", i),
-							/*bidir*/ 0))) FAIL(rc);
+							/*bidir*/ 0))) RC_FAIL(model, rc);
 					}
 					continue;
 				}
@@ -1407,7 +1352,7 @@ static int init_logicout_fw(struct fpga_model *model)
 				for (i = 0; i <= 23; i++) {
 					if ((rc = add_switch(model, y, x,
 						pf("INT_INTERFACE_LOGICOUT_%i", i), pf("INT_INTERFACE_LOGICOUT%i", i),
-						/*bidir*/ 0))) FAIL(rc);
+						/*bidir*/ 0))) RC_FAIL(model, rc);
 				}
 			}
 			continue;
@@ -1423,7 +1368,7 @@ static int init_logicout_fw(struct fpga_model *model)
 					for (i = 0; i <= 23; i++) {
 						if ((rc = add_switch(model, y, x,
 							pf("INT_INTERFACE_LOCAL_LOGICOUT_%i", i), pf("INT_INTERFACE_LOCAL_LOGICOUT%i", i),
-							/*bidir*/ 0))) FAIL(rc);
+							/*bidir*/ 0))) RC_FAIL(model, rc);
 					}
 					continue;
 				}
@@ -1434,21 +1379,20 @@ static int init_logicout_fw(struct fpga_model *model)
 				for (i = 0; i <= 23; i++) {
 					if ((rc = add_switch(model, y, x,
 						pf("INT_INTERFACE_LOGICOUT_%i", i), pf("INT_INTERFACE_LOGICOUT%i", i),
-						/*bidir*/ 0))) FAIL(rc);
+						/*bidir*/ 0))) RC_FAIL(model, rc);
 				}
 			}
 			continue;
 		}
 	}
-	return 0;
-fail:
-	return rc;
+	RC_RETURN(model);
 }
 
 static int init_bram(struct fpga_model *model)
 {
 	int i, x, y, tile0_to_3, wire_num, rc;
 
+	RC_CHECK(model);
 	for (x = 0; x < model->x_width; x++) {
 		if (!is_atx(X_FABRIC_BRAM_COL, model, x))
 			continue;
@@ -1462,10 +1406,10 @@ static int init_bram(struct fpga_model *model)
 			for (i = 0; i < sizeof(pairs)/sizeof(*pairs)/2; i++) {
 				if ((rc = add_switch(model, y, x,
 					pf(pairs[i*2], '0'+0), pf(pairs[i*2+1], 'A'+0),
-					/*bidir*/ 0))) FAIL(rc);
+					/*bidir*/ 0))) RC_FAIL(model, rc);
 				if ((rc = add_switch(model, y, x,
 					pf(pairs[i*2], '0'+1), pf(pairs[i*2+1], 'A'+1),
-					/*bidir*/ 0))) FAIL(rc);
+					/*bidir*/ 0))) RC_FAIL(model, rc);
 			}}
 			{ const char *s[] = {
 				"BRAM_SR0_INT1", "RAMB16BWER_RSTA",
@@ -1476,7 +1420,7 @@ static int init_bram(struct fpga_model *model)
 				"BRAM_SR1_INT2", "RAMB8BWER_1_RSTB" };
 			for (i = 0; i < sizeof(s)/sizeof(*s)/2; i++) {
 				if ((rc = add_switch(model, y, x, s[i*2],
-					s[i*2+1], /*bidir*/ 0))) FAIL(rc);
+					s[i*2+1], /*bidir*/ 0))) RC_FAIL(model, rc);
 			}}
 			for (i = BI_FIRST; i <= BI_LAST; i++) {
 				fdev_bram_inbit(BW+i, &tile0_to_3, &wire_num);
@@ -1484,21 +1428,21 @@ static int init_bram(struct fpga_model *model)
 				if ((rc = add_switch(model, y, x,
 					pf("BRAM_LOGICINB%i_INT%i", wire_num, tile0_to_3),
 					fpga_wire2str(BW+i),
-					/*bidir*/ 0))) FAIL(rc);
+					/*bidir*/ 0))) RC_FAIL(model, rc);
 				if (fdev_is_bram8_inwire(i)) {
 					fdev_bram_inbit(BW+(B8_0|i), &tile0_to_3, &wire_num);
 					if (tile0_to_3 == -1) { HERE(); continue; }
 					if ((rc = add_switch(model, y, x,
 						pf("BRAM_LOGICINB%i_INT%i", wire_num, tile0_to_3),
 						fpga_wire2str(BW+(B8_0|i)),
-						/*bidir*/ 0))) FAIL(rc);
+						/*bidir*/ 0))) RC_FAIL(model, rc);
 
 					fdev_bram_inbit(BW+(B8_1|i), &tile0_to_3, &wire_num);
 					if (tile0_to_3 == -1) { HERE(); continue; }
 					if ((rc = add_switch(model, y, x,
 						pf("BRAM_LOGICINB%i_INT%i", wire_num, tile0_to_3),
 						fpga_wire2str(BW+(B8_1|i)),
-						/*bidir*/ 0))) FAIL(rc);
+						/*bidir*/ 0))) RC_FAIL(model, rc);
 				}
 			}
 			for (i = BO_FIRST; i <= BO_LAST; i++) {
@@ -1507,34 +1451,33 @@ static int init_bram(struct fpga_model *model)
 				if ((rc = add_switch(model, y, x,
 					fpga_wire2str(BW+i),
 					pf("BRAM_LOGICOUT%i_INT%i", wire_num, tile0_to_3),
-					/*bidir*/ 0))) FAIL(rc);
+					/*bidir*/ 0))) RC_FAIL(model, rc);
 				if (fdev_is_bram8_outwire(i)) {
 					fdev_bram_outbit(BW+(B8_0|i), &tile0_to_3, &wire_num);
 					if (tile0_to_3 == -1) { HERE(); continue; }
 					if ((rc = add_switch(model, y, x,
 						fpga_wire2str(BW+(B8_0|i)),
 						pf("BRAM_LOGICOUT%i_INT%i", wire_num, tile0_to_3),
-						/*bidir*/ 0))) FAIL(rc);
+						/*bidir*/ 0))) RC_FAIL(model, rc);
 
 					fdev_bram_outbit(BW+(B8_1|i), &tile0_to_3, &wire_num);
 					if (tile0_to_3 == -1) { HERE(); continue; }
 					if ((rc = add_switch(model, y, x,
 						fpga_wire2str(BW+(B8_1|i)),
 						pf("BRAM_LOGICOUT%i_INT%i", wire_num, tile0_to_3),
-						/*bidir*/ 0))) FAIL(rc);
+						/*bidir*/ 0))) RC_FAIL(model, rc);
 				}
 			}
 		}
 	}
-	return 0;
-fail:
-	return rc;
+	RC_RETURN(model);
 }
 
 static int init_macc(struct fpga_model *model)
 {
 	int i, x, y, tile0_to_3, wire_num, rc;
 
+	RC_CHECK(model);
 	for (x = 0; x < model->x_width; x++) {
 		if (!is_atx(X_FABRIC_MACC_COL, model, x))
 			continue;
@@ -1553,7 +1496,7 @@ static int init_macc(struct fpga_model *model)
 				"MACC_CLK0_INT2", "CLK_DSP48A1_SITE" };
 			for (i = 0; i < sizeof(s)/sizeof(*s)/2; i++) {
 				if ((rc = add_switch(model, y, x, s[i*2],
-					s[i*2+1], /*bidir*/ 0))) FAIL(rc);
+					s[i*2+1], /*bidir*/ 0))) RC_FAIL(model, rc);
 			}}
 			for (i = MI_FIRST; i <= MI_LAST; i++) {
 				fdev_macc_inbit(MW+i, &tile0_to_3, &wire_num);
@@ -1561,7 +1504,7 @@ static int init_macc(struct fpga_model *model)
 				if ((rc = add_switch(model, y, x,
 					pf("MACC_LOGICINB%i_INT%i", wire_num, tile0_to_3),
 					fpga_wire2str(MW+i),
-					/*bidir*/ 0))) FAIL(rc);
+					/*bidir*/ 0))) RC_FAIL(model, rc);
 			}
 			for (i = MO_FIRST; i <= MO_LAST; i++) {
 				fdev_macc_outbit(MW+i, &tile0_to_3, &wire_num);
@@ -1569,53 +1512,51 @@ static int init_macc(struct fpga_model *model)
 				if ((rc = add_switch(model, y, x,
 					fpga_wire2str(MW+i),
 					pf("MACC_LOGICOUT%i_INT%i", wire_num, tile0_to_3),
-					/*bidir*/ 0))) FAIL(rc);
+					/*bidir*/ 0))) RC_FAIL(model, rc);
 			}
 			if (y != TOP_IO_TILES+3) { // exclude topmost macc dev 
 				if ((rc = add_switch(model, y, x,
 					"CARRYOUT_DSP48A1_SITE", "CARRYOUT_DSP48A1_B_SITE",
-					/*bidir*/ 0))) FAIL(rc);
+					/*bidir*/ 0))) RC_FAIL(model, rc);
 				for (i = 0; i <= 17; i++) {
 					if ((rc = add_switch(model, y, x,
 						pf("BCOUT%i_DSP48A1_SITE", i), pf("BCOUT%i_DSP48A1_B_SITE", i),
-						/*bidir*/ 0))) FAIL(rc);
+						/*bidir*/ 0))) RC_FAIL(model, rc);
 				}
 				for (i = 0; i <= 47; i++) {
 					if ((rc = add_switch(model, y, x,
 						pf("PCOUT%i_DSP48A1_SITE", i), pf("PCOUT%i_DSP48A1_B_SITE", i),
-						/*bidir*/ 0))) FAIL(rc);
+						/*bidir*/ 0))) RC_FAIL(model, rc);
 				}
 			}
 		}
 	}
-	return 0;
-fail:
-	return rc;
+	RC_RETURN(model);
 }
 
 static int init_topbot_tterm_gclk(struct fpga_model *model)
 {
 	int i, rc;
 
+	RC_CHECK(model);
 	for (i = 0; i <= 15; i++) {
 		if ((rc = add_switch(model, TOP_INNER_ROW, model->center_x + CENTER_X_PLUS_1, pf("IOI_TTERM_GCLK%i", i),
-			"BUFPLL_TOP_GCLK0", /*bidir*/ 0))) FAIL(rc);
+			"BUFPLL_TOP_GCLK0", /*bidir*/ 0))) RC_FAIL(model, rc);
 		if ((rc = add_switch(model, TOP_INNER_ROW, model->center_x + CENTER_X_PLUS_1, pf("IOI_TTERM_GCLK%i", i),
-			"BUFPLL_TOP_GCLK1", /*bidir*/ 0))) FAIL(rc);
+			"BUFPLL_TOP_GCLK1", /*bidir*/ 0))) RC_FAIL(model, rc);
 		if ((rc = add_switch(model, model->y_height - BOT_INNER_ROW, model->center_x + CENTER_X_PLUS_1, pf("IOI_BTERM_GCLK%i", i),
-			"BUFPLL_BOT_GCLK0", /*bidir*/ 0))) FAIL(rc);
+			"BUFPLL_BOT_GCLK0", /*bidir*/ 0))) RC_FAIL(model, rc);
 		if ((rc = add_switch(model, model->y_height - BOT_INNER_ROW, model->center_x + CENTER_X_PLUS_1, pf("IOI_BTERM_GCLK%i", i),
-			"BUFPLL_BOT_GCLK1", /*bidir*/ 0))) FAIL(rc);
+			"BUFPLL_BOT_GCLK1", /*bidir*/ 0))) RC_FAIL(model, rc);
 	}
-	return 0;
-fail:
-	return rc;
+	RC_RETURN(model);
 }
 
 static int init_bufio_tile(struct fpga_model *model, int y, int x, const char *s1, const char *s2)
 {
 	int i, j, rc;
 
+	RC_CHECK(model);
 	{ static const char *s[] = {
 		"I_BUFIO2_%s_SITE%i", "O_BUFIO2_%s_SITE%i",
 		"I_BUFIO2_%s_SITE%i", "ODIV_BUFIO2_%s_SITE%i",
@@ -1623,7 +1564,7 @@ static int init_bufio_tile(struct fpga_model *model, int y, int x, const char *s
 	for (i = 0; i < sizeof(s)/sizeof(*s)/2; i++) {
 		for (j = 0; j <= 7; j++) {
 			if ((rc = add_switch(model, y, x, pf(s[i*2], s2, j),
-				pf(s[i*2+1], s2, j), /*bidir*/ 0))) FAIL(rc);
+				pf(s[i*2+1], s2, j), /*bidir*/ 0))) RC_FAIL(model, rc);
 		}
 	}}
 	{ static const char *s[] = {
@@ -1634,7 +1575,7 @@ static int init_bufio_tile(struct fpga_model *model, int y, int x, const char *s
 	for (i = 0; i < sizeof(s)/sizeof(*s)/2; i++) {
 		for (j = 0; j <= 7; j++) {
 			if ((rc = add_switch(model, y, x, pf(s[i*2], s2, j),
-				pf(s[i*2+1], s1, j), /*bidir*/ 0))) FAIL(rc);
+				pf(s[i*2+1], s1, j), /*bidir*/ 0))) RC_FAIL(model, rc);
 		}
 	}}
 	{ static const char *s[] = {
@@ -1648,13 +1589,13 @@ static int init_bufio_tile(struct fpga_model *model, int y, int x, const char *s
 	for (i = 0; i < sizeof(s)/sizeof(*s)/2; i++) {
 		for (j = 0; j <= 7; j++) {
 			if ((rc = add_switch(model, y, x, pf(s[i*2], s1, j),
-				pf(s[i*2+1], s2, j), /*bidir*/ 0))) FAIL(rc);
+				pf(s[i*2+1], s2, j), /*bidir*/ 0))) RC_FAIL(model, rc);
 		}
 	}}
 	for (j = 0; j <= 7; j++) {
 		if ((rc = add_switch(model, y, x, pf("%s_VCC", s1),
 			pf("IB_BUFIO2_%s_SITE%i", s2, j),
-			/*bidir*/ 0))) FAIL(rc);
+			/*bidir*/ 0))) RC_FAIL(model, rc);
 	}
 	{ int n[] = { 1, 0, 3, 2, 5, 4, 7, 6 };
 	  const char *s[] = {
@@ -1664,7 +1605,7 @@ static int init_bufio_tile(struct fpga_model *model, int y, int x, const char *s
 		for (j = 0; j <= 7; j++) {
 			if ((rc = add_switch(model, y, x, pf(s[i*2], s1, j),
 				pf(s[i*2+1], s2, n[j]),
-				/*bidir*/ 0))) FAIL(rc);
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 		}
 	}}
 	{ int n1[] = { 1, 0, 3, 2, 0, 0, 2, 2};
@@ -1677,18 +1618,16 @@ static int init_bufio_tile(struct fpga_model *model, int y, int x, const char *s
 		for (j = 0; j <= 7; j++) {
 			if ((rc = add_switch(model, y, x, pf(s[i*2], s1, j),
 				pf(s[i*2+1], s2, n1[j]),
-				/*bidir*/ 0))) FAIL(rc);
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 			if ((rc = add_switch(model, y, x, pf(s[i*2], s1, j),
 				pf(s[i*2+1], s2, n2[j]),
-				/*bidir*/ 0))) FAIL(rc);
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 			if ((rc = add_switch(model, y, x, pf(s[i*2], s1, j),
 				pf(s[i*2+1], s2, n3[j]),
-				/*bidir*/ 0))) FAIL(rc);
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 		}
 	}}
-	return 0;
-fail:
-	return rc;
+	RC_RETURN(model);
 }
 
 static int init_bufio(struct fpga_model *model)
@@ -1697,15 +1636,17 @@ static int init_bufio(struct fpga_model *model)
 	const char *s1, *s2;
 	const int lr_n[] = { 0, 0, 2, 2, 4, 5, 6, 7 };
 
+	RC_CHECK(model);
+
 	y = TOP_OUTER_ROW;
 	x = model->center_x-CENTER_CMTPLL_O;
 	s1 = "REGT";
 	s2 = "TOP";
 	rc = init_bufio_tile(model, y, x, s1, s2);
-	if (rc) FAIL(rc);
+	if (rc) RC_FAIL(model, rc);
 	for (j = 0; j <= 7; j++) {
 		if ((rc = add_switch(model, y, x, pf("%s_GTPCLK%i", s1, j),
-			pf("I_BUFIO2_%s_SITE%i", s2, j), /*bidir*/ 0))) FAIL(rc);
+			pf("I_BUFIO2_%s_SITE%i", s2, j), /*bidir*/ 0))) RC_FAIL(model, rc);
 	}
 
 	y = model->center_y;
@@ -1713,10 +1654,10 @@ static int init_bufio(struct fpga_model *model)
 	s1 = "REGL";
 	s2 = "LEFT";
 	rc = init_bufio_tile(model, y, x, s1, s2);
-	if (rc) FAIL(rc);
+	if (rc) RC_FAIL(model, rc);
 	for (j = 0; j <= 7; j++) {
 		if ((rc = add_switch(model, y, x, pf("%s_GTPCLK%i", s1, lr_n[j]),
-			pf("I_BUFIO2_%s_SITE%i", s2, j), /*bidir*/ 0))) FAIL(rc);
+			pf("I_BUFIO2_%s_SITE%i", s2, j), /*bidir*/ 0))) RC_FAIL(model, rc);
 	}
 
 	y = model->center_y;
@@ -1724,10 +1665,10 @@ static int init_bufio(struct fpga_model *model)
 	s1 = "REGR";
 	s2 = "RIGHT";
 	rc = init_bufio_tile(model, y, x, s1, s2);
-	if (rc) FAIL(rc);
+	if (rc) RC_FAIL(model, rc);
 	for (j = 0; j <= 7; j++) {
 		if ((rc = add_switch(model, y, x, pf("%s_GTPCLK%i", s1, lr_n[j]),
-			pf("I_BUFIO2_%s_SITE%i", s2, j), /*bidir*/ 0))) FAIL(rc);
+			pf("I_BUFIO2_%s_SITE%i", s2, j), /*bidir*/ 0))) RC_FAIL(model, rc);
 	}
 
 	y = model->y_height-BOT_OUTER_ROW;
@@ -1735,14 +1676,12 @@ static int init_bufio(struct fpga_model *model)
 	s1 = "REGB";
 	s2 = "BOT";
 	rc = init_bufio_tile(model, y, x, s1, s2);
-	if (rc) FAIL(rc);
+	if (rc) RC_FAIL(model, rc);
 	for (j = 0; j <= 7; j++) {
 		if ((rc = add_switch(model, y, x, pf("%s_GTPCLK%i", s1, j),
-			pf("I_BUFIO2_%s_SITE%i", s2, j), /*bidir*/ 0))) FAIL(rc);
+			pf("I_BUFIO2_%s_SITE%i", s2, j), /*bidir*/ 0))) RC_FAIL(model, rc);
 	}
-	return 0;
-fail:
-	return rc;
+	RC_RETURN(model);
 }
 
 static int init_bscan(struct fpga_model *model)
@@ -1760,6 +1699,7 @@ static int init_bscan(struct fpga_model *model)
 		"BSCAN%i_UPDATE_PINWIRE",
 		"BSCAN%i_SEL_PINWIRE" };
 
+	RC_CHECK(model);
 	x = model->x_width-RIGHT_IO_DEVS_O;
 	for (y = TOP_IO_TILES; y < model->y_height-BOT_IO_TILES; y++) {
 		num_bscan_devs = has_device(model, y, x, DEV_BSCAN);
@@ -1771,21 +1711,20 @@ static int init_bscan(struct fpga_model *model)
 		for (i = 0; i <= 1; i++) {
 			for (j = 0; j < sizeof(s)/sizeof(*s); j++) {
 				if ((rc = add_switch(model, y, x, pf(s[j], i+1),
-					pf("INT_INTERFACE_LOCAL_LOGICOUT_%i", i*10+j), /*bidir*/ 0))) FAIL(rc);
+					pf("INT_INTERFACE_LOCAL_LOGICOUT_%i", i*10+j), /*bidir*/ 0))) RC_FAIL(model, rc);
 			}
 			if ((rc = add_switch(model, y, x, pf("INT_INTERFACE_LOCAL_LOGICBIN%i", i+1), 
-				pf("BSCAN%i_TDO_PINWIRE", i+1), /*bidir*/ 0))) FAIL(rc);
+				pf("BSCAN%i_TDO_PINWIRE", i+1), /*bidir*/ 0))) RC_FAIL(model, rc);
 		}
 	}
-	return 0;
-fail:
-	return rc;
+	RC_RETURN(model);
 }
 
 static int init_dcm(struct fpga_model *model)
 {
 	int y, x, i, j, k, num_devs, rc;
 
+	RC_CHECK(model);
 	x = model->center_x-CENTER_CMTPLL_O;
 	for (y = TOP_IO_TILES; y < model->y_height-BOT_IO_TILES; y++) {
 		num_devs = has_device(model, y, x, DEV_DCM);
@@ -1800,47 +1739,47 @@ static int init_dcm(struct fpga_model *model)
 					if ((rc = add_switch(model, y, x,
 						pf("DCM%i_CLKOUT%i", i+1, j),
 						pf("DCM_HCLK%i", k), 
-						/*bidir*/ 0))) FAIL(rc);
+						/*bidir*/ 0))) RC_FAIL(model, rc);
 				}
 			}
 		}
 		for (k = 0; k <= 15; k++) { // 16 hclk dests
 			if ((rc = add_switch(model, y, x,
 				pf("DCM_FABRIC_CLK%i", k), pf("DCM_HCLK%i", k),
-				/*bidir*/ 0))) FAIL(rc);
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 			if ((rc = add_switch(model, y, x,
 				pf("DCM_HCLK%i", k), pf("DCM_HCLK%i_N", k),
-				/*bidir*/ 0))) FAIL(rc);
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 			if (y > model->center_y) { // lower half
 				if ((rc = add_switch(model, y, x,
 					pf("DCM_HCLK%i_N", k), pf("PLL_CLK_CASC_TOP%i", k), 
-					/*bidir*/ 0))) FAIL(rc);
+					/*bidir*/ 0))) RC_FAIL(model, rc);
 				if ((rc = add_switch(model, y, x,
 					pf("PLL_CLK_CASC_BOT%i", k), pf("PLL_CLK_CASC_TOP%i", k), 
-					/*bidir*/ 0))) FAIL(rc);
+					/*bidir*/ 0))) RC_FAIL(model, rc);
 			} else { // upper half
 				if ((rc = add_switch(model, y, x,
 					pf("DCM_HCLK%i_N", k), pf("PLL_CLK_CASC_BOT%i", k), 
-					/*bidir*/ 0))) FAIL(rc);
+					/*bidir*/ 0))) RC_FAIL(model, rc);
 				if ((rc = add_switch(model, y, x,
 					pf("PLL_CLK_CASC_TOP%i", k), pf("PLL_CLK_CASC_BOT%i", k), 
-					/*bidir*/ 0))) FAIL(rc);
+					/*bidir*/ 0))) RC_FAIL(model, rc);
 			}
 		}
 		for (i = 0; i <= 7; i++) { // 8 wires
 			for (j = 1; j <= 2; j++) { // dcm 1 and 2
 				if ((rc = add_switch(model, y, x,
 					pf("DCM_CLK_FEEDBACK_LR_TOP%i", i), pf("DCM%i_CLKFB", j), 
-					/*bidir*/ 0))) FAIL(rc);
+					/*bidir*/ 0))) RC_FAIL(model, rc);
 				if ((rc = add_switch(model, y, x,
 					pf("DCM_CLK_FEEDBACK_TB_BOT%i", i), pf("DCM%i_CLKFB", j), 
-					/*bidir*/ 0))) FAIL(rc);
+					/*bidir*/ 0))) RC_FAIL(model, rc);
 				if ((rc = add_switch(model, y, x,
 					pf("DCM_CLK_INDIRECT_LR_TOP%i", i), pf("DCM%i_CLKIN", j), 
-					/*bidir*/ 0))) FAIL(rc);
+					/*bidir*/ 0))) RC_FAIL(model, rc);
 				if ((rc = add_switch(model, y, x,
 					pf("DCM_CLK_INDIRECT_TB_BOT%i", i), pf("DCM%i_CLKIN", j), 
-					/*bidir*/ 0))) FAIL(rc);
+					/*bidir*/ 0))) RC_FAIL(model, rc);
 			}
 		}
 		// logicin
@@ -1866,29 +1805,29 @@ static int init_dcm(struct fpga_model *model)
 			if (clb1_in0_to_62[i])
 				if ((rc = add_switch(model, y, x,
 					pf("DCM_CLB1_LOGICINB%i", i), clb1_in0_to_62[i], 
-					/*bidir*/ 0))) FAIL(rc);
+					/*bidir*/ 0))) RC_FAIL(model, rc);
 			if (clb2_in0_to_62[i])
 				if ((rc = add_switch(model, y, x,
 					pf("DCM_CLB2_LOGICINB%i", i), clb2_in0_to_62[i], 
-					/*bidir*/ 0))) FAIL(rc);
+					/*bidir*/ 0))) RC_FAIL(model, rc);
 		}}
 		// logicout
 		for (i = 0; i <= 7; i++) {
 			if ((rc = add_switch(model, y, x,
 				pf("DCM1_STATUS%i", i), pf("DCM_CLB2_LOGICOUT%i", 16+i),
-				/*bidir*/ 0))) FAIL(rc);
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 			if ((rc = add_switch(model, y, x,
 				pf("DCM2_STATUS%i", i), pf("DCM_CLB1_LOGICOUT%i", 16+i),
-				/*bidir*/ 0))) FAIL(rc);
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 		}
 		if ((rc = add_switch(model, y, x, "DCM1_LOCKED",
-			"DCM_CLB2_LOGICOUT14", /*bidir*/ 0))) FAIL(rc);
+			"DCM_CLB2_LOGICOUT14", /*bidir*/ 0))) RC_FAIL(model, rc);
 		if ((rc = add_switch(model, y, x, "DCM1_PSDONE",
-			"DCM_CLB2_LOGICOUT15", /*bidir*/ 0))) FAIL(rc);
+			"DCM_CLB2_LOGICOUT15", /*bidir*/ 0))) RC_FAIL(model, rc);
 		if ((rc = add_switch(model, y, x, "DCM2_LOCKED",
-			"DCM_CLB1_LOGICOUT14", /*bidir*/ 0))) FAIL(rc);
+			"DCM_CLB1_LOGICOUT14", /*bidir*/ 0))) RC_FAIL(model, rc);
 		if ((rc = add_switch(model, y, x, "DCM2_PSDONE",
-			"DCM_CLB1_LOGICOUT15", /*bidir*/ 0))) FAIL(rc);
+			"DCM_CLB1_LOGICOUT15", /*bidir*/ 0))) RC_FAIL(model, rc);
 
 		{ const char *s[] = {
 			"CLK0", "CLK90", "CLK180", "CLK270", "CLK2X",
@@ -1896,13 +1835,13 @@ static int init_dcm(struct fpga_model *model)
 		for (i = 0; i < sizeof(s)/sizeof(*s); i++) {
 			for (j = 1; j <= 2; j++) { // dcm1 and dcm2
 				if ((rc = add_switch(model, y, x, pf("DCM%i_%s", j, s[i]),
-					pf("DCM%i_CLKOUT%i", j, i), /*bidir*/ 0))) FAIL(rc);
+					pf("DCM%i_CLKOUT%i", j, i), /*bidir*/ 0))) RC_FAIL(model, rc);
 				if ((rc = add_switch(model, y, x, pf("DCM%i_%s", j, s[i]),
-					pf("DCM%i_CLK_TO_PLL", j), /*bidir*/ 0))) FAIL(rc);
+					pf("DCM%i_CLK_TO_PLL", j), /*bidir*/ 0))) RC_FAIL(model, rc);
 				if ((rc = add_switch(model, y, x, pf("DCM%i_%s", j, s[i]),
-					pf("DCM%i_%s_TEST", j, s[i]), /*bidir*/ 0))) FAIL(rc);
+					pf("DCM%i_%s_TEST", j, s[i]), /*bidir*/ 0))) RC_FAIL(model, rc);
 				if ((rc = add_switch(model, y, x, pf("DCM%i_%s_TEST", j, s[i]),
-					pf("DCM_%i_TESTCLK_PINWIRE", j==1?1:0), /*bidir*/ 0))) FAIL(rc);
+					pf("DCM_%i_TESTCLK_PINWIRE", j==1?1:0), /*bidir*/ 0))) RC_FAIL(model, rc);
 			}
 		}}
 
@@ -1923,7 +1862,7 @@ static int init_dcm(struct fpga_model *model)
 			"DCM2_GFAN1", "DCM1_PSCLK" };
 		for (i = 0; i < sizeof(s)/sizeof(*s)/2; i++) {
 			if ((rc = add_switch(model, y, x, s[i*2], s[i*2+1],
-				/*bidir*/ 0))) FAIL(rc);
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 		}}
 		{ const char *s[] = {
 			"DCM%i_CLK_FROM_BUFG0", "DCM%i_CLKFB",
@@ -1934,7 +1873,7 @@ static int init_dcm(struct fpga_model *model)
 		for (j = 1; j <= 2; j++) { // dcm1 and dcm2
 			for (i = 0; i < sizeof(s)/sizeof(*s)/2; i++) {
 				if ((rc = add_switch(model, y, x, pf(s[i*2], j), pf(s[i*2+1], j),
-					/*bidir*/ 0))) FAIL(rc);
+					/*bidir*/ 0))) RC_FAIL(model, rc);
 			}
 		}}
 		if (y > model->center_y) { // lower half
@@ -1944,7 +1883,7 @@ static int init_dcm(struct fpga_model *model)
 				"DCM_IOCLK_UP5", "DCM_IOCLK_DOWN5" };
 			for (i = 0; i < sizeof(s)/sizeof(*s)/2; i++) {
 				if ((rc = add_switch(model, y, x, s[i*2], s[i*2+1],
-					/*bidir*/ 0))) FAIL(rc);
+					/*bidir*/ 0))) RC_FAIL(model, rc);
 			}
 		} else { // upper half
 			const char *s[] = {
@@ -1953,19 +1892,18 @@ static int init_dcm(struct fpga_model *model)
 				"DCM_IOCLK_DOWN5", "DCM_IOCLK_UP5" };
 			for (i = 0; i < sizeof(s)/sizeof(*s)/2; i++) {
 				if ((rc = add_switch(model, y, x, s[i*2], s[i*2+1],
-					/*bidir*/ 0))) FAIL(rc);
+					/*bidir*/ 0))) RC_FAIL(model, rc);
 			}
 		}
 	}
-	return 0;
-fail:
-	return rc;
+	RC_RETURN(model);
 }
 
 static int init_pll(struct fpga_model *model)
 {
 	int y, x, i, j, num_devs, rc;
 
+	RC_CHECK(model);
 	x = model->center_x-CENTER_CMTPLL_O;
 	for (y = TOP_IO_TILES; y < model->y_height-BOT_IO_TILES; y++) {
 		num_devs = has_device(model, y, x, DEV_PLL);
@@ -1979,70 +1917,70 @@ static int init_pll(struct fpga_model *model)
 				if ((rc = add_switch(model, y, x,
 					pf("CMT_PLL_CLKOUT%i", i),
 					pf("CMT_PLL_HCLK%i", j), 
-					/*bidir*/ 0))) FAIL(rc);
+					/*bidir*/ 0))) RC_FAIL(model, rc);
 			}
 		}
 		for (i = 0; i <= 15; i++) {
 			if ((rc = add_switch(model, y, x,
 				"CMT_CLKFB",
 				pf("CMT_PLL_HCLK%i", i), 
-				/*bidir*/ 0))) FAIL(rc);
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 			if ((rc = add_switch(model, y, x,
 				"CMT_SE_CLK_OUT",
 				pf("CMT_PLL_HCLK%i", i), 
-				/*bidir*/ 0))) FAIL(rc);
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 			if ((rc = add_switch(model, y, x,
 				pf("CMT_FABRIC_CLK%i", i),
 				pf("CMT_PLL_HCLK%i", i), 
-				/*bidir*/ 0))) FAIL(rc);
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 			if ((rc = add_switch(model, y, x,
 				pf("CMT_PLL_HCLK%i", i),
 				pf("CMT_PLL_HCLK%i_E", i), 
-				/*bidir*/ 0))) FAIL(rc);
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 			if (y < model->center_y) {
 				if ((rc = add_switch(model, y, x,
 					pf("CMT_PLL_HCLK%i_E", i),
 					pf("CLK_PLLCASC_OUT%i", i), 
-					/*bidir*/ 0))) FAIL(rc);
+					/*bidir*/ 0))) RC_FAIL(model, rc);
 				if ((rc = add_switch(model, y, x,
 					pf("PLL_CLK_CASC_IN%i", i),
 					pf("CLK_PLLCASC_OUT%i", i), 
-					/*bidir*/ 0))) FAIL(rc);
+					/*bidir*/ 0))) RC_FAIL(model, rc);
 			} else {
 				if ((rc = add_switch(model, y, x,
 					pf("CMT_PLL_HCLK%i_E", i),
 					pf("PLL_CLK_CASC_IN%i", i), 
-					/*bidir*/ 0))) FAIL(rc);
+					/*bidir*/ 0))) RC_FAIL(model, rc);
 			}
 		}
 		for (i = 0; i <= 7; i++) {
 			if ((rc = add_switch(model, y, x,
 				pf("CMT_PLL_CLK_FEEDBACK_LRBOT%i", i),
 				"CMT_CLKMUX_CLKFB",
-				/*bidir*/ 0))) FAIL(rc);
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 			if ((rc = add_switch(model, y, x,
 				pf("PLL_CLK_FEEDBACK_TB%i", i),
 				"CMT_CLKMUX_CLKFB",
-				/*bidir*/ 0))) FAIL(rc);
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 		}
 		for (i = 0; i <= 7; i++) {
 			const char *to = i < 4 ? "CMT_CLKMUX_CLKREF" : "CMT_CLKMUX_CLKIN2";
 			if ((rc = add_switch(model, y, x,
 				pf("CMT_PLL_CLK_INDIRECT_LRBOT%i", i), to,
-				/*bidir*/ 0))) FAIL(rc);
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 			if ((rc = add_switch(model, y, x,
 				pf("PLL_CLK_INDIRECT_TB%i", i), to,
-				/*bidir*/ 0))) FAIL(rc);
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 		}
 		for (i = 0; i <= 5; i++) {
 			if ((rc = add_switch(model, y, x,
 				pf("CMT_PLL_CLKOUTDCM%i", i),
 				"CMT_CLK_TO_DCM1",
-				/*bidir*/ 0))) FAIL(rc);
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 			if ((rc = add_switch(model, y, x,
 				pf("CMT_PLL_CLKOUTDCM%i", i),
 				"CMT_CLK_TO_DCM2",
-				/*bidir*/ 0))) FAIL(rc);
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 		}
 		{ const char *s[] = {
 			"CMT_CLKFB", "CMT_CLKMUX_CLKFB",
@@ -2082,7 +2020,7 @@ static int init_pll(struct fpga_model *model)
 			"PLL_CLB2_GFAN1", "PLL_DCLK" };
 		for (i = 0; i < sizeof(s)/sizeof(*s)/2; i++) {
 			if ((rc = add_switch(model, y, x,
-				s[i*2], s[i*2+1], /*bidir*/ 0))) FAIL(rc);
+				s[i*2], s[i*2+1], /*bidir*/ 0))) RC_FAIL(model, rc);
 		}}
 		// logicin
 		{ const char *clb1_in0_to_62[] = {
@@ -2108,31 +2046,30 @@ static int init_pll(struct fpga_model *model)
 				if ((rc = add_switch(model, y, x,
 					pf("PLL_CLB1_LOGICINB%i", i),
 					pf("CMT_FABRIC_CLK%s", clb1_in0_to_62[i]), 
-					/*bidir*/ 0))) FAIL(rc);
+					/*bidir*/ 0))) RC_FAIL(model, rc);
 			if (clb2_in0_to_62[i])
 				if ((rc = add_switch(model, y, x,
 					pf("PLL_CLB2_LOGICINB%i", i), clb2_in0_to_62[i], 
-					/*bidir*/ 0))) FAIL(rc);
+					/*bidir*/ 0))) RC_FAIL(model, rc);
 		}}
 		// logicout
 		for (i = 0; i <= 15; i++) {
 			if ((rc = add_switch(model, y, x,
 				pf("PLL_DO%i", i),
 				pf("PLL_CLB1_LOGICOUT%i", i),
-				/*bidir*/ 0))) FAIL(rc);
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 		}
 		if ((rc = add_switch(model, y, x, "PLL_DRDY",
-			"PLL_CLB1_LOGICOUT16", /*bidir*/ 0))) FAIL(rc);
+			"PLL_CLB1_LOGICOUT16", /*bidir*/ 0))) RC_FAIL(model, rc);
 	}
-	return 0;
-fail:
-	return rc;
+	RC_RETURN(model);
 }
 
 static int init_center_hclk(struct fpga_model *model)
 {
 	int y, x, i, rc;
 
+	RC_CHECK(model);
 	x = model->center_x;
 	for (y = TOP_IO_TILES; y < model->y_height-BOT_IO_TILES; y++) {
 		if (!is_aty(Y_ROW_HORIZ_AXSYMM, model, y))
@@ -2141,54 +2078,53 @@ static int init_center_hclk(struct fpga_model *model)
 			if ((rc = add_switch(model, y, x,
 				pf("CLKV_GCLKH_L%i", i),
 				pf("I_BUFH_LEFT_SITE%i", i),
-				/*bidir*/ 0))) FAIL(rc);
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 			if ((rc = add_switch(model, y, x,
 				pf("CLKV_GCLKH_R%i", i),
 				pf("I_BUFH_RIGHT_SITE%i", i),
-				/*bidir*/ 0))) FAIL(rc);
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 			if ((rc = add_switch(model, y, x,
 				pf("CLKV_GCLKH_MAIN%i_FOLD", i),
 				pf("CLKV_GCLKH_L%i", i),
-				/*bidir*/ 0))) FAIL(rc);
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 			if ((rc = add_switch(model, y, x,
 				pf("CLKV_GCLKH_MAIN%i_FOLD", i),
 				pf("CLKV_GCLKH_R%i", i),
-				/*bidir*/ 0))) FAIL(rc);
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 			if ((rc = add_switch(model, y, x,
 				pf("I_BUFH_LEFT_SITE%i", i),
 				pf("O_BUFH_LEFT_SITE%i", i),
-				/*bidir*/ 0))) FAIL(rc);
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 			if ((rc = add_switch(model, y, x,
 				pf("I_BUFH_RIGHT_SITE%i", i),
 				pf("O_BUFH_RIGHT_SITE%i", i),
-				/*bidir*/ 0))) FAIL(rc);
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 			if ((rc = add_switch(model, y, x,
 				pf("O_BUFH_LEFT_SITE%i", i),
 				pf("CLKV_BUFH_LEFT_L%i", i),
-				/*bidir*/ 0))) FAIL(rc);
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 			if ((rc = add_switch(model, y, x,
 				pf("O_BUFH_RIGHT_SITE%i", i),
 				pf("CLKV_BUFH_RIGHT_R%i", i),
-				/*bidir*/ 0))) FAIL(rc);
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 			if ((rc = add_switch(model, y, x,
 				pf("REGV_PLL_HCLK%i", i),
 				pf("CLKV_GCLKH_L%i", i),
-				/*bidir*/ 0))) FAIL(rc);
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 			if ((rc = add_switch(model, y, x,
 				pf("REGV_PLL_HCLK%i", i),
 				pf("CLKV_GCLKH_R%i", i),
-				/*bidir*/ 0))) FAIL(rc);
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 		}
 	}
-	return 0;
-fail:
-	return rc;
+	RC_RETURN(model);
 }
 
 static int init_center_midbuf(struct fpga_model *model)
 {
 	int y, x, i, rc;
 
+	RC_CHECK(model);
 	x = model->center_x;
 	for (y = TOP_IO_TILES; y < model->y_height-BOT_IO_TILES; y++) {
 		if (!is_atyx(YX_CENTER_MIDBUF, model, y, x))
@@ -2198,36 +2134,35 @@ static int init_center_midbuf(struct fpga_model *model)
 				if ((rc = add_switch(model, y-1, x,
 					pf("CLKV_CKPIN_BUF%i", i),
 					pf("CLKV_MIDBUF_TOP_CKPIN%i", i),
-					/*bidir*/ 0))) FAIL(rc);
+					/*bidir*/ 0))) RC_FAIL(model, rc);
 			}
 		} else {
 			for (i = 0; i <= 7; i++) {
 				if ((rc = add_switch(model, y+1, x,
 					pf("CLKV_MIDBUF_BOT_CKPIN%i", i),
 					pf("CLKV_CKPIN_BOT_BUF%i", i),
-					/*bidir*/ 0))) FAIL(rc);
+					/*bidir*/ 0))) RC_FAIL(model, rc);
 			}
 		}
 		for (i = 0; i <= 15; i++) {
 			if ((rc = add_switch(model, y, x,
 				pf("CLKV_GCLK_MAIN%i", i),
 				pf("CLKV_MIDBUF_GCLK%i", i),
-				/*bidir*/ 0))) FAIL(rc);
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 			if ((rc = add_switch(model, y, x,
 				pf("CLKV_MIDBUF_GCLK%i", i),
 				pf("CLKV_GCLK_MAIN%i_BUF", i),
-				/*bidir*/ 0))) FAIL(rc);
+				/*bidir*/ 0))) RC_FAIL(model, rc);
 		}
 	}
-	return 0;
-fail:
-	return rc;
+	RC_RETURN(model);
 }
 
 static int init_center_reg_tile(struct fpga_model *model, int y, int x, const char *s1, const char *s2)
 {
 	int i, j, rc;
 
+	RC_CHECK(model);
 	{ static const char *s[] = {
 		"%s_CKPIN_OUT%i", "%s_CKPIN%i",
 		"%s_CKPIN_OUT%i", "%s_CLK_INDIRECT%i",
@@ -2238,18 +2173,18 @@ static int init_center_reg_tile(struct fpga_model *model, int y, int x, const ch
 	for (i = 0; i < sizeof(s)/sizeof(*s)/2; i++) {
 		for (j = 0; j <= 7; j++) {
 			if ((rc = add_switch(model, y, x, pf(s[i*2], s1, j),
-				pf(s[i*2+1], s1, j), /*bidir*/ 0))) FAIL(rc);
+				pf(s[i*2+1], s1, j), /*bidir*/ 0))) RC_FAIL(model, rc);
 		}
 	}}
-	return 0;
-fail:
-	return rc;
+	RC_RETURN(model);
 }
 
 static int init_center_reg_tblr(struct fpga_model *model)
 {
 	int y, x, i, j, rc;
 	const char *s1, *s2;
+
+	RC_CHECK(model);
 
 	//
 	// top
@@ -2260,14 +2195,14 @@ static int init_center_reg_tblr(struct fpga_model *model)
 	s1 = "REGT";
 	s2 = "TOP";
 	rc = init_center_reg_tile(model, y, x, s1, s2);
-	if (rc) FAIL(rc);
+	if (rc) RC_FAIL(model, rc);
 	for (i = 0; i <= 5; i++) {
 		for (j = 0; j <= 1; j++) {
 			if ((rc = add_switch(model, y, x, pf("REGT_PLL_IOCLK_UP%i", i),
-				pf("PLLIN_BUFPLL%i_TOP_SITE", j), /*bidir*/ 0))) FAIL(rc);
+				pf("PLLIN_BUFPLL%i_TOP_SITE", j), /*bidir*/ 0))) RC_FAIL(model, rc);
 			if (i < 3) {
 				if ((rc = add_switch(model, y, x, pf("REGT_LOCKIN%i", i),
-					pf("LOCKED_BUFPLL%i_TOP_SITE", j), /*bidir*/ 0))) FAIL(rc);
+					pf("LOCKED_BUFPLL%i_TOP_SITE", j), /*bidir*/ 0))) RC_FAIL(model, rc);
 			}
 		}
 	}
@@ -2284,12 +2219,12 @@ static int init_center_reg_tblr(struct fpga_model *model)
 		"SERDESSTROBE_BUFPLL1_TOP_SITE", "REGT_CEOUT1" };
 	for (i = 0; i < sizeof(s)/sizeof(*s)/2; i++) {
 		if ((rc = add_switch(model, y, x, pf(s[i*2]),
-			pf(s[i*2+1]), /*bidir*/ 0))) FAIL(rc);
+			pf(s[i*2+1]), /*bidir*/ 0))) RC_FAIL(model, rc);
 	}}
 	// y+1
 	for (i = 0; i <= 7; i++) {
 		if ((rc = add_switch(model, y+1, x, pf("REGT_TTERM_CLKPIN%i", i),
-			pf("REGT_TTERM_CKPIN%i", i), /*bidir*/ 0))) FAIL(rc);
+			pf("REGT_TTERM_CKPIN%i", i), /*bidir*/ 0))) RC_FAIL(model, rc);
 	}
 	{ const char *s[] = {
 		"REGT_TTERM_PLL_CEOUT0_N", "REGT_TTERM_PLL_CEOUT0",
@@ -2298,7 +2233,7 @@ static int init_center_reg_tblr(struct fpga_model *model)
 		"REGT_TTERM_PLL_CLKOUT1_N", "REGT_TTERM_PLL_CLKOUT1" };
 	for (i = 0; i < sizeof(s)/sizeof(*s)/2; i++) {
 		if ((rc = add_switch(model, y+1, x, pf(s[i*2]),
-			pf(s[i*2+1]), /*bidir*/ 0))) FAIL(rc);
+			pf(s[i*2+1]), /*bidir*/ 0))) RC_FAIL(model, rc);
 	}}
 
 	//
@@ -2310,7 +2245,7 @@ static int init_center_reg_tblr(struct fpga_model *model)
 	s1 = "REGL";
 	s2 = "LEFT";
 	rc = init_center_reg_tile(model, y, x, s1, s2);
-	if (rc) FAIL(rc);
+	if (rc) RC_FAIL(model, rc);
 	{ const char *s[] = {
 		"REGL_VCC", "REGL_PLL_CLKOUT0_LEFT",
 		"REGL_VCC", "REGL_PLL_CLKOUT1_LEFT",
@@ -2332,12 +2267,12 @@ static int init_center_reg_tblr(struct fpga_model *model)
 		"SERDESSTROBE_BUFPLL1_LEFT_SITE", "REGL_PLL_CEOUT1_LEFT" };
 	for (i = 0; i < sizeof(s)/sizeof(*s)/2; i++) {
 		if ((rc = add_switch(model, y, x, pf(s[i*2]),
-			pf(s[i*2+1]), /*bidir*/ 0))) FAIL(rc);
+			pf(s[i*2+1]), /*bidir*/ 0))) RC_FAIL(model, rc);
 	}}
 	// x+1
 	for (i = 0; i <= 7; i++) {
 		if ((rc = add_switch(model, y, x+1, pf("REGH_LTERM_CLKPIN%i", i),
-			pf("REGH_LTERM_CKPIN%i", i), /*bidir*/ 0))) FAIL(rc);
+			pf("REGH_LTERM_CKPIN%i", i), /*bidir*/ 0))) RC_FAIL(model, rc);
 	}
 	{ const char *s[] = {
 		"REGH_LTERM_PLL_CEOUT0_W", "REGH_LTERM_PLL_CEOUT0",
@@ -2346,7 +2281,7 @@ static int init_center_reg_tblr(struct fpga_model *model)
 		"REGH_LTERM_PLL_CLKOUT1_W", "REGH_LTERM_PLL_CLKOUT1" };
 	for (i = 0; i < sizeof(s)/sizeof(*s)/2; i++) {
 		if ((rc = add_switch(model, y, x+1, pf(s[i*2]),
-			pf(s[i*2+1]), /*bidir*/ 0))) FAIL(rc);
+			pf(s[i*2+1]), /*bidir*/ 0))) RC_FAIL(model, rc);
 	}}
 
 	//
@@ -2358,7 +2293,7 @@ static int init_center_reg_tblr(struct fpga_model *model)
 	s1 = "REGR";
 	s2 = "RIGHT";
 	rc = init_center_reg_tile(model, y, x, s1, s2);
-	if (rc) FAIL(rc);
+	if (rc) RC_FAIL(model, rc);
 	{ const char *s[] = {
 		"REGR_VCC", "REGR_PLLCLK0",
 		"REGR_VCC", "REGR_PLLCLK1",
@@ -2380,12 +2315,12 @@ static int init_center_reg_tblr(struct fpga_model *model)
 		"SERDESSTROBE_BUFPLL1_RIGHT_SITE", "REGR_CEOUT1" };
 	for (i = 0; i < sizeof(s)/sizeof(*s)/2; i++) {
 		if ((rc = add_switch(model, y, x, pf(s[i*2]),
-			pf(s[i*2+1]), /*bidir*/ 0))) FAIL(rc);
+			pf(s[i*2+1]), /*bidir*/ 0))) RC_FAIL(model, rc);
 	}}
 	// x-1
 	for (i = 0; i <= 7; i++) {
 		if ((rc = add_switch(model, y, x-1, pf("REGH_RTERM_CLKPIN%i", i),
-			pf("REGH_RTERM_CKPIN%i", i), /*bidir*/ 0))) FAIL(rc);
+			pf("REGH_RTERM_CKPIN%i", i), /*bidir*/ 0))) RC_FAIL(model, rc);
 	}
 	{ const char *s[] = {
 		"REGH_RTERM_PLL_CEOUT0_E", "REGH_RTERM_PLL_CEOUT0",
@@ -2394,7 +2329,7 @@ static int init_center_reg_tblr(struct fpga_model *model)
 		"REGH_RTERM_PLL_CLKOUT1_E", "REGH_RTERM_PLL_CLKOUT1" };
 	for (i = 0; i < sizeof(s)/sizeof(*s)/2; i++) {
 		if ((rc = add_switch(model, y, x-1, pf(s[i*2]),
-			pf(s[i*2+1]), /*bidir*/ 0))) FAIL(rc);
+			pf(s[i*2+1]), /*bidir*/ 0))) RC_FAIL(model, rc);
 	}}
 
 	//
@@ -2406,14 +2341,14 @@ static int init_center_reg_tblr(struct fpga_model *model)
 	s1 = "REGB";
 	s2 = "BOT";
 	rc = init_center_reg_tile(model, y, x, s1, s2);
-	if (rc) FAIL(rc);
+	if (rc) RC_FAIL(model, rc);
 	for (i = 0; i <= 5; i++) {
 		for (j = 0; j <= 1; j++) {
 			if ((rc = add_switch(model, y, x, pf("REGB_PLL_IOCLK_DOWN%i", i),
-				pf("PLLIN_BUFPLL%i_BOT_SITE", j), /*bidir*/ 0))) FAIL(rc);
+				pf("PLLIN_BUFPLL%i_BOT_SITE", j), /*bidir*/ 0))) RC_FAIL(model, rc);
 			if (i < 3) {
 				if ((rc = add_switch(model, y, x, pf("REGB_LOCKIN%i", i),
-					pf("LOCKED_BUFPLL%i_BOT_SITE", j), /*bidir*/ 0))) FAIL(rc);
+					pf("LOCKED_BUFPLL%i_BOT_SITE", j), /*bidir*/ 0))) RC_FAIL(model, rc);
 			}
 		}
 	}
@@ -2430,12 +2365,12 @@ static int init_center_reg_tblr(struct fpga_model *model)
 		"SERDESSTROBE_BUFPLL1_BOT_SITE", "REGB_CEOUT1" };
 	for (i = 0; i < sizeof(s)/sizeof(*s)/2; i++) {
 		if ((rc = add_switch(model, y, x, pf(s[i*2]),
-			pf(s[i*2+1]), /*bidir*/ 0))) FAIL(rc);
+			pf(s[i*2+1]), /*bidir*/ 0))) RC_FAIL(model, rc);
 	}}
 	// y-1
 	for (i = 0; i <= 7; i++) {
 		if ((rc = add_switch(model, y-1, x, pf("REGB_BTERM_CLKPIN%i", i),
-			pf("REGB_BTERM_CKPIN%i", i), /*bidir*/ 0))) FAIL(rc);
+			pf("REGB_BTERM_CKPIN%i", i), /*bidir*/ 0))) RC_FAIL(model, rc);
 	}
 	{ const char *s[] = {
 		"REGB_BTERM_PLL_CEOUT0_S", "REGB_BTERM_PLL_CEOUT0",
@@ -2444,11 +2379,9 @@ static int init_center_reg_tblr(struct fpga_model *model)
 		"REGB_BTERM_PLL_CLKOUT1_S", "REGB_BTERM_PLL_CLKOUT1" };
 	for (i = 0; i < sizeof(s)/sizeof(*s)/2; i++) {
 		if ((rc = add_switch(model, y-1, x, pf(s[i*2]),
-			pf(s[i*2+1]), /*bidir*/ 0))) FAIL(rc);
+			pf(s[i*2+1]), /*bidir*/ 0))) RC_FAIL(model, rc);
 	}}
-	return 0;
-fail:
-	return rc;
+	RC_RETURN(model);
 }
 
 static int init_center_topbot_cfb_dfb(struct fpga_model *model)
@@ -2457,29 +2390,30 @@ static int init_center_topbot_cfb_dfb(struct fpga_model *model)
 		model->center_x+CENTER_X_PLUS_2 };
 	int y, i, x_i, rc;
 
+	RC_CHECK(model);
 	y = TOP_INNER_ROW;
 	for (x_i = 0; x_i < sizeof(x_enum)/sizeof(*x_enum); x_i++) {
 		for (i = 0; i <= 1; i++) {
 			if ((rc = add_switch(model, y, x_enum[x_i], pf("IOI_REGT_CFB1_M%i_S", i+1),
-				pf("IOI_REGT_CFB1_M%i", i+1), /*bidir*/ 0))) FAIL(rc);
+				pf("IOI_REGT_CFB1_M%i", i+1), /*bidir*/ 0))) RC_FAIL(model, rc);
 			if ((rc = add_switch(model, y, x_enum[x_i], pf("IOI_REGT_CFB1_S%i_S", i+1),
-				pf("IOI_REGT_CFB1_S%i", i+1), /*bidir*/ 0))) FAIL(rc);
+				pf("IOI_REGT_CFB1_S%i", i+1), /*bidir*/ 0))) RC_FAIL(model, rc);
 			if ((rc = add_switch(model, y, x_enum[x_i], pf("IOI_REGT_CFB_M%i_S", i+1),
-				pf("IOI_REGT_CFB_M%i", i+1), /*bidir*/ 0))) FAIL(rc);
+				pf("IOI_REGT_CFB_M%i", i+1), /*bidir*/ 0))) RC_FAIL(model, rc);
 			if ((rc = add_switch(model, y, x_enum[x_i], pf("IOI_REGT_CFB_S%i_S", i+1),
-				pf("IOI_REGT_CFB_S%i", i+1), /*bidir*/ 0))) FAIL(rc);
+				pf("IOI_REGT_CFB_S%i", i+1), /*bidir*/ 0))) RC_FAIL(model, rc);
 			if ((rc = add_switch(model, y, x_enum[x_i], pf("IOI_REGT_DFB_M%i_S", i+1),
-				pf("IOI_REGT_DFB_M%i", i+1), /*bidir*/ 0))) FAIL(rc);
+				pf("IOI_REGT_DFB_M%i", i+1), /*bidir*/ 0))) RC_FAIL(model, rc);
 			if ((rc = add_switch(model, y, x_enum[x_i], pf("IOI_REGT_DFB_S%i_S", i+1),
-				pf("IOI_REGT_DFB_S%i", i+1), /*bidir*/ 0))) FAIL(rc);
+				pf("IOI_REGT_DFB_S%i", i+1), /*bidir*/ 0))) RC_FAIL(model, rc);
 			if ((rc = add_switch(model, y, x_enum[x_i], pf("IOI_REGT_DQSN%i_S", i),
-				pf("IOI_REGT_DQSN%i", i), /*bidir*/ 0))) FAIL(rc);
+				pf("IOI_REGT_DQSN%i", i), /*bidir*/ 0))) RC_FAIL(model, rc);
 			if ((rc = add_switch(model, y, x_enum[x_i], pf("IOI_REGT_DQSP%i_S", i),
-				pf("IOI_REGT_DQSP%i", i), /*bidir*/ 0))) FAIL(rc);
+				pf("IOI_REGT_DQSP%i", i), /*bidir*/ 0))) RC_FAIL(model, rc);
 			if ((rc = add_switch(model, y, x_enum[x_i], pf("TTERM_IOIBOT_IBUF%i", i),
-				pf("IOI_REGT_CLKPIN%i", i+2), /*bidir*/ 0))) FAIL(rc);
+				pf("IOI_REGT_CLKPIN%i", i+2), /*bidir*/ 0))) RC_FAIL(model, rc);
 			if ((rc = add_switch(model, y, x_enum[x_i], pf("TTERM_IOIUP_IBUF%i", i),
-				pf("IOI_REGT_CLKPIN%i", i), /*bidir*/ 0))) FAIL(rc);
+				pf("IOI_REGT_CLKPIN%i", i), /*bidir*/ 0))) RC_FAIL(model, rc);
 		}
 	}
 
@@ -2487,24 +2421,22 @@ static int init_center_topbot_cfb_dfb(struct fpga_model *model)
 	for (x_i = 0; x_i < sizeof(x_enum)/sizeof(*x_enum); x_i++) {
 		for (i = 0; i <= 3; i++) {
 			if ((rc = add_switch(model, y, x_enum[x_i], pf("BTERM_CLB_CFB1_%i_N", i+4),
-				pf("BTERM_CLB_CFB1_%i", i+4), /*bidir*/ 0))) FAIL(rc);
+				pf("BTERM_CLB_CFB1_%i", i+4), /*bidir*/ 0))) RC_FAIL(model, rc);
 			if ((rc = add_switch(model, y, x_enum[x_i], pf("BTERM_CLB_CFB%i_N", i+4),
-				pf("BTERM_CLB_CFB%i", i+4), /*bidir*/ 0))) FAIL(rc);
+				pf("BTERM_CLB_CFB%i", i+4), /*bidir*/ 0))) RC_FAIL(model, rc);
 			if ((rc = add_switch(model, y, x_enum[x_i], pf("BTERM_CLB_DFB%i_N", i+4),
-				pf("BTERM_CLB_DFB%i", i+4), /*bidir*/ 0))) FAIL(rc);
+				pf("BTERM_CLB_DFB%i", i+4), /*bidir*/ 0))) RC_FAIL(model, rc);
 		}
 		for (i = 0; i <= 1; i++) {
 			if ((rc = add_switch(model, y, x_enum[x_i], pf("BTERM_CLB_DQSN%i_N", i+2),
-				pf("BTERM_CLB_DQSN%i", i+2), /*bidir*/ 0))) FAIL(rc);
+				pf("BTERM_CLB_DQSN%i", i+2), /*bidir*/ 0))) RC_FAIL(model, rc);
 			if ((rc = add_switch(model, y, x_enum[x_i], pf("BTERM_CLB_DQSP%i_N", i+2),
-				pf("BTERM_CLB_DQSP%i", i+2), /*bidir*/ 0))) FAIL(rc);
+				pf("BTERM_CLB_DQSP%i", i+2), /*bidir*/ 0))) RC_FAIL(model, rc);
 			if ((rc = add_switch(model, y, x_enum[x_i], pf("BTERM_IOIBOT_IBUF%i", i),
-				pf("BTERM_CLB_CLKPIN%i", i+4), /*bidir*/ 0))) FAIL(rc);
+				pf("BTERM_CLB_CLKPIN%i", i+4), /*bidir*/ 0))) RC_FAIL(model, rc);
 			if ((rc = add_switch(model, y, x_enum[x_i], pf("BTERM_IOIUP_IBUF%i", i),
-				pf("BTERM_CLB_CLKPIN%i", i+6), /*bidir*/ 0))) FAIL(rc);
+				pf("BTERM_CLB_CLKPIN%i", i+6), /*bidir*/ 0))) RC_FAIL(model, rc);
 		}
 	}
-	return 0;
-fail:
-	return rc;
+	RC_RETURN(model);
 }
