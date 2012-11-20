@@ -365,7 +365,10 @@ const struct xc_info* xc_info(int idcode)
 			 [223] = { XC_T2_IOB_PAD, 74 }},
 		.mcb_ypos = 20,
 		.num_mui = 8,
-		.mui_pos = { 40, 43, 47, 50, 53, 56, 59, 63 }};
+		.mui_pos = { 40, 43, 47, 50, 53, 56, 59, 63 },
+		.sel_logicin = {
+			24, 15,  7, 42,  5, 12, 62, 16,
+			47, 20, 38, 23, 48, 57, 44,  4 }};
 	switch (idcode & IDCODE_MASK) {
 		case XC6SLX9: return &xc6slx9_info;
 	}

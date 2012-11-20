@@ -227,13 +227,13 @@ int fdev_enum(struct fpga_model* model, enum fpgadev_type type, int enum_i,
 	int *y, int *x, int *type_idx)
 {
 	struct fpga_tile* tile;
-	int i, j, type_count, rc;
+	int i, j, type_count;
 
-	CHECK_RC(model);
+	RC_CHECK(model);
 	switch (type) {
 		case DEV_BUFGMUX:
 			tile = YX_TILE(model, model->center_y, model->center_x);
-			if (!tile) FAIL(EINVAL);
+			if (!tile) RC_FAIL(model, EINVAL);
 			type_count = 0;
 			for (i = 0; i < tile->num_devs; i++) {
 				if (tile->devs[i].type != DEV_BUFGMUX)
@@ -242,12 +242,12 @@ int fdev_enum(struct fpga_model* model, enum fpgadev_type type, int enum_i,
 					*y = model->center_y;
 					*x = model->center_x;
 					*type_idx = type_count;
-					return 0;
+					RC_RETURN(model);
 				}
 				type_count++;
 			}
 			*y = -1;
-			return 0;
+			RC_RETURN(model);
 		case DEV_BUFIO: {
 			int yx_pairs[] = {
 			  TOP_OUTER_ROW, model->center_x-CENTER_CMTPLL_O,
@@ -265,30 +265,28 @@ int fdev_enum(struct fpga_model* model, enum fpgadev_type type, int enum_i,
 						*y = yx_pairs[i*2];
 						*x = yx_pairs[i*2+1];
 						*type_idx = type_count;
-						return 0;
+						RC_RETURN(model);
 					}
 					type_count++;
 				}
 			}
 			*y = -1;
-			return 0;
+			RC_RETURN(model);
 		}
 		case DEV_PLL:
 		case DEV_DCM:
 			enum_x(model, type, enum_i, y, model->center_x
 				- CENTER_CMTPLL_O, type_idx);
-			return 0;
+			RC_RETURN(model);
 		case DEV_BSCAN:
 			enum_x(model, type, enum_i, y, model->x_width
 				- RIGHT_IO_DEVS_O, type_idx);
-			return 0;
+			RC_RETURN(model);
 		default: break;
 	}
 	HERE();
 	*y = -1;
-	return 0;
-fail:
-	return rc;
+	RC_RETURN(model);
 }
 
 static const char* dev_str[] = FPGA_DEV_STR;

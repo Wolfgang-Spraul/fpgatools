@@ -843,11 +843,120 @@ const char *fpga_connpt_str(struct fpga_model *model, enum extra_wires wire,
  	enum { NUM_BUFS = 8, BUF_SIZE = MAX_WIRENAME_LEN };
 	static char buf[NUM_BUFS][BUF_SIZE];
 	static int last_buf = 0;
+	const char *wstr;
+	int i, wnum, wchar;
 
 	last_buf = (last_buf+1)%NUM_BUFS;
 	buf[last_buf][0] = 0;
 
-	if (wire >= CFB0 && wire <= CFB15) {
+	if (wire == CLK0 || wire == CLK1
+	    || wire == SR0 || wire == SR1) {
+		if (is_atx(X_LEFT_IO_DEVS_COL|X_FABRIC_LOGIC_COL|X_FABRIC_MACC_VIA_COL
+			   |X_FABRIC_BRAM_VIA_COL|X_CENTER_LOGIC_COL|X_RIGHT_IO_DEVS_COL, model, x))
+			snprintf(buf[last_buf], sizeof(buf[last_buf]),
+				"INT_INTERFACE_%s", fpga_wire2str(wire));
+		else if (is_atx(X_LEFT_MCB|X_RIGHT_MCB, model, x)) {
+			for (i = 0; i < model->xci->num_mui; i++) {
+				if (y == model->xci->mui_pos[i]+1) {
+					if (y-dest_y < 0 || y-dest_y > 1) HERE();
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+						"MUI_%s_INT%i", fpga_wire2str(wire), y-dest_y);
+					break;
+				}
+			}
+			if (i >= model->xci->num_mui)
+				strcpy(buf[last_buf], fpga_wire2str(wire));
+		} else if (is_atx(X_FABRIC_MACC_COL, model, x)) {
+			if (has_device(model, y, x, DEV_MACC)) {
+				if (y-dest_y < 0 || y-dest_y >= 4) HERE();
+				snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					"MACC_%s_INT%i", fpga_wire2str(wire), y-dest_y);
+			} else
+				strcpy(buf[last_buf], fpga_wire2str(wire));
+		} else
+			strcpy(buf[last_buf], fpga_wire2str(wire));
+	} else if (wire >= LOGICOUT_B0 && wire <= LOGICOUT_B0 + LOGICOUT_HIGHEST) {
+		wnum = wire - LOGICOUT_B0;
+		if (is_atx(X_ROUTING_COL, model, x)) {
+			snprintf(buf[last_buf], sizeof(buf[last_buf]),
+				"LOGICOUT%i", wnum);
+		} else if (is_atx(X_LEFT_IO_DEVS_COL|X_RIGHT_IO_DEVS_COL, model, x)) {
+			if (is_atx(X_LEFT_MCB|X_RIGHT_MCB, model, dest_x))
+				snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					"INT_INTERFACE_LOGICOUT_%i", wnum);
+			else
+				snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					"INT_INTERFACE_LOGICOUT%i", wnum);
+		} else if (is_atx(X_FABRIC_LOGIC_COL|X_CENTER_LOGIC_COL, model, x)) {
+			snprintf(buf[last_buf], sizeof(buf[last_buf]),
+				"INT_INTERFACE_LOGICOUT%i", wnum);
+		} else if (is_atx(X_FABRIC_MACC_VIA_COL|X_FABRIC_BRAM_VIA_COL, model, x)) {
+			if (is_atx(X_FABRIC_MACC_COL, model, dest_x))
+				snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					"INT_INTERFACE_LOGICOUT_%i", wnum);
+			else
+				snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					"INT_INTERFACE_LOGICOUT%i", wnum);
+		} else if (is_atx(X_LEFT_MCB|X_RIGHT_MCB, model, x)) {
+			for (i = 0; i < model->xci->num_mui; i++) {
+				if (y == model->xci->mui_pos[i]+1) {
+					if (y-dest_y < 0 || y-dest_y > 1) HERE();
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+						"MUI_LOGICOUT%i_INT%i", wnum, y-dest_y);
+					break;
+				}
+			}
+			if (i >= model->xci->num_mui)
+				strcpy(buf[last_buf], fpga_wire2str(wire));
+		} else if (is_atx(X_FABRIC_MACC_COL, model, x)) {
+			if (has_device(model, y, x, DEV_MACC)) {
+				if (y-dest_y < 0 || y-dest_y >= 4) HERE();
+				snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					"MACC_LOGICOUT%i_INT%i", wnum, y-dest_y);
+			} else
+				strcpy(buf[last_buf], fpga_wire2str(wire));
+		} else
+			strcpy(buf[last_buf], fpga_wire2str(wire));
+	} else if (wire >= LOGICIN_B0 && wire <= LOGICIN_B0 + LOGICIN_HIGHEST) {
+		wnum = wire - LOGICIN_B0;
+		if (is_atx(X_ROUTING_COL, model, x)) {
+			snprintf(buf[last_buf], sizeof(buf[last_buf]),
+				"LOGICIN_B%i", wnum);
+		} else if (is_atx(X_LEFT_IO_DEVS_COL|X_FABRIC_LOGIC_COL|X_CENTER_LOGIC_COL
+				  |X_RIGHT_IO_DEVS_COL|X_FABRIC_MACC_VIA_COL
+				  |X_FABRIC_BRAM_VIA_COL, model, x)) {
+			snprintf(buf[last_buf], sizeof(buf[last_buf]),
+				"INT_INTERFACE_LOGICBIN%i", wnum);
+		} else if (is_atx(X_LEFT_MCB|X_RIGHT_MCB, model, x)) {
+			for (i = 0; i < model->xci->num_mui; i++) {
+				if (y == model->xci->mui_pos[i]+1) {
+					if (y-dest_y < 0 || y-dest_y > 1) HERE();
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+						"MUI_LOGICINB%i_INT%i", wnum, y-dest_y);
+					break;
+				}
+			}
+			if (i >= model->xci->num_mui)
+				strcpy(buf[last_buf], fpga_wire2str(wire));
+		} else if (is_atx(X_FABRIC_MACC_COL, model, x)) {
+			if (has_device(model, y, x, DEV_MACC)) {
+				if (y-dest_y < 0 || y-dest_y >= 4) HERE();
+				snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					"MACC_LOGICINB%i_INT%i", wnum, y-dest_y);
+			} else
+				strcpy(buf[last_buf], fpga_wire2str(wire));
+		} else
+			strcpy(buf[last_buf], fpga_wire2str(wire));
+	} else if ((wire >= CFB0 && wire <= CFB15)
+	    || (wire >= DFB0 && wire <= DFB7)) {
+		if (wire >= CFB0 && wire <= CFB15) {
+			wstr = "CFB";
+			wnum = wire-CFB0;
+		} else if (wire >= DFB0 && wire <= DFB7) {
+			wstr = "DFB";
+			wnum = wire-DFB0;
+		} else HERE();
+
 		if (is_aty(Y_OUTER_TOP, model, y)) {
 			if (is_atx(X_CENTER_CMTPLL_COL, model, x))
 				snprintf(buf[last_buf], sizeof(buf[last_buf]),
@@ -855,13 +964,13 @@ const char *fpga_connpt_str(struct fpga_model *model, enum extra_wires wire,
 			else HERE();
 		} else if (is_aty(Y_INNER_TOP, model, y)) {
 			if (is_atx(X_CENTER_LOGIC_COL, model, x)) {
-				if ((wire >= CFB0 && wire <= CFB3)
-				    || (wire >= CFB8 && wire <= CFB11)) {
+				if (wnum%8 < 4) {
 					snprintf(buf[last_buf], sizeof(buf[last_buf]),
-						"IOI_REGT_CFB%s_%c%i",
-						wire >= CFB8 ? "1" : "",
-						(wire-CFB0) % 2 ? 'S' : 'M',
-						((wire-CFB0)%4)/2+1);
+						"IOI_REGT_%s%s_%c%i",
+						wstr,
+						wnum >= 8 ? "1" : "",
+						wnum%2 ? 'S' : 'M',
+						(wnum%4)/2+1);
 					if (is_atyx(YX_DEV_ILOGIC, model, dest_y, dest_x))
 						strcat(buf[last_buf], "_S");
 				} else HERE();
@@ -875,49 +984,50 @@ const char *fpga_connpt_str(struct fpga_model *model, enum extra_wires wire,
 				snprintf(buf[last_buf], sizeof(buf[last_buf]),
 					"IOI_TTERM_%s", fpga_wire2str(wire));
 			else if (x == model->center_x + CENTER_X_PLUS_2) {
-				if ((wire >= CFB4 && wire <= CFB7)
-				    || (wire >= CFB12 && wire <= CFB15)) {
+				if (wnum%8 >= 4) {
 					snprintf(buf[last_buf], sizeof(buf[last_buf]),
-						"IOI_REGT_CFB%s_%c%i",
-						wire >= CFB8 ? "1" : "",
-						(wire-CFB0) % 2 ? 'S' : 'M',
-						((wire-CFB0)%4)/2+1);
+						"IOI_REGT_%s%s_%c%i",
+						wstr,
+						wnum >= 8 ? "1" : "",
+						wnum % 2 ? 'S' : 'M',
+						(wnum%4)/2+1);
 					if (is_atyx(YX_DEV_ILOGIC, model, dest_y, dest_x))
 						strcat(buf[last_buf], "_S");
 				} else HERE();
 			} else HERE();
 		} else if (is_aty(Y_TOP_OUTER_IO, model, y)) {
 			snprintf(buf[last_buf], sizeof(buf[last_buf]),
-				"TIOI_%s_CFB%s_%c%s",
-				(wire-CFB0)%4 < 2 ? "OUTER" : "INNER",
-				wire >= CFB8 ? "1" : "",
-				(wire-CFB0) % 2 ? 'S' : 'M',
-				((wire-CFB0)%4)/2 ? "_EXT" : "");
+				"TIOI_%s_%s%s_%c%s",
+				wnum%4 < 2 ? "OUTER" : "INNER",
+				wstr,
+				wnum >= 8 ? "1" : "",
+				wnum % 2 ? 'S' : 'M',
+				(wnum%4)/2 ? "_EXT" : "");
 		} else if (is_aty(Y_TOP_INNER_IO, model, y)) {
-			if ((wire-CFB0)%4 >= 2) {
+			if (wnum%4 >= 2) {
 				snprintf(buf[last_buf], sizeof(buf[last_buf]),
-					"TIOI_INNER_CFB%s_%c",
-					wire >= CFB8 ? "1" : "",
-					(wire-CFB0) % 2 ? 'S' : 'M');
+					"TIOI_INNER_%s%s_%c", wstr,
+					wnum >= 8 ? "1" : "",
+					wnum%2 ? 'S' : 'M');
 			} else HERE();
 		} else if (is_aty(Y_BOT_INNER_IO, model, y)) {
-			if ((wire-CFB0)%4 >= 2) {
+			if (wnum%4 >= 2) {
 				snprintf(buf[last_buf], sizeof(buf[last_buf]),
-					"BIOI_INNER_CFB%s_%c",
-					wire >= CFB8 ? "1" : "",
-					(wire-CFB0) % 2 ? 'S' : 'M');
+					"BIOI_INNER_%s%s_%c", wstr,
+					wnum >= 8 ? "1" : "",
+					wnum%2 ? 'S' : 'M');
 			} else HERE();
 		} else if (is_aty(Y_BOT_OUTER_IO, model, y)) {
 			snprintf(buf[last_buf], sizeof(buf[last_buf]),
-				"BIOI_%s_CFB%s_%c%s",
-				(wire-CFB0)%4 < 2 ? "OUTER" : "INNER",
-				wire >= CFB8 ? "1" : "",
-				(wire-CFB0) % 2 ? 'S' : 'M',
-				((wire-CFB0)%4)/2 ? "_EXT" : "");
+				"BIOI_%s_%s%s_%c%s",
+				wnum%4 < 2 ? "OUTER" : "INNER",
+				wstr,
+				wnum >= 8 ? "1" : "",
+				wnum%2 ? 'S' : 'M',
+				(wnum%4)/2 ? "_EXT" : "");
 		} else if (is_aty(Y_INNER_BOTTOM, model, y)) {
 			if (is_atx(X_CENTER_LOGIC_COL, model, x)) {
-				if ((wire >= CFB4 && wire <= CFB7)
-				    || (wire >= CFB12 && wire <= CFB15)) {
+				if (wnum%8 >= 4) {
 					snprintf(buf[last_buf], sizeof(buf[last_buf]),
 						"BTERM_CLB_%s", fpga_wire2str(wire));
 					if (is_atyx(YX_DEV_ILOGIC, model, dest_y, dest_x))
@@ -927,22 +1037,20 @@ const char *fpga_connpt_str(struct fpga_model *model, enum extra_wires wire,
 				snprintf(buf[last_buf], sizeof(buf[last_buf]),
 					"REGB_BTERM_%s", fpga_wire2str(wire));
 			} else if (is_atx(X_CENTER_REGS_COL, model, x)) {
-				if ((wire >= CFB0 && wire <= CFB3)
-				    || (wire >= CFB8 && wire <= CFB11)) {
+				if (wnum%8 < 4) {
 					snprintf(buf[last_buf], sizeof(buf[last_buf]),
 						"REGV_BTERM_%s", fpga_wire2str(wire+4));
 				} else HERE();
 			} else if (x == model->center_x + CENTER_X_PLUS_1) {
-				if (wire >= CFB0 && wire <= CFB3)
+				if (wnum < 4)
 					snprintf(buf[last_buf], sizeof(buf[last_buf]),
 						"IOI_BTERM_%s", fpga_wire2str(wire+4));
-				else if (wire >= CFB8 && wire <= CFB11)
+				else if (wnum >= 8 && wnum <= 11)
 					snprintf(buf[last_buf], sizeof(buf[last_buf]),
 						"IOI_BTERM_BUFPLL_%s", fpga_wire2str(wire+4));
 				else HERE();
 			} else if (x == model->center_x + CENTER_X_PLUS_2) {
-				if ((wire >= CFB0 && wire <= CFB3)
-				    || (wire >= CFB8 && wire <= CFB11)) {
+				if (wnum%8 < 4) {
 					snprintf(buf[last_buf], sizeof(buf[last_buf]),
 						"BTERM_CLB_%s", fpga_wire2str(wire+4));
 					if (is_atyx(YX_DEV_ILOGIC, model, dest_y, dest_x))
@@ -964,14 +1072,14 @@ const char *fpga_connpt_str(struct fpga_model *model, enum extra_wires wire,
 				snprintf(buf[last_buf], sizeof(buf[last_buf]),
 					"REGH_LTERM_%s", fpga_wire2str(wire));
 			} else if (y == model->center_y + CENTER_Y_PLUS_1) {
-				if ((wire-CFB0)%8 < 4) {
+				if (wnum%8 < 4) {
 					snprintf(buf[last_buf], sizeof(buf[last_buf]),
 					  "IOI_LTERM_TOP_%s", fpga_wire2str(wire));
 					if (is_atx(X_LEFT_IO_ROUTING_COL|X_LEFT_IO_DEVS_COL, model, dest_x))
 						strcat(buf[last_buf], "_E");
 				} else HERE();
 			} else if (y == model->center_y + CENTER_Y_PLUS_2) {
-				if ((wire-CFB0)%8 < 2) {
+				if (wnum%8 < 2) {
 					snprintf(buf[last_buf], sizeof(buf[last_buf]),
 					  "IOI_LTERM_BOT_%s", fpga_wire2str(wire));
 					if (is_atx(X_LEFT_IO_ROUTING_COL|X_LEFT_IO_DEVS_COL, model, dest_x))
@@ -979,19 +1087,19 @@ const char *fpga_connpt_str(struct fpga_model *model, enum extra_wires wire,
 				} else HERE();
 			} else if (y == model->center_y - CENTER_Y_MINUS_1
 				   || y == model->center_y - CENTER_Y_MINUS_2) {
-				if ((wire-CFB0)%8 >= 4)
+				if (wnum%8 >= 4)
 					snprintf(buf[last_buf], sizeof(buf[last_buf]),
 					  "IOI_LTERM_%s_EXT", fpga_wire2str(wire-4));
 				else HERE();
 			} else if (y == model->center_y - CENTER_Y_MINUS_3) {
-				if ((wire-CFB0)%8 >= 4) {
+				if (wnum%8 >= 4) {
 					snprintf(buf[last_buf], sizeof(buf[last_buf]),
 					  "IOI_LTERM_BOT_%s", fpga_wire2str(wire-4));
 					if (is_atx(X_LEFT_IO_ROUTING_COL|X_LEFT_IO_DEVS_COL, model, dest_x))
 						strcat(buf[last_buf], "_E");
 				} else HERE();
 			} else if (y == model->center_y - CENTER_Y_MINUS_4) {
-				if ((wire-CFB0)%8 >= 4) {
+				if (wnum%8 >= 4) {
 					snprintf(buf[last_buf], sizeof(buf[last_buf]),
 					  "IOI_LTERM_TOP_%s", fpga_wire2str(wire-4));
 					if (is_atx(X_LEFT_IO_ROUTING_COL|X_LEFT_IO_DEVS_COL, model, dest_x))
@@ -1000,29 +1108,29 @@ const char *fpga_connpt_str(struct fpga_model *model, enum extra_wires wire,
 			} else HERE();
 		} else if (is_atx(X_LEFT_IO_ROUTING_COL, model, x)) {
 			snprintf(buf[last_buf], sizeof(buf[last_buf]),
-			  "INT_CFB%s_%c", wire >= CFB8 ? "1" : "",
-			  (wire-CFB0) % 2 ? 'S' : 'M');
+			  "INT_%s%s_%c", wstr, wnum >= 8 ? "1" : "",
+			  wnum%2 ? 'S' : 'M');
 		} else if (is_atx(X_LEFT_IO_DEVS_COL, model, x)) {
 			snprintf(buf[last_buf], sizeof(buf[last_buf]),
-			  "LIOI_CFB%s_%c_ILOGIC", wire >= CFB8 ? "1" : "",
-			  (wire-CFB0) % 2 ? 'S' : 'M');
+			  "LIOI_%s%s_%c_ILOGIC", wstr, wnum >= 8 ? "1" : "",
+			  wnum%2 ? 'S' : 'M');
 		} else if (is_atx(X_RIGHT_IO_DEVS_COL, model, x)) {
 			snprintf(buf[last_buf], sizeof(buf[last_buf]),
-			  "RIOI_CFB%s_%c_ILOGIC", wire >= CFB8 ? "1" : "",
-			  (wire-CFB0) % 2 ? 'S' : 'M');
+			  "RIOI_%s%s_%c_ILOGIC", wstr, wnum >= 8 ? "1" : "",
+			  wnum%2 ? 'S' : 'M');
 		} else if (is_atx(X_INNER_RIGHT, model, x)) {
 			if (is_aty(Y_CHIP_HORIZ_REGS, model, y)) {
 				snprintf(buf[last_buf], sizeof(buf[last_buf]),
 					"REGH_RTERM_%s", fpga_wire2str(wire));
 			} else if (y == model->center_y + CENTER_Y_PLUS_1) {
-				if ((wire-CFB0)%8 >= 4) {
+				if (wnum%8 >= 4) {
 					snprintf(buf[last_buf], sizeof(buf[last_buf]),
 					  "IOI_RTERM_TOP_%s", fpga_wire2str(wire-4));
 					if (is_atx(X_RIGHT_IO_DEVS_COL, model, dest_x))
 						strcat(buf[last_buf], "_W");
 				} else HERE();
 			} else if (y == model->center_y + CENTER_Y_PLUS_2) {
-				if ((wire-CFB0)%8 >= 6) {
+				if (wnum%8 >= 6) {
 					snprintf(buf[last_buf], sizeof(buf[last_buf]),
 					  "IOI_RTERM_BOT_%s", fpga_wire2str(wire-4));
 					if (is_atx(X_RIGHT_IO_DEVS_COL, model, dest_x))
@@ -1030,20 +1138,342 @@ const char *fpga_connpt_str(struct fpga_model *model, enum extra_wires wire,
 				} else HERE();
 			} else if (y == model->center_y - CENTER_Y_MINUS_1
 				   || y == model->center_y - CENTER_Y_MINUS_2) {
-				if ((wire-CFB0)%8 < 4)
+				if (wnum%8 < 4)
 					snprintf(buf[last_buf], sizeof(buf[last_buf]),
 					  "IOI_RTERM_%s%s", fpga_wire2str(wire),
-					  wire < CFB8 ? "_EXT" : "");
+					  wnum < 8 ? "_EXT" : "");
 				else HERE();
 			} else if (y == model->center_y - CENTER_Y_MINUS_3) {
-				if ((wire-CFB0)%8 < 4) {
+				if (wnum%8 < 4) {
 					snprintf(buf[last_buf], sizeof(buf[last_buf]),
 					  "IOI_RTERM_BOT_%s", fpga_wire2str(wire));
 					if (is_atx(X_RIGHT_IO_DEVS_COL, model, dest_x))
 						strcat(buf[last_buf], "_W");
 				} else HERE();
 			} else if (y == model->center_y - CENTER_Y_MINUS_4) {
-				if ((wire-CFB0)%8 < 4) {
+				if (wnum%8 < 4) {
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					  "IOI_RTERM_TOP_%s", fpga_wire2str(wire));
+					if (is_atx(X_RIGHT_IO_DEVS_COL, model, dest_x))
+						strcat(buf[last_buf], "_W");
+				} else HERE();
+			} else HERE();
+		} else if (is_atx(X_OUTER_RIGHT, model, x)) {
+			if (is_aty(Y_CHIP_HORIZ_REGS, model, y))
+				snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					"REGR_%s", fpga_wire2str(wire));
+			else HERE();
+		} else HERE();
+	} else if (wire >= CLKPIN0 && wire <= CLKPIN7) {
+		wstr = "CLKPIN";
+		wnum = wire-CLKPIN0;
+
+		if (is_aty(Y_OUTER_TOP, model, y)) {
+			if (is_atx(X_CENTER_CMTPLL_COL, model, x))
+				snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					"REGT_%s", fpga_wire2str(wire));
+			else HERE();
+		} else if (is_aty(Y_INNER_TOP, model, y)) {
+			if (is_atx(X_CENTER_LOGIC_COL, model, x))
+				snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					"IOI_REGT_%s", fpga_wire2str(wire));
+			else if (is_atx(X_CENTER_CMTPLL_COL, model, x))
+				snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					"REGT_TTERM_%s", fpga_wire2str(wire));
+			else if (is_atx(X_CENTER_REGS_COL, model, x))
+				snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					"REGV_TTERM_%s", fpga_wire2str(wire));
+			else if (x == model->center_x + CENTER_X_PLUS_1)
+				snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					"IOI_TTERM_%s", fpga_wire2str(wire));
+			else if (x == model->center_x + CENTER_X_PLUS_2) {
+				if (wnum >= 4)
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+						"IOI_REGT_%s", fpga_wire2str(wire-4));
+				else
+					HERE();
+			} else HERE();
+		} else if (is_aty(Y_INNER_BOTTOM, model, y)) {
+			if (is_atx(X_CENTER_LOGIC_COL, model, x)) {
+				if (wnum >= 4) {
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+						"BTERM_CLB_%s", fpga_wire2str(wire));
+				} else HERE();
+			} else if (is_atx(X_CENTER_CMTPLL_COL, model, x)) {
+				snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					"REGB_BTERM_%s", fpga_wire2str(wire));
+			} else if (is_atx(X_CENTER_REGS_COL, model, x)) {
+				if (wnum%8 < 4) {
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+						"REGV_BTERM_%s", fpga_wire2str(wire+4));
+				} else HERE();
+			} else if (x == model->center_x + CENTER_X_PLUS_1) {
+				if (wnum < 4)
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+						"IOI_BTERM_%s", fpga_wire2str(wire+4));
+				else HERE();
+			} else if (x == model->center_x + CENTER_X_PLUS_2) {
+				if (wnum < 4) {
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+						"BTERM_CLB_%s", fpga_wire2str(wire+4));
+				} else HERE();
+			} else HERE();
+		} else if (is_aty(Y_OUTER_BOTTOM, model, y)) {
+			if (is_atx(X_CENTER_CMTPLL_COL, model, x))
+				snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					"REGB_%s", fpga_wire2str(wire));
+			else HERE();
+		} else if (is_atx(X_OUTER_LEFT, model, x)) {
+			if (is_aty(Y_CHIP_HORIZ_REGS, model, y))
+				snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					"REGL_%s", fpga_wire2str(wire));
+			else HERE();
+		} else if (is_atx(X_INNER_LEFT, model, x)) {
+			if (is_aty(Y_CHIP_HORIZ_REGS, model, y)) {
+				snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					"REGH_LTERM_%s", fpga_wire2str(wire));
+			} else if (y == model->center_y + CENTER_Y_PLUS_1) {
+				if (wnum < 4) {
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					  "IOI_LTERM_%s", fpga_wire2str(wire));
+				} else HERE();
+			} else if (y == model->center_y + CENTER_Y_PLUS_2) {
+				if (wnum < 2) {
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					  "IOI_LTERM_%s", fpga_wire2str(wire));
+				} else HERE();
+			} else if (y == model->center_y - CENTER_Y_MINUS_1
+				   || y == model->center_y - CENTER_Y_MINUS_2) {
+				if (wnum >= 4)
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					  "IOI_LTERM_%s_EXT", fpga_wire2str(wire-4));
+				else HERE();
+			} else if (y == model->center_y - CENTER_Y_MINUS_3) {
+				if (wnum >= 4) {
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					  "IOI_LTERM_%s", fpga_wire2str(wire-4));
+				} else HERE();
+			} else if (y == model->center_y - CENTER_Y_MINUS_4) {
+				if (wnum >= 4) {
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					  "IOI_LTERM_%s", fpga_wire2str(wire-4));
+				} else HERE();
+			} else HERE();
+		} else if (is_atx(X_INNER_RIGHT, model, x)) {
+			if (is_aty(Y_CHIP_HORIZ_REGS, model, y)) {
+				snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					"REGH_RTERM_%s", fpga_wire2str(wire));
+			} else if (y == model->center_y + CENTER_Y_PLUS_1) {
+				if (wnum >= 4) {
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					  "IOI_RTERM_%s", fpga_wire2str(wire-4));
+				} else HERE();
+			} else if (y == model->center_y + CENTER_Y_PLUS_2) {
+				if (wnum >= 6) {
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					  "IOI_RTERM_%s", fpga_wire2str(wire-4));
+					if (is_atx(X_RIGHT_IO_DEVS_COL, model, dest_x))
+						strcat(buf[last_buf], "_W");
+				} else HERE();
+			} else if (y == model->center_y - CENTER_Y_MINUS_1
+				   || y == model->center_y - CENTER_Y_MINUS_2) {
+				if (wnum < 4)
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					  "IOI_RTERM_%s%s", fpga_wire2str(wire),
+					  wnum < 8 ? "_EXT" : "");
+				else HERE();
+			} else if (y == model->center_y - CENTER_Y_MINUS_3) {
+				if (wnum < 4) {
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					  "IOI_RTERM_%s", fpga_wire2str(wire));
+				} else HERE();
+			} else if (y == model->center_y - CENTER_Y_MINUS_4) {
+				if (wnum < 4) {
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					  "IOI_RTERM_%s", fpga_wire2str(wire));
+				} else HERE();
+			} else HERE();
+		} else if (is_atx(X_OUTER_RIGHT, model, x)) {
+			if (is_aty(Y_CHIP_HORIZ_REGS, model, y))
+				snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					"REGR_%s", fpga_wire2str(wire));
+			else HERE();
+		} else HERE();
+	} else if ((wire >= DQSN0 && wire <= DQSN3)
+		    || (wire >= DQSP0 && wire <= DQSP3)) {
+
+		if (wire >= DQSN0 && wire <= DQSN3) {
+			wchar = 'N';
+			wnum = wire - DQSN0;
+		} else if (wire >= DQSP0 && wire <= DQSP3) {
+			wchar = 'P';
+			wnum = wire - DQSP0;
+		} else HERE();
+
+		if (is_aty(Y_OUTER_TOP, model, y)) {
+			if (is_atx(X_CENTER_CMTPLL_COL, model, x))
+				snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					"REGT_%s", fpga_wire2str(wire));
+			else HERE();
+		} else if (is_aty(Y_INNER_TOP, model, y)) {
+			if (is_atx(X_CENTER_LOGIC_COL, model, x)) {
+				if (wnum%8 < 4) {
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+						"IOI_REGT_%s", fpga_wire2str(wire));
+					if (is_atyx(YX_DEV_ILOGIC, model, dest_y, dest_x))
+						strcat(buf[last_buf], "_S");
+				} else HERE();
+			} else if (is_atx(X_CENTER_CMTPLL_COL, model, x))
+				snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					"REGT_TTERM_%s", fpga_wire2str(wire));
+			else if (is_atx(X_CENTER_REGS_COL, model, x))
+				snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					"REGV_TTERM_%s", fpga_wire2str(wire));
+			else if (x == model->center_x + CENTER_X_PLUS_1)
+				snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					"IOI_TTERM_%s", fpga_wire2str(wire));
+			else if (x == model->center_x + CENTER_X_PLUS_2) {
+				if (wnum%8 >= 2) {
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+						"IOI_REGT_%s", fpga_wire2str(wire-2));
+					if (is_atyx(YX_DEV_ILOGIC, model, dest_y, dest_x))
+						strcat(buf[last_buf], "_S");
+				} else HERE();
+			} else HERE();
+		} else if (is_aty(Y_TOP_OUTER_IO, model, y)) {
+			snprintf(buf[last_buf], sizeof(buf[last_buf]),
+				"TIOI_%s_OUT%c%s", 
+				wnum%2 ? "INNER" : "UPPER", wchar,
+				wnum%2 ? "_EXT" : "");
+		} else if (is_aty(Y_TOP_INNER_IO, model, y)) {
+			snprintf(buf[last_buf], sizeof(buf[last_buf]),
+				"TIOI_INNER_OUT%c", wchar);
+		} else if (is_aty(Y_BOT_INNER_IO, model, y)) {
+			snprintf(buf[last_buf], sizeof(buf[last_buf]),
+				"BIOI_INNER_OUT%c", wchar);
+		} else if (is_aty(Y_BOT_OUTER_IO, model, y)) {
+			snprintf(buf[last_buf], sizeof(buf[last_buf]),
+				"BIOI_%s_OUT%c%s", 
+				wnum%2 ? "INNER" : "OUTER", wchar,
+				wnum%2 ? "_EXT" : "");
+		} else if (is_aty(Y_INNER_BOTTOM, model, y)) {
+			if (is_atx(X_CENTER_LOGIC_COL, model, x)) {
+				if (wnum >= 2) {
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+						"BTERM_CLB_%s", fpga_wire2str(wire));
+					if (is_atyx(YX_DEV_ILOGIC, model, dest_y, dest_x))
+						strcat(buf[last_buf], "_N");
+				} else HERE();
+			} else if (is_atx(X_CENTER_CMTPLL_COL, model, x)) {
+				snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					"REGB_BTERM_%s", fpga_wire2str(wire));
+			} else if (is_atx(X_CENTER_REGS_COL, model, x)) {
+				if (wnum < 2) {
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+						"REGV_BTERM_%s", fpga_wire2str(wire+2));
+				} else HERE();
+			} else if (x == model->center_x + CENTER_X_PLUS_1) {
+				if (wnum < 2)
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+						"IOI_BTERM_%s", fpga_wire2str(wire+2));
+				else HERE();
+			} else if (x == model->center_x + CENTER_X_PLUS_2) {
+				if (wnum < 2) {
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+						"BTERM_CLB_%s", fpga_wire2str(wire+2));
+					if (is_atyx(YX_DEV_ILOGIC, model, dest_y, dest_x))
+						strcat(buf[last_buf], "_N");
+				} else HERE();
+			} else HERE();
+		} else if (is_aty(Y_OUTER_BOTTOM, model, y)) {
+			if (is_atx(X_CENTER_CMTPLL_COL, model, x))
+				snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					"REGB_%s", fpga_wire2str(wire));
+			else HERE();
+		} else if (is_atx(X_OUTER_LEFT, model, x)) {
+			if (is_aty(Y_CHIP_HORIZ_REGS, model, y))
+				snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					"REGL_%s", fpga_wire2str(wire));
+			else HERE();
+		} else if (is_atx(X_INNER_LEFT, model, x)) {
+			if (is_aty(Y_CHIP_HORIZ_REGS, model, y)) {
+				snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					"REGH_LTERM_%s", fpga_wire2str(wire));
+			} else if (y == model->center_y + CENTER_Y_PLUS_1) {
+				if (wnum%8 < 4) {
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					  "IOI_LTERM_TOP_%s", fpga_wire2str(wire));
+					if (is_atx(X_LEFT_IO_ROUTING_COL|X_LEFT_IO_DEVS_COL, model, dest_x))
+						strcat(buf[last_buf], "_E");
+				} else HERE();
+			} else if (y == model->center_y + CENTER_Y_PLUS_2) {
+				if (wnum%8 < 2) {
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					  "IOI_LTERM_BOT_%s", fpga_wire2str(wire));
+					if (is_atx(X_LEFT_IO_ROUTING_COL|X_LEFT_IO_DEVS_COL, model, dest_x))
+						strcat(buf[last_buf], "_E");
+				} else HERE();
+			} else if (y == model->center_y - CENTER_Y_MINUS_1
+				   || y == model->center_y - CENTER_Y_MINUS_2) {
+				if (wnum >= 2)
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					  "IOI_LTERM_%s_EXT", fpga_wire2str(wire-2));
+				else HERE();
+			} else if (y == model->center_y - CENTER_Y_MINUS_3) {
+				if (wnum >= 2) {
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					  "IOI_LTERM_BOT_%s", fpga_wire2str(wire-2));
+					if (is_atx(X_LEFT_IO_ROUTING_COL|X_LEFT_IO_DEVS_COL, model, dest_x))
+						strcat(buf[last_buf], "_E");
+				} else HERE();
+			} else if (y == model->center_y - CENTER_Y_MINUS_4) {
+				if (wnum >= 2) {
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					  "IOI_LTERM_TOP_%s", fpga_wire2str(wire-2));
+					if (is_atx(X_LEFT_IO_ROUTING_COL|X_LEFT_IO_DEVS_COL, model, dest_x))
+						strcat(buf[last_buf], "_E");
+				} else HERE();
+			} else HERE();
+		} else if (is_atx(X_LEFT_IO_ROUTING_COL, model, x)) {
+			snprintf(buf[last_buf], sizeof(buf[last_buf]), "INT_OUT%c", wchar);
+		} else if (is_atx(X_LEFT_IO_DEVS_COL, model, x)) {
+			snprintf(buf[last_buf], sizeof(buf[last_buf]), "LIOI_OUT%c", wchar);
+		} else if (is_atx(X_RIGHT_IO_DEVS_COL, model, x)) {
+			snprintf(buf[last_buf], sizeof(buf[last_buf]), "RIOI_OUT%c", wchar);
+		} else if (is_atx(X_INNER_RIGHT, model, x)) {
+			if (is_aty(Y_CHIP_HORIZ_REGS, model, y)) {
+				snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					"REGH_RTERM_%s", fpga_wire2str(wire));
+			} else if (y == model->center_y + CENTER_Y_PLUS_1) {
+				if (wnum >= 2) {
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					  "IOI_RTERM_TOP_%s", fpga_wire2str(wire-2));
+					if (is_atx(X_RIGHT_IO_DEVS_COL, model, dest_x))
+						strcat(buf[last_buf], "_W");
+				} else HERE();
+			} else if (y == model->center_y + CENTER_Y_PLUS_2) {
+				if (wnum >= 3) {
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					  "IOI_RTERM_BOT_%s", fpga_wire2str(wire-2));
+					if (is_atx(X_RIGHT_IO_DEVS_COL, model, dest_x))
+						strcat(buf[last_buf], "_W");
+				} else HERE();
+			} else if (y == model->center_y - CENTER_Y_MINUS_1
+				   || y == model->center_y - CENTER_Y_MINUS_2) {
+				if (wnum < 2)
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					  "IOI_RTERM_%s%s", fpga_wire2str(wire),
+					  wnum < 8 ? "_EXT" : "");
+				else HERE();
+			} else if (y == model->center_y - CENTER_Y_MINUS_3) {
+				if (wnum < 2) {
+					snprintf(buf[last_buf], sizeof(buf[last_buf]),
+					  "IOI_RTERM_BOT_%s", fpga_wire2str(wire));
+					if (is_atx(X_RIGHT_IO_DEVS_COL, model, dest_x))
+						strcat(buf[last_buf], "_W");
+				} else HERE();
+			} else if (y == model->center_y - CENTER_Y_MINUS_4) {
+				if (wnum < 2) {
 					snprintf(buf[last_buf], sizeof(buf[last_buf]),
 					  "IOI_RTERM_TOP_%s", fpga_wire2str(wire));
 					if (is_atx(X_RIGHT_IO_DEVS_COL, model, dest_x))
@@ -1120,12 +1550,32 @@ const char* fpga_wire2str(enum extra_wires wire)
 		case DFB5:		return "DFB5";
 		case DFB6:		return "DFB6";
 		case DFB7:		return "DFB7";
+		case CLKPIN0:		return "CLKPIN0";
+		case CLKPIN1:		return "CLKPIN1";
+		case CLKPIN2:		return "CLKPIN2";
+		case CLKPIN3:		return "CLKPIN3";
+		case CLKPIN4:		return "CLKPIN4";
+		case CLKPIN5:		return "CLKPIN5";
+		case CLKPIN6:		return "CLKPIN6";
+		case CLKPIN7:		return "CLKPIN7";
+		case DQSN0:		return "DQSN0";
+		case DQSN1:		return "DQSN1";
+		case DQSN2:		return "DQSN2";
+		case DQSN3:		return "DQSN3";
+		case DQSP0:		return "DQSP0";
+		case DQSP1:		return "DQSP1";
+		case DQSP2:		return "DQSP2";
+		case DQSP3:		return "DQSP3";
 		default: ;
 	}
 
 	last_buf = (last_buf+1)%NUM_BUFS;
 	buf[last_buf][0] = 0;
-	if (wire >= GCLK0 && wire <= GCLK15)
+	if (wire >= LOGICOUT_B0 && wire <= LOGICOUT_B0+LOGICOUT_HIGHEST)
+		snprintf(buf[last_buf], sizeof(buf[0]), "LOGICOUT%i", wire-LOGICOUT_B0);
+	else if (wire >= LOGICIN_B0 && wire <= LOGICIN_B0+LOGICIN_HIGHEST)
+		snprintf(buf[last_buf], sizeof(buf[0]), "LOGICIN%i", wire-LOGICIN_B0);
+	else if (wire >= GCLK0 && wire <= GCLK15)
 		snprintf(buf[last_buf], sizeof(buf[0]), "GCLK%i", wire-GCLK0);
 	else if (wire >= DW && wire <= DW_LAST) {
 		char beg_end;
@@ -1235,7 +1685,7 @@ const char* fpga_wire2str(enum extra_wires wire)
 		else if (macc_w == MO_CARRYOUT)
 			snprintf(buf[last_buf], sizeof(buf[0]), "CARRYOUTF_DSP48A1_SITE");
 		else HERE();
-	} else HERE();
+	} else fprintf(stderr, "#E %s:%i unsupported wire %i\n", __FILE__, __LINE__, wire);
 
 	return buf[last_buf];
 }

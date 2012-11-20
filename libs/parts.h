@@ -68,6 +68,7 @@ struct xc_info
 	int mcb_ypos;
 	int num_mui;
 	int mui_pos[XC_MAX_MUI_POS];
+	int sel_logicin[16];
 };
 
 const struct xc_info* xc_info(int idcode);

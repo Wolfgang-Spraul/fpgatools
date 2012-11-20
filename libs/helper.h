@@ -25,8 +25,12 @@
 		__FILE__, __LINE__)
 #define FAIL(code)	do { HERE(); rc = (code); goto fail; } while (0)
 #define XOUT()		do { HERE(); goto xout; } while (0)
-#define CHECK_RC(m)	do { if ((m)->rc) return (m)->rc; } while (0)
 #define ASSERT(what)	do { if (!(what)) FAIL(EINVAL); } while (0)
+
+#define RC_CHECK(model)		do { if ((model)->rc) RC_RETURN(model); } while (0)
+#define RC_ASSERT(model, what)	do { if (!(what)) RC_FAIL(model, EINVAL); } while (0)
+#define RC_FAIL(model, code)	do { HERE(); if (!(model)->rc) (model)->rc = (code); RC_RETURN(model); } while (0)
+#define RC_RETURN(model)	return (model)->rc
 
 #define OUT_OF_U16(val)	((val) < 0 || (val) > 0xFFFF)
 
