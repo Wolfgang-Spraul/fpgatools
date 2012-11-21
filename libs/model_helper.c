@@ -138,12 +138,13 @@ int add_connpt_name(struct fpga_model* model, int y, int x,
 	uint16_t _name_i;
 	int rc, i;
 
+	RC_CHECK(model);
 	tile = &model->tiles[y * model->x_width + x];
 	rc = strarray_add(&model->str, connpt_name, &i);
 	if (rc) return rc;
 	if (i > 0xFFFF) {
 		fprintf(stderr, "Internal error in %s:%i\n", __FILE__, __LINE__);
-		return -1;
+		return EINVAL;
 	}
 	_name_i = i;
 	if (name_i) *name_i = i;
@@ -200,6 +201,7 @@ int add_connpt_2(struct fpga_model* model, int y, int x,
 	char name_buf[64];
 	int rc;
 
+	RC_CHECK(model);
 	snprintf(name_buf, sizeof(name_buf), "%s%s", connpt_name, suffix1);
 	rc = add_connpt_name(model, y, x, name_buf, dup_warn,
 		/*name_i*/ 0, /*connpt_o*/ 0);
@@ -223,6 +225,7 @@ int add_conn_uni(struct fpga_model* model, int y1, int x1, const char* name1, in
 	uint16_t* new_ptr;
 	int conn_start, num_conn_point_dests_for_this_wire, rc, j, conn_point_o;
 
+	RC_CHECK(model);
 	rc = add_connpt_name(model, y1, x1, name1, 0 /* warn_if_duplicate */,
 		&name1_i, &conn_point_o);
 	if (rc) goto xout;
@@ -231,7 +234,7 @@ int add_conn_uni(struct fpga_model* model, int y1, int x1, const char* name1, in
 	if (rc) return rc;
 	if (j > 0xFFFF) {
 		fprintf(stderr, "Internal error in %s:%i\n", __FILE__, __LINE__);
-		return -1;
+		return EINVAL;
 	}
 	name2_i = j;
 	tile = &model->tiles[y1 * model->x_width + x1];
@@ -262,7 +265,7 @@ int add_conn_uni(struct fpga_model* model, int y1, int x1, const char* name1, in
 		new_ptr = realloc(tile->conn_point_dests, (tile->num_conn_point_dests+CONNS_INCREMENT)*3*sizeof(uint16_t));
 		if (!new_ptr) {
 			fprintf(stderr, "Out of memory %s:%i\n", __FILE__, __LINE__);
-			return 0;
+			return ENOMEM;
 		}
 		tile->conn_point_dests = new_ptr;
 	}
@@ -293,27 +296,27 @@ int add_conn_uni_pref(struct fpga_model* model,
 	int y1, int x1, const char* name1,
 	int y2, int x2, const char* name2)
 {
-	return add_conn_uni(model,
-		y1, x1, wpref(model, y1, x1, name1),
-		y2, x2, wpref(model, y2, x2, name2));
+	add_conn_uni(model, y1, x1, wpref(model, y1, x1, name1),
+			    y2, x2, wpref(model, y2, x2, name2));
+	RC_RETURN(model);
 }
 
 int add_conn_bi(struct fpga_model* model,
 	int y1, int x1, const char* name1,
 	int y2, int x2, const char* name2)
 {
-	int rc = add_conn_uni(model, y1, x1, name1, y2, x2, name2);
-	if (rc) return rc;
-	return add_conn_uni(model, y2, x2, name2, y1, x1, name1);
+	add_conn_uni(model, y1, x1, name1, y2, x2, name2);
+	add_conn_uni(model, y2, x2, name2, y1, x1, name1);
+	RC_RETURN(model);
 }
 
 int add_conn_bi_pref(struct fpga_model* model,
 	int y1, int x1, const char* name1,
 	int y2, int x2, const char* name2)
 {
-	return add_conn_bi(model,
-		y1, x1, wpref(model, y1, x1, name1),
-		y2, x2, wpref(model, y2, x2, name2));
+	add_conn_bi(model, y1, x1, wpref(model, y1, x1, name1),
+			   y2, x2, wpref(model, y2, x2, name2));
+	RC_RETURN(model);
 }
 
 int add_conn_range(struct fpga_model* model, add_conn_f add_conn_func,
@@ -321,25 +324,26 @@ int add_conn_range(struct fpga_model* model, add_conn_f add_conn_func,
 	int y2, int x2, const char* name2, int start2)
 {
 	char buf1[128], buf2[128];
-	int rc, i;
+	int i;
 
+	RC_CHECK(model);
 	for (i = start1; i <= last1; i++) {
 		snprintf(buf1, sizeof(buf1), name1, i);
 		if (start2 & COUNT_DOWN)
 			snprintf(buf2, sizeof(buf2), name2, (start2 & COUNT_MASK)-(i-start1));
 		else
 			snprintf(buf2, sizeof(buf2), name2, (start2 & COUNT_MASK)+(i-start1));
-		rc = (*add_conn_func)(model, y1, x1, buf1, y2, x2, buf2);
-		if (rc) return rc;
+		(*add_conn_func)(model, y1, x1, buf1, y2, x2, buf2);
 	}
-	return 0;
+	RC_RETURN(model);
 }
 
 int add_conn_net(struct fpga_model* model, add_conn_f add_conn_func, const struct w_net *net)
 {
-	int i, j, rc;
+	int i, j;
 
-	if (net->num_pts < 2) FAIL(EINVAL);
+	RC_CHECK(model);
+	if (net->num_pts < 2) RC_FAIL(model, EINVAL);
 	for (i = 0; i < net->num_pts; i++) {
 		for (j = i+1; j < net->num_pts; j++) {
 			// We are buildings nets like a NN2 B-M-E net where
@@ -349,7 +353,7 @@ int add_conn_net(struct fpga_model* model, add_conn_f add_conn_func, const struc
 			if (net->pt[j].y == net->pt[i].y
 			    && net->pt[j].x == net->pt[i].x)
 				continue;
-			rc = add_conn_range(model, add_conn_func,
+			add_conn_range(model, add_conn_func,
 				net->pt[i].y, net->pt[i].x,
 				net->pt[i].name,
 				net->pt[i].start_count,
@@ -357,12 +361,9 @@ int add_conn_net(struct fpga_model* model, add_conn_f add_conn_func, const struc
 				net->pt[j].y, net->pt[j].x,
 				net->pt[j].name,
 				net->pt[j].start_count);
-			if (rc) FAIL(rc);
 		}
 	}
-	return 0;
-fail:
-	return rc;
+	RC_RETURN(model);
 }
 
 #define SWITCH_ALLOC_INCREMENT 256
@@ -380,6 +381,7 @@ int add_switch(struct fpga_model* model, int y, int x, const char* from,
 	int rc, i, from_idx, to_idx, from_connpt_o, to_connpt_o;
 	uint32_t new_switch;
 
+	RC_CHECK(model);
 // later this can be strarray_find() and not strarray_add(), but
 // then we need all wires and ports to be present first...
 #ifdef DBG_ALLOW_ADDPOINTS
@@ -469,6 +471,7 @@ int add_switch_set(struct fpga_model* model, int y, int x, const char* prefix,
 	int i, j, from_len, to_len, rc;
 	char from[64], to[64];
 
+	RC_CHECK(model);
 	if (!prefix) prefix = "";
 	for (i = 0; pairs[i*2][0]; i++) {
 		snprintf(from, sizeof(from), "%s%s", prefix, pairs[i*2]);
@@ -500,6 +503,7 @@ int replicate_switches_and_names(struct fpga_model* model,
 	struct fpga_tile* from_tile, *to_tile;
 	int rc;
 
+	RC_CHECK(model);
 	from_tile = YX_TILE(model, y_from, x_from);
 	to_tile = YX_TILE(model, y_to, x_to);
 	if (to_tile->num_conn_point_names

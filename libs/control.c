@@ -149,6 +149,7 @@ int fpga_find_iob(struct fpga_model* model, const char* sitename,
 	const char* name;
 	int i;
 
+	RC_CHECK(model);
 	for (i = 0; (name = fpga_enum_iob(model, i, y, x, idx)); i++) {
 		if (!strcmp(name, sitename))
 			return 0;
@@ -329,6 +330,7 @@ dev_idx_t fpga_dev_idx(struct fpga_model* model,
 	dev_type_idx_t type_count;
 	dev_idx_t i;
 
+	RC_CHECK(model);
 	tile = YX_TILE(model, y, x);
 	type_count = 0;
 	for (i = 0; i < tile->num_devs; i++) {
@@ -347,6 +349,7 @@ dev_type_idx_t fdev_typeidx(struct fpga_model* model, int y, int x,
 	struct fpga_tile* tile;
 	dev_type_idx_t type_count, i;
 
+	RC_CHECK(model);
 	tile = YX_TILE(model, y, x);
 	type_count = 0;
 	for (i = 0; i < dev_idx; i++) {
@@ -431,6 +434,7 @@ str16_t fdev_logic_pinstr_i(struct fpga_model* model, pinw_idx_t idx, int ld1_ty
 {
 	int str_i;
 
+	RC_CHECK(model);
 	str_i = strarray_find(&model->str, fdev_logic_pinstr(idx, ld1_type));
 	if (OUT_OF_U16(str_i))
 		{ HERE(); return STRIDX_NO_ENTRY; }
@@ -529,6 +533,7 @@ int fdev_logic_setconf(struct fpga_model* model, int y, int x,
 	struct fpga_device* dev;
 	int lut, rc;
 
+	RC_CHECK(model);
 	dev = fdev_p(model, y, x, DEV_LOGIC, type_idx);
 	if (!dev) FAIL(EINVAL);
 	rc = reset_required_pins(dev);
@@ -591,6 +596,7 @@ int fdev_logic_a2d_out_used(struct fpga_model* model, int y, int x,
 	struct fpga_device* dev;
 	int rc;
 
+	RC_CHECK(model);
 	dev = fdev_p(model, y, x, DEV_LOGIC, type_idx);
 	if (!dev) FAIL(EINVAL);
 	rc = reset_required_pins(dev);
@@ -610,6 +616,7 @@ int fdev_logic_a2d_lut(struct fpga_model* model, int y, int x, int type_idx,
 	char** lut_ptr;
 	int rc;
 
+	RC_CHECK(model);
 	dev = fdev_p(model, y, x, DEV_LOGIC, type_idx);
 	if (!dev) FAIL(EINVAL);
 	rc = reset_required_pins(dev);
@@ -638,6 +645,7 @@ int fdev_logic_a2d_ff(struct fpga_model* model, int y, int x, int type_idx,
 	struct fpga_device* dev;
 	int rc;
 
+	RC_CHECK(model);
 	dev = fdev_p(model, y, x, DEV_LOGIC, type_idx);
 	if (!dev) FAIL(EINVAL);
 	rc = reset_required_pins(dev);
@@ -659,6 +667,7 @@ int fdev_logic_a2d_ff5_srinit(struct fpga_model* model, int y, int x,
 	struct fpga_device* dev;
 	int rc;
 
+	RC_CHECK(model);
 	dev = fdev_p(model, y, x, DEV_LOGIC, type_idx);
 	if (!dev) FAIL(EINVAL);
 	rc = reset_required_pins(dev);
@@ -677,6 +686,7 @@ int fdev_logic_a2d_out_mux(struct fpga_model* model, int y, int x,
 	struct fpga_device* dev;
 	int rc;
 
+	RC_CHECK(model);
 	dev = fdev_p(model, y, x, DEV_LOGIC, type_idx);
 	if (!dev) FAIL(EINVAL);
 	rc = reset_required_pins(dev);
@@ -695,6 +705,7 @@ int fdev_logic_a2d_cy0(struct fpga_model* model, int y, int x,
 	struct fpga_device* dev;
 	int rc;
 
+	RC_CHECK(model);
 	dev = fdev_p(model, y, x, DEV_LOGIC, type_idx);
 	if (!dev) FAIL(EINVAL);
 	rc = reset_required_pins(dev);
@@ -713,6 +724,7 @@ int fdev_logic_clk(struct fpga_model* model, int y, int x, int type_idx,
 	struct fpga_device* dev;
 	int rc;
 
+	RC_CHECK(model);
 	dev = fdev_p(model, y, x, DEV_LOGIC, type_idx);
 	if (!dev) FAIL(EINVAL);
 	rc = reset_required_pins(dev);
@@ -731,6 +743,7 @@ int fdev_logic_sync(struct fpga_model* model, int y, int x, int type_idx,
 	struct fpga_device* dev;
 	int rc;
 
+	RC_CHECK(model);
 	dev = fdev_p(model, y, x, DEV_LOGIC, type_idx);
 	if (!dev) FAIL(EINVAL);
 	rc = reset_required_pins(dev);
@@ -748,6 +761,7 @@ int fdev_logic_ce_used(struct fpga_model* model, int y, int x, int type_idx)
 	struct fpga_device* dev;
 	int rc;
 
+	RC_CHECK(model);
 	dev = fdev_p(model, y, x, DEV_LOGIC, type_idx);
 	if (!dev) FAIL(EINVAL);
 	rc = reset_required_pins(dev);
@@ -765,6 +779,7 @@ int fdev_logic_sr_used(struct fpga_model* model, int y, int x, int type_idx)
 	struct fpga_device* dev;
 	int rc;
 
+	RC_CHECK(model);
 	dev = fdev_p(model, y, x, DEV_LOGIC, type_idx);
 	if (!dev) FAIL(EINVAL);
 	rc = reset_required_pins(dev);
@@ -783,6 +798,7 @@ int fdev_logic_we_mux(struct fpga_model* model, int y, int x,
 	struct fpga_device* dev;
 	int rc;
 
+	RC_CHECK(model);
 	dev = fdev_p(model, y, x, DEV_LOGIC, type_idx);
 	if (!dev) FAIL(EINVAL);
 	rc = reset_required_pins(dev);
@@ -801,6 +817,7 @@ int fdev_logic_cout_used(struct fpga_model* model, int y, int x,
 	struct fpga_device* dev;
 	int rc;
 
+	RC_CHECK(model);
 	dev = fdev_p(model, y, x, DEV_LOGIC, type_idx);
 	if (!dev) FAIL(EINVAL);
 	rc = reset_required_pins(dev);
@@ -819,6 +836,7 @@ int fdev_logic_precyinit(struct fpga_model* model, int y, int x,
 	struct fpga_device* dev;
 	int rc;
 
+	RC_CHECK(model);
 	dev = fdev_p(model, y, x, DEV_LOGIC, type_idx);
 	if (!dev) FAIL(EINVAL);
 	rc = reset_required_pins(dev);
@@ -841,6 +859,7 @@ int fdev_iob_input(struct fpga_model* model, int y, int x, int type_idx,
 	struct fpga_device* dev;
 	int rc;
 
+	RC_CHECK(model);
 	dev = fdev_p(model, y, x, DEV_IOB, type_idx);
 	if (!dev) FAIL(EINVAL);
 	rc = reset_required_pins(dev);
@@ -861,6 +880,7 @@ int fdev_iob_output(struct fpga_model* model, int y, int x, int type_idx,
 	struct fpga_device* dev;
 	int rc;
 
+	RC_CHECK(model);
 	dev = fdev_p(model, y, x, DEV_IOB, type_idx);
 	if (!dev) FAIL(EINVAL);
 	rc = reset_required_pins(dev);
@@ -893,6 +913,7 @@ int fdev_iob_IMUX(struct fpga_model* model, int y, int x,
 	struct fpga_device* dev;
 	int rc;
 
+	RC_CHECK(model);
 	dev = fdev_p(model, y, x, DEV_IOB, type_idx);
 	if (!dev) FAIL(EINVAL);
 	rc = reset_required_pins(dev);
@@ -911,6 +932,7 @@ int fdev_iob_slew(struct fpga_model* model, int y, int x,
 	struct fpga_device* dev;
 	int rc;
 
+	RC_CHECK(model);
 	dev = fdev_p(model, y, x, DEV_IOB, type_idx);
 	if (!dev) FAIL(EINVAL);
 	rc = reset_required_pins(dev);
@@ -929,6 +951,7 @@ int fdev_iob_drive(struct fpga_model* model, int y, int x,
 	struct fpga_device* dev;
 	int rc;
 
+	RC_CHECK(model);
 	dev = fdev_p(model, y, x, DEV_IOB, type_idx);
 	if (!dev) FAIL(EINVAL);
 	rc = reset_required_pins(dev);
@@ -947,6 +970,7 @@ int fdev_bufgmux(struct fpga_model* model, int y, int x,
 	struct fpga_device* dev;
 	int rc;
 
+	RC_CHECK(model);
 	dev = fdev_p(model, y, x, DEV_BUFGMUX, type_idx);
 	if (!dev) FAIL(EINVAL);
 	rc = reset_required_pins(dev);
@@ -985,6 +1009,7 @@ int fdev_set_required_pins(struct fpga_model* model, int y, int x, int type,
 	int digits[6];
 	int i, j, rc;
 
+	RC_CHECK(model);
 	dev = fdev_p(model, y, x, type, type_idx);
 	if (!dev) FAIL(EINVAL);
 	rc = reset_required_pins(dev);
@@ -1094,6 +1119,7 @@ int fpga_connpt_find(struct fpga_model* model, int y, int x,
 	struct fpga_tile* tile;
 	int i;
 
+	RC_CHECK(model);
 	tile = YX_TILE(model, y, x);
 	for (i = 0; i < tile->num_conn_point_names; i++) {
 		if (tile->conn_point_names[i*2+1] == name_i)
@@ -1137,6 +1163,7 @@ int fpga_find_conn(struct fpga_model* model, int search_y, int search_x,
 	struct fpga_tile* tile;
 	int i, j, dests_end;
 
+	RC_CHECK(model);
 	tile = YX_TILE(model, search_y, search_x);
 	for (i = 0; i < tile->num_conn_point_names; i++) {
 		dests_end = (i < tile->num_conn_point_names-1)
@@ -1162,6 +1189,7 @@ swidx_t fpga_switch_first(struct fpga_model* model, int y, int x,
 	struct fpga_tile* tile;
 	int i, connpt_o;
 
+	RC_CHECK(model);
 	// Finds the first switch either from or to the name given.
 	if (name_i == STRIDX_NO_ENTRY) { HERE(); return NO_SWITCH; }
 	tile = YX_TILE(model, y, x);
@@ -1179,6 +1207,7 @@ static swidx_t fpga_switch_search(struct fpga_model* model, int y, int x,
 	struct fpga_tile* tile;
 	int connpt_o, name_i, i;
 
+	RC_CHECK(model);
 	tile = YX_TILE(model, y, x);
 	if (last & FIRST_SW) {
 		connpt_o = fpga_connpt_find(model, y, x, last & ~FIRST_SW,
@@ -1214,6 +1243,7 @@ int fpga_swset_fromto(struct fpga_model* model, int y, int x,
 {
 	swidx_t idx;
 
+	RC_CHECK(model);
 	set->len = 0;
 	idx = fpga_switch_first(model, y, x, start_switch, from_to);
 	while (idx != NO_SWITCH) {
@@ -1231,6 +1261,7 @@ int fpga_swset_contains(struct fpga_model* model, int y, int x,
 	struct fpga_tile* tile;
 	int i;
 
+	RC_CHECK(model);
 	tile = YX_TILE(model, y, x);
 	for (i = 0; i < set->len; i++) {
 		if (CONNPT_STR16(tile, SW_I(set->sw[i], from_to)) == connpt)
@@ -1298,6 +1329,7 @@ int fpga_swset_level_down(struct fpga_model* model, int y, int x,
 {
 	int i;
 
+	RC_CHECK(model);
 	i = 0;
 	while (i < set->len) {
 		set->sw[i] = fpga_switch_first(model, y, x,fpga_switch_str_i(
@@ -1340,6 +1372,7 @@ int fpga_switch_same_fromto(struct fpga_model* model, int y, int x,
 	swidx_t cur_sw;
 	int max_len, rc;
 
+	RC_CHECK(model);
 	max_len = *same_len;
 	*same_len = 0;
 	if (max_len < 1) FAIL(EINVAL);
@@ -1787,6 +1820,7 @@ internal_error:
 int construct_sw_conns(struct sw_conns* conns, struct fpga_model* model,
 	int y, int x, str16_t start_switch, int from_to, int max_depth)
 {
+	RC_CHECK(model);
 	memset(conns, 0, sizeof(*conns));
 	construct_sw_chain(&conns->chain, model, y, x, start_switch,
 		from_to, max_depth, /*block_list*/ 0, /*block_list_len*/ 0);
@@ -1989,6 +2023,7 @@ static int fnet_useidx(struct fpga_model* model, net_idx_t new_idx)
 	void* new_ptr;
 	int new_array_size, rc;
 
+	RC_CHECK(model);
 	if (new_idx <= NO_NET) FAIL(EINVAL);
 	if (new_idx > model->highest_used_net)
 		model->highest_used_net = new_idx;
@@ -2014,6 +2049,7 @@ int fnet_new(struct fpga_model* model, net_idx_t* new_idx)
 {
 	int rc;
 
+	RC_CHECK(model);
 	// highest_used_net is initialized to NO_NET which becomes 1
 	rc = fnet_useidx(model, model->highest_used_net+1);
 	if (rc) return rc;
@@ -2045,6 +2081,7 @@ int fnet_enum(struct fpga_model* model, net_idx_t last, net_idx_t* next)
 {
 	int i;
 
+	RC_CHECK(model);
 	// last can be NO_NET which becomes 1 = the first net index
 	for (i = last+1; i <= model->highest_used_net; i++) {
 		if (model->nets[i-1].len) {
@@ -2074,6 +2111,7 @@ int fnet_add_port(struct fpga_model* model, net_idx_t net_i,
 	struct fpga_net* net;
 	int rc;
 
+	RC_CHECK(model);
 	rc = fnet_useidx(model, net_i);
 	if (rc) FAIL(rc);
 	
@@ -2097,6 +2135,7 @@ int fnet_add_sw(struct fpga_model* model, net_idx_t net_i,
 	struct fpga_net* net;
 	int i, rc;
 
+	RC_CHECK(model);
 	rc = fnet_useidx(model, net_i);
 	if (rc) FAIL(rc);
 
@@ -2124,6 +2163,7 @@ int fnet_remove_sw(struct fpga_model* model, net_idx_t net_i,
 	struct fpga_net* net;
 	int i, j, rc;
 
+	RC_CHECK(model);
 	if (net_i > model->highest_used_net)
 		FAIL(EINVAL);
 	net = &model->nets[net_i-1];
@@ -2227,9 +2267,9 @@ int fnet_autoroute(struct fpga_model* model, net_idx_t net_i)
 	struct switch_to_rel switch_to_rel;
 	int i, out_i, in_i, rc;
 
+	RC_CHECK(model);
 	// todo: gnd and vcc nets are special and have no outpin
 	//       but lots of inpins
-
 	net_p = fnet_get(model, net_i);
 	if (!net_p) FAIL(EINVAL);
 	out_i = -1;
@@ -2405,6 +2445,7 @@ int fnet_route_to_inpins(struct fpga_model* model, net_idx_t net_i,
 	struct sw_set start_set, end_set;
 	int i, rc;
 
+	RC_CHECK(model);
 	net_p = fnet_get(model, net_i);
 	if (!net_p) FAIL(EINVAL);
 	from_i = strarray_find(&model->str, from);
@@ -2447,6 +2488,7 @@ int froute_direct(struct fpga_model* model, int start_y, int start_x,
 	struct sw_set end_switches;
 	int i, rc;
 
+	RC_CHECK(model);
 	rc = fpga_swset_fromto(model, end_y, end_x, end_pt, SW_TO, &end_switches);
 	if (rc) FAIL(rc);
 	if (!end_switches.len) FAIL(EINVAL);

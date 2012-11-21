@@ -19,6 +19,7 @@ static int init_iologic_ports(struct fpga_model* model, int y, int x,
 	static const char* prefix, *suffix1, *suffix2;
 	int rc, i;
 
+	RC_CHECK(model);
 	switch (side) {
 		case TOP_S: prefix = "TIOI"; break;
 		case BOTTOM_S: prefix = "BIOI"; break;
@@ -193,6 +194,7 @@ int init_ports(struct fpga_model* model, int dup_warn)
 {
 	int x, y, i, j, k, row_num, row_pos, rc;
 
+	RC_CHECK(model);
 	// inner and outer IO tiles (ILOGIC/ILOGIC/IODELAY)
 	for (x = LEFT_SIDE_WIDTH; x < model->x_width - RIGHT_SIDE_WIDTH; x++) {
 		if (has_device(model, TOP_OUTER_IO, x, DEV_ILOGIC)) {

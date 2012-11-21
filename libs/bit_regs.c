@@ -1801,6 +1801,7 @@ static int write_bits(FILE* f, struct fpga_model* model)
 	int nwritten, i, j, rc;
 	char padding_frame[FRAME_SIZE];
 
+	RC_CHECK(model);
 	bits.len = IOB_DATA_START + IOB_DATA_LEN;
 	bits.d = calloc(bits.len, /*elsize*/ 1);
 	if (!bits.d) FAIL(ENOMEM);
@@ -1873,6 +1874,7 @@ int write_bitfile(FILE* f, struct fpga_model* model)
 	uint32_t u32;
 	int len_to_eof_pos, eof_pos, nwritten, i, rc;
 
+	RC_CHECK(model);
 	rc = write_header(f, "fpgatools.fp;UserID=0xFFFFFFFF",
 		"6slx9tqg144", "2010/05/26", "08:00:00");
 	if (rc) FAIL(rc);

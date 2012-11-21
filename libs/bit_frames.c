@@ -95,6 +95,8 @@ struct extract_state
 static int find_es_switch(struct extract_state* es, int y, int x, swidx_t sw)
 {
 	int i;
+
+	RC_CHECK(es->model);
 	if (sw == NO_SWITCH) { HERE(); return 0; }
 	for (i = 0; i < es->num_yx_pos; i++) {
 		if (es->yx_pos[i].y == y
@@ -112,6 +114,7 @@ static int write_iobs(struct fpga_bits* bits, struct fpga_model* model)
 	uint64_t u64;
 	const char* name;
 
+	RC_CHECK(model);
 	first_iob = 0;
 	for (i = 0; (name = fpga_enum_iob(model, i, &y, &x, &type_idx)); i++) {
 		dev_idx = fpga_dev_idx(model, y, x, DEV_IOB, type_idx);
@@ -274,6 +277,7 @@ static int extract_iobs(struct extract_state* es)
 	struct fpga_device* dev;
 	struct fpgadev_iob cfg;
 
+	RC_CHECK(es->model);
 	num_iobs = get_num_iobs(XC6SLX9);
 	first_iob = 0;
 	for (i = 0; i < num_iobs; i++) {
@@ -617,6 +621,7 @@ static int extract_logic(struct extract_state* es)
 	char lut5_x[NUM_LUTS][MAX_LUT_LEN];
 	struct fpga_device* dev_ml;
 
+	RC_CHECK(es->model);
 	for (x = LEFT_SIDE_WIDTH; x < es->model->x_width-RIGHT_SIDE_WIDTH; x++) {
 		if (!is_atx(X_FABRIC_LOGIC_COL|X_CENTER_LOGIC_COL, es->model, x))
 			continue;
@@ -1366,11 +1371,12 @@ fail:
 	return rc;
 }
 
-static int bitpos_is_set(struct extract_state* es, int y, int x,
-	struct xc6_routing_bitpos* swpos, int* is_set)
+static int bitpos_is_set(struct extract_state *es, int y, int x,
+	struct xc6_routing_bitpos *swpos, int *is_set)
 {
 	int row_num, row_pos, start_in_frame, two_bits_val, rc;
 
+	RC_CHECK(es->model);
 	*is_set = 0;
 	is_in_row(es->model, y, &row_num, &row_pos);
 	if (row_num == -1 || row_pos == -1
@@ -1416,6 +1422,7 @@ static int bitpos_clear_bits(struct extract_state* es, int y, int x,
 {
 	int row_num, row_pos, start_in_frame, rc;
 
+	RC_CHECK(es->model);
 	is_in_row(es->model, y, &row_num, &row_pos);
 	if (row_num == -1 || row_pos == -1
 	    || row_pos == HCLK_POS) FAIL(EINVAL);
@@ -1449,6 +1456,7 @@ static int bitpos_set_bits(struct fpga_bits* bits, struct fpga_model* model,
 {
 	int row_num, row_pos, start_in_frame, rc;
 
+	RC_CHECK(model);
 	is_in_row(model, y, &row_num, &row_pos);
 	if (row_num == -1 || row_pos == -1
 	    || row_pos == HCLK_POS) FAIL(EINVAL);
@@ -1522,6 +1530,7 @@ static int extract_logic_switches(struct extract_state* es, int y, int x)
 	int row, row_pos, byte_off, minor, rc;
 	uint8_t* u8_p;
 
+	RC_CHECK(es->model);
 	row = which_row(y, es->model);
 	row_pos = pos_in_row(y, es->model);
 	if (row == -1 || row_pos == -1 || row_pos == 8) FAIL(EINVAL);
@@ -1719,6 +1728,7 @@ static int extract_iologic_switches(struct extract_state* es, int y, int x)
 	str16_t from_str_i, to_str_i;
 	swidx_t sw_idx;
 
+	RC_CHECK(es->model);
 	// From y/x coordinate, determine major, row, bit offset
 	// in frame (v64_i) and pointer to first minor.
 	is_in_row(es->model, y, &row_num, &row_pos);
@@ -1789,6 +1799,7 @@ static int extract_switches(struct extract_state* es)
 {
 	int x, y, rc;
 
+	RC_CHECK(es->model);
 	for (x = 0; x < es->model->x_width; x++) {
 		for (y = 0; y < es->model->y_height; y++) {
 			// routing switches
@@ -1820,6 +1831,7 @@ fail:
 static int construct_extract_state(struct extract_state* es,
 	struct fpga_model* model)
 {
+	RC_CHECK(model);
 	memset(es, 0, sizeof(*es));
 	es->model = model;
 	return 0;
@@ -1894,6 +1906,7 @@ static int find_bitpos(struct fpga_model* model, int y, int x, swidx_t sw)
 	const char* from_str, *to_str;
 	int i;
 
+	RC_CHECK(model);
 	from_str = fpga_switch_str(model, y, x, sw, SW_FROM);
 	to_str = fpga_switch_str(model, y, x, sw, SW_TO);
 	from_w = fpga_str2wire(from_str);
@@ -1925,6 +1938,7 @@ static int write_routing_sw(struct fpga_bits* bits, struct fpga_model* model, in
 	struct fpga_tile* tile;
 	int i, bit_pos, rc;
 
+	RC_CHECK(model);
 	// go through enabled switches, lookup in sw_bitpos
 	// and set bits
 	tile = YX_TILE(model, y, x);
@@ -1957,6 +1971,7 @@ static int get_used_switches(struct fpga_model* model, int y, int x,
 	int i, num_used, rc;
 	struct fpga_tile* tile;
 
+	RC_CHECK(model);
 	tile = YX_TILE(model, y, x);
 	num_used = 0;
 	for (i = 0; i < tile->num_switches; i++) {
@@ -2020,6 +2035,7 @@ static int write_iologic_sw(struct fpga_bits* bits, struct fpga_model* model,
 	int found_i[MAX_IOLOGIC_SWBLOCK];
 	int num_sw, num_found;
 
+	RC_CHECK(model);
 	if (x < LEFT_SIDE_WIDTH) {
 		if (x != LEFT_IO_DEVS) FAIL(EINVAL);
 		sw_pos = s_left_io_swpos;
@@ -2079,6 +2095,7 @@ static int write_switches(struct fpga_bits* bits, struct fpga_model* model)
 	struct fpga_tile* tile;
 	int x, y, i, rc;
 
+	RC_CHECK(model);
 	for (x = 0; x < model->x_width; x++) {
 		for (y = 0; y < model->y_height; y++) {
 			if (is_atx(X_ROUTING_COL, model, x)
@@ -2124,6 +2141,7 @@ static int write_logic(struct fpga_bits* bits, struct fpga_model* model)
 	uint64_t u64;
 	uint8_t* u8_p;
 
+	RC_CHECK(model);
 	for (x = LEFT_SIDE_WIDTH; x < model->x_width-RIGHT_SIDE_WIDTH; x++) {
 		xm_col = is_atx(X_FABRIC_LOGIC_XM_COL, model, x);
 		if (!xm_col && !is_atx(X_FABRIC_LOGIC_XL_COL, model, x))
@@ -2206,18 +2224,15 @@ fail:
 
 int write_model(struct fpga_bits* bits, struct fpga_model* model)
 {
-	int i, rc;
+	int i;
 
 	RC_CHECK(model);
 
 	for (i = 0; i < sizeof(s_default_bits)/sizeof(s_default_bits[0]); i++)
 		set_bitp(bits, &s_default_bits[i]);
-	rc = write_switches(bits, model);
-	if (rc) RC_FAIL(model, rc);
-	rc = write_iobs(bits, model);
-	if (rc) RC_FAIL(model, rc);
-	rc = write_logic(bits, model);
-	if (rc) RC_FAIL(model, rc);
+	write_switches(bits, model);
+	write_iobs(bits, model);
+	write_logic(bits, model);
 
 	RC_RETURN(model);
 }

@@ -19,6 +19,7 @@ int init_devices(struct fpga_model* model)
 {
 	int x, y, i, j, rc;
 
+	RC_CHECK(model);
 	// DCM, PLL
 	for (i = 0; i < model->cfg_rows; i++) {
 		y = TOP_IO_TILES + HALF_ROW-1 + i*ROW_SIZE;
@@ -334,6 +335,7 @@ void free_devices(struct fpga_model* model)
 	struct fpga_tile* tile;
 	int x, y, i;
 
+	// leave model->rc untouched
 	for (x = 0; x < model->x_width; x++) {
 		for (y = 0; y < model->y_height; y++) {
 			tile = YX_TILE(model, y, x);
@@ -363,6 +365,7 @@ static int add_dev(struct fpga_model* model,
 	int new_dev_i;
 	int rc;
 
+	RC_CHECK(model);
 	tile = YX_TILE(model, y, x);
 	if (!(tile->num_devs % DEV_INCREMENT)) {
 		void* new_ptr = realloc(tile->devs,
@@ -397,6 +400,7 @@ static int init_iob(struct fpga_model* model, int y, int x, int idx)
 	int type_idx, rc;
 	char tmp_str[128];
 
+	RC_CHECK(model);
 	tile = YX_TILE(model, y, x);
 	type_idx = fdev_typeidx(model, y, x, idx);
 	if (!y)
@@ -472,6 +476,7 @@ static int init_logic(struct fpga_model* model, int y, int x, int idx)
 	const char* pre;
 	int i, j, rc;
 
+	RC_CHECK(model);
 	tile = YX_TILE(model, y, x);
 	if (tile->devs[idx].subtype == LOGIC_M)
 		pre = "M_";

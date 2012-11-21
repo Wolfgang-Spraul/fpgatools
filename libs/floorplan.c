@@ -24,6 +24,7 @@ int printf_tiles(FILE* f, struct fpga_model* model)
 	struct fpga_tile* tile;
 	int x, y;
 
+	RC_CHECK(model);
 	for (x = 0; x < model->x_width; x++) {
 		fprintf(f, "\n");
 		for (y = 0; y < model->y_height; y++) {
@@ -68,6 +69,7 @@ static int printf_IOB(FILE* f, struct fpga_model* model,
 	char pref[256];
 	int type_count, i;
 
+	RC_CHECK(model);
 	tile = YX_TILE(model, y, x);
 	type_count = 0;
 	for (i = 0; i < tile->num_devs; i++) {
@@ -295,6 +297,7 @@ static int printf_LOGIC(FILE* f, struct fpga_model* model,
 	char pref[256];
 	int type_count, i, j, rc;
 
+	RC_CHECK(model);
 	tile = YX_TILE(model, y, x);
 	type_count = 0;
 	for (i = 0; i < tile->num_devs; i++) {
@@ -663,6 +666,7 @@ static int printf_BUFGMUX(FILE* f, struct fpga_model* model,
 	char pref[256];
 	int type_count, i, rc;
 
+	RC_CHECK(model);
 	tile = YX_TILE(model, y, x);
 	type_count = 0;
 	for (i = 0; i < tile->num_devs; i++) {
@@ -753,6 +757,7 @@ static int printf_BUFIO(FILE* f, struct fpga_model* model,
 	char pref[256];
 	int type_count, i, rc;
 
+	RC_CHECK(model);
 	tile = YX_TILE(model, y, x);
 	type_count = 0;
 	for (i = 0; i < tile->num_devs; i++) {
@@ -832,6 +837,7 @@ static int printf_BSCAN(FILE* f, struct fpga_model* model,
 	char pref[256];
 	int type_count, i, rc;
 
+	RC_CHECK(model);
 	tile = YX_TILE(model, y, x);
 	type_count = 0;
 	for (i = 0; i < tile->num_devs; i++) {
@@ -891,6 +897,7 @@ int printf_devices(FILE* f, struct fpga_model* model, int config_only)
 	int x, y, i, rc;
 	struct fpga_tile* tile;
 
+	RC_CHECK(model);
 	for (x = 0; x < model->x_width; x++) {
 		for (y = 0; y < model->y_height; y++) {
 			rc = printf_IOB(f, model, y, x, config_only);
@@ -950,6 +957,7 @@ int printf_ports(FILE* f, struct fpga_model* model)
 	int x, y, i, conn_point_dests_o, num_dests_for_this_conn_point;
 	int first_port_printed;
 
+	RC_CHECK(model);
 	for (x = 0; x < model->x_width; x++) {
 		for (y = 0; y < model->y_height; y++) {
 			tile = &model->tiles[y*model->x_width + x];
@@ -991,6 +999,7 @@ int printf_conns(FILE* f, struct fpga_model* model)
 	int x, y, i, j, k, conn_point_dests_o, num_dests_for_this_conn_point;
 	int other_tile_x, other_tile_y, first_conn_printed;
 
+	RC_CHECK(model);
 	for (x = 0; x < model->x_width; x++) {
 		for (y = 0; y < model->y_height; y++) {
 			tile = &model->tiles[y*model->x_width + x];
@@ -1046,6 +1055,7 @@ int printf_switches(FILE* f, struct fpga_model* model)
 	struct fpga_tile* tile;
 	int x, y, i, first_switch_printed;
 
+	RC_CHECK(model);
 	for (x = 0; x < model->x_width; x++) {
 		for (y = 0; y < model->y_height; y++) {
 			tile = YX_TILE(model, y, x);
@@ -1068,6 +1078,7 @@ int printf_nets(FILE* f, struct fpga_model* model)
 	net_idx_t net_i;
 	int rc;
 
+	RC_CHECK(model);
 	net_i = NO_NET;
 	while (!(rc = fnet_enum(model, net_i, &net_i)) && net_i != NO_NET)
 		fnet_printf(f, model, net_i);
@@ -1300,6 +1311,7 @@ int read_floorplan(struct fpga_model* model, FILE* f)
 	char line[1024];
 	int beg, end;
 
+	RC_CHECK(model);
 	while (fgets(line, sizeof(line), f)) {
 		next_word(line, 0, &beg, &end);
 		if (end == beg) continue;
@@ -1318,22 +1330,15 @@ int read_floorplan(struct fpga_model* model, FILE* f)
 
 int write_floorplan(FILE* f, struct fpga_model* model, int flags)
 {
-	int rc;
-
 	if (!(flags & FP_NO_HEADER))
 		printf_version(f);
-	if (model->rc) {
+
+	if (model->rc)
 		fprintf(f, "rc %i\n", model->rc);
-		FAIL(model->rc);
+	else {
+		printf_devices(f, model, /*config_only*/ 1);
+		printf_nets(f, model);
 	}
 
-	rc = printf_devices(f, model, /*config_only*/ 1);
-	if (rc) FAIL(rc);
-
-	rc = printf_nets(f, model);
-	if (rc) FAIL(rc);
-
-	return 0;
-fail:
-	return rc;
+	RC_RETURN(model);
 }

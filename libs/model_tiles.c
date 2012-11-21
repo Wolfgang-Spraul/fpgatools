@@ -15,6 +15,7 @@ int init_tiles(struct fpga_model* model)
 	char cur_cfgcol, last_col;
 	struct fpga_tile* tile_i0;
 
+	RC_CHECK(model);
 	tile_rows = 1 /* middle */ + (8+1+8)*model->cfg_rows + 2+2 /* two extra tiles at top and bottom */;
 	tile_columns = LEFT_SIDE_WIDTH + RIGHT_SIDE_WIDTH;
 	for (i = 0; model->cfg_columns[i] != 0; i++) {
