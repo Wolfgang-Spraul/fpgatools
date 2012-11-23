@@ -9,6 +9,20 @@
 #include "model.h"
 #include "parts.h"
 
+static int centx_gtp(struct fpga_model *model);
+static int centy_pci_rdy(struct fpga_model *model);
+static int dev_oct_calibrate(struct fpga_model *model, int y, int x, int index);
+static int dev_dna(struct fpga_model *model);
+static int dev_pmv(struct fpga_model *model);
+static int dev_icap(struct fpga_model *model);
+static int dev_spi_access(struct fpga_model *model);
+static int dev_post_crc(struct fpga_model *model);
+static int dev_startup(struct fpga_model *model);
+static int dev_slave_spi(struct fpga_model *model);
+static int dev_suspend_sync(struct fpga_model *model);
+static int centy_bram_ckpin(struct fpga_model *model);
+static int pcice_sw(struct fpga_model *model);
+static int term_to_io_sw(struct fpga_model *model, enum extra_wires wire);
 static int init_ce_clk(struct fpga_model *model);
 static int init_io(struct fpga_model *model);
 static int init_routing(struct fpga_model *model);
@@ -35,8 +49,34 @@ int init_switches(struct fpga_model *model, int routing_sw)
 {
 	RC_CHECK(model);
 
+	centx_gtp(model);
+	centy_pci_rdy(model);
+
+	dev_oct_calibrate(model, TOP_FIRST_REGULAR, LEFT_IO_DEVS, /*idx*/ 0);
+	dev_oct_calibrate(model, TOP_FIRST_REGULAR, LEFT_IO_DEVS, /*idx*/ 1);
+	dev_oct_calibrate(model, model->y_height - BOT_LAST_REGULAR_O, LEFT_IO_DEVS, /*idx*/ 0);
+	dev_oct_calibrate(model, model->y_height - BOT_LAST_REGULAR_O, LEFT_IO_DEVS, /*idx*/ 1);
+	dev_oct_calibrate(model, TOP_FIRST_REGULAR+1, model->x_width-RIGHT_IO_DEVS_O, /*idx*/ 0);
+	dev_oct_calibrate(model, model->y_height - BOT_LAST_REGULAR_O, model->x_width-RIGHT_IO_DEVS_O, /*idx*/ 0);
+
+	dev_dna(model);
+	dev_pmv(model);
+	dev_icap(model);
+	dev_spi_access(model);
+	dev_post_crc(model);
+	dev_startup(model);
+	dev_slave_spi(model);
+	dev_suspend_sync(model);
+	centy_bram_ckpin(model);
+	pcice_sw(model);
+	term_to_io_sw(model, IOCE);
+	term_to_io_sw(model, IOCLK);
+	term_to_io_sw(model, PLLCE);
+	term_to_io_sw(model, PLLCLK);
+
 	if (routing_sw)
 		init_routing(model);
+
 	init_logic(model);
    	init_iologic(model);
    	init_north_south_dirwire_term(model);
@@ -58,6 +98,292 @@ int init_switches(struct fpga_model *model, int routing_sw)
 	init_center_reg_tblr(model);
 	init_center_topbot_cfb_dfb(model);
 
+	RC_RETURN(model);
+}
+
+static int centx_gtp(struct fpga_model *model)
+{
+	RC_CHECK(model);
+	add_switch(model, TOP_INNER_ROW, model->center_x-CENTER_CMTPLL_O,
+		"REGT_TTERM_GTP_CLKOUTEW0",
+		"REGT_TTERM_ALTGTP_CLKINEAST0", /*bidir*/ 0);
+	add_switch(model, TOP_INNER_ROW, model->center_x-CENTER_CMTPLL_O,
+		"REGT_TTERM_ALTGTP_CLKOUTEW0",
+		"REGT_TTERM_GTP_CLKINWEST0", /*bidir*/ 0);
+	add_switch(model, model->y_height-BOT_INNER_ROW, model->center_x-CENTER_CMTPLL_O,
+		"REGB_BTERM_GTP_CLKOUTEW0",
+		"REGB_BTERM_ALTGTP_CLKINEAST0", /*bidir*/ 0);
+	add_switch(model, model->y_height-BOT_INNER_ROW, model->center_x-CENTER_CMTPLL_O,
+		"REGB_BTERM_ALTGTP_CLKOUTEW0",
+		"REGB_BTERM_GTP_CLKINWEST0", /*bidir*/ 0);
+	RC_RETURN(model);
+}
+
+static int centy_pci_rdy(struct fpga_model *model)
+{
+	RC_CHECK(model);
+	add_switch(model, model->center_y-CENTER_Y_MINUS_3, LEFT_OUTER_COL,
+		"LIOB_TOP_PCI_RDY0", "LIOB_PCICE_TRDY_EXT", /*bidir*/ 0);
+	add_switch(model, model->center_y+CENTER_Y_PLUS_1, LEFT_OUTER_COL,
+		"LIOB_BOT_PCI_RDY0", "LIOB_PCI_IT_RDY", /*bidir*/ 0);
+	add_switch(model, model->center_y-CENTER_Y_MINUS_3, model->x_width-RIGHT_OUTER_O,
+		"RIOB_BOT_PCI_RDY0", "RIOB_PCI_IT_RDY", /*bidir*/ 0);
+	add_switch(model, model->center_y+CENTER_Y_PLUS_1, model->x_width-RIGHT_OUTER_O,
+		"RIOB_TOP_PCI_RDY1", "RIOB_PCI_TRDY_EXT", /*bidir*/ 0);
+	RC_RETURN(model);
+}
+
+static int dev_oct_calibrate(struct fpga_model *model, int y, int x, int index)
+{
+	static const int logicin_wnums[4] = {/*i0*/ 29, 32, /*i1*/ 15, 7};
+
+	RC_CHECK(model);
+	add_switch(model, y, x,
+		pf("INT_INTERFACE_LOCAL_LOGICBIN%i", logicin_wnums[index*2]),
+		pf("OCT_CALIBRATE%s_SO_PINWIRE", index ? "1" : ""),
+		/*bidir*/ 0);
+	add_switch(model, y, x,
+		pf("INT_INTERFACE_LOCAL_LOGICBIN%i", logicin_wnums[index*2+1]),
+		pf("OCT_CALIBRATE%s_S1_PINWIRE", index ? "1" : ""),
+		/*bidir*/ 0);
+	RC_RETURN(model);
+}
+
+static int dev_dna(struct fpga_model *model)
+{
+	static const char *pairs[] = {
+		"INT_INTERFACE_LOCAL_CLK0",	  "DNA_PORT_CLK_PINWIRE",
+		"INT_INTERFACE_LOCAL_LOGICBIN14", "DNA_PORT_TEST_PINWIRE",
+		"INT_INTERFACE_LOCAL_LOGICBIN31", "DNA_PORT_READ_PINWIRE",
+		"INT_INTERFACE_LOCAL_LOGICBIN39", "DNA_PORT_DIN_PINWIRE",
+		"INT_INTERFACE_LOCAL_LOGICBIN8",  "DNA_PORT_SHIFT_PINWIRE",
+		"DNA_PORT_DOUT_PINWIRE",	  "INT_INTERFACE_LOCAL_LOGICOUT_23",
+		"" };
+
+	RC_CHECK(model);
+	add_switch_set(model, TOP_OUTER_IO, LEFT_IO_DEVS,
+		/*prefix*/ 0, pairs, /*inc*/ 0);
+	RC_RETURN(model);
+}
+
+static int dev_pmv(struct fpga_model *model)
+{
+	static const char *pairs[] = {
+		"INT_INTERFACE_LOCAL_LOGICBIN20", "PMV_ENABLEB_PINWIRE",
+		"INT_INTERFACE_LOCAL_LOGICBIN54", "PMV_SELECTB0_PINWIRE",
+		"INT_INTERFACE_LOCAL_LOGICBIN48", "PMV_SELECTB1_PINWIRE",
+		"INT_INTERFACE_LOCAL_LOGICBIN23", "PMV_SELECTB2_PINWIRE",
+		"INT_INTERFACE_LOCAL_LOGICBIN57", "PMV_SELECTB3_PINWIRE",
+		"INT_INTERFACE_LOCAL_LOGICBIN44", "PMV_SELECTB4_PINWIRE",
+		"INT_INTERFACE_LOCAL_LOGICBIN4", "PMV_SELECTB5_PINWIRE",
+		"PMV_OUT_PINWIRE", "INT_INTERFACE_LOCAL_LOGICOUT_0",
+		"PMV_OUT_DIV2_PINWIRE", "INT_INTERFACE_LOCAL_LOGICOUT_1",
+		"PMV_OUT_DIV4_PINWIRE", "INT_INTERFACE_LOCAL_LOGICOUT_2",
+		"" };
+
+	RC_CHECK(model);
+	add_switch_set(model, TOP_OUTER_IO, LEFT_IO_DEVS,
+		/*prefix*/ 0, pairs, /*inc*/ 0);
+	RC_RETURN(model);
+}
+
+static int dev_icap(struct fpga_model *model)
+{
+	static const char *pairs[] = {
+		"INT_INTERFACE_LOCAL_CLK1", "ICAP_CLK_PINWIRE",
+		"INT_INTERFACE_LOCAL_LOGICBIN7", "ICAP_CE_PINWIRE",
+		"INT_INTERFACE_LOCAL_LOGICBIN42", "ICAP_WRITE_PINWIRE",
+		"ICAP_BUSY_PINWIRE", "INT_INTERFACE_LOCAL_LOGICOUT_3",
+		"" };
+	static const int icap_in_wnums[] =
+		{16, 5, 12, 47, 20, 45, 36, 17, 25, 34, 54, 48, 23, 57, 44, 4};
+	int i;
+
+	RC_CHECK(model);
+	add_switch_set(model, model->y_height-BOT_OUTER_IO, model->x_width-RIGHT_IO_DEVS_O,
+		/*prefix*/ 0, pairs, /*inc*/ 0);
+	for (i = 0; i <= 15; i++) {
+		add_switch(model, model->y_height-BOT_OUTER_IO,
+			model->x_width-RIGHT_IO_DEVS_O,
+			pf("INT_INTERFACE_LOCAL_LOGICBIN%i", icap_in_wnums[i]),
+			pf("ICAP_I%i_PINWIRE", i), /*bidir*/ 0);
+		add_switch(model, model->y_height-BOT_OUTER_IO,
+			model->x_width-RIGHT_IO_DEVS_O,
+			pf("ICAP_O%i_PINWIRE", i),
+			pf("INT_INTERFACE_LOCAL_LOGICOUT_%i", 4+i),
+			/*bidir*/ 0);
+	}
+	RC_RETURN(model);
+}
+
+static int dev_spi_access(struct fpga_model *model)
+{
+	static const char *pairs[] = {
+		"INT_INTERFACE_LOCAL_CLK0", "SPI_ACCESS_CLK_PINWIRE",
+		"INT_INTERFACE_LOCAL_LOGICBIN24", "SPI_ACCESS_CSB_PINWIRE",
+		"INT_INTERFACE_LOCAL_SR0", "SPI_ACCESS_MOSI_PINWIRE",
+		"SPI_ACCESS_MISO_PINWIRE", "INT_INTERFACE_LOCAL_LOGICOUT_1",
+		"" };
+
+	RC_CHECK(model);
+	add_switch_set(model, model->y_height-BOT_OUTER_IO,
+		model->x_width-RIGHT_IO_DEVS_O, /*prefix*/ 0, pairs, /*inc*/ 0);
+	RC_RETURN(model);
+}
+
+static int dev_post_crc(struct fpga_model *model)
+{
+	RC_CHECK(model);
+	add_switch(model, model->y_height-BOT_INNER_IO,
+		model->x_width-RIGHT_IO_DEVS_O,
+		"POST_CRC_CRCERROR_PINWIRE",
+		"INT_INTERFACE_LOCAL_LOGICOUT_8",
+		/*bidir*/ 0);
+	RC_RETURN(model);
+}
+static int dev_startup(struct fpga_model *model)
+{
+	static const char *pairs[] = {
+		"INT_INTERFACE_LOCAL_CLK1", "STARTUP_CLK_PINWIRE",
+		"INT_INTERFACE_LOCAL_LOGICBIN1", "STARTUP_KEYCLEARB_PINWIRE",
+		"INT_INTERFACE_LOCAL_LOGICBIN24", "STARTUP_GTS_PINWIRE",
+		"INT_INTERFACE_LOCAL_SR1", "STARTUP_GSR_PINWIRE",
+		"STARTUP_CFGCLK_PINWIRE", "INT_INTERFACE_LOCAL_LOGICOUT_2",
+		"STARTUP_CFGMCLK_PINWIRE", "INT_INTERFACE_LOCAL_LOGICOUT_1",
+		"STARTUP_EOS_PINWIRE", "INT_INTERFACE_LOCAL_LOGICOUT_3",
+		"" };
+
+	RC_CHECK(model);
+	add_switch_set(model, model->y_height-BOT_INNER_IO,
+		model->x_width-RIGHT_IO_DEVS_O, /*prefix*/ 0, pairs, /*inc*/ 0);
+	RC_RETURN(model);
+}
+
+static int dev_slave_spi(struct fpga_model *model)
+{
+	static const char *pairs[] = {
+		"INT_INTERFACE_LOCAL_LOGICBIN15", "SLAVE_SPI_CMPMISO_PINWIRE",
+		"SLAVE_SPI_CMPACTIVEB_PINWIRE", "INT_INTERFACE_LOCAL_LOGICOUT_7",
+		"SLAVE_SPI_CMPCLK_PINWIRE", "INT_INTERFACE_LOCAL_LOGICOUT_4",
+		"SLAVE_SPI_CMPCSB_PINWIRE", "INT_INTERFACE_LOCAL_LOGICOUT_5",
+		"SLAVE_SPI_CMPMOSI_PINWIRE", "INT_INTERFACE_LOCAL_LOGICOUT_6",
+		"" };
+
+	RC_CHECK(model);
+	add_switch_set(model, model->y_height-BOT_INNER_IO,
+		model->x_width-RIGHT_IO_DEVS_O, /*prefix*/ 0, pairs, /*inc*/ 0);
+	RC_RETURN(model);
+}
+
+static int dev_suspend_sync(struct fpga_model *model)
+{
+	static const char *pairs[] = {
+		"INT_INTERFACE_LOCAL_CLK0", "SUSPEND_SYNC_CLK_PINWIRE",
+		"INT_INTERFACE_LOCAL_SR0", "SUSPEND_SYNC_SACK_PINWIRE",
+		"SUSPEND_SYNC_SREQ_PINWIRE", "INT_INTERFACE_LOCAL_LOGICOUT_0",
+		"" };
+
+	RC_CHECK(model);
+	add_switch_set(model, model->y_height-BOT_INNER_IO,
+		model->x_width-RIGHT_IO_DEVS_O, /*prefix*/ 0, pairs, /*inc*/ 0);
+	RC_RETURN(model);
+}
+
+static int centy_bram_ckpin(struct fpga_model *model)
+{
+	int x, i;
+
+	RC_CHECK(model);
+	for (x = LEFT_SIDE_WIDTH; x < model->x_width-RIGHT_SIDE_WIDTH; x++) {
+		if (!is_atx(X_FABRIC_BRAM_COL, model, x))
+			continue;
+		for (i = 0; i <= 7; i++) {
+			add_switch(model, model->center_y, x,
+				pf("REGH_DSP_IN_CKPIN%i", i),
+				pf("REGH_DSP_OUT_CKPIN%i", i), /*bidir*/ 0);
+		}
+	}
+	RC_RETURN(model);
+}
+
+static int pcice_sw(struct fpga_model *model)
+{
+	int x;
+
+	RC_CHECK(model);
+	for (x = LEFT_SIDE_WIDTH; x < model->x_width-RIGHT_SIDE_WIDTH; x++) {
+		if (is_atx(X_FABRIC_BRAM_COL, model, x)) {
+			add_switch(model, TOP_INNER_ROW, x,
+				"BRAM_TTERM_PCICE_IN",
+				"BRAM_TTERM_PCICE_OUT", /*bidir*/ 0);
+			add_switch(model, model->y_height-BOT_INNER_ROW, x,
+				"BRAM_TTERM_PCICE_IN",
+				"BRAM_TTERM_PCICE_OUT", /*bidir*/ 0);
+		} else if (is_atx(X_FABRIC_MACC_COL, model, x)) {
+			add_switch(model, TOP_INNER_ROW, x,
+				"MACCSITE2_TTERM_PCICE_IN",
+				"MACCSITE2_TTERM_PCICE_OUT", /*bidir*/ 0);
+			add_switch(model, model->y_height-BOT_INNER_ROW, x,
+				"MACCSITE2_TTERM_PCICE_IN",
+				"MACCSITE2_TTERM_PCICE_OUT", /*bidir*/ 0);
+		}
+	}
+	RC_RETURN(model);
+}
+
+static int term_to_io_x(struct fpga_model *model, enum extra_wires wire, int x)
+{
+	const char *s1;
+	int last_inc, y, i;
+
+	RC_CHECK(model);
+
+	if (wire == IOCE) {
+		s1 = "IOCE";
+		last_inc = 3;
+	} else if (wire == IOCLK) {
+		s1 = "IOCLK";
+		last_inc = 3;
+	} else if (wire == PLLCE) {
+		s1 = "PLLCE";
+		last_inc = 1;
+	} else if (wire == PLLCLK) {
+		s1 = "PLLCLK";
+		last_inc = 1;
+	} else RC_FAIL(model, EINVAL);
+
+	for (y = TOP_FIRST_REGULAR; y <= model->y_height - BOT_LAST_REGULAR_O; y++) {
+		if (!is_aty(Y_ROW_HORIZ_AXSYMM, model, y))
+			continue;
+		// up
+		for (i = 1; i <= HALF_ROW; i++) {
+			if (is_aty((x < model->center_x) ? Y_LEFT_WIRED : Y_RIGHT_WIRED, model, y-i)) {
+				for (i = 0; i <= last_inc; i++) {
+					add_switch(model, y, x, pf("HCLK_IOIL_%s%i", s1, i),
+						pf("HCLK_IOIL_%s%i_UP", s1, i), /*bidir*/ 0);
+				}
+				break;
+			}
+		}
+		// down
+		for (i = 1; i <= HALF_ROW; i++) {
+			if (is_aty((x < model->center_x) ? Y_LEFT_WIRED : Y_RIGHT_WIRED, model, y+i)) {
+				for (i = 0; i <= last_inc; i++) {
+					add_switch(model, y, x, pf("HCLK_IOIL_%s%i", s1, i),
+						pf("HCLK_IOIL_%s%i_DOWN", s1, i), /*bidir*/ 0);
+				}
+				break;
+			}
+		}
+	}
+	RC_RETURN(model);
+}
+
+static int term_to_io_sw(struct fpga_model *model, enum extra_wires wire)
+{
+	RC_CHECK(model);
+	term_to_io_x(model, wire, LEFT_IO_DEVS);
+	term_to_io_x(model, wire, model->x_width - RIGHT_IO_DEVS_O);
 	RC_RETURN(model);
 }
 

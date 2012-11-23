@@ -850,6 +850,8 @@ const char *fpga_connpt_str(struct fpga_model *model, enum extra_wires wire,
 	const char *wstr;
 	int i, wnum, wchar;
 
+	if (dest_y == -1) dest_y = y;
+	if (dest_x == -1) dest_x = x;
 	last_buf = (last_buf+1)%NUM_BUFS;
 	buf[last_buf][0] = 0;
 

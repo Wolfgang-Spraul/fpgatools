@@ -9,6 +9,7 @@
 #include "model.h"
 #include "parts.h"
 
+static int bufpll(struct fpga_model *model);
 static int reg_ioclk(struct fpga_model *model);
 static int reg_lock(struct fpga_model *model);
 static int reg_pll_dcm(struct fpga_model *model);
@@ -39,6 +40,7 @@ int init_conns(struct fpga_model *model)
 {
 	RC_CHECK(model);
 
+	bufpll(model);
 	reg_ioclk(model);
 	reg_lock(model);
 	reg_pll_dcm(model);
@@ -75,6 +77,27 @@ int init_conns(struct fpga_model *model)
 	run_logic_inout(model);
 	run_dirwires(model);
 
+	RC_RETURN(model);
+}
+
+static int bufpll_x(struct fpga_model *model, int x)
+{
+	RC_CHECK(model);
+	add_switch(model, model->center_y-CENTER_Y_MINUS_2, x,
+		"CLK0", "INT_BUFPLL_GCLK2", /*bidir*/ 0);
+	add_switch(model, model->center_y-CENTER_Y_MINUS_2, x,
+		"CLK1", "INT_BUFPLL_GCLK3", /*bidir*/ 0);
+	add_switch(model, model->center_y-CENTER_Y_MINUS_1, x,
+		"CLK0", "INT_BUFPLL_GCLK0", /*bidir*/ 0);
+	add_switch(model, model->center_y-CENTER_Y_MINUS_1, x,
+		"CLK1", "INT_BUFPLL_GCLK1", /*bidir*/ 0);
+	RC_RETURN(model);
+}
+static int bufpll(struct fpga_model *model)
+{
+	RC_CHECK(model);
+	bufpll_x(model, LEFT_IO_ROUTING);
+	bufpll_x(model, model->x_width-RIGHT_IO_ROUTING_O);
 	RC_RETURN(model);
 }
 
@@ -172,7 +195,7 @@ static int reg_ioclk(struct fpga_model *model)
 
 static int reg_lock(struct fpga_model *model)
 {
-	int top_pll_y, top_dcm_y, bot_pll_y, bot_dcm_y, i, rc;
+	int top_pll_y, top_dcm_y, bot_pll_y, bot_dcm_y, i;
 
 	RC_CHECK(model);
 
@@ -183,7 +206,11 @@ static int reg_lock(struct fpga_model *model)
 		 { "REGH_LTERM_LOCK%i", 0, model->center_y, LEFT_INNER_COL },
 		 { "REGH_IOI_INT_LOCK%i", 0, model->center_y, LEFT_IO_ROUTING },
 		 { "INT_BUFPLL_LOCK_LR%i", 0, model->center_y-CENTER_Y_MINUS_1, LEFT_IO_ROUTING }}};
-	if ((rc = add_conn_net(model, NOPREF_BI_F, &n))) RC_FAIL(model, rc); }
+	add_conn_net(model, NOPREF_BI_F, &n); }
+	add_switch(model, model->center_y-CENTER_Y_MINUS_1, LEFT_IO_ROUTING,
+		"INT_BUFPLL_LOCK_LR0", "LOGICOUT0", /*bidir*/ 0);
+	add_switch(model, model->center_y-CENTER_Y_MINUS_1, LEFT_IO_ROUTING,
+		"INT_BUFPLL_LOCK_LR1", "LOGICOUT1", /*bidir*/ 0);
 
 	// right
 	{ struct w_net n = {
@@ -194,7 +221,11 @@ static int reg_lock(struct fpga_model *model)
 		 { "REGH_RIOI_LOCK%i", 0, model->center_y, model->x_width-RIGHT_IO_DEVS_O },
 		 { "REGH_RIOI_INT_LOCK%i", 0, model->center_y, model->x_width-RIGHT_IO_ROUTING_O },
 		 { "INT_BUFPLL_LOCK_LR%i", 0, model->center_y-CENTER_Y_MINUS_1, model->x_width-RIGHT_IO_ROUTING_O }}};
-	if ((rc = add_conn_net(model, NOPREF_BI_F, &n))) RC_FAIL(model, rc); }
+	add_conn_net(model, NOPREF_BI_F, &n); }
+	add_switch(model, model->center_y-CENTER_Y_MINUS_1, model->x_width-RIGHT_IO_ROUTING_O,
+		"INT_BUFPLL_LOCK_LR0", "LOGICOUT0", /*bidir*/ 0);
+	add_switch(model, model->center_y-CENTER_Y_MINUS_1, model->x_width-RIGHT_IO_ROUTING_O,
+		"INT_BUFPLL_LOCK_LR1", "LOGICOUT1", /*bidir*/ 0);
 
 	// top
 	{ struct w_net n = {
@@ -204,7 +235,11 @@ static int reg_lock(struct fpga_model *model)
 		 { "REGV_TTERM_LOCK%i", 0, TOP_INNER_ROW, model->center_x },
 		 { "PLLBUF_TOP_LOCK%i", 0, TOP_INNER_ROW, model->center_x+CENTER_X_PLUS_1 },
 		 { "INT_BUFPLL_LOCK%i", 0, TOP_OUTER_IO, model->center_x+CENTER_X_PLUS_1 }}};
-	if ((rc = add_conn_net(model, NOPREF_BI_F, &n))) RC_FAIL(model, rc); }
+	add_conn_net(model, NOPREF_BI_F, &n); }
+	add_switch(model, TOP_OUTER_IO, model->center_x+CENTER_X_PLUS_1,
+		"INT_BUFPLL_LOCK0", "LOGICOUT18", /*bidir*/ 0);
+	add_switch(model, TOP_OUTER_IO, model->center_x+CENTER_X_PLUS_1,
+		"INT_BUFPLL_LOCK1", "LOGICOUT19", /*bidir*/ 0);
 
 	// bottom
 	{ struct w_net n = {
@@ -217,7 +252,11 @@ static int reg_lock(struct fpga_model *model)
 		 { "BIOI_OUTER_LOCK%i", 0,    model->y_height-BOT_OUTER_IO,  model->center_x+CENTER_X_PLUS_2 },
 		 { "BIOI_INNER_LOCK%i", 0,    model->y_height-BOT_INNER_IO,  model->center_x+CENTER_X_PLUS_2 },
 		 { "INT_BUFPLL_LOCK_DN%i", 0, model->y_height-BOT_INNER_IO,  model->center_x+CENTER_X_PLUS_1 }}};
-	if ((rc = add_conn_net(model, NOPREF_BI_F, &n))) RC_FAIL(model, rc); }
+	add_conn_net(model, NOPREF_BI_F, &n); }
+	add_switch(model, model->y_height-BOT_INNER_IO, model->center_x+CENTER_X_PLUS_1,
+		"INT_BUFPLL_LOCK_DN0", "LOGICOUT18", /*bidir*/ 0);
+	add_switch(model, model->y_height-BOT_INNER_IO, model->center_x+CENTER_X_PLUS_1,
+		"INT_BUFPLL_LOCK_DN1", "LOGICOUT19", /*bidir*/ 0);
 
 	find_pll_dcm_y(model, &top_pll_y, &top_dcm_y, &bot_pll_y, &bot_dcm_y);
 	RC_ASSERT(model, top_pll_y != -1 && top_dcm_y != -1
@@ -231,20 +270,18 @@ static int reg_lock(struct fpga_model *model)
 			 { pf("REGT_TERM_LOCKIN%i", i), 0, TOP_INNER_ROW, model->center_x-CENTER_CMTPLL_O },
 			 { pf("CMT_PLL_LOCK_UP%i", i), 0, top_pll_y, model->center_x-CENTER_CMTPLL_O },
 			 { pf("CMT_DCM_LOCK_UP%i", i), 0, top_dcm_y, model->center_x-CENTER_CMTPLL_O }}};
-		if ((rc = add_conn_net(model, NOPREF_BI_F, &n))) RC_FAIL(model, rc);
+		add_conn_net(model, NOPREF_BI_F, &n);
 	}
 
 	// :1 between pll and dcm
-	rc = add_conn_bi(model,
+	add_conn_bi(model,
 		top_pll_y, model->center_x-CENTER_CMTPLL_O, "CMT_PLL_LOCK_DN1",
 		top_dcm_y, model->center_x-CENTER_CMTPLL_O, "CMT_DCM_LOCK_UP1");
-	if (rc) RC_FAIL(model, rc);
 
 	// 0:2 between dcm and center_y
-	rc = add_conn_range(model, NOPREF_BI_F,
+	add_conn_range(model, NOPREF_BI_F,
 		top_dcm_y, model->center_x-CENTER_CMTPLL_O, "CMT_DCM_LOCK_DN%i", 0, 2,
 		model->center_y, model->center_x-CENTER_CMTPLL_O, "PLL_LOCK_TOP%i", 0);
-	if (rc) RC_FAIL(model, rc);
 
 	for (i = 0; i <= 2; i++) {
 		// nets for :0 and :2 include the dcm, the :1 net ends at the pll
@@ -253,14 +290,13 @@ static int reg_lock(struct fpga_model *model)
 			{{ pf("PLL_LOCK_BOT%i", i), 0, model->center_y, model->center_x-CENTER_CMTPLL_O },
 			 { pf("CMT_PLL_LOCK_UP%i", i), 0, bot_pll_y, model->center_x-CENTER_CMTPLL_O },
 			 { pf("CMT_DCM_LOCK_UP%i", i), 0, bot_dcm_y, model->center_x-CENTER_CMTPLL_O }}};
-		if ((rc = add_conn_net(model, NOPREF_BI_F, &n))) RC_FAIL(model, rc);
+		add_conn_net(model, NOPREF_BI_F, &n);
 	}
 
 	// :1 between pll and dcm
-	rc = add_conn_bi(model,
+	add_conn_bi(model,
 		bot_pll_y, model->center_x-CENTER_CMTPLL_O, "CMT_PLL_LOCK_DN1",
 		bot_dcm_y, model->center_x-CENTER_CMTPLL_O, "CMT_DCM_LOCK_UP1");
-	if (rc) RC_FAIL(model, rc);
 
 	// 0:2 to bottom reg
 	{ struct w_net n = {
@@ -268,49 +304,43 @@ static int reg_lock(struct fpga_model *model)
 		{{ "CMT_DCM_LOCK_DN%i", 0, bot_dcm_y, model->center_x-CENTER_CMTPLL_O },
 		 { "REGB_TERM_LOCKIN%i", 0, model->y_height-BOT_INNER_ROW, model->center_x-CENTER_CMTPLL_O },
 		 { "REGB_LOCKIN%i", 0, model->y_height-BOT_OUTER_ROW, model->center_x-CENTER_CMTPLL_O }}};
-	if ((rc = add_conn_net(model, NOPREF_BI_F, &n))) RC_FAIL(model, rc); }
+	add_conn_net(model, NOPREF_BI_F, &n); }
 
 	RC_RETURN(model);
 }
 
 static int pll_dcm_clk(struct fpga_model *model, int pll_y, int dcm_y)
 {
-	int rc;
 	RC_CHECK(model);
-	rc = add_conn_range(model, NOPREF_BI_F,
+	add_conn_range(model, NOPREF_BI_F,
 		pll_y, model->center_x-CENTER_CMTPLL_O, "CMT_CLK_TO_DCM%i", 1, 2,
 		dcm_y, model->center_x-CENTER_CMTPLL_O, "DCM%i_CLK_FROM_PLL", 1);
-	if (rc) RC_FAIL(model, rc);
-	rc = add_conn_range(model, NOPREF_BI_F,
+	add_conn_range(model, NOPREF_BI_F,
 		pll_y, model->center_x-CENTER_CMTPLL_O, "CMT_CLK_FROM_DCM%i", 1, 2,
 		dcm_y, model->center_x-CENTER_CMTPLL_O, "DCM%i_CLK_TO_PLL", 1);
-	if (rc) RC_FAIL(model, rc);
-	rc = add_conn_range(model, NOPREF_BI_F,
+	add_conn_range(model, NOPREF_BI_F,
 		pll_y, model->center_x-CENTER_CMTPLL_O, "CMT_DCM%i_CLKFB", 1, 2,
 		dcm_y, model->center_x-CENTER_CMTPLL_O, "DCM%i_CLKFB_TOPLL", 1);
-	if (rc) RC_FAIL(model, rc);
-	rc = add_conn_range(model, NOPREF_BI_F,
+	add_conn_range(model, NOPREF_BI_F,
 		pll_y, model->center_x-CENTER_CMTPLL_O, "CMT_DCM%i_CLKIN", 1, 2,
 		dcm_y, model->center_x-CENTER_CMTPLL_O, "DCM%i_CLKIN_TOPLL", 1);
-	if (rc) RC_FAIL(model, rc);
 	RC_RETURN(model);
 }
 
 static int reg_pll_dcm(struct fpga_model *model)
 {
-	int y, top_pll_y, top_dcm_y, bot_pll_y, bot_dcm_y, rc;
+	int y, i, top_pll_y, top_dcm_y, bot_pll_y, bot_dcm_y;
 
 	RC_CHECK(model);
 	for (y = TOP_FIRST_REGULAR; y < model->y_height - BOT_LAST_REGULAR_O; y++) {
 		// connections at each hclk row
 		if (is_aty(Y_ROW_HORIZ_AXSYMM, model, y)) {
-			rc = add_conn_range(model, NOPREF_BI_F,
+			add_conn_range(model, NOPREF_BI_F,
 				y, model->center_x, "REGV_PLL_HCLK%i", 0, 15,
 				y-1, model->center_x-CENTER_CMTPLL_O,
 				has_device(model, y-1, model->center_x
 				  - CENTER_CMTPLL_O, DEV_PLL)
 				  ? "CMT_PLL_HCLK%i" : "DCM_HCLK%i", 0);
-			if (rc) RC_FAIL(model, rc);
 		}
 	}
 
@@ -323,10 +353,9 @@ static int reg_pll_dcm(struct fpga_model *model)
 	//
 
 	// from top_pll_y down to top_dcm_y
-	rc = add_conn_range(model, NOPREF_BI_F,
+	add_conn_range(model, NOPREF_BI_F,
 		top_pll_y, model->center_x-CENTER_CMTPLL_O, "CLK_PLLCASC_OUT%i", 0, 15,
 		top_dcm_y, model->center_x-CENTER_CMTPLL_O, "PLL_CLK_CASC_TOP%i", 0);
-	if (rc) RC_FAIL(model, rc);
 
 	// from center up to top_dcm_y and down to bot_pll_y
 	{ struct w_net n = {
@@ -337,7 +366,7 @@ static int reg_pll_dcm(struct fpga_model *model)
 			model->center_y, model->center_x-CENTER_CMTPLL_O },
 		 { "PLL_CLK_CASC_BOT%i", 0,
 			top_dcm_y, model->center_x-CENTER_CMTPLL_O }}};
-	if ((rc = add_conn_net(model, NOPREF_BI_F, &n))) RC_FAIL(model, rc); }
+	add_conn_net(model, NOPREF_BI_F, &n); }
 	{ struct w_net n = {
 		.last_inc = 15, .num_pts = 3, .pt =
 		{{ "CLKC_PLL_L%i", 0,
@@ -346,13 +375,18 @@ static int reg_pll_dcm(struct fpga_model *model)
 			model->center_y, model->center_x-CENTER_CMTPLL_O },
 		 { "PLL_CLK_CASC_IN%i", 0,
 			bot_pll_y, model->center_x-CENTER_CMTPLL_O }}};
-	if ((rc = add_conn_net(model, NOPREF_BI_F, &n))) RC_FAIL(model, rc); }
+	add_conn_net(model, NOPREF_BI_F, &n); }
+
+	for (i = 0; i <= 15; i++) {
+		add_switch(model, bot_pll_y, model->center_x-CENTER_CMTPLL_O,
+			pf("CLK_PLLCASC_OUT%i", i), pf("PLL_CLK_CASC_IN%i", i),
+			/*bidir*/ 0);
+	}
 
 	// from bot_pll_y down to bot_dcm_y
-	rc = add_conn_range(model, NOPREF_BI_F,
+	add_conn_range(model, NOPREF_BI_F,
 		bot_pll_y, model->center_x-CENTER_CMTPLL_O, "CLK_PLLCASC_OUT%i", 0, 15,
 		bot_dcm_y, model->center_x-CENTER_CMTPLL_O, "PLL_CLK_CASC_TOP%i", 0);
-	if (rc) RC_FAIL(model, rc);
 
 	//
 	// clk between pll and dcm, top and bottom side
@@ -366,56 +400,47 @@ static int reg_pll_dcm(struct fpga_model *model)
 
 static int gtp(struct fpga_model *model)
 {
-	int rc;
-
 	RC_CHECK(model);
 
 	// left
-	rc = add_conn_range(model, NOPREF_BI_F,
+	add_conn_range(model, NOPREF_BI_F,
 		model->center_y, LEFT_OUTER_COL, "REGL_GTPCLK%i", 0, 7,
 		model->center_y, LEFT_INNER_COL, "REGH_LTERM_GTPCLK%i", 0);
-	if (rc) RC_FAIL(model, rc);
-	rc = add_conn_range(model, NOPREF_BI_F,
+	add_conn_range(model, NOPREF_BI_F,
 		model->center_y, LEFT_OUTER_COL, "REGL_GTPFB%i", 0, 7,
 		model->center_y, LEFT_INNER_COL, "REGH_LTERM_GTPFB%i", 0);
-	if (rc) RC_FAIL(model, rc);
 
 	// right
-	rc = add_conn_range(model, NOPREF_BI_F,
+	add_conn_range(model, NOPREF_BI_F,
 		model->center_y, model->x_width-RIGHT_OUTER_O, "REGR_GTPCLK%i", 0, 7,
 		model->center_y, model->x_width-RIGHT_INNER_O, "REGH_RTERM_GTPCLK%i", 0);
-	if (rc) RC_FAIL(model, rc);
-	rc = add_conn_range(model, NOPREF_BI_F,
+	add_conn_range(model, NOPREF_BI_F,
 		model->center_y, model->x_width-RIGHT_OUTER_O, "REGR_GTPFB%i", 0, 7,
 		model->center_y, model->x_width-RIGHT_INNER_O, "REGH_RTERM_GTPFB%i", 0);
-	if (rc) RC_FAIL(model, rc);
 
 	// top
-	rc = add_conn_range(model, NOPREF_BI_F,
+	add_conn_range(model, NOPREF_BI_F,
 		TOP_OUTER_ROW, model->center_x-CENTER_CMTPLL_O, "REGT_GTPCLK%i", 0, 7,
 		TOP_INNER_ROW, model->center_x-CENTER_CMTPLL_O, "REGT_TTERM_GTPCLK%i", 0);
-	if (rc) RC_FAIL(model, rc);
-	rc = add_conn_range(model, NOPREF_BI_F,
+	add_conn_range(model, NOPREF_BI_F,
 		TOP_OUTER_ROW, model->center_x-CENTER_CMTPLL_O, "REGT_GTPFB%i", 0, 7,
 		TOP_INNER_ROW, model->center_x-CENTER_CMTPLL_O, "REGT_TTERM_GTPFB%i", 0);
-	if (rc) RC_FAIL(model, rc);
 
 	// bottom
-	rc = add_conn_range(model, NOPREF_BI_F,
+	add_conn_range(model, NOPREF_BI_F,
 		model->y_height-BOT_OUTER_ROW, model->center_x-CENTER_CMTPLL_O, "REGB_GTPCLK%i", 0, 7,
 		model->y_height-BOT_INNER_ROW, model->center_x-CENTER_CMTPLL_O, "REGB_BTERM_GTPCLK%i", 0);
-	if (rc) RC_FAIL(model, rc);
-	rc = add_conn_range(model, NOPREF_BI_F,
+	add_conn_range(model, NOPREF_BI_F,
 		model->y_height-BOT_OUTER_ROW, model->center_x-CENTER_CMTPLL_O, "REGB_GTPFB%i", 0, 7,
 		model->y_height-BOT_INNER_ROW, model->center_x-CENTER_CMTPLL_O, "REGB_BTERM_GTPFB%i", 0);
-	if (rc) RC_FAIL(model, rc);
 
 	RC_RETURN(model);
 }
 
 static int pci(struct fpga_model *model)
 {
-	int rc;
+	static const int pci_wnum[3] = {24, 7, 5};
+	int i;
 
 	RC_CHECK(model);
 
@@ -428,31 +453,38 @@ static int pci(struct fpga_model *model)
 		 { "LIOB_PCI_IT_RDY", 0, model->center_y-CENTER_Y_MINUS_1, LEFT_OUTER_COL },
 		 { "LIOB_PCI_IT_RDY", 0, model->center_y-CENTER_Y_MINUS_2, LEFT_OUTER_COL },
 		 { "LIOB_PCICE_TRDY_EXT", 0, model->center_y-CENTER_Y_MINUS_3, LEFT_OUTER_COL }}};
-	if ((rc = add_conn_net(model, NOPREF_BI_F, &n))) RC_FAIL(model, rc); }
+	add_conn_net(model, NOPREF_BI_F, &n); }
 	{ struct w_net n = {
 		.last_inc = 0, .num_pts = 2, .pt =
 		{{ "REGL_PCI_TRDY_IOB", 0, model->center_y, LEFT_OUTER_COL },
 		 { "LIOB_PCI_IT_RDY", 0, model->center_y+CENTER_Y_PLUS_1, LEFT_OUTER_COL }}};
-	if ((rc = add_conn_net(model, NOPREF_BI_F, &n))) RC_FAIL(model, rc); }
+	add_conn_net(model, NOPREF_BI_F, &n); }
 
 	{ struct w_net n = {
 		.last_inc = 0, .num_pts = 3, .pt =
 		{{ "REGL_PCI_IRDY_PINW", 0, model->center_y, LEFT_OUTER_COL },
 		 { "REGH_LTERM_IRDY_PINW", 0, model->center_y, LEFT_INNER_COL },
 		 { "REGH_LEFT_PCI_IRDY_PINW", 0, model->center_y, LEFT_IO_ROUTING }}};
-	if ((rc = add_conn_net(model, NOPREF_BI_F, &n))) RC_FAIL(model, rc); }
+	add_conn_net(model, NOPREF_BI_F, &n); }
 	{ struct w_net n = {
 		.last_inc = 0, .num_pts = 3, .pt =
 		{{ "REGL_PCI_TRDY_PINW", 0, model->center_y, LEFT_OUTER_COL },
 		 { "REGH_LTERM_TRDY_PINW", 0, model->center_y, LEFT_INNER_COL },
 		 { "REGH_LEFT_PCI_TRDY_PINW", 0, model->center_y, LEFT_IO_ROUTING }}};
-	if ((rc = add_conn_net(model, NOPREF_BI_F, &n))) RC_FAIL(model, rc); }
+	add_conn_net(model, NOPREF_BI_F, &n); }
 
 	{ struct w_net n = {
 		.last_inc = 2, .num_pts = 2, .pt =
 		{{ "IOI_INT_I%i", 1, model->center_y-CENTER_Y_MINUS_1, LEFT_IO_ROUTING },
 		 { "REGH_PCI_I%i_INT", 1, model->center_y, LEFT_IO_ROUTING }}};
-	if ((rc = add_conn_net(model, NOPREF_BI_F, &n))) RC_FAIL(model, rc); }
+	add_conn_net(model, NOPREF_BI_F, &n); }
+
+	for (i = 1; i <= 3; i++) {
+		add_switch(model, model->center_y-CENTER_Y_MINUS_1, LEFT_IO_ROUTING,
+			pf("LOGICIN_B%i", pci_wnum[i-1]), pf("IOI_INT_I%i", i), /*bidir*/ 0);
+		add_switch(model, model->center_y, LEFT_IO_ROUTING,
+			pf("REGH_PCI_I%i_INT", i), pf("REGL_PCI_I%i_PINW", i), /*bidir*/ 0);
+	}
 
 	//
 	// right side
@@ -463,12 +495,12 @@ static int pci(struct fpga_model *model)
 		 { "RIOB_PCI_IT_RDY", 0, model->center_y-CENTER_Y_MINUS_1, model->x_width-RIGHT_OUTER_O },
 		 { "RIOB_PCI_IT_RDY", 0, model->center_y-CENTER_Y_MINUS_2, model->x_width-RIGHT_OUTER_O },
 		 { "RIOB_PCI_IT_RDY", 0, model->center_y-CENTER_Y_MINUS_3, model->x_width-RIGHT_OUTER_O }}};
-	if ((rc = add_conn_net(model, NOPREF_BI_F, &n))) RC_FAIL(model, rc); }
+	add_conn_net(model, NOPREF_BI_F, &n); }
 	{ struct w_net n = {
 		.last_inc = 0, .num_pts = 2, .pt =
 		{{ "REGR_PCI_TRDY_IOB", 0, model->center_y, model->x_width-RIGHT_OUTER_O },
 		 { "RIOB_PCI_TRDY_EXT", 0, model->center_y+CENTER_Y_PLUS_1, model->x_width-RIGHT_OUTER_O }}};
-	if ((rc = add_conn_net(model, NOPREF_BI_F, &n))) RC_FAIL(model, rc); }
+	add_conn_net(model, NOPREF_BI_F, &n); }
 
 	{ struct w_net n = {
 		.last_inc = 0, .num_pts = 4, .pt =
@@ -476,22 +508,28 @@ static int pci(struct fpga_model *model)
 		 { "REGH_RTERM_IRDY_PINW", 0, model->center_y, model->x_width-RIGHT_INNER_O },
 		 { "MCB_REGH_IRDY_PINW", 0, model->center_y, model->x_width-RIGHT_MCB_O },
 		 { "REGR_RTERM_IRDY_PINW", 0, model->center_y, model->x_width-RIGHT_IO_DEVS_O }}};
-	if ((rc = add_conn_net(model, NOPREF_BI_F, &n))) RC_FAIL(model, rc); }
+	add_conn_net(model, NOPREF_BI_F, &n); }
 	{ struct w_net n = {
 		.last_inc = 0, .num_pts = 4, .pt =
 		{{ "REGR_PCI_TRDY_PINW", 0, model->center_y, model->x_width-RIGHT_OUTER_O },
 		 { "REGH_RTERM_TRDY_PINW", 0, model->center_y, model->x_width-RIGHT_INNER_O },
 		 { "MCB_REGH_TRDY_PINW", 0, model->center_y, model->x_width-RIGHT_MCB_O },
 		 { "REGR_RTERM_TRDY_PINW", 0, model->center_y, model->x_width-RIGHT_IO_DEVS_O }}};
-	if ((rc = add_conn_net(model, NOPREF_BI_F, &n))) RC_FAIL(model, rc); }
+	add_conn_net(model, NOPREF_BI_F, &n); }
 
 	{ struct w_net n = {
 		.last_inc = 2, .num_pts = 3, .pt =
 		{{ "REGH_RIOI_PCI_I%i", 1, model->center_y, model->x_width-RIGHT_IO_DEVS_O },
 		 { "REGH_IOI_INT_I%i", 1, model->center_y, model->x_width-RIGHT_IO_ROUTING_O },
 		 { "IOI_INT_I%i", 1, model->center_y-CENTER_Y_MINUS_1, model->x_width-RIGHT_IO_ROUTING_O }}};
-	if ((rc = add_conn_net(model, NOPREF_BI_F, &n))) RC_FAIL(model, rc); }
+	add_conn_net(model, NOPREF_BI_F, &n); }
 
+	for (i = 1; i <= 3; i++) {
+		add_switch(model, model->center_y-CENTER_Y_MINUS_1, model->x_width-RIGHT_IO_ROUTING_O,
+			pf("LOGICIN_B%i", pci_wnum[i-1]), pf("IOI_INT_I%i", i), /*bidir*/ 0);
+		add_switch(model, model->center_y, model->x_width-RIGHT_IO_DEVS_O,
+			pf("REGH_RIOI_PCI_I%i", i), pf("REGR_PCI_I%i_PINW", i), /*bidir*/ 0);
+	}
 	RC_RETURN(model);
 }
 
@@ -756,6 +794,57 @@ static void net_mirror_x(struct fpga_model *model, struct w_net_i *net)
 		net->yx[i].x = model->x_width - 1 - net->yx[i].x;
 }
 
+static const char *io_site_connpt(struct fpga_model *model, int y, int x, int wire)
+{
+	if (wire >= CFB0 && wire <= CFB7) {
+		if ((wire-CFB0)%2) return "CFB0_ILOGIC_SITE_S";
+		return "CFB0_ILOGIC_SITE";
+	}
+	if (wire >= CFB8 && wire <= CFB15) {
+		if ((wire-CFB8)%2) return "CFB1_ILOGIC_SITE_S";
+		return "CFB1_ILOGIC_SITE";
+	}
+	if (wire >= DFB0 && wire <= DFB7) {
+		if ((wire-DFB0)%2) return "DFB_ILOGIC_SITE_S";
+		return "DFB_ILOGIC_SITE";
+	}
+	if (wire >= DQSN0 && wire <= DQSN3) return "OUTN_IODELAY_SITE";
+	if (wire >= DQSP0 && wire <= DQSP3) return "OUTP_IODELAY_SITE";
+	return 0;
+}
+
+static int add_cfb_dfb_clkpin_dqsn_dqsp_sw(struct fpga_model *model, const struct w_net_i *net)
+{
+	char wstr[MAX_WIRENAME_LEN];
+	int y, x, i;
+
+	RC_CHECK(model);
+	y = net->yx[net->num_yx-1].y;
+	x = net->yx[net->num_yx-1].x;
+	if (is_atx(X_INNER_LEFT|X_INNER_RIGHT, model, x)) {
+		for (i = 0; i <= net->wire_inc; i++) {
+			strcpy(wstr, fpga_connpt_str(model, net->wire+i, y, x, -1, -1));
+			if (net->wire >= CLKPIN0 && net->wire <= CLKPIN7)
+				add_switch(model, y, x, pf("%cTERM_IOB_IBUF%i",
+					x < model->center_x ? 'L' : 'R', i),
+					wstr, /*bidir*/ 0);
+			else
+				add_switch(model, y, x, pf("%s_%c",
+					wstr, x < model->center_x ? 'E' : 'W'),
+					wstr, /*bidir*/ 0);
+		}
+	} else if (is_atyx(YX_DEV_ILOGIC, model, y, x)) {
+		for (i = 0; i <= net->wire_inc; i++) {
+			const char *site_str = io_site_connpt(model, y, x, net->wire+i);
+			if (!site_str) continue;
+			add_switch(model, y, x, site_str,
+				fpga_connpt_str(model, net->wire+i, y, x, -1, -1),
+				/*bidir*/ 0);
+		}
+	}
+	RC_RETURN(model);
+}
+
 static int add_cfb_dfb_clkpin_dqsn_dqsp_wires(struct fpga_model *model,
 	enum extra_wires first_wire, int num_wires)
 {
@@ -784,11 +873,13 @@ static int add_cfb_dfb_clkpin_dqsn_dqsp_wires(struct fpga_model *model,
 			{{ .y = TOP_INNER_ROW, .x = model->center_x-CENTER_LOGIC_O },
 			 { .y = TOP_OUTER_IO, .x = model->center_x-CENTER_LOGIC_O }}};
 		add_conn_net_i(model, &n);
+		add_cfb_dfb_clkpin_dqsn_dqsp_sw(model, &n);
 	
 		// bottom into outer io
 		net_mirror_y(model, &n);
 		n.wire = first_wire + num_wires/2;
-		add_conn_net_i(model, &n); }
+		add_conn_net_i(model, &n);
+		add_cfb_dfb_clkpin_dqsn_dqsp_sw(model, &n); }
 
 		// top into inner io
 		{ struct w_net_i n = { .wire = first_wire+num_wires/4, .wire_inc = num_wires/4-1, .num_yx = 3,
@@ -796,11 +887,13 @@ static int add_cfb_dfb_clkpin_dqsn_dqsp_wires(struct fpga_model *model,
 			 { .y = TOP_OUTER_IO, .x = model->center_x-CENTER_LOGIC_O },
 			 { .y = TOP_INNER_IO, .x = model->center_x-CENTER_LOGIC_O }}};
 		add_conn_net_i(model, &n);
+		add_cfb_dfb_clkpin_dqsn_dqsp_sw(model, &n);
 
 		// bottom into inner io
 		net_mirror_y(model, &n);
 		n.wire = first_wire+num_wires-num_wires/4;
-		add_conn_net_i(model, &n); }
+		add_conn_net_i(model, &n);
+		add_cfb_dfb_clkpin_dqsn_dqsp_sw(model, &n); }
 	}
 
 	//
@@ -827,11 +920,13 @@ static int add_cfb_dfb_clkpin_dqsn_dqsp_wires(struct fpga_model *model,
 			{{ .y = TOP_INNER_ROW, .x = model->center_x+CENTER_X_PLUS_2 },
 			 { .y = TOP_OUTER_IO, .x = model->center_x+CENTER_X_PLUS_2 }}};
 		add_conn_net_i(model, &n);
+		add_cfb_dfb_clkpin_dqsn_dqsp_sw(model, &n);
 
 		// bottom into outer io
 		net_mirror_y(model, &n);
 		n.wire = first_wire;
-		add_conn_net_i(model, &n); }
+		add_conn_net_i(model, &n);
+		add_cfb_dfb_clkpin_dqsn_dqsp_sw(model, &n); }
 
 		// top into inner io
 		{ struct w_net_i n = { .wire = first_wire+num_wires-num_wires/4, .wire_inc = num_wires/4-1, .num_yx = 3,
@@ -839,16 +934,44 @@ static int add_cfb_dfb_clkpin_dqsn_dqsp_wires(struct fpga_model *model,
 			 { .y = TOP_OUTER_IO, .x = model->center_x+CENTER_X_PLUS_2 },
 			 { .y = TOP_INNER_IO, .x = model->center_x+CENTER_X_PLUS_2 }}};
 		add_conn_net_i(model, &n);
+		add_cfb_dfb_clkpin_dqsn_dqsp_sw(model, &n);
 
 		// bottom into inner io
 		net_mirror_y(model, &n);
 		n.wire = first_wire+num_wires/4;
-		add_conn_net_i(model, &n); }
+		add_conn_net_i(model, &n);
+		add_cfb_dfb_clkpin_dqsn_dqsp_sw(model, &n); }
 	}
 
 	//
 	// left and right center
 	//
+
+	// term: top side left center
+	{ struct w_net_i n = { .wire = first_wire+num_wires-num_wires/4, .wire_inc = num_wires/4-1, .num_yx = 6, .yx =
+		{{ .y = model->center_y, .x = LEFT_OUTER_COL },
+		 { .y = model->center_y, .x = LEFT_INNER_COL },
+		 { .y = model->center_y - CENTER_Y_MINUS_1, .x = LEFT_INNER_COL },
+		 { .y = model->center_y - CENTER_Y_MINUS_2, .x = LEFT_INNER_COL },
+		 { .y = model->center_y - CENTER_Y_MINUS_3, .x = LEFT_INNER_COL },
+		 { .y = model->center_y - CENTER_Y_MINUS_4, .x = LEFT_INNER_COL }}};
+	add_conn_net_i(model, &n);
+	add_cfb_dfb_clkpin_dqsn_dqsp_sw(model, &n);
+	n.num_yx--; // one less - remove CENTER_Y_MINUS_4
+	n.wire = first_wire+num_wires/2;
+	add_conn_net_i(model, &n);
+	add_cfb_dfb_clkpin_dqsn_dqsp_sw(model, &n);
+
+	// term: top side right center
+	n.num_yx++;
+	net_mirror_x(model, &n);
+	n.wire = first_wire;
+	add_conn_net_i(model, &n);
+	add_cfb_dfb_clkpin_dqsn_dqsp_sw(model, &n);
+	n.num_yx--; // one less - remove CENTER_Y_MINUS_4
+	n.wire = first_wire+num_wires/4;
+	add_conn_net_i(model, &n);
+	add_cfb_dfb_clkpin_dqsn_dqsp_sw(model, &n); }
 
 	// term: bottom side left center
 	{ struct w_net_i n = { .wire = first_wire, .wire_inc = num_wires/4-1, .num_yx = 4,
@@ -857,9 +980,11 @@ static int add_cfb_dfb_clkpin_dqsn_dqsp_wires(struct fpga_model *model,
 		 { .y = model->center_y + CENTER_Y_PLUS_1, .x = LEFT_INNER_COL },
 		 { .y = model->center_y + CENTER_Y_PLUS_2, .x = LEFT_INNER_COL }}};
 	add_conn_net_i(model, &n);
+	add_cfb_dfb_clkpin_dqsn_dqsp_sw(model, &n);
 	n.num_yx--; // one less - remove CENTER_Y_PLUS_2
 	n.wire = first_wire+num_wires/4;
 	add_conn_net_i(model, &n);
+	add_cfb_dfb_clkpin_dqsn_dqsp_sw(model, &n);
 
 	// term: bottom side right center
 	n.num_yx++;
@@ -867,31 +992,11 @@ static int add_cfb_dfb_clkpin_dqsn_dqsp_wires(struct fpga_model *model,
 
 	n.wire = first_wire+num_wires-num_wires/4;
 	add_conn_net_i(model, &n);
+	add_cfb_dfb_clkpin_dqsn_dqsp_sw(model, &n);
 	n.num_yx--; // one less - remove CENTER_Y_PLUS_2
 	n.wire = first_wire+num_wires/2;
-	add_conn_net_i(model, &n); }
-
-	// term: top side left center
-	{ struct w_net_i n = { .wire = first_wire+num_wires-num_wires/4, .wire_inc = num_wires/4-1, .num_yx = 6,
-		{{ .y = model->center_y, .x = LEFT_OUTER_COL },
-		 { .y = model->center_y, .x = LEFT_INNER_COL },
-		 { .y = model->center_y - CENTER_Y_MINUS_1, .x = LEFT_INNER_COL },
-		 { .y = model->center_y - CENTER_Y_MINUS_2, .x = LEFT_INNER_COL },
-		 { .y = model->center_y - CENTER_Y_MINUS_3, .x = LEFT_INNER_COL },
-		 { .y = model->center_y - CENTER_Y_MINUS_4, .x = LEFT_INNER_COL }}};
 	add_conn_net_i(model, &n);
-	n.num_yx--; // one less - remove CENTER_Y_MINUS_4
-	n.wire = first_wire+num_wires/2;
-	add_conn_net_i(model, &n);
-
-	// term: top side right center
-	n.num_yx++;
-	net_mirror_x(model, &n);
-	n.wire = first_wire;
-	add_conn_net_i(model, &n);
-	n.num_yx--; // one less - remove CENTER_Y_MINUS_4
-	n.wire = first_wire+num_wires/4;
-	add_conn_net_i(model, &n); }
+	add_cfb_dfb_clkpin_dqsn_dqsp_sw(model, &n); }
 
 	if (first_wire != CLKPIN0) {
 		// io devs: left
@@ -900,36 +1005,44 @@ static int add_cfb_dfb_clkpin_dqsn_dqsp_wires(struct fpga_model *model,
 			 { .y = model->center_y + CENTER_Y_PLUS_2, .x = LEFT_IO_ROUTING },
 			 { .y = model->center_y + CENTER_Y_PLUS_2, .x = LEFT_IO_DEVS }}};
 		add_conn_net_i(model, &n);
+		add_cfb_dfb_clkpin_dqsn_dqsp_sw(model, &n);
 
 		n.wire = first_wire+num_wires/4;
 		n.yx[0].y = n.yx[1].y = n.yx[2].y = model->center_y + CENTER_Y_PLUS_1;
 		add_conn_net_i(model, &n);
+		add_cfb_dfb_clkpin_dqsn_dqsp_sw(model, &n);
 
 		n.wire = first_wire+(num_wires/4)*2;
 		n.yx[0].y = n.yx[1].y = n.yx[2].y = model->center_y - CENTER_Y_MINUS_3;
 		add_conn_net_i(model, &n);
+		add_cfb_dfb_clkpin_dqsn_dqsp_sw(model, &n);
 
 		n.wire = first_wire+(num_wires/4)*3;
 		n.yx[0].y = n.yx[1].y = n.yx[2].y = model->center_y - CENTER_Y_MINUS_4;
-		add_conn_net_i(model, &n); }
+		add_conn_net_i(model, &n);
+		add_cfb_dfb_clkpin_dqsn_dqsp_sw(model, &n); }
 
-		// io devs: right
+		// io dev: right
 		{ struct w_net_i n = { .wire = first_wire, .wire_inc = num_wires/4-1, .num_yx = 2,
 			{{ .y = model->center_y - CENTER_Y_MINUS_4, .x = model->x_width - RIGHT_INNER_O },
 			 { .y = model->center_y - CENTER_Y_MINUS_4, .x = model->x_width - RIGHT_IO_DEVS_O }}};
 		add_conn_net_i(model, &n);
+		add_cfb_dfb_clkpin_dqsn_dqsp_sw(model, &n);
 
 		n.wire = first_wire+num_wires/4;
 		n.yx[0].y = n.yx[1].y = model->center_y - CENTER_Y_MINUS_3;
 		add_conn_net_i(model, &n);
+		add_cfb_dfb_clkpin_dqsn_dqsp_sw(model, &n);
 
 		n.wire = first_wire+(num_wires/4)*2;
 		n.yx[0].y = n.yx[1].y = model->center_y + CENTER_Y_PLUS_1;
 		add_conn_net_i(model, &n);
+		add_cfb_dfb_clkpin_dqsn_dqsp_sw(model, &n);
 
 		n.wire = first_wire+(num_wires/4)*3;
 		n.yx[0].y = n.yx[1].y = model->center_y + CENTER_Y_PLUS_2;
-		add_conn_net_i(model, &n); }
+		add_conn_net_i(model, &n);
+		add_cfb_dfb_clkpin_dqsn_dqsp_sw(model, &n); }
 	}
 	RC_RETURN(model);
 }
@@ -1206,23 +1319,46 @@ static int pcice_fill_net_io(struct fpga_model *model, struct w_net *net,
 
 static int pcice_left_right_devs(struct fpga_model *model, int x)
 {
-	int rc;
 	struct w_net net;
 
 	RC_CHECK(model);
 	// Connect the left and right center upwards and downwards
 	// one half-row including the subsequent hclk.
-	rc = pcice_fill_net_devs(model, &net, model->center_y - HCLK_POS - 1, model->center_y + HCLK_POS + 1, x);
-	if (rc) RC_FAIL(model, rc);
-	if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) RC_FAIL(model, rc);
+	pcice_fill_net_devs(model, &net, model->center_y - HCLK_POS - 1, model->center_y + HCLK_POS + 1, x);
+	add_conn_net(model, NOPREF_BI_F, &net);
+
+	add_switch(model, TOP_INNER_ROW, x,
+		"IOI_PCICE_TB", "IOI_PCICE_EW", /*bidir*/ 0);
+
+	RC_ASSERT(model, model->center_y-HCLK_POS-1-ROW_SIZE == TOP_FIRST_REGULAR+HCLK_POS);
+	add_switch(model, TOP_FIRST_REGULAR+HCLK_POS, x,
+		"HCLK_PCI_CE_SPLIT", "HCLK_PCI_CE_INOUT", /*bidir*/ 0);
+	add_switch(model, model->center_y-HCLK_POS-1, x,
+		"HCLK_PCI_CE_OUT", "HCLK_PCI_CE_IN", /*bidir*/ 0);
+	add_switch(model, model->center_y-HCLK_POS-1, x,
+		"HCLK_PCI_CE_TRUNK_IN", "HCLK_PCI_CE_TRUNK_OUT", /*bidir*/ 0);
+
+	add_switch(model, model->center_y, x,
+		"REGH_IOI_PCI_CE", "REGH_IOI_PCICE_TB", /*bidir*/ 0);
+
 	// top-side net
-	rc = pcice_fill_net_devs(model, &net, TOP_INNER_ROW, model->center_y - HCLK_POS - 1, x);
-	if (rc) RC_FAIL(model, rc);
-	if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) RC_FAIL(model, rc);
+	pcice_fill_net_devs(model, &net, TOP_INNER_ROW, model->center_y - HCLK_POS - 1, x);
+	add_conn_net(model, NOPREF_BI_F, &net);
 	// bottom-side net
-	rc = pcice_fill_net_devs(model, &net, model->center_y + HCLK_POS + 1, model->y_height - BOT_INNER_ROW, x);
-	if (rc) RC_FAIL(model, rc);
-	if ((rc = add_conn_net(model, NOPREF_BI_F, &net))) RC_FAIL(model, rc);
+	pcice_fill_net_devs(model, &net, model->center_y + HCLK_POS + 1, model->y_height - BOT_INNER_ROW, x);
+	add_conn_net(model, NOPREF_BI_F, &net);
+
+	RC_ASSERT(model, model->y_height-BOT_LAST_REGULAR_O-HCLK_POS-ROW_SIZE == model->center_y+1+HCLK_POS);
+	add_switch(model, model->center_y+1+HCLK_POS, x,
+		"HCLK_PCI_CE_IN", "HCLK_PCI_CE_OUT", /*bidir*/ 0);
+	add_switch(model, model->center_y+1+HCLK_POS, x,
+		"HCLK_PCI_CE_TRUNK_OUT", "HCLK_PCI_CE_TRUNK_IN", /*bidir*/ 0);
+	add_switch(model, model->y_height-BOT_LAST_REGULAR_O-HCLK_POS, x,
+		"HCLK_PCI_CE_SPLIT", "HCLK_PCI_CE_INOUT", /*bidir*/ 0);
+
+	add_switch(model, model->y_height-BOT_INNER_ROW, x,
+		"IOI_PCICE_TB", "IOI_PCICE_EW", /*bidir*/ 0);
+
 	RC_RETURN(model);
 }
 
