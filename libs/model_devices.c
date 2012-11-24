@@ -21,7 +21,7 @@ int init_devices(struct fpga_model* model)
 
 	RC_CHECK(model);
 	// DCM, PLL
-	for (i = 0; i < model->cfg_rows; i++) {
+	for (i = 0; i < model->xci->num_rows; i++) {
 		y = TOP_IO_TILES + HALF_ROW-1 + i*ROW_SIZE;
 		if (y > model->center_y) y++; // central regs
 		x = model->center_x-CENTER_CMTPLL_O;
@@ -132,7 +132,7 @@ int init_devices(struct fpga_model* model)
 	}
 	
 	// BUFH
-	for (i = 0; i < model->cfg_rows; i++) {
+	for (i = 0; i < model->xci->num_rows; i++) {
 		y = TOP_IO_TILES + HALF_ROW + i*ROW_SIZE;
 		if (y > model->center_y) y++; // central regs
 		x = model->center_x;

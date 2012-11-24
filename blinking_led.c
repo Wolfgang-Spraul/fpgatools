@@ -34,8 +34,7 @@ int main(int argc, char** argv)
 	struct fpgadev_logic logic_cfg;
 	net_idx_t inA_net, inB_net, out_net;
 
-	fpga_build_model(&model, XC6SLX9, XC6SLX9_ROWS, XC6SLX9_COLUMNS,
-		XC6SLX9_LEFT_WIRING, XC6SLX9_RIGHT_WIRING);
+	fpga_build_model(&model, XC6SLX9);
 
 	fpga_find_iob(&model, "P55", &iob_clk_y, &iob_clk_x, &iob_clk_type_idx);
 	fdev_iob_input(&model, iob_clk_y, iob_clk_x, iob_clk_type_idx,
@@ -86,30 +85,29 @@ int main(int argc, char** argv)
 			logic_cfg.sync_attr = SYNCATTR_ASYNC;
 			logic_cfg.precyinit = PRECYINIT_0;
 			logic_cfg.cout_used = 1;
-	rc = fdev_logic_setconf(tstate->model, y, x, type_idx, logic_cfg);
-	if (rc) FAIL(rc);
+	logic_setconf(tstate->model, y, x, type_idx, logic_cfg);
 
 
-	if ((rc = fnet_new(&model, &inA_net))) FAIL(rc);
-	if ((rc = fnet_add_port(&model, inA_net, iob_inA_y, iob_inA_x,
-		DEV_IOB, iob_inA_type_idx, IOB_OUT_I))) FAIL(rc);
-	if ((rc = fnet_add_port(&model, inA_net, logic_y, logic_x, DEV_LOGIC,
-		logic_type_idx, LI_D3))) FAIL(rc);
-	if ((rc = fnet_autoroute(&model, inA_net))) FAIL(rc);
+	fnet_new(&model, &inA_net);
+	fnet_add_port(&model, inA_net, iob_inA_y, iob_inA_x,
+		DEV_IOB, iob_inA_type_idx, IOB_OUT_I);
+	fnet_add_port(&model, inA_net, logic_y, logic_x, DEV_LOGIC,
+		logic_type_idx, LI_D3);
+	fnet_autoroute(&model, inA_net);
 
-	if ((rc = fnet_new(&model, &inB_net))) FAIL(rc);
-	if ((rc = fnet_add_port(&model, inB_net, iob_inB_y, iob_inB_x,
-		DEV_IOB, iob_inB_type_idx, IOB_OUT_I))) FAIL(rc);
-	if ((rc = fnet_add_port(&model, inB_net, logic_y, logic_x, DEV_LOGIC,
-		logic_type_idx, LI_D5))) FAIL(rc);
-	if ((rc = fnet_autoroute(&model, inB_net))) FAIL(rc);
+	fnet_new(&model, &inB_net);
+	fnet_add_port(&model, inB_net, iob_inB_y, iob_inB_x,
+		DEV_IOB, iob_inB_type_idx, IOB_OUT_I);
+	fnet_add_port(&model, inB_net, logic_y, logic_x, DEV_LOGIC,
+		logic_type_idx, LI_D5);
+	fnet_autoroute(&model, inB_net);
 
-	if ((rc = fnet_new(&model, &out_net))) FAIL(rc);
-	if ((rc = fnet_add_port(&model, out_net, logic_y, logic_x, DEV_LOGIC,
-		logic_type_idx, LO_D))) FAIL(rc);
-	if ((rc = fnet_add_port(&model, out_net, iob_out_y, iob_out_x,
-		DEV_IOB, iob_out_type_idx, IOB_IN_O))) FAIL(rc);
-	if ((rc = fnet_autoroute(&model, out_net))) FAIL(rc);
+	fnet_new(&model, &out_net);
+	fnet_add_port(&model, out_net, logic_y, logic_x, DEV_LOGIC,
+		logic_type_idx, LO_D);
+	fnet_add_port(&model, out_net, iob_out_y, iob_out_x,
+		DEV_IOB, iob_out_type_idx, IOB_IN_O);
+	fnet_autoroute(&model, out_net);
 #endif
 
 	write_floorplan(stdout, &model, FP_DEFAULT);

@@ -15,41 +15,6 @@
 
 #include "helper.h"
 
-//
-// columns
-//  'L' = X+L logic block
-//  'M' = X+M logic block
-//  'B' = block ram
-//  'D' = dsp (macc)
-//  'R' = registers and center IO/logic column
-//
-//  'n' = noio - can follow L or M to designate a logic
-//        column without IO at top or bottom
-//  'g' = gclk - can follow LlMmBD to designate exactly one
-//        place on the left and right side of the chip where
-//        the global clock is separated into left and right
-//        half (on each side of the chip, for a total of 4
-//        vertical clock separations).
-//
-// wiring on the left and right side is described with 16
-// characters for each row, order is top-down
-//   'W' = wired
-//   'U' = unwired
-//
-
-#define XC6SLX9_ROWS	4
-#define XC6SLX9_COLUMNS	"M L Bg M L D M R M Ln M L Bg M L"
-#define XC6SLX9_LEFT_WIRING \
-	/* row 3 */ "UWUWUWUW" "WWWWUUUU" \
-	/* row 2 */ "UUUUUUUU" "WWWWWWUU" \
-	/* row 1 */ "WWWUUWUU" "WUUWUUWU" \
-	/* row 0 */ "UWUUWUUW" "UUWWWWUU"
-#define XC6SLX9_RIGHT_WIRING \
-	/* row 3 */ "UUWWUWUW" "WWWWUUUU" \
-	/* row 2 */ "UUUUUUUU" "WWWWWWUU" \
-	/* row 1 */ "WWWUUWUU" "WUUWUUWU" \
-	/* row 0 */ "UWUUWUUW" "UUWWWWUU"
-
 #define LEFT_SIDE_MAJOR 1
 
 struct fpga_model
@@ -57,9 +22,6 @@ struct fpga_model
 	int rc; // if rc != 0, all function calls will immediately return
 
 	const struct xc_info *xci;
-	int cfg_rows;
-	char cfg_columns[512];
-	char cfg_left_wiring[1024], cfg_right_wiring[1024];
 
 	int x_width, y_height;
 	int center_x;
@@ -793,9 +755,7 @@ struct fpga_tile
 	uint32_t* switches;
 };
 
-int fpga_build_model(struct fpga_model* model,
-	int idcode, int fpga_rows, const char* columns,
-	const char* left_wiring, const char* right_wiring);
+int fpga_build_model(struct fpga_model* model, int idcode);
 // returns model->rc (model itself will be memset to 0)
 int fpga_free_model(struct fpga_model* model);
 

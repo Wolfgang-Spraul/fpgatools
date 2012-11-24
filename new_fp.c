@@ -14,8 +14,7 @@ int main(int argc, char** argv)
 	struct fpga_model model;
 	int no_conns, rc;
 
-	if ((rc = fpga_build_model(&model, XC6SLX9, XC6SLX9_ROWS,
-		  XC6SLX9_COLUMNS, XC6SLX9_LEFT_WIRING, XC6SLX9_RIGHT_WIRING)))
+	if ((rc = fpga_build_model(&model, XC6SLX9)))
 		goto fail;
 
 	no_conns = 0;

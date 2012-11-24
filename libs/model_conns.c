@@ -2785,9 +2785,9 @@ static int run_gclk(struct fpga_model* model)
 	struct w_net gclk_net;
 
 	RC_CHECK(model);
-	for (row = model->cfg_rows-1; row >= 0; row--) {
-		row_top_y = TOP_IO_TILES + (model->cfg_rows-1-row)*(8+1/* middle of row */+8);
-		if (row < (model->cfg_rows/2)) row_top_y++; // center regs
+	for (row = model->xci->num_rows-1; row >= 0; row--) {
+		row_top_y = TOP_IO_TILES + (model->xci->num_rows-1-row)*(8+1/* middle of row */+8);
+		if (row < (model->xci->num_rows/2)) row_top_y++; // center regs
 
 		// net that connects the hclk of half the chip together horizontally
 		gclk_net.last_inc = 15;
@@ -2844,13 +2844,13 @@ static int run_gclk(struct fpga_model* model)
 	}
 	for (x = 0; x < model->x_width; x++) {
 		if (is_atx(X_ROUTING_COL, model, x)) {
-			for (row = model->cfg_rows-1; row >= 0; row--) {
-				row_top_y = 2 /* top IO */ + (model->cfg_rows-1-row)*(8+1/* middle of row */+8);
-				if (row < (model->cfg_rows/2)) row_top_y++; // center regs
+			for (row = model->xci->num_rows-1; row >= 0; row--) {
+				row_top_y = 2 /* top IO */ + (model->xci->num_rows-1-row)*(8+1/* middle of row */+8);
+				if (row < (model->xci->num_rows/2)) row_top_y++; // center regs
 
 				is_break = 0;
  				if (is_atx(X_LEFT_IO_ROUTING_COL|X_RIGHT_IO_ROUTING_COL, model, x)) {
-					if (row && row != model->cfg_rows/2)
+					if (row && row != model->xci->num_rows/2)
 						is_break = 1;
 				} else {
 					if (row)
@@ -3542,7 +3542,7 @@ static int run_logic_inout(struct fpga_model* model)
 		}
 	}
 	// LOGICIN
-	for (i = 0; i < model->cfg_rows; i++) {
+	for (i = 0; i < model->xci->num_rows; i++) {
 		y = TOP_IO_TILES + HALF_ROW + i*ROW_SIZE;
 		if (y > model->center_y) y++; // central regs
 

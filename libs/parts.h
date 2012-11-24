@@ -54,6 +54,28 @@ struct xc_type2_info
 	int val;
 };
 
+//
+// major_str
+//  'L' = X+L logic block
+//  'M' = X+M logic block
+//  'B' = block ram
+//  'D' = dsp (macc)
+//  'R' = registers and center IO/logic column
+//
+//  'n' = noio - can follow L or M to designate a logic
+//        column without IO at top or bottom
+//  'g' = gclk - can follow LlMmBD to designate exactly one
+//        place on the left and right side of the chip where
+//        the global clock is separated into left and right
+//        half (on each side of the chip, for a total of 4
+//        vertical clock separations).
+//
+// left_wiring and right_wiring are described with 16
+// characters for each row, order is top-down
+//   'W' = wired
+//   'U' = unwired
+//
+
 struct xc_info
 {
 	int idcode;

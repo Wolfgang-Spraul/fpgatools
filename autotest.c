@@ -1862,8 +1862,7 @@ int main(int argc, char** argv)
 	MEMUSAGE();
 
 	printf("O Building memory model...\n");
-	if ((rc = fpga_build_model(&model, XC6SLX9, XC6SLX9_ROWS,
-		XC6SLX9_COLUMNS, XC6SLX9_LEFT_WIRING, XC6SLX9_RIGHT_WIRING)))
+	if ((rc = fpga_build_model(&model, XC6SLX9)))
 		goto fail;
 	printf("O Done\n");
 	TIME_AND_MEM();

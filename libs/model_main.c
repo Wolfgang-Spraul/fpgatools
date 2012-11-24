@@ -11,52 +11,32 @@
 
 static int s_high_speed_replicate = 1;
 
-int fpga_build_model(struct fpga_model* model, int idcode, int fpga_rows,
-	const char* columns, const char* left_wiring, const char* right_wiring)
+int fpga_build_model(struct fpga_model* model, int idcode)
 {
 	int rc;
 
 	memset(model, 0, sizeof(*model));
 	model->xci = xc_info(idcode);
-	if (!model->xci) FAIL(EINVAL);
-	model->cfg_rows = fpga_rows;
-	strncpy(model->cfg_columns, columns, sizeof(model->cfg_columns)-1);
-	strncpy(model->cfg_left_wiring, left_wiring,
-		sizeof(model->cfg_left_wiring)-1);
-	strncpy(model->cfg_right_wiring, right_wiring,
-		sizeof(model->cfg_right_wiring)-1);
+	if (!model->xci) RC_FAIL(model, EINVAL);
 	strarray_init(&model->str, STRIDX_64K);
 	rc = get_xc6_routing_bitpos(&model->sw_bitpos, &model->num_bitpos);
-	if (rc) FAIL(rc);
+	if (rc) RC_FAIL(model, rc);
 
 	// The order of tiles, then devices, then ports, then
 	// connections and finally switches is important so
 	// that the codes can build upon each other.
 
-	rc = init_tiles(model);
-	if (rc) FAIL(rc);
-
-	rc = init_devices(model);
-	if (rc) FAIL(rc);
-
-	if (s_high_speed_replicate) {
-		rc = replicate_routing_switches(model);
-		if (rc) FAIL(rc);
-	}
-
+	init_tiles(model);
+	init_devices(model);
+	if (s_high_speed_replicate)
+		replicate_routing_switches(model);
 	// todo: compare.ports only works if other switches and conns
 	//       are disabled, as long as not all connections are supported
-	rc = init_ports(model, /*dup_warn*/ !s_high_speed_replicate);
-	if (rc) FAIL(rc);
+	init_ports(model, /*dup_warn*/ !s_high_speed_replicate);
+	init_conns(model);
+	init_switches(model, /*routing_sw*/ !s_high_speed_replicate);
 
-	rc = init_conns(model);
-	if (rc) FAIL(rc);
-
-	rc = init_switches(model, /*routing_sw*/ !s_high_speed_replicate);
-	if (rc) FAIL(rc);
-	return 0;
-fail:
-	return rc;
+	RC_RETURN(model);
 }
 
 int fpga_free_model(struct fpga_model* model)

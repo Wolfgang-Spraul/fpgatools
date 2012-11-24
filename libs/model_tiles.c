@@ -7,6 +7,7 @@
 
 #include <stdarg.h>
 #include "model.h"
+#include "parts.h"
 
 int init_tiles(struct fpga_model* model)
 {
@@ -16,14 +17,14 @@ int init_tiles(struct fpga_model* model)
 	struct fpga_tile* tile_i0;
 
 	RC_CHECK(model);
-	tile_rows = 1 /* middle */ + (8+1+8)*model->cfg_rows + 2+2 /* two extra tiles at top and bottom */;
+	tile_rows = 1 /* middle */ + (8+1+8)*model->xci->num_rows + 2+2 /* two extra tiles at top and bottom */;
 	tile_columns = LEFT_SIDE_WIDTH + RIGHT_SIDE_WIDTH;
-	for (i = 0; model->cfg_columns[i] != 0; i++) {
-		if (model->cfg_columns[i] == 'L' || model->cfg_columns[i] == 'M')
+	for (i = 0; model->xci->major_str[i] != 0; i++) {
+		if (model->xci->major_str[i] == 'L' || model->xci->major_str[i] == 'M')
 			tile_columns += 2; // 2 for logic blocks L/M
-		else if (model->cfg_columns[i] == 'B' || model->cfg_columns[i] == 'D')
+		else if (model->xci->major_str[i] == 'B' || model->xci->major_str[i] == 'D')
 			tile_columns += 3; // 3 for bram or macc
-		else if (model->cfg_columns[i] == 'R')
+		else if (model->xci->major_str[i] == 'R')
 			tile_columns += 2+2; // 2+2 for middle IO+logic+PLL/DCM
 	}
 	model->tmp_str = malloc((tile_columns > tile_rows ? tile_columns : tile_rows) * sizeof(*model->tmp_str));
@@ -43,7 +44,7 @@ int init_tiles(struct fpga_model* model)
 		model->tiles[i].type = NA;
 	if (!(tile_rows % 2))
 		fprintf(stderr, "Unexpected even number of tile rows (%i).\n", tile_rows);
-	model->center_y = 2 /* top IO files */ + (model->cfg_rows/2)*(8+1/*middle of row clock*/+8);
+	model->center_y = 2 /* top IO files */ + (model->xci->num_rows/2)*(8+1/*middle of row clock*/+8);
 
 	//
 	// top, bottom, center:
@@ -55,15 +56,15 @@ int init_tiles(struct fpga_model* model)
 		model->x_major[i] = LEFT_SIDE_MAJOR;
 	cur_major = LEFT_SIDE_MAJOR+1;
 	// i is now LEFT_SIDE_WIDTH (5)
-	for (j = 0; model->cfg_columns[j]; j++) {
-		cur_cfgcol = model->cfg_columns[j];
+	for (j = 0; model->xci->major_str[j]; j++) {
+		cur_cfgcol = model->xci->major_str[j];
 		switch (cur_cfgcol) {
 			case 'L':
 			case 'l':
 			case 'M':
 			case 'm':
-				no_io = (next_non_whitespace(&model->cfg_columns[j+1]) == 'n');
-				last_col = last_major(model->cfg_columns, j);
+				no_io = (next_non_whitespace(&model->xci->major_str[j+1]) == 'n');
+				last_col = last_major(model->xci->major_str, j);
 
 				model->tiles[i].flags |= TF_FABRIC_ROUTING_COL;
 				if (no_io) model->tiles[i].flags |= TF_ROUTING_NO_IO;
@@ -71,10 +72,10 @@ int init_tiles(struct fpga_model* model)
 					(cur_cfgcol == 'L' || cur_cfgcol == 'l')
 						? TF_FABRIC_LOGIC_XL_COL
 						: TF_FABRIC_LOGIC_XM_COL;
-				for (k = model->cfg_rows-1; k >= 0; k--) {
-					row_top_y = 2 /* top IO tiles */ + (model->cfg_rows-1-k)*(8+1/*middle of row clock*/+8);
-					if (k<(model->cfg_rows/2)) row_top_y++; // middle system tiles (center row)
-					start = ((k == model->cfg_rows-1 && !no_io) ? 2 : 0);
+				for (k = model->xci->num_rows-1; k >= 0; k--) {
+					row_top_y = 2 /* top IO tiles */ + (model->xci->num_rows-1-k)*(8+1/*middle of row clock*/+8);
+					if (k<(model->xci->num_rows/2)) row_top_y++; // middle system tiles (center row)
+					start = ((k == model->xci->num_rows-1 && !no_io) ? 2 : 0);
 					end = ((k == 0 && !no_io) ? 14 : 16);
 					for (l = start; l < end; l++) {
 						tile_i0 = &model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + i];
@@ -153,7 +154,7 @@ int init_tiles(struct fpga_model* model)
 				break;
 
 			case 'B':
-				if (next_non_whitespace(&model->cfg_columns[j+1]) == 'g') {
+				if (next_non_whitespace(&model->xci->major_str[j+1]) == 'g') {
 					if (left_side)
 						model->left_gclk_sep_x = i+2;
 					else
@@ -163,9 +164,9 @@ int init_tiles(struct fpga_model* model)
 				model->tiles[i].flags |= TF_ROUTING_NO_IO; // no_io always on for BRAM
 				model->tiles[i+1].flags |= TF_FABRIC_BRAM_VIA_COL;
 				model->tiles[i+2].flags |= TF_FABRIC_BRAM_COL;
-				for (k = model->cfg_rows-1; k >= 0; k--) {
-					row_top_y = 2 /* top IO tiles */ + (model->cfg_rows-1-k)*(8+1/*middle of row clock*/+8);
-					if (k<(model->cfg_rows/2)) row_top_y++; // middle system tiles
+				for (k = model->xci->num_rows-1; k >= 0; k--) {
+					row_top_y = 2 /* top IO tiles */ + (model->xci->num_rows-1-k)*(8+1/*middle of row clock*/+8);
+					if (k<(model->xci->num_rows/2)) row_top_y++; // middle system tiles
 					for (l = 0; l < 16; l++) {
 						tile_i0 = &model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + i];
 						if (l < 15)
@@ -204,9 +205,9 @@ int init_tiles(struct fpga_model* model)
 				model->tiles[i].flags |= TF_ROUTING_NO_IO; // no_io always on for MACC
 				model->tiles[i+1].flags |= TF_FABRIC_MACC_VIA_COL;
 				model->tiles[i+2].flags |= TF_FABRIC_MACC_COL;
-				for (k = model->cfg_rows-1; k >= 0; k--) {
-					row_top_y = 2 /* top IO tiles */ + (model->cfg_rows-1-k)*(8+1/*middle of row clock*/+8);
-					if (k<(model->cfg_rows/2)) row_top_y++; // middle system tiles
+				for (k = model->xci->num_rows-1; k >= 0; k--) {
+					row_top_y = 2 /* top IO tiles */ + (model->xci->num_rows-1-k)*(8+1/*middle of row clock*/+8);
+					if (k<(model->xci->num_rows/2)) row_top_y++; // middle system tiles
 					for (l = 0; l < 16; l++) {
 						tile_i0 = &model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + i];
 						if (l < 15)
@@ -241,22 +242,22 @@ int init_tiles(struct fpga_model* model)
 				break;
 
 			case 'R':
-				if (next_non_whitespace(&model->cfg_columns[j+1]) != 'M') {
+				if (next_non_whitespace(&model->xci->major_str[j+1]) != 'M') {
 					// We expect a LOGIC_XM column to follow the center for
 					// the top and bottom bufpll and reg routing.
-					fprintf(stderr, "Expecting LOGIC_XM after center but found '%c'\n", model->cfg_columns[j+1]);
+					fprintf(stderr, "Expecting LOGIC_XM after center but found '%c'\n", model->xci->major_str[j+1]);
 				}
 				model->center_x = i+3;
 
 				left_side = 0;
-				for (k = model->cfg_rows-1; k >= 0; k--) {
-					row_top_y = 2 /* top IO tiles */ + (model->cfg_rows-1-k)*(8+1/*middle of row clock*/+8);
-					if (k<(model->cfg_rows/2)) row_top_y++; // middle system tiles
+				for (k = model->xci->num_rows-1; k >= 0; k--) {
+					row_top_y = 2 /* top IO tiles */ + (model->xci->num_rows-1-k)*(8+1/*middle of row clock*/+8);
+					if (k<(model->xci->num_rows/2)) row_top_y++; // middle system tiles
 
 					for (l = 0; l < 16; l++) {
 						tile_i0 = &model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + i];
 
-						if ((k < model->cfg_rows-1 || l >= 2) && (k || l<14)) {
+						if ((k < model->xci->num_rows-1 || l >= 2) && (k || l<14)) {
 							if (l < 15)
 								tile_i0->type = ROUTING;
 							else
@@ -265,7 +266,7 @@ int init_tiles(struct fpga_model* model)
 								tile_i0[1].type = ROUTING_VIA_IO;
 							else if (l == 8)
 								tile_i0[1].type = (k%2) ? ROUTING_VIA_CARRY : ROUTING_VIA_IO_DCM;
-							else if (l == 15 && k==model->cfg_rows/2)
+							else if (l == 15 && k==model->xci->num_rows/2)
 								tile_i0[1].type = ROUTING_VIA_REGC;
 							else {
 								tile_i0[1].type = LOGIC_XL;
@@ -280,28 +281,28 @@ int init_tiles(struct fpga_model* model)
 						if (l == 7) {
 							if (k%2) { // odd
 								model->tiles[(row_top_y+l)*tile_columns + i + 2].flags |= TF_PLL_DEV;
-								model->tiles[(row_top_y+l)*tile_columns + i + 2].type = (k<(model->cfg_rows/2)) ? PLL_B : PLL_T;
+								model->tiles[(row_top_y+l)*tile_columns + i + 2].type = (k<(model->xci->num_rows/2)) ? PLL_B : PLL_T;
 							} else { // even
 								model->tiles[(row_top_y+l)*tile_columns + i + 2].flags |= TF_DCM_DEV;
-								model->tiles[(row_top_y+l)*tile_columns + i + 2].type = (k<(model->cfg_rows/2)) ? DCM_B : DCM_T;
+								model->tiles[(row_top_y+l)*tile_columns + i + 2].type = (k<(model->xci->num_rows/2)) ? DCM_B : DCM_T;
 							}
 						}
 						// four midbuf tiles, in the middle of the top and bottom halves
 						if (l == 15) {
-							if (k == model->cfg_rows*3/4)
+							if (k == model->xci->num_rows*3/4)
 								model->tiles[(row_top_y+l+1)*tile_columns + i + 3].type = REGV_MIDBUF_T;
-							else if (k == model->cfg_rows/4) {
+							else if (k == model->xci->num_rows/4) {
 								model->tiles[(row_top_y+l+1)*tile_columns + i + 3].flags |= TF_CENTER_MIDBUF;
 								model->tiles[(row_top_y+l+1)*tile_columns + i + 3].type = REGV_HCLKBUF_B;
 							} else
 								model->tiles[(row_top_y+l+1)*tile_columns + i + 3].type = REGV_BRK;
-						} else if (l == 0 && k == model->cfg_rows*3/4-1) {
+						} else if (l == 0 && k == model->xci->num_rows*3/4-1) {
 							model->tiles[(row_top_y+l)*tile_columns + i + 3].flags |= TF_CENTER_MIDBUF;
 							model->tiles[(row_top_y+l)*tile_columns + i + 3].type = REGV_HCLKBUF_T;
-						} else if (l == 0 && k == model->cfg_rows/4-1)
+						} else if (l == 0 && k == model->xci->num_rows/4-1)
 							model->tiles[(row_top_y+l)*tile_columns + i + 3].type = REGV_MIDBUF_B;
 						else if (l == 8)
-							model->tiles[(row_top_y+l+1)*tile_columns + i + 3].type = (k<model->cfg_rows/2) ? REGV_B : REGV_T;
+							model->tiles[(row_top_y+l+1)*tile_columns + i + 3].type = (k<model->xci->num_rows/2) ? REGV_B : REGV_T;
 						else
 							model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + i + 3].type = REGV;
 					}
@@ -362,45 +363,45 @@ int init_tiles(struct fpga_model* model)
 	// left IO
 	//
 
-	for (k = model->cfg_rows-1; k >= 0; k--) {
-		row_top_y = 2 /* top IO tiles */ + (model->cfg_rows-1-k)*(8+1/*middle of row clock*/+8);
-		if (k<(model->cfg_rows/2)) row_top_y++; // middle system tiles
+	for (k = model->xci->num_rows-1; k >= 0; k--) {
+		row_top_y = 2 /* top IO tiles */ + (model->xci->num_rows-1-k)*(8+1/*middle of row clock*/+8);
+		if (k<(model->xci->num_rows/2)) row_top_y++; // middle system tiles
 
 		for (l = 0; l < 16; l++) {
 			//
 			// +0
 			//
-			if (model->cfg_left_wiring[(model->cfg_rows-1-k)*16+l] == 'W') {
+			if (model->xci->left_wiring[(model->xci->num_rows-1-k)*16+l] == 'W') {
 				model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns].flags |= TF_WIRED;
 				model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns].type = IO_L;
 			}
 			//
 			// +1
 			//
-			if ((k == model->cfg_rows-1 && !l) || (!k && l==15))
+			if ((k == model->xci->num_rows-1 && !l) || (!k && l==15))
 				model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + 1].type = CORNER_TERM_L;
-			else if (k == model->cfg_rows/2 && l == 12)
+			else if (k == model->xci->num_rows/2 && l == 12)
 				model->tiles[(row_top_y+l+1)*tile_columns + 1].type = IO_TERM_L_UPPER_TOP;
-			else if (k == model->cfg_rows/2 && l == 13)
+			else if (k == model->xci->num_rows/2 && l == 13)
 				model->tiles[(row_top_y+l+1)*tile_columns + 1].type = IO_TERM_L_UPPER_BOT;
-			else if (k == (model->cfg_rows/2)-1 && !l)
+			else if (k == (model->xci->num_rows/2)-1 && !l)
 				model->tiles[(row_top_y+l)*tile_columns + 1].type = IO_TERM_L_LOWER_TOP;
-			else if (k == (model->cfg_rows/2)-1 && l == 1)
+			else if (k == (model->xci->num_rows/2)-1 && l == 1)
 				model->tiles[(row_top_y+l)*tile_columns + 1].type = IO_TERM_L_LOWER_BOT;
 			else 
 				model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + 1].type = IO_TERM_L;
 			//
 			// +2
 			//
-			if (model->cfg_left_wiring[(model->cfg_rows-1-k)*16+l] == 'W') {
-				if (l == 15 && k && k != model->cfg_rows/2)
+			if (model->xci->left_wiring[(model->xci->num_rows-1-k)*16+l] == 'W') {
+				if (l == 15 && k && k != model->xci->num_rows/2)
 					model->tiles[(row_top_y+l+1)*tile_columns + 2].type = ROUTING_IO_L_BRK;
 				else
 					model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + 2].type = ROUTING_IO_L;
 			} else { // unwired
-				if (k && k != model->cfg_rows/2 && l == 15)
+				if (k && k != model->xci->num_rows/2 && l == 15)
 					model->tiles[(row_top_y+l+1)*tile_columns + 2].type = ROUTING_BRK;
-				else if (k == model->cfg_rows/2 && l == 14)
+				else if (k == model->xci->num_rows/2 && l == 14)
 					model->tiles[(row_top_y+l+1)*tile_columns + 2].type = ROUTING_GCLK;
 				else
 					model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + 2].type = ROUTING;
@@ -408,16 +409,16 @@ int init_tiles(struct fpga_model* model)
 			//
 			// +3
 			//
-			if (model->cfg_left_wiring[(model->cfg_rows-1-k)*16+l] == 'W') {
+			if (model->xci->left_wiring[(model->xci->num_rows-1-k)*16+l] == 'W') {
 				model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + 3].flags |= TF_IOLOGIC_DELAY_DEV;
 				model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + 3].type = ROUTING_IO_VIA_L;
 			} else { // unwired
-				if (k == model->cfg_rows-1 && !l) {
+				if (k == model->xci->num_rows-1 && !l) {
 					model->tiles[(row_top_y+l)*tile_columns + 3].type = CORNER_TL;
 				} else if (!k && l == 15) {
 					model->tiles[(row_top_y+l+1)*tile_columns + 3].type = CORNER_BL;
 				} else {
-					if (k && k != model->cfg_rows/2 && l == 15)
+					if (k && k != model->xci->num_rows/2 && l == 15)
 						model->tiles[(row_top_y+l+1)*tile_columns + 3].type = ROUTING_VIA_CARRY;
 					else
 						model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + 3].type = ROUTING_VIA;
@@ -426,17 +427,17 @@ int init_tiles(struct fpga_model* model)
 		}
 		model->tiles[(row_top_y+8)*tile_columns + 1].type = HCLK_TERM_L;
 		model->tiles[(row_top_y+8)*tile_columns + 2].type = HCLK_ROUTING_IO_L;
-		if (k >= model->cfg_rows/2) { // top half
-			if (k > (model->cfg_rows*3)/4)
+		if (k >= model->xci->num_rows/2) { // top half
+			if (k > (model->xci->num_rows*3)/4)
 				model->tiles[(row_top_y+8)*tile_columns + 3].type = HCLK_IO_TOP_UP_L;
-			else if (k == (model->cfg_rows*3)/4)
+			else if (k == (model->xci->num_rows*3)/4)
 				model->tiles[(row_top_y+8)*tile_columns + 3].type = HCLK_IO_TOP_SPLIT_L;
 			else
 				model->tiles[(row_top_y+8)*tile_columns + 3].type = HCLK_IO_TOP_DN_L;
 		} else { // bottom half
-			if (k < model->cfg_rows/4 - 1)
+			if (k < model->xci->num_rows/4 - 1)
 				model->tiles[(row_top_y+8)*tile_columns + 3].type = HCLK_IO_BOT_DN_L;
-			else if (k == model->cfg_rows/4 - 1)
+			else if (k == model->xci->num_rows/4 - 1)
 				model->tiles[(row_top_y+8)*tile_columns + 3].type = HCLK_IO_BOT_SPLIT_L;
 			else
 				model->tiles[(row_top_y+8)*tile_columns + 3].type = HCLK_IO_BOT_UP_L;
@@ -465,41 +466,41 @@ int init_tiles(struct fpga_model* model)
 	// right IO
 	//
 
-	for (k = model->cfg_rows-1; k >= 0; k--) {
-		row_top_y = 2 /* top IO tiles */ + (model->cfg_rows-1-k)*(8+1/*middle of row clock*/+8);
-		if (k<(model->cfg_rows/2)) row_top_y++; // middle system tiles
+	for (k = model->xci->num_rows-1; k >= 0; k--) {
+		row_top_y = 2 /* top IO tiles */ + (model->xci->num_rows-1-k)*(8+1/*middle of row clock*/+8);
+		if (k<(model->xci->num_rows/2)) row_top_y++; // middle system tiles
 
 		for (l = 0; l < 16; l++) {
 			//
 			// -1
 			//
-			if (model->cfg_right_wiring[(model->cfg_rows-1-k)*16+l] == 'W')
+			if (model->xci->right_wiring[(model->xci->num_rows-1-k)*16+l] == 'W')
 				model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + tile_columns - 1].flags |= TF_WIRED;
 
-			if (k == model->cfg_rows/2 && l == 13)
+			if (k == model->xci->num_rows/2 && l == 13)
 				model->tiles[(row_top_y+l+1)*tile_columns + tile_columns - 1].type = IO_RDY_R;
-			else if (k == model->cfg_rows/2 && l == 14)
+			else if (k == model->xci->num_rows/2 && l == 14)
 				model->tiles[(row_top_y+l+1)*tile_columns + tile_columns - 1].type = IO_PCI_CONN_R;
-			else if (k == model->cfg_rows/2 && l == 15)
+			else if (k == model->xci->num_rows/2 && l == 15)
 				model->tiles[(row_top_y+l+1)*tile_columns + tile_columns - 1].type = IO_PCI_CONN_R;
-			else if (k == model->cfg_rows/2-1 && !l)
+			else if (k == model->xci->num_rows/2-1 && !l)
 				model->tiles[(row_top_y+l)*tile_columns + tile_columns - 1].type = IO_PCI_R;
 			else {
-				if (model->cfg_right_wiring[(model->cfg_rows-1-k)*16+l] == 'W')
+				if (model->xci->right_wiring[(model->xci->num_rows-1-k)*16+l] == 'W')
 					model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + tile_columns - 1].type = IO_R;
 			}
 			//
 			// -2
 			//
-			if ((k == model->cfg_rows-1 && (!l || l == 1)) || (!k && (l==15 || l==14)))
+			if ((k == model->xci->num_rows-1 && (!l || l == 1)) || (!k && (l==15 || l==14)))
 				model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + tile_columns - 2].type = CORNER_TERM_R;
-			else if (k == model->cfg_rows/2 && l == 12)
+			else if (k == model->xci->num_rows/2 && l == 12)
 				model->tiles[(row_top_y+l+1)*tile_columns + tile_columns - 2].type = IO_TERM_R_UPPER_TOP;
-			else if (k == model->cfg_rows/2 && l == 13)
+			else if (k == model->xci->num_rows/2 && l == 13)
 				model->tiles[(row_top_y+l+1)*tile_columns + tile_columns - 2].type = IO_TERM_R_UPPER_BOT;
-			else if (k == (model->cfg_rows/2)-1 && !l)
+			else if (k == (model->xci->num_rows/2)-1 && !l)
 				model->tiles[(row_top_y+l)*tile_columns + tile_columns - 2].type = IO_TERM_R_LOWER_TOP;
-			else if (k == (model->cfg_rows/2)-1 && l == 1)
+			else if (k == (model->xci->num_rows/2)-1 && l == 1)
 				model->tiles[(row_top_y+l)*tile_columns + tile_columns - 2].type = IO_TERM_R_LOWER_BOT;
 			else 
 				model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + tile_columns - 2].type = IO_TERM_R;
@@ -509,15 +510,15 @@ int init_tiles(struct fpga_model* model)
 			//
 			// -4
 			//
-			if (model->cfg_right_wiring[(model->cfg_rows-1-k)*16+l] == 'W') {
+			if (model->xci->right_wiring[(model->xci->num_rows-1-k)*16+l] == 'W') {
 				model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + tile_columns - 4].flags |= TF_IOLOGIC_DELAY_DEV;
 				model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + tile_columns - 4].type = ROUTING_IO_VIA_R;
 			} else {
-				if (k == model->cfg_rows-1 && l == 0)
+				if (k == model->xci->num_rows-1 && l == 0)
 					model->tiles[(row_top_y+l)*tile_columns + tile_columns - 4].type = CORNER_TR_UPPER;
-				else if (k == model->cfg_rows-1 && l == 1)
+				else if (k == model->xci->num_rows-1 && l == 1)
 					model->tiles[(row_top_y+l)*tile_columns + tile_columns - 4].type = CORNER_TR_LOWER;
-				else if (k && k != model->cfg_rows/2 && l == 15)
+				else if (k && k != model->xci->num_rows/2 && l == 15)
 					model->tiles[(row_top_y+l+1)*tile_columns + tile_columns - 4].type = ROUTING_VIA_CARRY;
 				else if (!k && l == 14)
 					model->tiles[(row_top_y+l+1)*tile_columns + tile_columns - 4].type = CORNER_BR_UPPER;
@@ -529,12 +530,12 @@ int init_tiles(struct fpga_model* model)
 			//
 			// -5
 			//
-			if (model->cfg_right_wiring[(model->cfg_rows-1-k)*16+l] == 'W')
+			if (model->xci->right_wiring[(model->xci->num_rows-1-k)*16+l] == 'W')
 				model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + tile_columns - 5].type = IO_ROUTING;
 			else {
-				if (k && k != model->cfg_rows/2 && l == 15)
+				if (k && k != model->xci->num_rows/2 && l == 15)
 					model->tiles[(row_top_y+l+1)*tile_columns + tile_columns - 5].type = ROUTING_BRK;
-				else if (k == model->cfg_rows/2 && l == 14)
+				else if (k == model->xci->num_rows/2 && l == 14)
 					model->tiles[(row_top_y+l+1)*tile_columns + tile_columns - 5].type = ROUTING_GCLK;
 				else
 					model->tiles[(row_top_y+(l<8?l:l+1))*tile_columns + tile_columns - 5].type = ROUTING;
@@ -544,17 +545,17 @@ int init_tiles(struct fpga_model* model)
 		model->tiles[(row_top_y+8)*tile_columns + tile_columns - 3].type = HCLK_MCB;
 
 		model->tiles[(row_top_y+8)*tile_columns + tile_columns - 5].type = HCLK_ROUTING_IO_R;
-		if (k >= model->cfg_rows/2) { // top half
-			if (k > (model->cfg_rows*3)/4)
+		if (k >= model->xci->num_rows/2) { // top half
+			if (k > (model->xci->num_rows*3)/4)
 				model->tiles[(row_top_y+8)*tile_columns + tile_columns - 4].type = HCLK_IO_TOP_UP_R;
-			else if (k == (model->cfg_rows*3)/4)
+			else if (k == (model->xci->num_rows*3)/4)
 				model->tiles[(row_top_y+8)*tile_columns + tile_columns - 4].type = HCLK_IO_TOP_SPLIT_R;
 			else
 				model->tiles[(row_top_y+8)*tile_columns + tile_columns - 4].type = HCLK_IO_TOP_DN_R;
 		} else { // bottom half
-			if (k < model->cfg_rows/4 - 1)
+			if (k < model->xci->num_rows/4 - 1)
 				model->tiles[(row_top_y+8)*tile_columns + tile_columns - 4].type = HCLK_IO_BOT_DN_R;
-			else if (k == model->cfg_rows/4 - 1)
+			else if (k == model->xci->num_rows/4 - 1)
 				model->tiles[(row_top_y+8)*tile_columns + tile_columns - 4].type = HCLK_IO_BOT_SPLIT_R;
 			else
 				model->tiles[(row_top_y+8)*tile_columns + tile_columns - 4].type = HCLK_IO_BOT_UP_R;

@@ -697,14 +697,14 @@ void is_in_row(const struct fpga_model* model, int y,
 
 	// calculate distance to center and check
 	// that y is not pointing to the center
-	dist_to_center = (model->cfg_rows/2)*(8+1/*middle of row*/+8);
+	dist_to_center = (model->xci->num_rows/2)*(8+1/*middle of row*/+8);
 	if (y == dist_to_center) return;
 	if (y > dist_to_center) y--;
 
 	// check that y is not pointing past the last row
-	if (y >= model->cfg_rows*(8+1+8)) return;
+	if (y >= model->xci->num_rows*(8+1+8)) return;
 
-	if (row_num) *row_num = model->cfg_rows-(y/(8+1+8))-1;
+	if (row_num) *row_num = model->xci->num_rows-(y/(8+1+8))-1;
 	if (row_pos) *row_pos = y%(8+1+8);
 }
 
