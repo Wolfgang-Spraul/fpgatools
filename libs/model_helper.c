@@ -130,41 +130,49 @@ static void connpt_names_array_append(struct fpga_tile* tile, int name_i)
 	tile->num_conn_point_names++;
 }
 
-int add_connpt_name(struct fpga_model* model, int y, int x,
-	const char* connpt_name, int warn_if_duplicate, uint16_t* name_i,
-	int* conn_point_o)
+static int add_connpt_name_i(struct fpga_model *model, int y, int x,
+	str16_t name_i, int warn_dup, int *conn_point_o)
 {
-	struct fpga_tile* tile;
-	uint16_t _name_i;
-	int rc, i;
+	struct fpga_tile *tile;
+	int i;
 
 	RC_CHECK(model);
-	tile = &model->tiles[y * model->x_width + x];
-	rc = strarray_add(&model->str, connpt_name, &i);
-	if (rc) return rc;
-	if (i > 0xFFFF) {
-		fprintf(stderr, "Internal error in %s:%i\n", __FILE__, __LINE__);
-		return EINVAL;
-	}
-	_name_i = i;
-	if (name_i) *name_i = i;
+	tile = YX_TILE(model, y, x);
 
-	// Search for an existing connection point under name.
+	// All destinations for a connection point must be under
+	// one unique entry for that connection point, so we
+	// first have to search for existing destinations.
 	for (i = 0; i < tile->num_conn_point_names; i++) {
-		if (tile->conn_point_names[i*2+1] == _name_i)
+		if (tile->conn_point_names[i*2+1] == name_i)
 			break;
 	}
 	if (conn_point_o) *conn_point_o = i;
 	if (i < tile->num_conn_point_names) {
-		if (warn_if_duplicate)
-			fprintf(stderr,
-				"Duplicate connection point name y%02i x%02u %s\n",
-				y, x, connpt_name);
-		return 0;
-	}
-	// This is the first connection under name, add name.
-	connpt_names_array_append(tile, _name_i);
-	return 0;
+		if (warn_dup)
+			fprintf(stderr, "Duplicate connection point name "
+				"y%02i x%02u %s\n", y, x,
+				strarray_lookup(&model->str, name_i));
+	} else
+		// This is the first connection under name, add name.
+		connpt_names_array_append(tile, name_i);
+	RC_RETURN(model);
+}
+
+int add_connpt_name(struct fpga_model* model, int y, int x,
+	const char* connpt_name, int warn_if_duplicate, uint16_t* name_i,
+	int* conn_point_o)
+{
+	int rc, i;
+
+	RC_CHECK(model);
+
+	rc = strarray_add(&model->str, connpt_name, &i);
+	if (rc) RC_FAIL(model, rc);
+
+	RC_ASSERT(model, !OUT_OF_U16(i));
+	if (name_i) *name_i = i;
+
+	return add_connpt_name_i(model, y, x, i, warn_if_duplicate, conn_point_o);
 }
 
 int has_device(struct fpga_model* model, int y, int x, int dev)
@@ -198,107 +206,114 @@ int add_connpt_2(struct fpga_model* model, int y, int x,
 	const char* connpt_name, const char* suffix1, const char* suffix2,
 	int dup_warn)
 {
-	char name_buf[64];
-	int rc;
+	char name_buf[MAX_WIRENAME_LEN];
 
 	RC_CHECK(model);
+
 	snprintf(name_buf, sizeof(name_buf), "%s%s", connpt_name, suffix1);
-	rc = add_connpt_name(model, y, x, name_buf, dup_warn,
+	add_connpt_name(model, y, x, name_buf, dup_warn,
 		/*name_i*/ 0, /*connpt_o*/ 0);
-	if (rc) goto xout;
+
 	snprintf(name_buf, sizeof(name_buf), "%s%s", connpt_name, suffix2);
-	rc = add_connpt_name(model, y, x, name_buf, dup_warn,
+	add_connpt_name(model, y, x, name_buf, dup_warn,
 		/*name_i*/ 0, /*connpt_o*/ 0);
-	if (rc) goto xout;
-	return 0;
-xout:
-	return rc;
+
+	RC_RETURN(model);
 }
 
 #define CONNS_INCREMENT		128
 #undef DBG_ADD_CONN_UNI
 
-int add_conn_uni(struct fpga_model* model, int y1, int x1, const char* name1, int y2, int x2, const char* name2)
+static int add_conn_uni_i(struct fpga_model *model,
+	int from_y, int from_x, str16_t from_name, int *from_connpt_o,
+	int to_y, int to_x, str16_t to_name)
 {
-	struct fpga_tile* tile;
-	uint16_t name1_i, name2_i;
-	uint16_t* new_ptr;
-	int conn_start, num_conn_point_dests_for_this_wire, rc, j, conn_point_o;
+	struct fpga_tile *tile;
+	uint16_t *new_ptr;
+	int conn_start, num_conn_point_dests_for_this_wire, j;
 
 	RC_CHECK(model);
-	rc = add_connpt_name(model, y1, x1, name1, 0 /* warn_if_duplicate */,
-		&name1_i, &conn_point_o);
-	if (rc) goto xout;
-
-	rc = strarray_add(&model->str, name2, &j);
-	if (rc) return rc;
-	if (j > 0xFFFF) {
-		fprintf(stderr, "Internal error in %s:%i\n", __FILE__, __LINE__);
-		return EINVAL;
+	if (*from_connpt_o == -1) {
+		add_connpt_name_i(model, from_y, from_x, from_name,
+			0 /* warn_if_duplicate */, from_connpt_o);
+		RC_CHECK(model);
 	}
-	name2_i = j;
-	tile = &model->tiles[y1 * model->x_width + x1];
-	conn_start = tile->conn_point_names[conn_point_o*2];
-	if (conn_point_o+1 >= tile->num_conn_point_names)
+
+	tile = YX_TILE(model, from_y, from_x);
+	conn_start = tile->conn_point_names[(*from_connpt_o)*2];
+	if ((*from_connpt_o)+1 >= tile->num_conn_point_names)
 		num_conn_point_dests_for_this_wire = tile->num_conn_point_dests - conn_start;
 	else
-		num_conn_point_dests_for_this_wire = tile->conn_point_names[(conn_point_o+1)*2] - conn_start;
+		num_conn_point_dests_for_this_wire = tile->conn_point_names[((*from_connpt_o)+1)*2] - conn_start;
 
 	// Is the connection made a second time?
 	for (j = conn_start; j < conn_start + num_conn_point_dests_for_this_wire; j++) {
-		if (tile->conn_point_dests[j*3] == x2
-		    && tile->conn_point_dests[j*3+1] == y2
-		    && tile->conn_point_dests[j*3+2] == name2_i) {
+		if (tile->conn_point_dests[j*3] == to_x
+		    && tile->conn_point_dests[j*3+1] == to_y
+		    && tile->conn_point_dests[j*3+2] == to_name) {
 			fprintf(stderr, "Duplicate conn (num_conn_point_dests %i): y%02i x%02i %s - y%02i x%02i %s.\n",
-				num_conn_point_dests_for_this_wire, y1, x1, name1, y2, x2, name2);
+				num_conn_point_dests_for_this_wire,
+				from_y, from_x, strarray_lookup(&model->str, from_name),
+				to_y, to_x, strarray_lookup(&model->str, to_name));
 			for (j = conn_start; j < conn_start + num_conn_point_dests_for_this_wire; j++) {
 				fprintf(stderr, "c%i: y%02i x%02i %s -> y%02i x%02i %s\n", j,
-					y1, x1, name1,
+					from_y, from_x, strarray_lookup(&model->str, from_name),
 					tile->conn_point_dests[j*3+1], tile->conn_point_dests[j*3],
 					strarray_lookup(&model->str, tile->conn_point_dests[j*3+2]));
 			}
-			return 0;
+			RC_RETURN(model);
 		}
 	}
 
 	if (!(tile->num_conn_point_dests % CONNS_INCREMENT)) {
-		new_ptr = realloc(tile->conn_point_dests, (tile->num_conn_point_dests+CONNS_INCREMENT)*3*sizeof(uint16_t));
-		if (!new_ptr) {
-			fprintf(stderr, "Out of memory %s:%i\n", __FILE__, __LINE__);
-			return ENOMEM;
-		}
+		new_ptr = realloc(tile->conn_point_dests,
+			(tile->num_conn_point_dests+CONNS_INCREMENT)*3*sizeof(uint16_t));
+		if (!new_ptr) RC_FAIL(model, ENOMEM);
 		tile->conn_point_dests = new_ptr;
 	}
 	if (tile->num_conn_point_dests > j)
-		memmove(&tile->conn_point_dests[(j+1)*3], &tile->conn_point_dests[j*3], (tile->num_conn_point_dests-j)*3*sizeof(uint16_t));
-	tile->conn_point_dests[j*3] = x2;
-	tile->conn_point_dests[j*3+1] = y2;
-	tile->conn_point_dests[j*3+2] = name2_i;
+		memmove(&tile->conn_point_dests[(j+1)*3],
+			&tile->conn_point_dests[j*3],
+			(tile->num_conn_point_dests-j)*3*sizeof(uint16_t));
+	tile->conn_point_dests[j*3] = to_x;
+	tile->conn_point_dests[j*3+1] = to_y;
+	tile->conn_point_dests[j*3+2] = to_name;
 	tile->num_conn_point_dests++;
-	while (conn_point_o+1 < tile->num_conn_point_names) {
-		tile->conn_point_names[(conn_point_o+1)*2]++;
-		conn_point_o++;
-	}
+	for (j = (*from_connpt_o)+1; j < tile->num_conn_point_names; j++)
+		tile->conn_point_names[j*2]++;
 #if DBG_ADD_CONN_UNI
-	printf("conn_point_dests for y%02i x%02i %s now:\n", y1, x1, name1);
+	printf("conn_point_dests for y%02i x%02i %s now:\n",
+		from_y, from_x, strarray_lookup(&model->str, from_name));
 	for (j = conn_start; j < conn_start + num_conn_point_dests_for_this_wire+1; j++) {
-		fprintf(stderr, "c%i: y%02i x%02i %s -> y%02i x%02i %s\n", j, y1, x1, name1,
+		fprintf(stderr, "c%i: y%02i x%02i %s -> y%02i x%02i %s\n",
+			j, from_y, from_x, strarray_lookup(&model->str, from_name),
 			tile->conn_point_dests[j*3+1], tile->conn_point_dests[j*3],
 			strarray_lookup(&model->str, tile->conn_point_dests[j*3+2]));
 	}
 #endif
-	return 0;
-xout:
-	return rc;
+	RC_RETURN(model);
 }
 
-int add_conn_uni_pref(struct fpga_model* model,
-	int y1, int x1, const char* name1,
-	int y2, int x2, const char* name2)
+static int add_conn_uni(struct fpga_model *model,
+	int y1, int x1, const char *name1,
+	int y2, int x2, const char *name2)
 {
-	add_conn_uni(model, y1, x1, wpref(model, y1, x1, name1),
-			    y2, x2, wpref(model, y2, x2, name2));
-	RC_RETURN(model);
+	str16_t name1_i, name2_i;
+	int j, from_connpt_o, rc;
+
+	RC_CHECK(model);
+
+	rc = strarray_add(&model->str, name1, &j);
+	if (rc) RC_FAIL(model, rc);
+	RC_ASSERT(model, !OUT_OF_U16(j));
+	name1_i = j;
+	rc = strarray_add(&model->str, name2, &j);
+	if (rc) RC_FAIL(model, rc);
+	RC_ASSERT(model, !OUT_OF_U16(j));
+	name2_i = j;
+
+	from_connpt_o = -1;
+	return add_conn_uni_i(model, y1, x1, name1_i, &from_connpt_o, y2, x2, name2_i);
 }
 
 int add_conn_bi(struct fpga_model* model,
@@ -323,7 +338,7 @@ int add_conn_range(struct fpga_model* model, add_conn_f add_conn_func,
 	int y1, int x1, const char* name1, int start1, int last1,
 	int y2, int x2, const char* name2, int start2)
 {
-	char buf1[128], buf2[128];
+	char buf1[MAX_WIRENAME_LEN], buf2[MAX_WIRENAME_LEN];
 	int i;
 
 	RC_CHECK(model);
@@ -338,29 +353,63 @@ int add_conn_range(struct fpga_model* model, add_conn_f add_conn_func,
 	RC_RETURN(model);
 }
 
-int add_conn_net(struct fpga_model* model, add_conn_f add_conn_func, const struct w_net *net)
+int add_conn_net(struct fpga_model* model, int add_pref, const struct w_net *net)
 {
-	int i, j;
+	int i, j, rc;
 
 	RC_CHECK(model);
 	if (net->num_pts < 2) RC_FAIL(model, EINVAL);
-	for (i = 0; i < net->num_pts; i++) {
-		for (j = i+1; j < net->num_pts; j++) {
-			// We are buildings nets like a NN2 B-M-E net where
-			// we add the _S0 wire at the end, at the same x/y
-			// coordinate as the M point. Here we skip such
-			// connections back to the start tile.
-			if (net->pt[j].y == net->pt[i].y
-			    && net->pt[j].x == net->pt[i].x)
-				continue;
-			add_conn_range(model, add_conn_func,
-				net->pt[i].y, net->pt[i].x,
-				net->pt[i].name,
-				net->pt[i].start_count,
-				net->pt[i].start_count + net->last_inc,
-				net->pt[j].y, net->pt[j].x,
-				net->pt[j].name,
-				net->pt[j].start_count);
+	if (!net->last_inc) {
+		str16_t net_name_i[MAX_NET_POINTS];
+		int str_i, net_connpt_o[MAX_NET_POINTS];
+
+		for (i = 0; i < net->num_pts; i++) {
+			rc = strarray_add(&model->str, add_pref
+				? wpref(model,
+					net->pt[i].y, net->pt[i].x,
+					net->pt[i].name)
+				: net->pt[i].name, &str_i);
+			if (rc) RC_FAIL(model, rc);
+			RC_ASSERT(model, !OUT_OF_U16(str_i));
+			net_name_i[i] = str_i;
+
+			net_connpt_o[i] = -1;
+		}
+		for (i = 0; i < net->num_pts; i++) {
+			for (j = i+1; j < net->num_pts; j++) {
+				if (net->pt[j].y == net->pt[i].y
+				    && net->pt[j].x == net->pt[i].x)
+					continue;
+				add_conn_uni_i(model,
+					net->pt[i].y, net->pt[i].x, net_name_i[i],
+					&net_connpt_o[i],
+					net->pt[j].y, net->pt[j].x, net_name_i[j]);
+				add_conn_uni_i(model,
+					net->pt[j].y, net->pt[j].x, net_name_i[j],
+					&net_connpt_o[j],
+					net->pt[i].y, net->pt[i].x, net_name_i[i]);
+			}
+		}
+	} else { // last_inc != 0
+		for (i = 0; i < net->num_pts; i++) {
+			for (j = i+1; j < net->num_pts; j++) {
+				// We are buildings nets like a NN2 B-M-E net where
+				// we add the _S0 wire at the end, at the same x/y
+				// coordinate as the M point. Here we skip such
+				// connections back to the start tile.
+				if (net->pt[j].y == net->pt[i].y
+				    && net->pt[j].x == net->pt[i].x)
+					continue;
+				add_conn_range(model,
+					add_pref ? add_conn_bi_pref : add_conn_bi,
+					net->pt[i].y, net->pt[i].x,
+					net->pt[i].name,
+					net->pt[i].start_count,
+					net->pt[i].start_count + net->last_inc,
+					net->pt[j].y, net->pt[j].x,
+					net->pt[j].name,
+					net->pt[j].start_count);
+			}
 		}
 	}
 	RC_RETURN(model);

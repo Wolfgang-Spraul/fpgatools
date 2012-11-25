@@ -11,7 +11,7 @@
 
 static int centx_gtp(struct fpga_model *model);
 static int centy_pci_rdy(struct fpga_model *model);
-static int dev_oct_calibrate(struct fpga_model *model, int y, int x, int index);
+static int dev_oct_calibrate(struct fpga_model *model, int y, int x, int idx);
 static int dev_dna(struct fpga_model *model);
 static int dev_pmv(struct fpga_model *model);
 static int dev_icap(struct fpga_model *model);
@@ -133,18 +133,18 @@ static int centy_pci_rdy(struct fpga_model *model)
 	RC_RETURN(model);
 }
 
-static int dev_oct_calibrate(struct fpga_model *model, int y, int x, int index)
+static int dev_oct_calibrate(struct fpga_model *model, int y, int x, int idx)
 {
 	static const int logicin_wnums[4] = {/*i0*/ 29, 32, /*i1*/ 15, 7};
 
 	RC_CHECK(model);
 	add_switch(model, y, x,
-		pf("INT_INTERFACE_LOCAL_LOGICBIN%i", logicin_wnums[index*2]),
-		pf("OCT_CALIBRATE%s_SO_PINWIRE", index ? "1" : ""),
+		pf("INT_INTERFACE_LOCAL_LOGICBIN%i", logicin_wnums[idx*2]),
+		pf("OCT_CALIBRATE%s_SO_PINWIRE", idx ? "1" : ""),
 		/*bidir*/ 0);
 	add_switch(model, y, x,
-		pf("INT_INTERFACE_LOCAL_LOGICBIN%i", logicin_wnums[index*2+1]),
-		pf("OCT_CALIBRATE%s_S1_PINWIRE", index ? "1" : ""),
+		pf("INT_INTERFACE_LOCAL_LOGICBIN%i", logicin_wnums[idx*2+1]),
+		pf("OCT_CALIBRATE%s_S1_PINWIRE", idx ? "1" : ""),
 		/*bidir*/ 0);
 	RC_RETURN(model);
 }

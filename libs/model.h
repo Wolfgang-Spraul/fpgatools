@@ -799,15 +799,7 @@ typedef int (*add_conn_f)(struct fpga_model* model,
 	int y2, int x2, const char* name2);
 #define NOPREF_BI_F	add_conn_bi
 #define PREF_BI_F	add_conn_bi_pref
-#define NOPREF_UNI_F	add_conn_uni
-#define PREF_UNI_F	add_conn_uni_pref
 
-int add_conn_uni(struct fpga_model* model,
-	int y1, int x1, const char* name1,
-	int y2, int x2, const char* name2);
-int add_conn_uni_pref(struct fpga_model* model,
-	int y1, int x1, const char* name1,
-	int y2, int x2, const char* name2);
 int add_conn_bi(struct fpga_model* model,
 	int y1, int x1, const char* name1,
 	int y2, int x2, const char* name2);
@@ -1117,4 +1109,7 @@ struct w_net
 	struct w_point pt[MAX_NET_POINTS];
 };
 
-int add_conn_net(struct fpga_model* model, add_conn_f add_conn_func, const struct w_net *net);
+#define NO_PREF 0
+#define ADD_PREF 1
+
+int add_conn_net(struct fpga_model* model, int add_pref, const struct w_net *net);

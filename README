@@ -44,6 +44,13 @@ fpgatools Development Utilities
 - pair2net           reads the first two words per line and builds nets
 - hstrrep            high-speed hashed array based search and replace util
 
+Profiling
+
+~# time ./hello_world
+~# perf record ./hello_world
+~# perf annotate
+~# perf report
+
 Design Principles
 
 - small independent command line utilities, no GUI
