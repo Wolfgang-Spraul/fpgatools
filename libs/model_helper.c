@@ -233,6 +233,13 @@ static int add_conn_uni_i(struct fpga_model *model,
 	int conn_start, num_conn_point_dests_for_this_wire, j;
 
 	RC_CHECK(model);
+#ifdef DBG_ADD_CONN_UNI
+	fprintf(stderr, "add_conn_uni_i() from y%02i x%02i %s connpt %i"
+		" to y%02i x%02i %s\n", from_y, from_x,
+		strarray_lookup(&model->str, from_name), *from_connpt_o,
+		to_y, to_x, strarray_lookup(&model->str, to_name));
+#endif
+	// this optimization saved about 30% of model creation time
 	if (*from_connpt_o == -1) {
 		add_connpt_name_i(model, from_y, from_x, from_name,
 			0 /* warn_if_duplicate */, from_connpt_o);
@@ -281,11 +288,11 @@ static int add_conn_uni_i(struct fpga_model *model,
 	tile->num_conn_point_dests++;
 	for (j = (*from_connpt_o)+1; j < tile->num_conn_point_names; j++)
 		tile->conn_point_names[j*2]++;
-#if DBG_ADD_CONN_UNI
-	printf("conn_point_dests for y%02i x%02i %s now:\n",
+#ifdef DBG_ADD_CONN_UNI
+	fprintf(stderr, " conn_point_dests for y%02i x%02i %s now:\n",
 		from_y, from_x, strarray_lookup(&model->str, from_name));
 	for (j = conn_start; j < conn_start + num_conn_point_dests_for_this_wire+1; j++) {
-		fprintf(stderr, "c%i: y%02i x%02i %s -> y%02i x%02i %s\n",
+		fprintf(stderr, "  c%i: y%02i x%02i %s -> y%02i x%02i %s\n",
 			j, from_y, from_x, strarray_lookup(&model->str, from_name),
 			tile->conn_point_dests[j*3+1], tile->conn_point_dests[j*3],
 			strarray_lookup(&model->str, tile->conn_point_dests[j*3+2]));

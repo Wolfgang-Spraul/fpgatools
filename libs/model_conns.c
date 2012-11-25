@@ -73,8 +73,9 @@ int init_conns(struct fpga_model *model)
 	connect_clk_sr(model, "SR");
 	run_gfan(model);
 	run_io_wires(model);
-
 	run_logic_inout(model);
+
+	// it's a little faster to do the dirwires last
 	run_dirwires(model);
 
 	RC_RETURN(model);
@@ -3839,6 +3840,99 @@ static void dirwire_next_hop(struct fpga_model *model, enum wire_type wire, char
 	} else HERE();
 }
 
+#define DIRW_STR_BE(_wire) \
+  	if (wire_type == W_##_wire) \
+	{ \
+		if (bamce == 'B') { \
+			const char *s[4] = { \
+				MACRO_STR(_wire) "B0", \
+				MACRO_STR(_wire) "B1", \
+				MACRO_STR(_wire) "B2", \
+				MACRO_STR(_wire) "B3" }; \
+			return s[num_0to3]; \
+		} \
+		if (bamce == 'E') { \
+			const char *s[4] = { \
+				MACRO_STR(_wire) "E0", \
+				MACRO_STR(_wire) "E1", \
+				MACRO_STR(_wire) "E2", \
+				MACRO_STR(_wire) "E3" }; \
+			return s[num_0to3]; \
+		} \
+	}
+
+#define DIRW_STR_M(_wire) \
+  	if (wire_type == W_##_wire) \
+	{ \
+		if (bamce == 'M') { \
+			const char *s[4] = { \
+				MACRO_STR(_wire) "M0", \
+				MACRO_STR(_wire) "M1", \
+				MACRO_STR(_wire) "M2", \
+				MACRO_STR(_wire) "M3" }; \
+			return s[num_0to3]; \
+		} \
+	}
+
+#define DIRW_STR_AC(_wire) \
+  	if (wire_type == W_##_wire) \
+	{ \
+		if (bamce == 'A') { \
+			const char *s[4] = { \
+				MACRO_STR(_wire) "A0", \
+				MACRO_STR(_wire) "A1", \
+				MACRO_STR(_wire) "A2", \
+				MACRO_STR(_wire) "A3" }; \
+			return s[num_0to3]; \
+		} \
+		if (bamce == 'C') { \
+			const char *s[4] = { \
+				MACRO_STR(_wire) "C0", \
+				MACRO_STR(_wire) "C1", \
+				MACRO_STR(_wire) "C2", \
+				MACRO_STR(_wire) "C3" }; \
+			return s[num_0to3]; \
+		} \
+	}
+
+// dirw_str() is an optimization to replace printf() calls
+// with static strings and saves about 5% of model creation time.
+static const char *dirw_str(enum wire_type wire_type, char bamce, int num_0to3)
+{
+	// len-1
+	DIRW_STR_BE(NL1);
+	DIRW_STR_BE(NR1);
+	DIRW_STR_BE(EL1);
+	DIRW_STR_BE(ER1);
+	DIRW_STR_BE(SL1);
+	DIRW_STR_BE(SR1);
+	DIRW_STR_BE(WL1);
+	DIRW_STR_BE(WR1);
+
+	// len-2
+	DIRW_STR_BE(NN2); DIRW_STR_M(NN2);
+	DIRW_STR_BE(NE2); DIRW_STR_M(NE2);
+	DIRW_STR_BE(EE2); DIRW_STR_M(EE2);
+	DIRW_STR_BE(SE2); DIRW_STR_M(SE2);
+	DIRW_STR_BE(SS2); DIRW_STR_M(SS2);
+	DIRW_STR_BE(SW2); DIRW_STR_M(SW2);
+	DIRW_STR_BE(WW2); DIRW_STR_M(WW2);
+	DIRW_STR_BE(NW2); DIRW_STR_M(NW2);
+
+	// len-4
+	DIRW_STR_BE(NN4); DIRW_STR_M(NN4); DIRW_STR_AC(NN4);
+	DIRW_STR_BE(NE4); DIRW_STR_M(NE4); DIRW_STR_AC(NE4);
+	DIRW_STR_BE(EE4); DIRW_STR_M(EE4); DIRW_STR_AC(EE4);
+	DIRW_STR_BE(SE4); DIRW_STR_M(SE4); DIRW_STR_AC(SE4);
+	DIRW_STR_BE(SS4); DIRW_STR_M(SS4); DIRW_STR_AC(SS4);
+	DIRW_STR_BE(SW4); DIRW_STR_M(SW4); DIRW_STR_AC(SW4);
+	DIRW_STR_BE(WW4); DIRW_STR_M(WW4); DIRW_STR_AC(WW4);
+	DIRW_STR_BE(NW4); DIRW_STR_M(NW4); DIRW_STR_AC(NW4);
+
+	HERE();
+	return pf("%s%c%i", wire_base(wire_type), bamce, num_0to3);
+}
+
 static int set_BAMCE_point(struct fpga_model *model, struct w_net *net,
 	enum wire_type wire, char bamce, int num_0to3, int *cur_y, int *cur_x)
 {
@@ -3852,26 +3946,26 @@ static int set_BAMCE_point(struct fpga_model *model, struct w_net *net,
 		if (is_atx(X_FABRIC_BRAM_COL|X_FABRIC_MACC_COL, model, *cur_x)) {
 			row_pos = regular_row_pos(*cur_y, model);
 			if (row_pos == -1) {
-				net->pt[net->num_pts].name = pf("%s%c%i", wire_base(wire), bamce, num_0to3);
+				net->pt[net->num_pts].name = dirw_str(wire, bamce, num_0to3);
 			} else {
 				y_dist_to_dev = 3-(row_pos%4);
 				if (y_dist_to_dev) {
 					net->pt[net->num_pts].y += y_dist_to_dev;
 					net->pt[net->num_pts].name = pf("%s%c%i_%i", wire_base(wire), bamce, num_0to3, y_dist_to_dev);
 				} else
-					net->pt[net->num_pts].name = pf("%s%c%i", wire_base(wire), bamce, num_0to3);
+					net->pt[net->num_pts].name = dirw_str(wire, bamce, num_0to3);
 			}
 		} else if (is_atx(X_CENTER_CMTPLL_COL, model, *cur_x)) {
 			row_pos = regular_row_pos(*cur_y, model);
 			if (row_pos == -1)
-				net->pt[net->num_pts].name = pf("%s%c%i", wire_base(wire), bamce, num_0to3);
+				net->pt[net->num_pts].name = dirw_str(wire, bamce, num_0to3);
 			else {
 				y_dist_to_dev = 7-row_pos;
 				if (y_dist_to_dev > 0) {
 					net->pt[net->num_pts].y += y_dist_to_dev;
 					net->pt[net->num_pts].name = pf("%s%c%i_%i", wire_base(wire), bamce, num_0to3, y_dist_to_dev);
 				} else if (!y_dist_to_dev)
-					net->pt[net->num_pts].name = pf("%s%c%i", wire_base(wire), bamce, num_0to3);
+					net->pt[net->num_pts].name = dirw_str(wire, bamce, num_0to3);
 				else { // y_dist_to_dev < 0
 					net->pt[net->num_pts].y += y_dist_to_dev - /*hclk*/ 1;
 					net->pt[net->num_pts].name = pf("%s%c%i_%i", wire_base(wire), bamce, num_0to3, 16+y_dist_to_dev);
@@ -3894,13 +3988,13 @@ static int set_BAMCE_point(struct fpga_model *model, struct w_net *net,
 					}
 				}
 				if (i >= model->xci->num_mui)
-					net->pt[net->num_pts].name = pf("%s%c%i", wire_base(wire), bamce, num_0to3);
+					net->pt[net->num_pts].name = dirw_str(wire, bamce, num_0to3);
 			}
 		} else {
 			if (is_atx(X_INNER_LEFT, model, *cur_x) && wire == W_SE2 && bamce == 'E' && num_0to3 == 3)
 				net->pt[net->num_pts].name = "SE2M3";
 			else
-				net->pt[net->num_pts].name = pf("%s%c%i", wire_base(wire), bamce, num_0to3);
+				net->pt[net->num_pts].name = dirw_str(wire, bamce, num_0to3);
 		}
 		net->num_pts++;
 
