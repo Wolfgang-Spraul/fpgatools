@@ -44,6 +44,7 @@ clean:
 test: test-counter test-blinking test-hello_world
 
 test-counter: counter.bit mini-jtag
+	@./mini-jtag reset
 	@./mini-jtag load $<
 	@echo "Read counter registers (1 ~ 5)"
 	@./mini-jtag read 0		# read version
@@ -69,6 +70,7 @@ test-counter: counter.bit mini-jtag
 	@./mini-jtag write 1 0		# disable counter
 
 test-blinking: blinking.bit mini-jtag
+	./mini-jtag reset
 	./mini-jtag idcode
 	./mini-jtag load $<
 	sleep 2
@@ -79,4 +81,5 @@ hello_world.bit:
 	../hello_world | ../fp2bit - $@
 
 test-hello_world: hello_world.bit
+	./mini-jtag reset
 	./mini-jtag load $<
