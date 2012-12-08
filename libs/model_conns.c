@@ -7,7 +7,6 @@
 
 #include <stdarg.h>
 #include "model.h"
-#include "parts.h"
 
 static int bufpll(struct fpga_model *model);
 static int reg_ioclk(struct fpga_model *model);
@@ -687,7 +686,7 @@ static int clkc(struct fpga_model *model)
 	int i, rc;
 
 	RC_CHECK(model);
-	for (i = 0; i < sizeof(model->xci->sel_logicin)/sizeof(model->xci->sel_logicin[0]); i++) {
+	for (i = 0; i < sizeof(model->die->sel_logicin)/sizeof(model->die->sel_logicin[0]); i++) {
 		struct w_net n = {
 			.last_inc = 0, .num_pts = 5, .pt =
 			{{ pf("CLKC_SEL%i_PLL", i), 0,
@@ -696,9 +695,9 @@ static int clkc(struct fpga_model *model)
 				model->center_y, model->center_x-CENTER_CMTPLL_O },
 			 { pf("REGC_CLE_SEL%i", i), 0,
 				model->center_y, model->center_x-CENTER_LOGIC_O },
-			 { pf("INT_INTERFACE_REGC_LOGICBIN%i", model->xci->sel_logicin[i]), 0,
+			 { pf("INT_INTERFACE_REGC_LOGICBIN%i", model->die->sel_logicin[i]), 0,
 				model->center_y-CENTER_Y_MINUS_1, model->center_x-CENTER_LOGIC_O },
-			 { pf("LOGICIN_B%i", model->xci->sel_logicin[i]), 0,
+			 { pf("LOGICIN_B%i", model->die->sel_logicin[i]), 0,
 				model->center_y-CENTER_Y_MINUS_1, model->center_x-CENTER_ROUTING_O }}};
 		if ((rc = add_conn_net(model, NO_PREF, &n))) RC_FAIL(model, rc);
 	}
@@ -708,8 +707,8 @@ static int clkc(struct fpga_model *model)
 static int find_mui_pos(struct fpga_model *model, int y)
 {
 	int i;
-	for (i = 0; i < model->xci->num_mui; i++) {
-		if (y == model->xci->mui_pos[i] || y == model->xci->mui_pos[i]+1)
+	for (i = 0; i < model->die->num_mui; i++) {
+		if (y == model->die->mui_pos[i] || y == model->die->mui_pos[i]+1)
 			return i;
 	}
 	return -1;
@@ -726,7 +725,7 @@ static int mui_x(struct fpga_model *model, int x)
 			{ struct w_net_i n = { .wire = CLK0, .wire_inc = 1, .num_yx = 3,
 				{{ .y = y, .x = x },
 				 { .y = y, .x = x+1 },
-				 { .y = model->xci->mui_pos[i]+1, .x = x+2 }}};
+				 { .y = model->die->mui_pos[i]+1, .x = x+2 }}};
 			add_conn_net_i(model, &n);
 			n.wire = SR0;
 			add_conn_net_i(model, &n);
@@ -740,7 +739,7 @@ static int mui_x(struct fpga_model *model, int x)
 			n.yx[1].y = y;
 			n.yx[1].x = x;
 			add_conn_net_i(model, &n);
-			n.yx[1].y = model->xci->mui_pos[i]+1;
+			n.yx[1].y = model->die->mui_pos[i]+1;
 			n.yx[1].x = x+2;
 			add_conn_net_i(model, &n); }
 		}
@@ -2061,8 +2060,8 @@ static int term_to_io(struct fpga_model *model, enum extra_wires wire)
 			 { pf("HCLK_IOIL_%s%%i", s1),        0, y,   LEFT_IO_DEVS }}};
 
 		if (wire == PLLCLK
-		    && model->xci->mcb_ypos >= y-HALF_ROW
-		    && model->xci->mcb_ypos <= y+HALF_ROW ) {
+		    && model->die->mcb_ypos >= y-HALF_ROW
+		    && model->die->mcb_ypos <= y+HALF_ROW ) {
 			n.pt[3].name = "HCLK_MCB_PLLCLKOUT%i_W";
 			n.pt[3].start_count = 0;
 			n.pt[3].y = y;
@@ -2070,15 +2069,15 @@ static int term_to_io(struct fpga_model *model, enum extra_wires wire)
 			n.num_pts = 4;
 			rc = add_conn_bi(model,
 				y, LEFT_MCB_COL, "MCB_HCLK_PLLCLKO_PINW",
-				model->xci->mcb_ypos, LEFT_MCB_COL, "MCB_L_PLLCLK0_PW");
+				model->die->mcb_ypos, LEFT_MCB_COL, "MCB_L_PLLCLK0_PW");
 			if (rc) RC_FAIL(model, rc);
 			rc = add_conn_bi(model,
 				y, LEFT_MCB_COL, "MCB_HCLK_PLLCLK1_PINW",
-				model->xci->mcb_ypos, LEFT_MCB_COL, "MCB_L_PLLCLK1_PW");
+				model->die->mcb_ypos, LEFT_MCB_COL, "MCB_L_PLLCLK1_PW");
 			if (rc) RC_FAIL(model, rc);
 		} else if (wire == PLLCE
-		    && model->xci->mcb_ypos >= y-HALF_ROW
-		    && model->xci->mcb_ypos <= y+HALF_ROW ) {
+		    && model->die->mcb_ypos >= y-HALF_ROW
+		    && model->die->mcb_ypos <= y+HALF_ROW ) {
 			n.pt[3].name = "HCLK_MCB_PLLCEOUT%i_W";
 			n.pt[3].start_count = 0;
 			n.pt[3].y = y;
@@ -2086,7 +2085,7 @@ static int term_to_io(struct fpga_model *model, enum extra_wires wire)
 			n.num_pts = 4;
 			rc = add_conn_range(model, NOPREF_BI_F,
 				y, LEFT_MCB_COL, "MCB_HCLK_PLLCE%i_PINW", 0, 1,
-				model->xci->mcb_ypos, LEFT_MCB_COL, "MCB_L_PLLCE%i_PW", 0);
+				model->die->mcb_ypos, LEFT_MCB_COL, "MCB_L_PLLCE%i_PW", 0);
 			if (rc) RC_FAIL(model, rc);
 		}
 		if ((rc = add_conn_net(model, NO_PREF, &n))) RC_FAIL(model, rc); }
@@ -2786,9 +2785,9 @@ static int run_gclk(struct fpga_model* model)
 	struct w_net gclk_net;
 
 	RC_CHECK(model);
-	for (row = model->xci->num_rows-1; row >= 0; row--) {
-		row_top_y = TOP_IO_TILES + (model->xci->num_rows-1-row)*(8+1/* middle of row */+8);
-		if (row < (model->xci->num_rows/2)) row_top_y++; // center regs
+	for (row = model->die->num_rows-1; row >= 0; row--) {
+		row_top_y = TOP_IO_TILES + (model->die->num_rows-1-row)*(8+1/* middle of row */+8);
+		if (row < (model->die->num_rows/2)) row_top_y++; // center regs
 
 		// net that connects the hclk of half the chip together horizontally
 		gclk_net.last_inc = 15;
@@ -2845,13 +2844,13 @@ static int run_gclk(struct fpga_model* model)
 	}
 	for (x = 0; x < model->x_width; x++) {
 		if (is_atx(X_ROUTING_COL, model, x)) {
-			for (row = model->xci->num_rows-1; row >= 0; row--) {
-				row_top_y = 2 /* top IO */ + (model->xci->num_rows-1-row)*(8+1/* middle of row */+8);
-				if (row < (model->xci->num_rows/2)) row_top_y++; // center regs
+			for (row = model->die->num_rows-1; row >= 0; row--) {
+				row_top_y = 2 /* top IO */ + (model->die->num_rows-1-row)*(8+1/* middle of row */+8);
+				if (row < (model->die->num_rows/2)) row_top_y++; // center regs
 
 				is_break = 0;
  				if (is_atx(X_LEFT_IO_ROUTING_COL|X_RIGHT_IO_ROUTING_COL, model, x)) {
-					if (row && row != model->xci->num_rows/2)
+					if (row && row != model->die->num_rows/2)
 						is_break = 1;
 				} else {
 					if (row)
@@ -3543,7 +3542,7 @@ static int run_logic_inout(struct fpga_model* model)
 		}
 	}
 	// LOGICIN
-	for (i = 0; i < model->xci->num_rows; i++) {
+	for (i = 0; i < model->die->num_rows; i++) {
 		y = TOP_IO_TILES + HALF_ROW + i*ROW_SIZE;
 		if (y > model->center_y) y++; // central regs
 
@@ -3610,12 +3609,12 @@ static int run_logic_inout(struct fpga_model* model)
 				if ((rc = add_conn_range(model, NOPREF_BI_F,
 					y, x, "LOGICIN_B%i", 0, 62,
 					y, x+1, "INT_INTERFACE_LOCAL_LOGICBIN%i", 0))) RC_FAIL(model, rc);
-			} else if (y > model->xci->mcb_ypos-6 && y <= model->xci->mcb_ypos+6) {
+			} else if (y > model->die->mcb_ypos-6 && y <= model->die->mcb_ypos+6) {
 				struct w_net n = {
 					.last_inc = 62, .num_pts = 3, .pt =
 					{{ "LOGICIN_B%i", 0, y, x },
 					 { "INT_INTERFACE_LOGICBIN%i", 0, y, x+1 },
-					 { pf("MCB_L_CLEXM_LOGICIN_B%%i_%i", y-(model->xci->mcb_ypos-6)), 0, model->xci->mcb_ypos, x+2 }}};
+					 { pf("MCB_L_CLEXM_LOGICIN_B%%i_%i", y-(model->die->mcb_ypos-6)), 0, model->die->mcb_ypos, x+2 }}};
 				if ((rc = add_conn_net(model, NO_PREF, &n))) RC_FAIL(model, rc);
 			} else {
 				if (find_mui_pos(model, y) == -1
@@ -3720,12 +3719,12 @@ static int run_logic_inout(struct fpga_model* model)
 					}
 					if (is_aty(Y_CHIP_HORIZ_REGS, model, y+1)) {
 						for (i = 0; i <= LOGICIN_HIGHEST; i++) {
-							for (j = 0; j < sizeof(model->xci->sel_logicin)/sizeof(model->xci->sel_logicin[0]); j++) {
-								if (i == model->xci->sel_logicin[j])
+							for (j = 0; j < sizeof(model->die->sel_logicin)/sizeof(model->die->sel_logicin[0]); j++) {
+								if (i == model->die->sel_logicin[j])
 									break;
 							}
 							// the sel_logicin wires are done in clkc()
-							if (j >= sizeof(model->xci->sel_logicin)/sizeof(model->xci->sel_logicin[0])
+							if (j >= sizeof(model->die->sel_logicin)/sizeof(model->die->sel_logicin[0])
 							    && (rc = add_conn_bi(model, y, x, pf("LOGICIN_B%i", i),
 								y, x+1, pf("INT_INTERFACE_REGC_LOGICBIN%i", i))))
 								RC_FAIL(model, rc);
@@ -3972,22 +3971,22 @@ static int set_BAMCE_point(struct fpga_model *model, struct w_net *net,
 				}
 			}
 		} else if (is_atx(X_LEFT_MCB|X_RIGHT_MCB, model, *cur_x)) {
-			if (*cur_y > model->xci->mcb_ypos-6 && *cur_y <= model->xci->mcb_ypos+6 ) {
-				net->pt[net->num_pts].y = model->xci->mcb_ypos;
-				net->pt[net->num_pts].name = pf("%s%c%i_%i", wire_base(wire), bamce, num_0to3, model->xci->mcb_ypos+6-*cur_y);
+			if (*cur_y > model->die->mcb_ypos-6 && *cur_y <= model->die->mcb_ypos+6 ) {
+				net->pt[net->num_pts].y = model->die->mcb_ypos;
+				net->pt[net->num_pts].name = pf("%s%c%i_%i", wire_base(wire), bamce, num_0to3, model->die->mcb_ypos+6-*cur_y);
 			} else {
-				for (i = 0; i < model->xci->num_mui; i++) {
-					if (*cur_y == model->xci->mui_pos[i]) {
+				for (i = 0; i < model->die->num_mui; i++) {
+					if (*cur_y == model->die->mui_pos[i]) {
 						net->pt[net->num_pts].y++;
 						net->pt[net->num_pts].name = pf("%s%c%i_1", wire_base(wire), bamce, num_0to3);
 						break;
 					}
-					if (*cur_y == model->xci->mui_pos[i]+1) {
+					if (*cur_y == model->die->mui_pos[i]+1) {
 						net->pt[net->num_pts].name = pf("%s%c%i_0", wire_base(wire), bamce, num_0to3);
 						break;
 					}
 				}
-				if (i >= model->xci->num_mui)
+				if (i >= model->die->num_mui)
 					net->pt[net->num_pts].name = dirw_str(wire, bamce, num_0to3);
 			}
 		} else {

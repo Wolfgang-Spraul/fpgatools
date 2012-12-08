@@ -14,6 +14,7 @@
 #include <sys/stat.h>
 
 #include "helper.h"
+#include "parts.h"
 
 #define LEFT_SIDE_MAJOR 1
 
@@ -21,7 +22,8 @@ struct fpga_model
 {
 	int rc; // if rc != 0, all function calls will immediately return
 
-	const struct xc_info *xci;
+	const struct xc_die *die;
+	const struct xc6_pkg_info *pkg;
 
 	int x_width, y_height;
 	int center_x;
@@ -755,7 +757,7 @@ struct fpga_tile
 	uint32_t* switches;
 };
 
-int fpga_build_model(struct fpga_model* model, int idcode);
+int fpga_build_model(struct fpga_model* model, int idcode, enum xc6_pkg pkg);
 // returns model->rc (model itself will be memset to 0)
 int fpga_free_model(struct fpga_model* model);
 

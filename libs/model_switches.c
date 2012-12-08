@@ -7,7 +7,6 @@
 
 #include <stdarg.h>
 #include "model.h"
-#include "parts.h"
 
 static int centx_gtp(struct fpga_model *model);
 static int centy_pci_rdy(struct fpga_model *model);

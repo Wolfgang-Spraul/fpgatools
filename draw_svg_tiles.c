@@ -18,7 +18,6 @@
 #include <libxml/xpathInternals.h>
 
 #include "model.h"
-#include "parts.h"
 
 #define VERT_TILE_SPACING	 45
 #define HORIZ_TILE_SPACING	160
@@ -47,7 +46,7 @@ int main(int argc, char** argv)
 // on the output for now
 
 	xmlInitParser();
-	if (fpga_build_model(&model, XC6SLX9))
+	if (fpga_build_model(&model, XC6SLX9, TQG144))
 		goto fail;
 
 	doc = xmlParseDoc(empty_svg);

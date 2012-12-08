@@ -7,7 +7,6 @@
 
 #include "model.h"
 #include "bit.h"
-#include "parts.h"
 #include "control.h"
 
 #define HCLK_BYTES 2

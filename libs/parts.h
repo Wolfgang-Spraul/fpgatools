@@ -69,14 +69,14 @@ struct xc_type2_info
 //        the global clock is separated into left and right
 //        half (on each side of the chip, for a total of 4
 //        vertical clock separations).
-//
+
 // left_wiring and right_wiring are described with 16
 // characters for each row, order is top-down
 //   'W' = wired
 //   'U' = unwired
 //
 
-struct xc_info
+struct xc_die
 {
 	int idcode;
 	int num_rows;
@@ -93,7 +93,21 @@ struct xc_info
 	int sel_logicin[16];
 };
 
-const struct xc_info* xc_info(int idcode);
+const struct xc_die* xc_die_info(int idcode);
+
+enum xc6_pkg { TQG144, FTG256, CSG324, FGG484 };
+#define XC6_NUM_GCLK_PINS 32
+
+struct xc6_pkg_info
+{
+	enum xc6_pkg pkg;
+	int num_gclk_pins;
+	// negative side of differential pairs: even numbers
+	// positive side of differential pairs: odd numbers
+	const char* gclk_pin[XC6_NUM_GCLK_PINS];
+};
+
+const struct xc6_pkg_info *xc6_pkg_info(enum xc6_pkg pkg);
 
 #define FRAME_SIZE		130
 #define FRAMES_PER_ROW		505 // for slx4 and slx9

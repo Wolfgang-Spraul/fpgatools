@@ -1918,6 +1918,7 @@ int fpga_switch_to_yx(struct switch_to_yx* p)
 	int best_num_dests, rc;
 	str16_t best_connpt;
 
+	RC_CHECK(p->model);
 	rc = construct_sw_conns(&conns, p->model, p->y, p->x, p->start_switch,
 		p->from_to, (p->flags & SWTO_YX_MAX_SWITCH_DEPTH)
 			? p->max_switch_depth : SW_SET_SIZE);
@@ -1981,6 +1982,7 @@ int fpga_switch_to_rel(struct switch_to_rel* p)
 	struct sw_conns conns;
 	int rc;
 
+	RC_CHECK(p->model);
 	rc = construct_sw_conns(&conns, p->model, p->start_y, p->start_x,
 		p->start_switch, p->from_to, SW_SET_SIZE);
 	if (rc) FAIL(rc);
@@ -2258,6 +2260,11 @@ void fnet_printf(FILE* f, struct fpga_model* model, net_idx_t net_i)
 	}
 }
 
+static int fnet_autoroute_clock(struct fpga_model* model, net_idx_t net_i)
+{
+	return 0;
+}
+
 int fnet_autoroute(struct fpga_model* model, net_idx_t net_i)
 {
 	struct fpga_net* net_p;
@@ -2265,41 +2272,54 @@ int fnet_autoroute(struct fpga_model* model, net_idx_t net_i)
 	struct switch_to_yx switch_to;
 	struct sw_set logic_route_set, iologic_route_set;
 	struct switch_to_rel switch_to_rel;
-	int i, out_i, in_i, rc;
+	int i, out_i, in_i;
 
 	RC_CHECK(model);
+	net_p = fnet_get(model, net_i);
+	if (!net_p) RC_FAIL(model, EINVAL);
+
+	// abort if there are any routed switches in the net already
+	for (i = 0; i < net_p->len; i++) {
+		if (!(net_p->el[i].idx & NET_IDX_IS_PINW))
+			RC_FAIL(model, EINVAL);
+	}
+
+	// check for clock nets
+	for (i = 0; i < net_p->len; i++) {
+		dev_p = FPGA_DEV(model, net_p->el[i].y,
+			net_p->el[i].x, net_p->el[i].dev_idx);
+		if (dev_p->type == DEV_LOGIC
+		    && (net_p->el[i].idx & NET_IDX_MASK) == LI_CLK)
+			return fnet_autoroute_clock(model, net_i);
+	}
+
 	// todo: gnd and vcc nets are special and have no outpin
 	//       but lots of inpins
-	net_p = fnet_get(model, net_i);
-	if (!net_p) FAIL(EINVAL);
 	out_i = -1;
 	in_i = -1;
 	for (i = 0; i < net_p->len; i++) {
-		if (!(net_p->el[i].idx & NET_IDX_IS_PINW)) {
-			// net already routed?
-			FAIL(EINVAL);
-		}
 		dev_p = FPGA_DEV(model, net_p->el[i].y,
 			net_p->el[i].x, net_p->el[i].dev_idx);
 		if ((net_p->el[i].idx & NET_IDX_MASK) < dev_p->num_pinw_in) {
 			// todo: right now we only support 1 inpin
-			if (in_i != -1) FAIL(ENOTSUP);
+			if (in_i != -1) RC_FAIL(model, ENOTSUP);
 			in_i = i;
 			continue;
 		}
-		if (out_i != -1) FAIL(EINVAL); // at most 1 outpin
+		if (out_i != -1) RC_FAIL(model, EINVAL); // at most 1 outpin
 		out_i = i;
 	}
 	// todo: vcc and gnd have no outpin?
 	if (out_i == -1 || in_i == -1)
-		FAIL(EINVAL);
+		RC_FAIL(model, EINVAL);
+
 	out_dev = FPGA_DEV(model, net_p->el[out_i].y,
 			net_p->el[out_i].x, net_p->el[out_i].dev_idx);
 	in_dev = FPGA_DEV(model, net_p->el[in_i].y,
 			net_p->el[in_i].x, net_p->el[in_i].dev_idx);
 	if (out_dev->type == DEV_IOB) {
 		if (in_dev->type != DEV_LOGIC)
-			FAIL(ENOTSUP);
+			RC_FAIL(model, ENOTSUP);
 
 		// switch to ilogic
 		switch_to.yx_req = YX_DEV_ILOGIC;
@@ -2310,11 +2330,9 @@ int fnet_autoroute(struct fpga_model* model, net_idx_t net_i)
 		switch_to.start_switch = out_dev->pinw[net_p->el[out_i].idx
 			& NET_IDX_MASK];
 		switch_to.from_to = SW_FROM;
-		rc = fpga_switch_to_yx(&switch_to);
-		if (rc) FAIL(rc);
-		rc = fnet_add_sw(model, net_i, switch_to.y, switch_to.x,
+		fpga_switch_to_yx(&switch_to);
+		fnet_add_sw(model, net_i, switch_to.y, switch_to.x,
 			switch_to.set.sw, switch_to.set.len);
-		if (rc) FAIL(rc);
 
 		// switch to ilogic routing
 		switch_to.yx_req = YX_ROUTING_TILE;
@@ -2324,11 +2342,9 @@ int fnet_autoroute(struct fpga_model* model, net_idx_t net_i)
 		switch_to.x = switch_to.dest_x;
 		switch_to.start_switch = switch_to.dest_connpt;
 		switch_to.from_to = SW_FROM;
-		rc = fpga_switch_to_yx(&switch_to);
-		if (rc) FAIL(rc);
-		rc = fnet_add_sw(model, net_i, switch_to.y, switch_to.x,
+		fpga_switch_to_yx(&switch_to);
+		fnet_add_sw(model, net_i, switch_to.y, switch_to.x,
 			switch_to.set.sw, switch_to.set.len);
-		if (rc) FAIL(rc);
 
 		// switch from logic tile to logic routing tile
 		switch_to_rel.model = model;
@@ -2340,33 +2356,27 @@ int fnet_autoroute(struct fpga_model* model, net_idx_t net_i)
 		switch_to_rel.rel_y = 0;
 		switch_to_rel.rel_x = -1;
 		switch_to_rel.target_connpt = STRIDX_NO_ENTRY;
-		rc = fpga_switch_to_rel(&switch_to_rel);
-		if (rc) FAIL(rc);
-		rc = fnet_add_sw(model, net_i, switch_to_rel.start_y,
+		fpga_switch_to_rel(&switch_to_rel);
+		fnet_add_sw(model, net_i, switch_to_rel.start_y,
 			switch_to_rel.start_x, switch_to_rel.set.sw,
 			switch_to_rel.set.len);
-		if (rc) FAIL(rc);
 
 		// route from ilogic routing to logic routing
-		rc = froute_direct(model, switch_to.dest_y, switch_to.dest_x,
+		froute_direct(model, switch_to.dest_y, switch_to.dest_x,
 			switch_to.dest_connpt,
 			switch_to_rel.dest_y, switch_to_rel.dest_x,
 			switch_to_rel.dest_connpt,
 			&iologic_route_set, &logic_route_set);
-		if (rc) FAIL(rc);
-		if (!iologic_route_set.len || !logic_route_set.len) FAIL(EINVAL);
-		rc = fnet_add_sw(model, net_i, switch_to.dest_y, switch_to.dest_x,
+		if (!iologic_route_set.len || !logic_route_set.len) RC_FAIL(model, EINVAL);
+		fnet_add_sw(model, net_i, switch_to.dest_y, switch_to.dest_x,
 			iologic_route_set.sw, iologic_route_set.len);
-		if (rc) FAIL(rc);
-		rc = fnet_add_sw(model, net_i, net_p->el[in_i].y, net_p->el[in_i].x-1,
+		fnet_add_sw(model, net_i, net_p->el[in_i].y, net_p->el[in_i].x-1,
 			logic_route_set.sw, logic_route_set.len);
-		if (rc) FAIL(rc);
-
-		return 0;
+		RC_RETURN(model);
 	}
 	if (out_dev->type == DEV_LOGIC) {
 		if (in_dev->type != DEV_IOB)
-			FAIL(ENOTSUP);
+			RC_FAIL(model, ENOTSUP);
 
 		// switch from ologic to iob
 		switch_to.yx_req = YX_DEV_OLOGIC;
@@ -2377,11 +2387,9 @@ int fnet_autoroute(struct fpga_model* model, net_idx_t net_i)
 		switch_to.start_switch = in_dev->pinw[net_p->el[in_i].idx
 			& NET_IDX_MASK];
 		switch_to.from_to = SW_TO;
-		rc = fpga_switch_to_yx(&switch_to);
-		if (rc) FAIL(rc);
-		rc = fnet_add_sw(model, net_i, switch_to.y, switch_to.x,
+		fpga_switch_to_yx(&switch_to);
+		fnet_add_sw(model, net_i, switch_to.y, switch_to.x,
 			switch_to.set.sw, switch_to.set.len);
-		if (rc) FAIL(rc);
 
 		// switches inside ologic to ologic routing
 		switch_to.yx_req = YX_ROUTING_TILE;
@@ -2391,11 +2399,9 @@ int fnet_autoroute(struct fpga_model* model, net_idx_t net_i)
 		switch_to.x = switch_to.dest_x;
 		switch_to.start_switch = switch_to.dest_connpt;
 		switch_to.from_to = SW_TO;
-		rc = fpga_switch_to_yx(&switch_to);
-		if (rc) FAIL(rc);
-		rc = fnet_add_sw(model, net_i, switch_to.y, switch_to.x,
+		fpga_switch_to_yx(&switch_to);
+		fnet_add_sw(model, net_i, switch_to.y, switch_to.x,
 			switch_to.set.sw, switch_to.set.len);
-		if (rc) FAIL(rc);
 
 		// switch inside logic tile
 		switch_to_rel.model = model;
@@ -2407,33 +2413,25 @@ int fnet_autoroute(struct fpga_model* model, net_idx_t net_i)
 		switch_to_rel.rel_y = 0;
 		switch_to_rel.rel_x = -1;
 		switch_to_rel.target_connpt = STRIDX_NO_ENTRY;
-		rc = fpga_switch_to_rel(&switch_to_rel);
-		if (rc) FAIL(rc);
-		rc = fnet_add_sw(model, net_i, switch_to_rel.start_y,
+		fpga_switch_to_rel(&switch_to_rel);
+		fnet_add_sw(model, net_i, switch_to_rel.start_y,
 			switch_to_rel.start_x, switch_to_rel.set.sw,
 			switch_to_rel.set.len);
-		if (rc) FAIL(rc);
 
 		// route from logic routing to ilogic routing
-		rc = froute_direct(model, switch_to_rel.dest_y,
+		froute_direct(model, switch_to_rel.dest_y,
 			switch_to_rel.dest_x, switch_to_rel.dest_connpt,
 			switch_to.dest_y, switch_to.dest_x, switch_to.dest_connpt,
 			&logic_route_set, &iologic_route_set);
-		if (rc) FAIL(rc);
-		if (!iologic_route_set.len || !logic_route_set.len) FAIL(EINVAL);
-		rc = fnet_add_sw(model, net_i, switch_to.dest_y, switch_to.dest_x,
+		if (!iologic_route_set.len || !logic_route_set.len) RC_FAIL(model, EINVAL);
+		fnet_add_sw(model, net_i, switch_to.dest_y, switch_to.dest_x,
 			iologic_route_set.sw, iologic_route_set.len);
-		if (rc) FAIL(rc);
-		rc = fnet_add_sw(model, net_i, switch_to_rel.dest_y,
+		fnet_add_sw(model, net_i, switch_to_rel.dest_y,
 			switch_to_rel.dest_x, logic_route_set.sw,
 			logic_route_set.len);
-		if (rc) FAIL(rc);
-
-		return 0;
+		RC_RETURN(model);
 	}
-	FAIL(ENOTSUP);
-fail:
-	return rc;
+	RC_FAIL(model, ENOTSUP);
 }
 
 int fnet_route_to_inpins(struct fpga_model* model, net_idx_t net_i,

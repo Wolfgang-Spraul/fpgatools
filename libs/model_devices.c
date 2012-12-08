@@ -8,7 +8,6 @@
 #include <stdarg.h>
 #include "model.h"
 #include "control.h"
-#include "parts.h"
 
 static int add_dev(struct fpga_model* model,
 	int y, int x, int type, int subtype);
@@ -21,7 +20,7 @@ int init_devices(struct fpga_model* model)
 
 	RC_CHECK(model);
 	// DCM, PLL
-	for (i = 0; i < model->xci->num_rows; i++) {
+	for (i = 0; i < model->die->num_rows; i++) {
 		y = TOP_IO_TILES + HALF_ROW-1 + i*ROW_SIZE;
 		if (y > model->center_y) y++; // central regs
 		x = model->center_x-CENTER_CMTPLL_O;
@@ -61,8 +60,8 @@ int init_devices(struct fpga_model* model)
 	if ((rc = add_dev(model, y, x, DEV_SUSPEND_SYNC, 0))) goto fail;
 
 	// MCB
-	if ((rc = add_dev(model, model->xci->mcb_ypos, LEFT_MCB_COL, DEV_MCB, 0))) goto fail;
-	if ((rc = add_dev(model, model->xci->mcb_ypos, model->x_width-RIGHT_MCB_O, DEV_MCB, 0))) goto fail;
+	if ((rc = add_dev(model, model->die->mcb_ypos, LEFT_MCB_COL, DEV_MCB, 0))) goto fail;
+	if ((rc = add_dev(model, model->die->mcb_ypos, model->x_width-RIGHT_MCB_O, DEV_MCB, 0))) goto fail;
 
 	// OCT_CALIBRATE
 	x = LEFT_IO_DEVS;
@@ -132,7 +131,7 @@ int init_devices(struct fpga_model* model)
 	}
 	
 	// BUFH
-	for (i = 0; i < model->xci->num_rows; i++) {
+	for (i = 0; i < model->die->num_rows; i++) {
 		y = TOP_IO_TILES + HALF_ROW + i*ROW_SIZE;
 		if (y > model->center_y) y++; // central regs
 		x = model->center_x;

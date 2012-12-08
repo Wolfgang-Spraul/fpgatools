@@ -8,9 +8,8 @@
 #include <stdarg.h>
 #include <errno.h>
 #include "model.h"
-#include "parts.h"
 
-const char* bitstr(uint32_t value, int digits)
+const char *bitstr(uint32_t value, int digits)
 {
         static char str[2 /* "0b" */ + 32 + 1 /* '\0' */];
         int i;
@@ -23,7 +22,7 @@ const char* bitstr(uint32_t value, int digits)
         return str;
 }
 
-void hexdump(int indent, const uint8_t* data, int len)
+void hexdump(int indent, const uint8_t *data, int len)
 {
 	int i, j;
 	char fmt_str[16] = "%s@%05x %02x";
@@ -68,7 +67,7 @@ uint32_t __swab32(uint32_t x)
             ((x & 0xff000000UL) >> 24)); \
 }
 
-int atom_found(char* bits, const cfg_atom_t* atom)
+int atom_found(char *bits, const cfg_atom_t *atom)
 {
 	int i;
 	for (i = 0; atom->must_0[i] != -1; i++)
@@ -82,7 +81,7 @@ int atom_found(char* bits, const cfg_atom_t* atom)
 	return atom->must_1[i] == -1;
 }
 
-void atom_remove(char* bits, const cfg_atom_t* atom)
+void atom_remove(char *bits, const cfg_atom_t *atom)
 {
 	int i;
 	for (i = 0; atom->must_1[i] != -1; i++) {
@@ -95,7 +94,7 @@ void atom_remove(char* bits, const cfg_atom_t* atom)
 const int lut_base_vars[6] = {0 /* A1 */, 1, 0 /* A3 - not used */,
 				0, 0, 1 /* A6 */};
 
-static int bool_nextlen(const char* expr, int len)
+static int bool_nextlen(const char *expr, int len)
 {
 	int i, depth;
 
@@ -128,7 +127,7 @@ static int bool_nextlen(const char* expr, int len)
 
 // + or, * and, @ xor, ~ not
 // var must point to array of A1..A6 variables
-static int bool_eval(const char* expr, int len, const int* var)
+static int bool_eval(const char *expr, int len, const int *var)
 {
 	int i, negate, result, oplen;
 
@@ -178,7 +177,7 @@ fail:
 	return -1;
 }
 
-uint64_t map_bits(uint64_t u64, int num_bits, int* src_pos)
+uint64_t map_bits(uint64_t u64, int num_bits, int *src_pos)
 {
 	uint64_t result;
 	int i;
@@ -191,7 +190,7 @@ uint64_t map_bits(uint64_t u64, int num_bits, int* src_pos)
 	return result;
 }
 
-int bool_str2bits(const char* str, uint64_t* u64, int num_bits)
+int bool_str2bits(const char *str, uint64_t *u64, int num_bits)
 {
 	int i, j, bool_res, rc, vars[6];
 
@@ -335,7 +334,7 @@ const char* bool_bits2str(uint64_t u64, int num_bits)
 	return str;
 }
 
-int parse_boolexpr(const char* expr, uint64_t* lut)
+int parse_boolexpr(const char *expr, uint64_t *lut)
 {
 	int i, j, result, vars[6];
 
@@ -356,7 +355,7 @@ int parse_boolexpr(const char* expr, uint64_t* lut)
 	return 0;
 }
 
-int printf_type2(uint8_t* d, int len, int inpos, int num_entries)
+int printf_type2(uint8_t *d, int len, int inpos, int num_entries)
 {
 	int i, num_printed;
 	uint64_t u64;
@@ -372,7 +371,7 @@ int printf_type2(uint8_t* d, int len, int inpos, int num_entries)
 	return num_printed;
 }
 
-void printf_ramb16_data(uint8_t* bits, int inpos)
+void printf_ramb16_data(uint8_t *bits, int inpos)
 {
 	int nonzero_head, nonzero_tail;
 	uint8_t init_byte;
@@ -453,14 +452,14 @@ void printf_ramb16_data(uint8_t* bits, int inpos)
 	}
 }
 
-int is_empty(const uint8_t* d, int l)
+int is_empty(const uint8_t *d, int l)
 {
 	while (--l >= 0)
 		if (d[l]) return 0;
 	return 1;
 }
 
-int count_bits(const uint8_t* d, int l)
+int count_bits(const uint8_t *d, int l)
 {
 	int bits = 0;
 	while (--l >= 0) {
@@ -476,25 +475,25 @@ int count_bits(const uint8_t* d, int l)
 	return bits;
 }
 
-int frame_get_bit(const uint8_t* frame_d, int bit)
+int frame_get_bit(const uint8_t *frame_d, int bit)
 {
 	uint8_t v = 1<<(7-(bit%8));
 	return (frame_d[(bit/16)*2 + !((bit/8)%2)] & v) != 0;
 }
 
-void frame_clear_bit(uint8_t* frame_d, int bit)
+void frame_clear_bit(uint8_t *frame_d, int bit)
 {
 	uint8_t v = 1<<(7-(bit%8));
 	frame_d[(bit/16)*2 + !((bit/8)%2)] &= ~v;
 }
 
-void frame_set_bit(uint8_t* frame_d, int bit)
+void frame_set_bit(uint8_t *frame_d, int bit)
 {
 	uint8_t v = 1<<(7-(bit%8));
 	frame_d[(bit/16)*2 + !((bit/8)%2)] |= v;
 }
 
-uint8_t frame_get_u8(const uint8_t* frame_d)
+uint8_t frame_get_u8(const uint8_t *frame_d)
 {
 	uint8_t v = 0;
 	int i;
@@ -503,7 +502,7 @@ uint8_t frame_get_u8(const uint8_t* frame_d)
 	return v;
 }
 
-uint16_t frame_get_u16(const uint8_t* frame_d)
+uint16_t frame_get_u16(const uint8_t *frame_d)
 {
 	uint16_t high_b, low_b;
 	high_b = frame_get_u8(frame_d);
@@ -511,7 +510,7 @@ uint16_t frame_get_u16(const uint8_t* frame_d)
 	return (high_b << 8) | low_b;
 }
 
-uint32_t frame_get_u32(const uint8_t* frame_d)
+uint32_t frame_get_u32(const uint8_t *frame_d)
 {
 	uint32_t high_w, low_w;
 	low_w = frame_get_u16(frame_d);
@@ -519,7 +518,7 @@ uint32_t frame_get_u32(const uint8_t* frame_d)
 	return (high_w << 16) | low_w;
 }
 
-uint64_t frame_get_u64(const uint8_t* frame_d)
+uint64_t frame_get_u64(const uint8_t *frame_d)
 {
 	uint64_t high_w, low_w;
 	low_w = frame_get_u32(frame_d);
@@ -527,7 +526,7 @@ uint64_t frame_get_u64(const uint8_t* frame_d)
 	return (high_w << 32) | low_w;
 }
 
-void frame_set_u8(uint8_t* frame_d, uint8_t v)
+void frame_set_u8(uint8_t *frame_d, uint8_t v)
 {
 	int i;
 	for (i = 0; i < 8; i++) {
@@ -538,7 +537,7 @@ void frame_set_u8(uint8_t* frame_d, uint8_t v)
 	}
 }
 
-void frame_set_u16(uint8_t* frame_d, uint16_t v)
+void frame_set_u16(uint8_t *frame_d, uint16_t v)
 {
 	uint16_t high_b, low_b;
 	high_b = v >> 8;

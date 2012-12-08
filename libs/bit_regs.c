@@ -7,7 +7,6 @@
 
 #include "model.h"
 #include "bit.h"
-#include "parts.h"
 
 static int parse_header(struct fpga_config* config, uint8_t* d,
 	int len, int inpos, int* outdelta);
@@ -845,7 +844,7 @@ static int dump_maj_right(const uint8_t* bits, int row, int major)
 
 static int dump_maj_logic(const uint8_t* bits, int row, int major)
 {
-	const struct xc_info* xci = xc_info(XC6SLX9);
+	const struct xc_die* xci = xc_die_info(XC6SLX9);
 	int minor, i, logdev_start, logdev_end;
 
 	for (minor = 0; minor < xci->majors[major].minors; minor++)
@@ -861,7 +860,7 @@ static int dump_maj_logic(const uint8_t* bits, int row, int major)
 	logdev_start = 0;
 	logdev_end = 15;
 	if (xci->majors[major].flags & XC_MAJ_TOP_BOT_IO) {
-		if (row == xc_info(XC6SLX9)->num_rows-1)
+		if (row == xc_die_info(XC6SLX9)->num_rows-1)
 			logdev_start += TOPBOT_IO_ROWS;
 		else if (!row)
 			logdev_end -= TOPBOT_IO_ROWS;

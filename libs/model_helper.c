@@ -7,7 +7,6 @@
 
 #include <stdarg.h>
 #include "model.h"
-#include "parts.h"
 
 #define NUM_PF_BUFS	32
 
@@ -64,16 +63,16 @@ const char* wpref(struct fpga_model* model, int y, int x, const char* wire_name)
 		else if (is_atx(X_CENTER_CMTPLL_COL, model, x))
 			prefix = "CMT_PLL_";
 		else if (is_atx(X_RIGHT_MCB|X_LEFT_MCB, model, x)) {
-			if (y == model->xci->mcb_ypos)
+			if (y == model->die->mcb_ypos)
 				prefix = "MCB_";
 			else {
-				for (i = 0; i < model->xci->num_mui; i++) {
-					if (y == model->xci->mui_pos[i]+1) {
+				for (i = 0; i < model->die->num_mui; i++) {
+					if (y == model->die->mui_pos[i]+1) {
 						prefix = "MCB_MUI_";
 						break;
 					}
 				}
-				if (i >= model->xci->num_mui)
+				if (i >= model->die->num_mui)
 					prefix = "MCB_INT_";
 			}
 		} else if (is_atx(X_INNER_RIGHT, model, x))
@@ -753,14 +752,14 @@ void is_in_row(const struct fpga_model* model, int y,
 
 	// calculate distance to center and check
 	// that y is not pointing to the center
-	dist_to_center = (model->xci->num_rows/2)*(8+1/*middle of row*/+8);
+	dist_to_center = (model->die->num_rows/2)*(8+1/*middle of row*/+8);
 	if (y == dist_to_center) return;
 	if (y > dist_to_center) y--;
 
 	// check that y is not pointing past the last row
-	if (y >= model->xci->num_rows*(8+1+8)) return;
+	if (y >= model->die->num_rows*(8+1+8)) return;
 
-	if (row_num) *row_num = model->xci->num_rows-(y/(8+1+8))-1;
+	if (row_num) *row_num = model->die->num_rows-(y/(8+1+8))-1;
 	if (row_pos) *row_pos = y%(8+1+8);
 }
 
@@ -918,15 +917,15 @@ const char *fpga_connpt_str(struct fpga_model *model, enum extra_wires wire,
 			snprintf(buf[last_buf], sizeof(buf[last_buf]),
 				"INT_INTERFACE_%s", fpga_wire2str(wire));
 		else if (is_atx(X_LEFT_MCB|X_RIGHT_MCB, model, x)) {
-			for (i = 0; i < model->xci->num_mui; i++) {
-				if (y == model->xci->mui_pos[i]+1) {
+			for (i = 0; i < model->die->num_mui; i++) {
+				if (y == model->die->mui_pos[i]+1) {
 					if (y-dest_y < 0 || y-dest_y > 1) HERE();
 					snprintf(buf[last_buf], sizeof(buf[last_buf]),
 						"MUI_%s_INT%i", fpga_wire2str(wire), y-dest_y);
 					break;
 				}
 			}
-			if (i >= model->xci->num_mui)
+			if (i >= model->die->num_mui)
 				strcpy(buf[last_buf], fpga_wire2str(wire));
 		} else if (is_atx(X_FABRIC_MACC_COL, model, x)) {
 			if (has_device(model, y, x, DEV_MACC)) {
@@ -960,15 +959,15 @@ const char *fpga_connpt_str(struct fpga_model *model, enum extra_wires wire,
 				snprintf(buf[last_buf], sizeof(buf[last_buf]),
 					"INT_INTERFACE_LOGICOUT%i", wnum);
 		} else if (is_atx(X_LEFT_MCB|X_RIGHT_MCB, model, x)) {
-			for (i = 0; i < model->xci->num_mui; i++) {
-				if (y == model->xci->mui_pos[i]+1) {
+			for (i = 0; i < model->die->num_mui; i++) {
+				if (y == model->die->mui_pos[i]+1) {
 					if (y-dest_y < 0 || y-dest_y > 1) HERE();
 					snprintf(buf[last_buf], sizeof(buf[last_buf]),
 						"MUI_LOGICOUT%i_INT%i", wnum, y-dest_y);
 					break;
 				}
 			}
-			if (i >= model->xci->num_mui)
+			if (i >= model->die->num_mui)
 				strcpy(buf[last_buf], fpga_wire2str(wire));
 		} else if (is_atx(X_FABRIC_MACC_COL, model, x)) {
 			if (has_device(model, y, x, DEV_MACC)) {
@@ -990,15 +989,15 @@ const char *fpga_connpt_str(struct fpga_model *model, enum extra_wires wire,
 			snprintf(buf[last_buf], sizeof(buf[last_buf]),
 				"INT_INTERFACE_LOGICBIN%i", wnum);
 		} else if (is_atx(X_LEFT_MCB|X_RIGHT_MCB, model, x)) {
-			for (i = 0; i < model->xci->num_mui; i++) {
-				if (y == model->xci->mui_pos[i]+1) {
+			for (i = 0; i < model->die->num_mui; i++) {
+				if (y == model->die->mui_pos[i]+1) {
 					if (y-dest_y < 0 || y-dest_y > 1) HERE();
 					snprintf(buf[last_buf], sizeof(buf[last_buf]),
 						"MUI_LOGICINB%i_INT%i", wnum, y-dest_y);
 					break;
 				}
 			}
-			if (i >= model->xci->num_mui)
+			if (i >= model->die->num_mui)
 				strcpy(buf[last_buf], fpga_wire2str(wire));
 		} else if (is_atx(X_FABRIC_MACC_COL, model, x)) {
 			if (has_device(model, y, x, DEV_MACC)) {

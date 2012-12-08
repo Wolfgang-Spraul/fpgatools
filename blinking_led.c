@@ -8,7 +8,6 @@
 #include "model.h"
 #include "floorplan.h"
 #include "control.h"
-#include "parts.h"
 
 /*
    This C design corresponds to the following Verilog:
@@ -32,9 +31,9 @@ int main(int argc, char** argv)
 	int iob_led_y, iob_led_x, iob_led_type_idx;
 	int logic_y, logic_x, logic_type_idx;
 	struct fpgadev_logic logic_cfg;
-	net_idx_t inA_net, inB_net, out_net;
+	net_idx_t clk_net;
 
-	fpga_build_model(&model, XC6SLX9);
+	fpga_build_model(&model, XC6SLX9, TQG144);
 
 	fpga_find_iob(&model, "P55", &iob_clk_y, &iob_clk_x, &iob_clk_type_idx);
 	fdev_iob_input(&model, iob_clk_y, iob_clk_x, iob_clk_type_idx,
@@ -48,67 +47,69 @@ int main(int argc, char** argv)
 	fdev_iob_drive(&model, iob_led_y, iob_led_x, iob_led_type_idx,
 		8);
 
-#if 0
-	logic_y = 55-58
+	logic_y = 58;
 	logic_x = 13;
-	logic_type_idx = DEV_LOG_X;
-	if ((rc = fdev_logic_a2d_lut(&model, logic_y, logic_x, logic_type_idx,
-		LUT_D, 6, "A3*A5", ZTERM))) FAIL(rc);
+	logic_type_idx = DEV_LOG_M_OR_L;
 
-			memset(&logic_cfg, 0, sizeof(logic_cfg));
-			logic_cfg.a2d[LUT_A].lut6 = "(A6+~A6)*(~A5)";
-			logic_cfg.a2d[LUT_A].lut5 = "1";
-			logic_cfg.a2d[LUT_A].cy0 = CY0_O5;
-			logic_cfg.a2d[LUT_A].ff = FF_FF;
-			logic_cfg.a2d[LUT_A].ff_mux = MUX_XOR;
-			logic_cfg.a2d[LUT_A].ff_srinit = FF_SRINIT0;
-			logic_cfg.a2d[LUT_B].lut6 = "(A6+~A6)*(A5)";
-			logic_cfg.a2d[LUT_B].lut5 = "1";
-			logic_cfg.a2d[LUT_B].cy0 = CY0_O5;
-			logic_cfg.a2d[LUT_B].ff = FF_FF;
-			logic_cfg.a2d[LUT_B].ff_mux = MUX_XOR;
-			logic_cfg.a2d[LUT_B].ff_srinit = FF_SRINIT0;
-			logic_cfg.a2d[LUT_C].lut6 = "(A6+~A6)*(A5)";
-			logic_cfg.a2d[LUT_C].lut5 = "1";
-			logic_cfg.a2d[LUT_C].cy0 = CY0_O5;
-			logic_cfg.a2d[LUT_C].ff = FF_FF;
-			logic_cfg.a2d[LUT_C].ff_mux = MUX_XOR;
-			logic_cfg.a2d[LUT_C].ff_srinit = FF_SRINIT0;
-			logic_cfg.a2d[LUT_D].lut6 = "(A6+~A6)*(A5)";
-			logic_cfg.a2d[LUT_D].lut5 = "1";
-			logic_cfg.a2d[LUT_D].cy0 = CY0_O5;
-			logic_cfg.a2d[LUT_D].ff = FF_FF;
-			logic_cfg.a2d[LUT_D].ff_mux = MUX_XOR;
-			logic_cfg.a2d[LUT_D].ff_srinit = FF_SRINIT0;
+	memset(&logic_cfg, 0, sizeof(logic_cfg));
+	logic_cfg.a2d[LUT_A].lut6 = "(A6+~A6)*(~A5)";
+	logic_cfg.a2d[LUT_A].lut5 = "1";
+	logic_cfg.a2d[LUT_A].cy0 = CY0_O5;
+	logic_cfg.a2d[LUT_A].ff = FF_FF;
+	logic_cfg.a2d[LUT_A].ff_mux = MUX_XOR;
+	logic_cfg.a2d[LUT_A].ff_srinit = FF_SRINIT0;
+	logic_cfg.a2d[LUT_B].lut6 = "(A6+~A6)*(A5)";
+	logic_cfg.a2d[LUT_B].lut5 = "1";
+	logic_cfg.a2d[LUT_B].cy0 = CY0_O5;
+	logic_cfg.a2d[LUT_B].ff = FF_FF;
+	logic_cfg.a2d[LUT_B].ff_mux = MUX_XOR;
+	logic_cfg.a2d[LUT_B].ff_srinit = FF_SRINIT0;
+	logic_cfg.a2d[LUT_C].lut6 = "(A6+~A6)*(A5)";
+	logic_cfg.a2d[LUT_C].lut5 = "1";
+	logic_cfg.a2d[LUT_C].cy0 = CY0_O5;
+	logic_cfg.a2d[LUT_C].ff = FF_FF;
+	logic_cfg.a2d[LUT_C].ff_mux = MUX_XOR;
+	logic_cfg.a2d[LUT_C].ff_srinit = FF_SRINIT0;
+	logic_cfg.a2d[LUT_D].lut6 = "(A6+~A6)*(A5)";
+	logic_cfg.a2d[LUT_D].lut5 = "1";
+	logic_cfg.a2d[LUT_D].cy0 = CY0_O5;
+	logic_cfg.a2d[LUT_D].ff = FF_FF;
+	logic_cfg.a2d[LUT_D].ff_mux = MUX_XOR;
+	logic_cfg.a2d[LUT_D].ff_srinit = FF_SRINIT0;
 
-			logic_cfg.clk_inv = CLKINV_CLK;
-			logic_cfg.sync_attr = SYNCATTR_ASYNC;
-			logic_cfg.precyinit = PRECYINIT_0;
-			logic_cfg.cout_used = 1;
-	logic_setconf(tstate->model, y, x, type_idx, logic_cfg);
+	logic_cfg.clk_inv = CLKINV_CLK;
+	logic_cfg.sync_attr = SYNCATTR_ASYNC;
+	logic_cfg.precyinit = PRECYINIT_0;
+	logic_cfg.cout_used = 1;
+	fdev_logic_setconf(&model, logic_y, logic_x, logic_type_idx, &logic_cfg);
 
+	logic_y = 57;
+	logic_cfg.precyinit = 0;
+	logic_cfg.a2d[LUT_A].lut6 = "(A6+~A6)*(A5)";
+	fdev_logic_setconf(&model, logic_y, logic_x, logic_type_idx, &logic_cfg);
 
-	fnet_new(&model, &inA_net);
-	fnet_add_port(&model, inA_net, iob_inA_y, iob_inA_x,
-		DEV_IOB, iob_inA_type_idx, IOB_OUT_I);
-	fnet_add_port(&model, inA_net, logic_y, logic_x, DEV_LOGIC,
-		logic_type_idx, LI_D3);
-	fnet_autoroute(&model, inA_net);
+	logic_y = 56;
+	fdev_logic_setconf(&model, logic_y, logic_x, logic_type_idx, &logic_cfg);
 
-	fnet_new(&model, &inB_net);
-	fnet_add_port(&model, inB_net, iob_inB_y, iob_inB_x,
-		DEV_IOB, iob_inB_type_idx, IOB_OUT_I);
-	fnet_add_port(&model, inB_net, logic_y, logic_x, DEV_LOGIC,
-		logic_type_idx, LI_D5);
-	fnet_autoroute(&model, inB_net);
+	logic_y = 55;
+	logic_cfg.cout_used = 0;
+	logic_cfg.a2d[LUT_C].lut6 = "A5";
+	logic_cfg.a2d[LUT_C].lut5 = 0;
+	logic_cfg.a2d[LUT_C].cy0 = 0;
+	logic_cfg.a2d[LUT_C].ff = FF_FF;
+	logic_cfg.a2d[LUT_C].ff_mux = MUX_XOR;
+	logic_cfg.a2d[LUT_C].ff_srinit = FF_SRINIT0;
+	memset(&logic_cfg.a2d[LUT_D], 0, sizeof(logic_cfg.a2d[LUT_D]));
+	fdev_logic_setconf(&model, logic_y, logic_x, logic_type_idx, &logic_cfg);
 
-	fnet_new(&model, &out_net);
-	fnet_add_port(&model, out_net, logic_y, logic_x, DEV_LOGIC,
-		logic_type_idx, LO_D);
-	fnet_add_port(&model, out_net, iob_out_y, iob_out_x,
-		DEV_IOB, iob_out_type_idx, IOB_IN_O);
-	fnet_autoroute(&model, out_net);
-#endif
+	fnet_new(&model, &clk_net);
+	fnet_add_port(&model, clk_net, iob_clk_y, iob_clk_x, DEV_IOB,
+		iob_clk_type_idx, IOB_OUT_I);
+	fnet_add_port(&model, clk_net, 55, 13, DEV_LOGIC, DEV_LOG_M_OR_L, LI_CLK);
+	fnet_add_port(&model, clk_net, 56, 13, DEV_LOGIC, DEV_LOG_M_OR_L, LI_CLK);
+	fnet_add_port(&model, clk_net, 57, 13, DEV_LOGIC, DEV_LOG_M_OR_L, LI_CLK);
+	fnet_add_port(&model, clk_net, 58, 13, DEV_LOGIC, DEV_LOG_M_OR_L, LI_CLK);
+	fnet_autoroute(&model, clk_net);
 
 	write_floorplan(stdout, &model, FP_DEFAULT);
 	return fpga_free_model(&model);

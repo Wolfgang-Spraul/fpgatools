@@ -7,17 +7,17 @@
 
 #include <stdarg.h>
 #include "model.h"
-#include "parts.h"
 
 static int s_high_speed_replicate = 1;
 
-int fpga_build_model(struct fpga_model* model, int idcode)
+int fpga_build_model(struct fpga_model* model, int idcode, enum xc6_pkg pkg)
 {
 	int rc;
 
 	memset(model, 0, sizeof(*model));
-	model->xci = xc_info(idcode);
-	if (!model->xci) RC_FAIL(model, EINVAL);
+	model->die = xc_die_info(idcode);
+	model->pkg = xc6_pkg_info(pkg);
+	if (!model->die || !model->pkg) RC_FAIL(model, EINVAL);
 	strarray_init(&model->str, STRIDX_64K);
 	rc = get_xc6_routing_bitpos(&model->sw_bitpos, &model->num_bitpos);
 	if (rc) RC_FAIL(model, rc);

@@ -10,7 +10,6 @@
 #include "model.h"
 #include "floorplan.h"
 #include "control.h"
-#include "parts.h"
 
 time_t g_start_time;
 #define TIME()		(time(0)-g_start_time)
@@ -1733,6 +1732,63 @@ static int test_bscan_config(struct test_state* tstate)
 	return 0;
 }
 
+static int test_clock_routing(struct test_state* tstate)
+{
+	int rc, i, iob_clk_y, iob_clk_x, iob_clk_type_idx;
+	int logic_y, logic_x, logic_type_idx;
+	net_idx_t clock_net;
+
+	tstate->diff_to_null = 1;
+	for (i = 0; i < tstate->model->pkg->num_gclk_pins; i++) {
+		if (!tstate->model->pkg->gclk_pin[i])
+			continue;
+		rc = fpga_find_iob(tstate->model, tstate->model->pkg->gclk_pin[i],
+			&iob_clk_y, &iob_clk_x, &iob_clk_type_idx);
+		if (rc) FAIL(rc);
+		rc = fdev_iob_input(tstate->model, iob_clk_y, iob_clk_x,
+			iob_clk_type_idx, IO_LVCMOS33);
+		if (rc) FAIL(rc);
+
+		logic_y = 58;
+		logic_x = 13;
+		logic_type_idx = DEV_LOG_M_OR_L;
+
+		rc = fdev_logic_a2d_lut(tstate->model, logic_y, logic_x,
+			logic_type_idx, LUT_A, 6, "A1", ZTERM);
+		if (rc) FAIL(rc);
+		rc = fdev_set_required_pins(tstate->model, logic_y, logic_x,
+			DEV_LOGIC, logic_type_idx);
+		if (rc) FAIL(rc);
+		
+		if (tstate->dry_run)
+			fdev_print_required_pins(tstate->model,
+				logic_y, logic_x, DEV_LOGIC, logic_type_idx);
+
+		rc = fnet_new(tstate->model, &clock_net);
+		if (rc) FAIL(rc);
+		rc = fnet_add_port(tstate->model, clock_net, iob_clk_y,
+			iob_clk_x, DEV_IOB, iob_clk_type_idx, IOB_OUT_I);
+		if (rc) FAIL(rc);
+		rc = fnet_add_port(tstate->model, clock_net, logic_y, logic_x,
+			DEV_LOGIC, logic_type_idx, LI_CLK);
+		if (rc) FAIL(rc);
+		rc = fnet_autoroute(tstate->model, clock_net);
+		if (rc) FAIL(rc);
+
+		if ((rc = diff_printf(tstate))) FAIL(rc);
+
+		fnet_delete(tstate->model, clock_net);
+		fdev_delete(tstate->model, logic_y, logic_x, DEV_LOGIC,
+			logic_type_idx);
+		fdev_delete(tstate->model, iob_clk_y, iob_clk_x, DEV_IOB,
+			iob_clk_type_idx);
+break;
+	}
+	return 0;
+fail:
+	return rc;
+}
+
 #define DEFAULT_DIFF_EXEC "./autotest_diff.sh"
 
 static void printf_help(const char* argv_0, const char** available_tests)
@@ -1742,7 +1798,8 @@ static void printf_help(const char* argv_0, const char** available_tests)
 		"\n"
 		"Usage: %s [--test=<name>] [--skip=<num>] [--dry-run]\n"
 		"       %*s [--diff=<diff executable>]\n"
-		"Default diff executable: " DEFAULT_DIFF_EXEC "\n", argv_0, (int) strlen(argv_0), "");
+		"Default diff executable: " DEFAULT_DIFF_EXEC "\n"
+		"Output dir: " AUTOTEST_TMP_DIR "\n", argv_0, (int) strlen(argv_0), "");
 
 	if (available_tests) {
 		int i = 0;
@@ -1765,7 +1822,7 @@ int main(int argc, char** argv)
 	const char* available_tests[] =
 		{ "logic_cfg", "routing_sw", "io_sw", "iob_cfg",
 		  "lut_encoding", "bufg_cfg", "bufio_cfg", "pll_cfg",
-		  "dcm_cfg", "bscan_cfg", 0 };
+		  "dcm_cfg", "bscan_cfg", "clock_routing", 0 };
 
 	// flush after every line is better for the autotest
 	// output, tee, etc.
@@ -1862,7 +1919,7 @@ int main(int argc, char** argv)
 	MEMUSAGE();
 
 	printf("O Building memory model...\n");
-	if ((rc = fpga_build_model(&model, XC6SLX9)))
+	if ((rc = fpga_build_model(&model, XC6SLX9, TQG144)))
 		goto fail;
 	printf("O Done\n");
 	TIME_AND_MEM();
@@ -1911,6 +1968,10 @@ int main(int argc, char** argv)
 	}
 	if (!strcmp(cmdline_test, "bscan_cfg")) {
 		rc = test_bscan_config(&tstate);
+		if (rc) FAIL(rc);
+	}
+	if (!strcmp(cmdline_test, "clock_routing")) {
+		rc = test_clock_routing(&tstate);
 		if (rc) FAIL(rc);
 	}
 

@@ -8,7 +8,6 @@
 #include "model.h"
 #include "floorplan.h"
 #include "bit.h"
-#include "parts.h"
 
 int main(int argc, char** argv)
 {
@@ -53,7 +52,7 @@ int main(int argc, char** argv)
 	}
 
 	// build model
-	if ((rc = fpga_build_model(&model, XC6SLX9)))
+	if ((rc = fpga_build_model(&model, XC6SLX9, TQG144)))
 		FAIL(rc);
 
 	if (print_swbits) {

@@ -7,14 +7,13 @@
 
 #include "model.h"
 #include "floorplan.h"
-#include "parts.h"
 
 int main(int argc, char** argv)
 {
 	struct fpga_model model;
 	int no_conns, rc;
 
-	if ((rc = fpga_build_model(&model, XC6SLX9)))
+	if ((rc = fpga_build_model(&model, XC6SLX9, TQG144)))
 		goto fail;
 
 	no_conns = 0;

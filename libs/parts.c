@@ -7,7 +7,6 @@
 
 #include "model.h"
 #include "control.h"
-#include "parts.h"
 
 const char* iob_xc6slx9_sitenames[IOB_WORDS*2/8] =
 {
@@ -100,9 +99,9 @@ int xc_num_rows(int idcode)
 	return NUM_ROWS;
 }
 
-const struct xc_info* xc_info(int idcode)
+const struct xc_die *xc_die_info(int idcode)
 {
-	static const struct xc_info xc6slx9_info = {
+	static const struct xc_die xc6slx9_info = {
 		.idcode = XC6SLX9,
 		.num_rows = 4,
 		.left_wiring =
@@ -371,6 +370,29 @@ const struct xc_info* xc_info(int idcode)
 			47, 20, 38, 23, 48, 57, 44,  4 }};
 	switch (idcode & IDCODE_MASK) {
 		case XC6SLX9: return &xc6slx9_info;
+	}
+	HERE();
+	return 0;
+}
+
+const struct xc6_pkg_info *xc6_pkg_info(enum xc6_pkg pkg)
+{
+	// ug382 table 1-6 page 25
+	static const struct xc6_pkg_info pkg_tqg144 = {
+		.pkg = TQG144,
+		.num_gclk_pins = XC6_NUM_GCLK_PINS,
+		.gclk_pin = {
+			/*  0 */ "P55",  "P56",  0,      0,
+			/*  4 */ "P84",  "P85",  "P87",  "P88",
+			/*  8 */ "P92",  "P93",  "P94",  "P95",
+			/* 12 */ "P123", "P124", "P126", "P127",
+			/* 16 */ "P131", "P132", "P133", "P134",
+			/* 20 */ "P14",  "P15",  "P16",  "P17",
+			/* 24 */ "P21",  "P22",  "P23",  "P24",
+			/* 28 */ 0,      0,      "P50",  "P51" }};
+	switch (pkg) {
+		case TQG144: return &pkg_tqg144;
+		default: ;
 	}
 	HERE();
 	return 0;
