@@ -268,6 +268,8 @@ void printf_swconns(struct fpga_model* model, int y, int x,
 	str16_t sw, int from_to, int max_depth);
 
 #define SWTO_YX_DEF			0
+// SWTO_YX_CLOSEST finds the closest tile that satisfies
+// the YX requirement.
 #define SWTO_YX_CLOSEST			0x0001
 #define SWTO_YX_TARGET_CONNPT		0x0002
 #define SWTO_YX_MAX_SWITCH_DEPTH	0x0004
@@ -292,8 +294,28 @@ struct switch_to_yx
 	str16_t dest_connpt;
 };
 
-int fpga_switch_to_yx(struct switch_to_yx* p);
-void printf_switch_to_yx_result(struct switch_to_yx* p);
+int fpga_switch_to_yx(struct switch_to_yx *p);
+void printf_switch_to_yx_result(struct switch_to_yx *p);
+
+struct switch_to_yx_l2
+{
+	struct switch_to_yx l1;
+	// l2 y/x/set is inserted between l1.y/x/start_switch
+	// and l1.dest_y/dest_x/dest_connpt
+	struct sw_set l2_set;
+	int l2_y, l2_x;
+};
+
+// fpga_switch_to_yx_l2() allows for an optional intermediate tile
+// to come before the yx_req. If a direct link was found, l2_set.len
+// will be 0 and l2_y and l2_x are undefined.
+int fpga_switch_to_yx_l2(struct switch_to_yx_l2 *p);
+
+#define SWTO_REL_DEFAULT	0
+// If a connection to the actal target is not found,
+// WEAK_TARGET will allow to return the connection that
+// reaches as close as possible to the x/y target.
+#define SWTO_REL_WEAK_TARGET	0x0001
 
 struct switch_to_rel
 {
@@ -303,6 +325,7 @@ struct switch_to_rel
 	int start_x;
 	str16_t start_switch;
 	int from_to;
+	int flags; // SWTO_REL-value
 	int rel_y;
 	int rel_x;
 	str16_t target_connpt; // can be STRIDX_NO_ENTRY
@@ -370,6 +393,8 @@ void fnet_printf(FILE* f, struct fpga_model* model, net_idx_t net_i);
 int fnet_autoroute(struct fpga_model* model, net_idx_t net_i);
 
 int fnet_route_to_inpins(struct fpga_model* model, net_idx_t net_i,
+	str16_t from);
+int fnet_route_to_inpins_s(struct fpga_model* model, net_idx_t net_i,
 	const char* from);
 
 //

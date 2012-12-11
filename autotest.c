@@ -22,6 +22,7 @@ time_t g_start_time;
 struct test_state
 {
 	int cmdline_skip;
+	int cmdline_count;
 	char cmdline_diff_exec[1024];
 	int dry_run;
 	int diff_to_null;
@@ -77,6 +78,11 @@ static int diff_printf(struct test_state* tstate)
 	if (tstate->cmdline_skip >= tstate->next_diff_counter) {
 		printf("O Skipping diff %i.\n", tstate->next_diff_counter++);
 		return 0;
+	}
+	if (tstate->cmdline_count != -1
+	    && tstate->next_diff_counter >= tstate->cmdline_skip + tstate->cmdline_count + 1) {
+		printf("\nO Finished %i tests.\n", tstate->cmdline_count);
+		exit(0);
 	}
 
 	snprintf(path, sizeof(path), "%s/autotest_%s_%06i", tstate->tmp_dir,
@@ -561,6 +567,7 @@ static int test_routing_sw_from_logic(struct test_state* tstate,
 			swto.start_switch = fdev_logic_pinstr_i(tstate->model,
 				dev->pinw_req_for_cfg[0]|LD1, LOGIC_M);
 			swto.from_to = SW_TO;
+			swto.flags = SWTO_REL_DEFAULT;
 			swto.rel_y = 0;
 			swto.rel_x = -1;
 			swto.target_connpt = STRIDX_NO_ENTRY;
@@ -1061,7 +1068,8 @@ static int test_logic(struct test_state* tstate, int y, int x, int type_idx,
 		    || (latch_logic
 			&& (dev->pinw_req_for_cfg[i] == LI_CLK
 			    || dev->pinw_req_for_cfg[i] == LI_CE))) {
-			rc = fnet_route_to_inpins(tstate->model, pinw_nets[i], "VCC_WIRE");
+			rc = fnet_route_to_inpins_s(tstate->model,
+				pinw_nets[i], "VCC_WIRE");
 			if (rc) FAIL(rc);
 		}
 	}
@@ -1745,6 +1753,9 @@ static int test_clock_routing(struct test_state* tstate)
 		rc = fpga_find_iob(tstate->model, tstate->model->pkg->gclk_pin[i],
 			&iob_clk_y, &iob_clk_x, &iob_clk_type_idx);
 		if (rc) FAIL(rc);
+		printf("\nO test %i: gclk pin %s (y%02i x%02i IOB %i)\n",
+			tstate->next_diff_counter, tstate->model->pkg->gclk_pin[i],
+			iob_clk_y, iob_clk_x, iob_clk_type_idx);
 		rc = fdev_iob_input(tstate->model, iob_clk_y, iob_clk_x,
 			iob_clk_type_idx, IO_LVCMOS33);
 		if (rc) FAIL(rc);
@@ -1782,7 +1793,6 @@ static int test_clock_routing(struct test_state* tstate)
 			logic_type_idx);
 		fdev_delete(tstate->model, iob_clk_y, iob_clk_x, DEV_IOB,
 			iob_clk_type_idx);
-break;
 	}
 	return 0;
 fail:
@@ -1796,8 +1806,8 @@ static void printf_help(const char* argv_0, const char** available_tests)
 	printf( "\n"
 		"fpgatools automatic test suite\n"
 		"\n"
-		"Usage: %s [--test=<name>] [--skip=<num>] [--dry-run]\n"
-		"       %*s [--diff=<diff executable>]\n"
+		"Usage: %s [--test=<name>] [--skip=<num>] [--count=<num>]\n"
+		"       %*s [--dry-run] [--diff=<diff executable>]\n"
 		"Default diff executable: " DEFAULT_DIFF_EXEC "\n"
 		"Output dir: " AUTOTEST_TMP_DIR "\n", argv_0, (int) strlen(argv_0), "");
 
@@ -1818,7 +1828,7 @@ int main(int argc, char** argv)
 	struct fpga_model model;
 	struct test_state tstate;
 	char param[1024], cmdline_test[1024];
-	int i, param_skip, rc;
+	int i, param_skip, param_count, rc;
 	const char* available_tests[] =
 		{ "logic_cfg", "routing_sw", "io_sw", "iob_cfg",
 		  "lut_encoding", "bufg_cfg", "bufio_cfg", "pll_cfg",
@@ -1840,6 +1850,7 @@ int main(int argc, char** argv)
 
 	memset(&tstate, 0, sizeof(tstate));
 	tstate.cmdline_skip = -1;
+	tstate.cmdline_count = -1;
 	tstate.cmdline_diff_exec[0] = 0;
 	cmdline_test[0] = 0;
 	tstate.dry_run = -1;
@@ -1869,6 +1880,14 @@ int main(int argc, char** argv)
 				return EINVAL;
 			}
 			tstate.cmdline_skip = param_skip;
+			continue;
+		}
+		if (sscanf(argv[i], "--count=%i", &param_count) == 1) {
+			if (tstate.cmdline_count != -1) {
+				printf_help(argv[0], available_tests);
+				return EINVAL;
+			}
+			tstate.cmdline_count = param_count;
 			continue;
 		}
 		if (!strcmp(argv[i], "--dry-run")) {
@@ -1910,6 +1929,7 @@ int main(int argc, char** argv)
 	printf("O Test: %s\n", cmdline_test);
 	printf("O Diff: %s\n", tstate.cmdline_diff_exec);
 	printf("O Skip: %i\n", tstate.cmdline_skip);
+	printf("O Count: %i\n", tstate.cmdline_count);
 	printf("O Dry run: %i\n", tstate.dry_run);
 	printf("\n");
 	printf("O Time measured in seconds from 0.\n");

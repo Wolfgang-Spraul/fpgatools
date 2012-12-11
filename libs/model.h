@@ -293,6 +293,9 @@ int is_atx(int check, struct fpga_model* model, int x);
 // boundary of the regular routing area.
 #define YX_OUTSIDE_OF_ROUTING	0x0400
 #define YX_ROUTING_BOUNDARY	0x0800
+#define YX_X_CENTER_CMTPLL	0x1000
+#define YX_Y_CENTER		0x2000
+#define YX_CENTER		0x4000
 
 int is_atyx(int check, struct fpga_model* model, int y, int x);
 
@@ -307,6 +310,7 @@ int which_row(int y, struct fpga_model* model);
 int pos_in_row(int y, struct fpga_model* model);
 // regular_row_pos() returns the index (0..15) without hclk, or -1 if y is a hclk.
 int regular_row_pos(int y, struct fpga_model* model);
+int y_to_hclk(int y, struct fpga_model *model);
 
 const char* logicin_s(int wire, int routing_io);
 

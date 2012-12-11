@@ -736,6 +736,13 @@ int is_atyx(int check, struct fpga_model* model, int y, int x)
 	    && is_atyx(YX_ROUTING_TILE, model, y, x)
 	    && (x == LEFT_IO_ROUTING || x == model->x_width-RIGHT_IO_ROUTING_O
 	        || y == TOP_FIRST_REGULAR || y == model->y_height-BOT_LAST_REGULAR_O)) return 1;
+	if (check & YX_X_CENTER_CMTPLL
+	    && is_atx(X_CENTER_CMTPLL_COL, model, x)) return 1;
+	if (check & YX_Y_CENTER
+	    && is_aty(Y_CHIP_HORIZ_REGS, model, y)) return 1;
+	if (check & YX_CENTER
+	    && is_atx(X_CENTER_REGS_COL, model, x)
+	    && is_aty(Y_CHIP_HORIZ_REGS, model, y)) return 1;
 	return 0;
 }
 
@@ -783,6 +790,22 @@ int regular_row_pos(int y, struct fpga_model* model)
 	if (row_pos == -1 || row_pos == HCLK_POS) return -1;
 	if (row_pos > HCLK_POS) row_pos--;
 	return row_pos;
+}
+
+int y_to_hclk(int y, struct fpga_model *model)
+{
+	int row_num, row_pos, hclk_pos;
+
+	is_in_row(model, y, &row_num, &row_pos);
+	if (row_num == -1
+	    || row_pos == -1 || row_pos == HCLK_POS)
+		{ HERE(); return -1; }
+	hclk_pos = model->y_height - BOT_LAST_REGULAR_O - row_num*ROW_SIZE - HCLK_POS;
+	if (hclk_pos < model->center_y)
+		hclk_pos--; // center regs
+	if (hclk_pos < TOP_FIRST_REGULAR)
+		{ HERE(); return -1; }
+	return hclk_pos;
 }
 
 const char* logicin_s(int wire, int routing_io)

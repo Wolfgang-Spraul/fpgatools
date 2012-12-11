@@ -69,7 +69,7 @@ const char* bool_bits2str(uint64_t u64, int num_bits);
 
 int parse_boolexpr(const char* expr, uint64_t* lut);
 
-int printf_type2(uint8_t* d, int len, int inpos, int num_entries);
+void printf_type2(uint8_t* d, int len, int inpos, int num_entries);
 void printf_ramb16_data(uint8_t* bits, int inpos);
 
 int is_empty(const uint8_t* d, int l);

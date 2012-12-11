@@ -355,20 +355,22 @@ int parse_boolexpr(const char *expr, uint64_t *lut)
 	return 0;
 }
 
-int printf_type2(uint8_t *d, int len, int inpos, int num_entries)
+void printf_type2(uint8_t *d, int len, int inpos, int num_entries)
 {
-	int i, num_printed;
 	uint64_t u64;
+	uint16_t u16;
+	int i, j;
 
-	num_printed = 0;
 	for (i = 0; i < num_entries; i++) {
 		u64 = frame_get_u64(&d[inpos+i*8]);
-		if (u64) {
-			printf("type2 i%i 0x%016lX\n", i, u64);
-			num_printed++;
+		if (!u64) continue;
+		printf("type2 8*%i 0x%016lX\n", i, u64);
+		for (j = 0; j < 4; j++) {
+			u16 = frame_get_u16(&d[inpos+i*8+j*2]);
+			if (u16)
+				printf("type2 2*%i 8*%i+%i 0x%04X\n", i*4+j, i, j, u16);
 		}
 	}
-	return num_printed;
 }
 
 void printf_ramb16_data(uint8_t *bits, int inpos)

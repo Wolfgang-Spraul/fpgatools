@@ -8,6 +8,10 @@
 #include "model.h"
 #include "control.h"
  
+#undef DBG_ENUM_SWITCH
+#undef DBG_SWITCH_TO_YX
+#undef DBG_SWITCH_TO_REL
+
 struct iob_site
 {
 	int xy;
@@ -1574,14 +1578,11 @@ const char* fmt_swset(struct fpga_model* model, int y, int x,
 	return buf[last_buf];
 }
 
-#undef DBG_ENUM_SWITCH
-
 int construct_sw_chain(struct sw_chain* chain, struct fpga_model* model,
 	int y, int x, str16_t start_switch, int from_to, int max_depth,
 	swidx_t* block_list, int block_list_len)
 {
-	int rc;
-
+	RC_CHECK(model);
 #ifdef DBG_ENUM_SWITCH
 	printf("construct_sw_chain() %s (%s)\n",
 		strarray_lookup(&model->str, start_switch),
@@ -1601,7 +1602,7 @@ int construct_sw_chain(struct sw_chain* chain, struct fpga_model* model,
 		chain->internal_block_list = malloc(
 			MAX_SWITCHBOX_SIZE * sizeof(*chain->block_list));
 		if (!chain->internal_block_list)
-			FAIL(ENOMEM);
+			RC_FAIL(model, ENOMEM);
 		chain->block_list = chain->internal_block_list;
 		chain->block_list_len = 0;
 	}
@@ -1612,9 +1613,7 @@ int construct_sw_chain(struct sw_chain* chain, struct fpga_model* model,
 	chain->first_round = 1;
 	chain->set.len = 1;
 	chain->set.sw[0] = FIRST_SW | start_switch;
-	return 0;
-fail:
-	return rc;
+	RC_RETURN(model);
 }
 
 void destruct_sw_chain(struct sw_chain* chain)
@@ -1824,7 +1823,7 @@ int construct_sw_conns(struct sw_conns* conns, struct fpga_model* model,
 	memset(conns, 0, sizeof(*conns));
 	construct_sw_chain(&conns->chain, model, y, x, start_switch,
 		from_to, max_depth, /*block_list*/ 0, /*block_list_len*/ 0);
-	return 0;
+	RC_RETURN(model);
 }
 
 void destruct_sw_conns(struct sw_conns* conns)
@@ -1915,41 +1914,54 @@ int fpga_switch_to_yx(struct switch_to_yx* p)
 	struct sw_conns conns;
 	struct sw_set best_set;
 	int best_y, best_x, best_distance, distance;
-	int best_num_dests, rc;
+	int best_num_dests;
 	str16_t best_connpt;
 
 	RC_CHECK(p->model);
-	rc = construct_sw_conns(&conns, p->model, p->y, p->x, p->start_switch,
+#ifdef DBG_SWITCH_TO_YX
+	printf("fpga_switch_to_yx() %s y%02i-x%02i-%s yx_req %Xh flags %Xh\n",
+		p->from_to == SW_FROM ? "SW_FROM" : "SW_TO",
+		p->y, p->x, strarray_lookup(&p->model->str, p->start_switch),
+		p->yx_req, p->flags);
+#endif
+	construct_sw_conns(&conns, p->model, p->y, p->x, p->start_switch,
 		p->from_to, (p->flags & SWTO_YX_MAX_SWITCH_DEPTH)
 			? p->max_switch_depth : SW_SET_SIZE);
-	if (rc) FAIL(rc);
+	RC_CHECK(p->model);
 
 	best_y = -1;
 	while (fpga_switch_conns(&conns) != NO_CONN) {
-		if (is_atyx(p->yx_req, p->model, conns.dest_y, conns.dest_x)) {
-			if (p->flags & SWTO_YX_TARGET_CONNPT
-			    && conns.dest_str_i != p->target_connpt)
-				continue;
-			if (best_y != -1) {
-				distance = abs(conns.dest_y-p->y)
-					+abs(conns.dest_x-p->x);
-				if (distance > best_distance)
-					continue;
-				else if (conns.num_dests > best_num_dests)
-					continue;
-				else if (conns.chain.set.len > best_set.len)
-					continue;
-			}
-			best_set = conns.chain.set;
-			best_y = conns.dest_y;
-			best_x = conns.dest_x;
-			best_num_dests = conns.num_dests;
-			best_connpt = conns.dest_str_i;
-			best_distance = abs(conns.dest_y-p->y)
+		if (!is_atyx(p->yx_req, p->model, conns.dest_y, conns.dest_x))
+			continue;
+#ifdef DBG_SWITCH_TO_YX
+		printf(" sw %s conn y%02i x%02i %s\n",
+			fmt_swset(p->model, p->y, p->x,
+				&conns.chain.set, p->from_to),
+			conns.dest_y, conns.dest_x,
+			strarray_lookup(&p->model->str, conns.dest_str_i));
+#endif
+		if (p->flags & SWTO_YX_TARGET_CONNPT
+		    && conns.dest_str_i != p->target_connpt)
+			continue;
+		if (best_y != -1) {
+			distance = abs(conns.dest_y-p->y)
 				+abs(conns.dest_x-p->x);
-			if (!p->flags & SWTO_YX_CLOSEST)
-				break;
+			if (distance > best_distance)
+				continue;
+			else if (conns.num_dests > best_num_dests)
+				continue;
+			else if (conns.chain.set.len > best_set.len)
+				continue;
 		}
+		best_set = conns.chain.set;
+		best_y = conns.dest_y;
+		best_x = conns.dest_x;
+		best_num_dests = conns.num_dests;
+		best_connpt = conns.dest_str_i;
+		best_distance = abs(conns.dest_y-p->y)
+			+abs(conns.dest_x-p->x);
+		if (!p->flags & SWTO_YX_CLOSEST)
+			break;
 	}
 	if (best_y == -1)
 		p->set.len = 0;
@@ -1960,9 +1972,7 @@ int fpga_switch_to_yx(struct switch_to_yx* p)
 		p->dest_connpt = best_connpt;
 	}
 	destruct_sw_conns(&conns);
-	return 0;
-fail:
-	return rc;
+	RC_RETURN(p->model);
 }
 
 void printf_switch_to_yx_result(struct switch_to_yx* p)
@@ -1977,33 +1987,114 @@ void printf_switch_to_yx_result(struct switch_to_yx* p)
 		fmt_swset(p->model, p->y, p->x, &p->set, p->from_to));
 }
 
-int fpga_switch_to_rel(struct switch_to_rel* p)
+int fpga_switch_to_yx_l2(struct switch_to_yx_l2 *p)
+{
+	RC_CHECK(p->l1.model);
+	fpga_switch_to_yx(&p->l1);
+	RC_CHECK(p->l1.model);
+	p->l2_set.len = 0;
+	if (!p->l1.set.len) {
+		struct sw_conns conns;
+		struct switch_to_yx l2 = p->l1;
+
+		construct_sw_conns(&conns, p->l1.model, p->l1.y, p->l1.x, p->l1.start_switch,
+			p->l1.from_to, (p->l1.flags & SWTO_YX_MAX_SWITCH_DEPTH)
+				? p->l1.max_switch_depth : SW_SET_SIZE);
+		RC_CHECK(p->l1.model);
+		while (fpga_switch_conns(&conns) != NO_CONN) {
+			l2.y = conns.dest_y;
+			l2.x = conns.dest_x;
+			l2.start_switch = conns.dest_str_i;
+			fpga_switch_to_yx(&l2);
+			RC_CHECK(l2.model);
+			if (l2.set.len) {
+				p->l1.set = conns.chain.set;
+				p->l1.dest_y = l2.dest_y;
+				p->l1.dest_x = l2.dest_x;
+				p->l1.dest_connpt = l2.dest_connpt;
+				p->l2_set = l2.set;
+				p->l2_y = l2.y;
+				p->l2_x = l2.x;
+				break;
+			}
+		}
+		destruct_sw_conns(&conns);
+	}
+	RC_RETURN(p->l1.model);
+}
+
+int fpga_switch_to_rel(struct switch_to_rel *p)
 {
 	struct sw_conns conns;
-	int rc;
+	struct sw_set best_set;
+	int best_y, best_x, best_distance;
+	str16_t best_connpt;
 
 	RC_CHECK(p->model);
-	rc = construct_sw_conns(&conns, p->model, p->start_y, p->start_x,
+#ifdef DBG_SWITCH_TO_REL
+	printf("fpga_switch_to_rel() %s y%02i-x%02i-%s flags %Xh rel_y %i rel_x %i target_connpt %s\n",
+		p->from_to == SW_FROM ? "SW_FROM" : "SW_TO",
+		p->start_y, p->start_x, strarray_lookup(&p->model->str, p->start_switch),
+		p->flags, p->rel_y, p->rel_x,
+		p->target_connpt == STRIDX_NO_ENTRY ? "-" :
+			strarray_lookup(&p->model->str, p->target_connpt));
+#endif
+	construct_sw_conns(&conns, p->model, p->start_y, p->start_x,
 		p->start_switch, p->from_to, SW_SET_SIZE);
-	if (rc) FAIL(rc);
-	p->set.len = 0;
+	RC_CHECK(p->model);
+
+	best_y = -1;
 	while (fpga_switch_conns(&conns) != NO_CONN) {
+#ifdef DBG_SWITCH_TO_REL
+		printf(" sw %s conn y%02i x%02i %s\n",
+			fmt_swset(p->model, p->start_y, p->start_x,
+				&conns.chain.set, p->from_to),
+			conns.dest_y, conns.dest_x,
+			strarray_lookup(&p->model->str, conns.dest_str_i));
+#endif
 		if (conns.dest_y != p->start_y + p->rel_y
-		    || conns.dest_x != p->start_x + p->rel_x)
+		    || conns.dest_x != p->start_x + p->rel_x) {
+			if (!(p->flags & SWTO_REL_WEAK_TARGET))
+				continue;
+			if (best_y != -1) {
+				int distance = abs(conns.dest_y - (p->start_y+p->rel_y))
+					+ abs(conns.dest_x - (p->start_x+p->rel_x));
+				if (distance > best_distance)
+					continue;
+			}
+			best_set = conns.chain.set;
+			best_y = conns.dest_y;
+			best_x = conns.dest_x;
+			best_connpt = conns.dest_str_i;
+			best_distance = abs(conns.dest_y - (p->start_y+p->rel_y))
+				+ abs(conns.dest_x - (p->start_x+p->rel_x));
 			continue;
+		}
 		if (p->target_connpt != STRIDX_NO_ENTRY
 		    && conns.dest_str_i != p->target_connpt)
 			continue;
-		p->set = conns.chain.set;
-		p->dest_y = conns.dest_y;
-		p->dest_x = conns.dest_x;
-		p->dest_connpt = conns.dest_str_i;
+		best_set = conns.chain.set;
+		best_y = conns.dest_y;
+		best_x = conns.dest_x;
+		best_connpt = conns.dest_str_i;
 		break;
 	}
+	if (best_y == -1)
+		p->set.len = 0;
+	else {
+#ifdef DBG_SWITCH_TO_REL
+		printf(" sw %s\n", fmt_swset(p->model, p->start_y, p->start_x,
+			&best_set, p->from_to));
+		printf(" dest y%02i-x%02i-%s\n", best_y, best_x,
+			strarray_lookup(&p->model->str, best_connpt));
+#endif
+		p->set = best_set;
+		p->dest_y = best_y;
+		p->dest_x = best_x;
+		p->dest_connpt = best_connpt;
+	}
 	destruct_sw_conns(&conns);
-	return 0;
-fail:
-	return rc;
+	RC_RETURN(p->model);
 }
 
 void printf_switch_to_rel_result(struct switch_to_rel* p)
@@ -2260,9 +2351,153 @@ void fnet_printf(FILE* f, struct fpga_model* model, net_idx_t net_i)
 	}
 }
 
+static int fnet_pinw(struct fpga_model *model, net_idx_t net_i,
+	int out_pinw, int idx)
+{
+	struct fpga_net *net_p;
+	struct fpga_device *dev_p;
+	int i, next_idx;
+
+	if (model->rc) { HERE(); return -1; };
+	net_p = fnet_get(model, net_i);
+	if (!net_p) { HERE(); return -1; };
+
+	next_idx = 0;
+	for (i = 0; i < net_p->len; i++) {
+		if (!(net_p->el[i].idx & NET_IDX_IS_PINW))
+			continue;
+		dev_p = FPGA_DEV(model, net_p->el[i].y,
+			net_p->el[i].x, net_p->el[i].dev_idx);
+		if ((out_pinw && (net_p->el[i].idx & NET_IDX_MASK) < dev_p->num_pinw_in)
+		    || (!out_pinw && (net_p->el[i].idx & NET_IDX_MASK) >= dev_p->num_pinw_in))
+			continue;
+		if (next_idx == idx)
+			return i;
+		next_idx++;
+	}
+	return -1;
+}
+
 static int fnet_autoroute_clock(struct fpga_model* model, net_idx_t net_i)
 {
-	return 0;
+	struct fpga_net *net_p;
+	int out_i, in_i, hclk_y;
+	struct fpga_device *out_dev, *in_dev;
+	struct switch_to_yx_l2 switch_to_yx_l2;
+	struct switch_to_rel switch_to_rel;
+
+	RC_CHECK(model);
+
+	net_p = fnet_get(model, net_i);
+	if (!net_p) RC_FAIL(model, EINVAL);
+
+	out_i = fnet_pinw(model, net_i, /*out*/ 1, 0);
+	in_i = fnet_pinw(model, net_i, /*out*/ 0, 0);
+	if (out_i == -1 || in_i == -1)
+		RC_FAIL(model, EINVAL);
+
+	out_dev = FPGA_DEV(model, net_p->el[out_i].y,
+			net_p->el[out_i].x, net_p->el[out_i].dev_idx);
+	in_dev = FPGA_DEV(model, net_p->el[in_i].y,
+			net_p->el[in_i].x, net_p->el[in_i].dev_idx);
+	if (out_dev->type != DEV_IOB || in_dev->type != DEV_LOGIC)
+		RC_FAIL(model, ENOTSUP);
+
+	// to regs (l2 allows one intermediate hop)
+	switch_to_yx_l2.l1.yx_req = YX_X_CENTER_CMTPLL | YX_Y_CENTER;
+	switch_to_yx_l2.l1.flags = SWTO_YX_CLOSEST;
+	switch_to_yx_l2.l1.model = model;
+	switch_to_yx_l2.l1.y = net_p->el[out_i].y;
+	switch_to_yx_l2.l1.x = net_p->el[out_i].x;
+	switch_to_yx_l2.l1.start_switch = out_dev->pinw[net_p->el[out_i].idx
+		& NET_IDX_MASK];
+	switch_to_yx_l2.l1.from_to = SW_FROM;
+	fpga_switch_to_yx_l2(&switch_to_yx_l2);
+	RC_ASSERT(model, switch_to_yx_l2.l1.set.len);
+	fnet_add_sw(model, net_i, switch_to_yx_l2.l1.y, switch_to_yx_l2.l1.x,
+		switch_to_yx_l2.l1.set.sw, switch_to_yx_l2.l1.set.len);
+	if (switch_to_yx_l2.l2_set.len)
+		fnet_add_sw(model, net_i, switch_to_yx_l2.l2_y, switch_to_yx_l2.l2_x,
+			switch_to_yx_l2.l2_set.sw, switch_to_yx_l2.l2_set.len);
+
+	// to center (possibly over intermediate)
+	switch_to_rel.dest_y = switch_to_yx_l2.l1.dest_y;
+	switch_to_rel.dest_x = switch_to_yx_l2.l1.dest_x;
+	switch_to_rel.dest_connpt = switch_to_yx_l2.l1.dest_connpt;
+	do {
+		switch_to_rel.model = model;
+		switch_to_rel.start_y = switch_to_rel.dest_y;
+		switch_to_rel.start_x = switch_to_rel.dest_x;
+		switch_to_rel.start_switch = switch_to_rel.dest_connpt;
+		switch_to_rel.from_to = SW_FROM;
+		switch_to_rel.flags = SWTO_REL_WEAK_TARGET;
+		switch_to_rel.rel_y = model->center_y - switch_to_rel.start_y;
+		switch_to_rel.rel_x = model->center_x - switch_to_rel.start_x;
+		switch_to_rel.target_connpt = STRIDX_NO_ENTRY;
+		fpga_switch_to_rel(&switch_to_rel);
+		RC_ASSERT(model, switch_to_rel.set.len);
+		fnet_add_sw(model, net_i, switch_to_rel.start_y, switch_to_rel.start_x,
+			switch_to_rel.set.sw, switch_to_rel.set.len);
+	} while (switch_to_rel.dest_y != model->center_y
+		 || switch_to_rel.dest_x != model->center_x);
+
+	// to hclk
+	RC_ASSERT(model, switch_to_rel.dest_y == model->center_y
+			 && switch_to_rel.dest_x == model->center_x);
+	hclk_y = y_to_hclk(net_p->el[in_i].y, model);
+	RC_ASSERT(model, hclk_y != -1);
+	do {
+		switch_to_rel.model = model;
+		switch_to_rel.start_y = switch_to_rel.dest_y;
+		switch_to_rel.start_x = switch_to_rel.dest_x;
+		switch_to_rel.start_switch = switch_to_rel.dest_connpt;
+		switch_to_rel.from_to = SW_FROM;
+		switch_to_rel.flags = SWTO_REL_WEAK_TARGET;
+		switch_to_rel.rel_y = hclk_y - switch_to_rel.start_y;
+		switch_to_rel.rel_x = 0;
+		switch_to_rel.target_connpt = STRIDX_NO_ENTRY;
+		fpga_switch_to_rel(&switch_to_rel);
+		RC_ASSERT(model, switch_to_rel.set.len);
+		fnet_add_sw(model, net_i, switch_to_rel.start_y, switch_to_rel.start_x,
+			switch_to_rel.set.sw, switch_to_rel.set.len);
+	} while (switch_to_rel.dest_y != hclk_y);
+
+	// to routing col
+	do {
+		switch_to_rel.model = model;
+		switch_to_rel.start_y = switch_to_rel.dest_y;
+		switch_to_rel.start_x = switch_to_rel.dest_x;
+		switch_to_rel.start_switch = switch_to_rel.dest_connpt;
+		switch_to_rel.from_to = SW_FROM;
+		switch_to_rel.flags = SWTO_REL_WEAK_TARGET;
+		switch_to_rel.rel_y = 0;
+		switch_to_rel.rel_x = net_p->el[in_i].x-1 - switch_to_rel.start_x;
+		switch_to_rel.target_connpt = STRIDX_NO_ENTRY;
+		fpga_switch_to_rel(&switch_to_rel);
+		RC_ASSERT(model, switch_to_rel.set.len);
+		fnet_add_sw(model, net_i, switch_to_rel.start_y, switch_to_rel.start_x,
+			switch_to_rel.set.sw, switch_to_rel.set.len);
+	} while (switch_to_rel.dest_x != net_p->el[in_i].x-1);
+
+	// to logic device routing
+	switch_to_rel.model = model;
+	switch_to_rel.start_y = switch_to_rel.dest_y;
+	switch_to_rel.start_x = switch_to_rel.dest_x;
+	switch_to_rel.start_switch = switch_to_rel.dest_connpt;
+	switch_to_rel.from_to = SW_FROM;
+	switch_to_rel.flags = SWTO_REL_DEFAULT;
+	switch_to_rel.rel_y = net_p->el[in_i].y - switch_to_rel.start_y;
+	switch_to_rel.rel_x = net_p->el[in_i].x-1 - switch_to_rel.start_x;
+	switch_to_rel.target_connpt = STRIDX_NO_ENTRY;
+	fpga_switch_to_rel(&switch_to_rel);
+	RC_ASSERT(model, switch_to_rel.set.len);
+	fnet_add_sw(model, net_i, switch_to_rel.start_y, switch_to_rel.start_x,
+		switch_to_rel.set.sw, switch_to_rel.set.len);
+
+	// connect with pinw
+	fnet_route_to_inpins(model, net_i, switch_to_rel.dest_connpt);
+
+	RC_RETURN(model);
 }
 
 int fnet_autoroute(struct fpga_model* model, net_idx_t net_i)
@@ -2294,22 +2529,9 @@ int fnet_autoroute(struct fpga_model* model, net_idx_t net_i)
 	}
 
 	// todo: gnd and vcc nets are special and have no outpin
-	//       but lots of inpins
-	out_i = -1;
-	in_i = -1;
-	for (i = 0; i < net_p->len; i++) {
-		dev_p = FPGA_DEV(model, net_p->el[i].y,
-			net_p->el[i].x, net_p->el[i].dev_idx);
-		if ((net_p->el[i].idx & NET_IDX_MASK) < dev_p->num_pinw_in) {
-			// todo: right now we only support 1 inpin
-			if (in_i != -1) RC_FAIL(model, ENOTSUP);
-			in_i = i;
-			continue;
-		}
-		if (out_i != -1) RC_FAIL(model, EINVAL); // at most 1 outpin
-		out_i = i;
-	}
-	// todo: vcc and gnd have no outpin?
+	//       but can have multiple inpins
+	out_i = fnet_pinw(model, net_i, /*out*/ 1, 0);
+	in_i = fnet_pinw(model, net_i, /*out*/ 0, 0);
 	if (out_i == -1 || in_i == -1)
 		RC_FAIL(model, EINVAL);
 
@@ -2353,6 +2575,7 @@ int fnet_autoroute(struct fpga_model* model, net_idx_t net_i)
 		switch_to_rel.start_switch =
 			in_dev->pinw[net_p->el[in_i].idx & NET_IDX_MASK];
 		switch_to_rel.from_to = SW_TO;
+		switch_to_rel.flags = SWTO_REL_DEFAULT;
 		switch_to_rel.rel_y = 0;
 		switch_to_rel.rel_x = -1;
 		switch_to_rel.target_connpt = STRIDX_NO_ENTRY;
@@ -2410,6 +2633,7 @@ int fnet_autoroute(struct fpga_model* model, net_idx_t net_i)
 		switch_to_rel.start_switch =
 			out_dev->pinw[net_p->el[out_i].idx & NET_IDX_MASK];
 		switch_to_rel.from_to = SW_FROM;
+		switch_to_rel.flags = SWTO_REL_DEFAULT;
 		switch_to_rel.rel_y = 0;
 		switch_to_rel.rel_x = -1;
 		switch_to_rel.target_connpt = STRIDX_NO_ENTRY;
@@ -2435,19 +2659,16 @@ int fnet_autoroute(struct fpga_model* model, net_idx_t net_i)
 }
 
 int fnet_route_to_inpins(struct fpga_model* model, net_idx_t net_i,
-	const char* from)
+	str16_t from)
 {
 	struct fpga_net* net_p;
 	struct fpga_device* dev_p;
-	str16_t from_i;
 	struct sw_set start_set, end_set;
-	int i, rc;
+	int i;
 
 	RC_CHECK(model);
 	net_p = fnet_get(model, net_i);
-	if (!net_p) FAIL(EINVAL);
-	from_i = strarray_find(&model->str, from);
-	if (from_i == STRIDX_NO_ENTRY) FAIL(EINVAL);
+	RC_ASSERT(model, net_p);
 
 	for (i = 0; i < net_p->len; i++) {
 		if (!(net_p->el[i].idx & NET_IDX_IS_PINW))
@@ -2459,23 +2680,30 @@ int fnet_route_to_inpins(struct fpga_model* model, net_idx_t net_i,
 			// skip outpin
 			continue;
 
-		rc = froute_direct(model, net_p->el[i].y, net_p->el[i].x-1,
-			from_i, net_p->el[i].y, net_p->el[i].x,
+		froute_direct(model, net_p->el[i].y, net_p->el[i].x-1,
+			from, net_p->el[i].y, net_p->el[i].x,
 			dev_p->pinw[net_p->el[i].idx & NET_IDX_MASK],
 			&start_set, &end_set);
-		if (rc) FAIL(rc);
+		RC_CHECK(model);
 		if (!start_set.len || !end_set.len)
 			HERE();
-		rc = fnet_add_sw(model, net_i, net_p->el[i].y,
+		fnet_add_sw(model, net_i, net_p->el[i].y,
 			net_p->el[i].x-1, start_set.sw, start_set.len);
-		if (rc) FAIL(rc);
-		rc = fnet_add_sw(model, net_i, net_p->el[i].y,
+		fnet_add_sw(model, net_i, net_p->el[i].y,
 			net_p->el[i].x, end_set.sw, end_set.len);
-		if (rc) FAIL(rc);
 	}
-	return 0;
-fail:
-	return rc;
+	RC_RETURN(model);
+}
+
+int fnet_route_to_inpins_s(struct fpga_model *model, net_idx_t net_i,
+	const char *from)
+{
+	str16_t from_i;
+
+	RC_CHECK(model);
+	from_i = strarray_find(&model->str, from);
+	RC_ASSERT(model, from_i != STRIDX_NO_ENTRY);
+	return fnet_route_to_inpins(model, net_i, from_i);
 }
 
 int froute_direct(struct fpga_model* model, int start_y, int start_x,

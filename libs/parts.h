@@ -105,6 +105,7 @@ struct xc6_pkg_info
 	// negative side of differential pairs: even numbers
 	// positive side of differential pairs: odd numbers
 	const char* gclk_pin[XC6_NUM_GCLK_PINS];
+	int gclk_type2_o[XC6_NUM_GCLK_PINS]; // in words
 };
 
 const struct xc6_pkg_info *xc6_pkg_info(enum xc6_pkg pkg);
@@ -123,6 +124,9 @@ const struct xc6_pkg_info *xc6_pkg_info(enum xc6_pkg pkg);
 #define IOB_DATA_LEN		(IOB_WORDS*2)
 #define IOB_ENTRY_LEN		8
 #define BITS_LEN		(IOB_DATA_START+IOB_DATA_LEN)
+
+#define XC6_WORD_BYTES		2
+#define XC6_WORD_BITS		(XC6_WORD_BYTES*8)
 
 #define XC6_HCLK_BYTES		2
 #define XC6_HCLK_BITS		(XC6_HCLK_BYTES*8)
@@ -421,3 +425,5 @@ void xc6_lut_bitmap(int lut_pos, int (*map)[64], int num_bits);
 #define XC6_ML_A_CY0_O5		62	// implies lut5 on ML-A
 
 #define XC6_L_A_FFSRINIT_1	63	// L-device only
+
+#define XC6_TYPE2_GCLK_REG_SW	 2 // bit 2 in 1st word

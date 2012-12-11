@@ -106,7 +106,7 @@ static int find_es_switch(struct extract_state* es, int y, int x, swidx_t sw)
 	return 0;
 }
 
-static int write_iobs(struct fpga_bits* bits, struct fpga_model* model)
+static int write_type2(struct fpga_bits* bits, struct fpga_model* model)
 {
 	int i, y, x, type_idx, part_idx, dev_idx, first_iob, rc;
 	struct fpga_device* dev;
@@ -569,6 +569,79 @@ static int extract_iobs(struct extract_state* es)
 	return 0;
 fail:
 	return rc;
+}
+
+static int extract_type2(struct extract_state* es)
+{
+	int i, bits_off;
+	uint16_t u16;
+
+	RC_CHECK(es->model);
+	extract_iobs(es);
+	for (i = 0; i < es->model->pkg->num_gclk_pins; i++) {
+		if (!es->model->pkg->gclk_pin[i])
+			continue;
+		bits_off = IOB_DATA_START
+			+ es->model->pkg->gclk_type2_o[i]*XC6_WORD_BYTES
+			+ XC6_TYPE2_GCLK_REG_SW/XC6_WORD_BITS;
+		u16 = frame_get_u16(&es->bits->d[bits_off]);
+		if (!u16)
+			continue;
+		if (u16 & (1<<(XC6_TYPE2_GCLK_REG_SW%XC6_WORD_BITS))) {
+			int iob_y, iob_x, iob_idx;
+			struct fpga_device *iob_dev;
+			struct switch_to_yx_l2 switch_to_yx_l2;
+			struct switch_to_rel switch_to_rel;
+
+			//
+			// find and enable reg-switch for gclk_pin[i]
+			//
+
+			fpga_find_iob(es->model, es->model->pkg->gclk_pin[i],
+				&iob_y, &iob_x, &iob_idx);
+			RC_CHECK(es->model);
+			iob_dev = fdev_p(es->model, iob_y, iob_x, DEV_IOB, iob_idx);
+			RC_ASSERT(es->model, iob_dev);
+
+			switch_to_yx_l2.l1.yx_req = YX_X_CENTER_CMTPLL | YX_Y_CENTER;
+			switch_to_yx_l2.l1.flags = SWTO_YX_CLOSEST;
+			switch_to_yx_l2.l1.model = es->model;
+			switch_to_yx_l2.l1.y = iob_y;
+			switch_to_yx_l2.l1.x = iob_x;
+			switch_to_yx_l2.l1.start_switch = iob_dev->pinw[IOB_OUT_I];
+			switch_to_yx_l2.l1.from_to = SW_FROM;
+			fpga_switch_to_yx_l2(&switch_to_yx_l2);
+			RC_CHECK(es->model);
+			if (!switch_to_yx_l2.l1.set.len)
+				{ HERE(); continue; }
+
+			switch_to_rel.model = es->model;
+			switch_to_rel.start_y = switch_to_yx_l2.l1.dest_y;
+			switch_to_rel.start_x = switch_to_yx_l2.l1.dest_x;
+			switch_to_rel.start_switch = switch_to_yx_l2.l1.dest_connpt;
+			switch_to_rel.from_to = SW_FROM;
+			switch_to_rel.flags = SWTO_REL_WEAK_TARGET;
+			switch_to_rel.rel_y = es->model->center_y - switch_to_rel.start_y;
+			switch_to_rel.rel_x = es->model->center_x - switch_to_rel.start_x;
+			switch_to_rel.target_connpt = STRIDX_NO_ENTRY;
+			fpga_switch_to_rel(&switch_to_rel);
+			RC_CHECK(es->model);
+			if (!switch_to_rel.set.len)
+				{ HERE(); continue; }
+			if (switch_to_rel.set.len != 1) HERE();
+
+			RC_ASSERT(es->model, es->num_yx_pos < MAX_YX_SWITCHES);
+			es->yx_pos[es->num_yx_pos].y = switch_to_rel.start_y;
+			es->yx_pos[es->num_yx_pos].x = switch_to_rel.start_x;
+			es->yx_pos[es->num_yx_pos].idx = switch_to_rel.set.sw[0];
+			es->num_yx_pos++;
+
+			u16 &= ~(1<<(XC6_TYPE2_GCLK_REG_SW%XC6_WORD_BITS));
+		}
+		if (u16) HERE();
+		frame_set_u16(&es->bits->d[bits_off], u16);
+	}
+	RC_RETURN(es->model);
 }
 
 static int lut2str(uint64_t lut, int lut_pos, int lut5_used,
@@ -1854,7 +1927,7 @@ int extract_model(struct fpga_model* model, struct fpga_bits* bits)
 
 	rc = extract_switches(&es);
 	if (rc) RC_FAIL(model, rc);
-	rc = extract_iobs(&es);
+	rc = extract_type2(&es);
 	if (rc) RC_FAIL(model, rc);
 	rc = extract_logic(&es);
 	if (rc) RC_FAIL(model, rc);
@@ -2230,7 +2303,7 @@ int write_model(struct fpga_bits* bits, struct fpga_model* model)
 	for (i = 0; i < sizeof(s_default_bits)/sizeof(s_default_bits[0]); i++)
 		set_bitp(bits, &s_default_bits[i]);
 	write_switches(bits, model);
-	write_iobs(bits, model);
+	write_type2(bits, model);
 	write_logic(bits, model);
 
 	RC_RETURN(model);
