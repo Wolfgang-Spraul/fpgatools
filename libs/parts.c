@@ -375,6 +375,17 @@ const struct xc_die *xc_die_info(int idcode)
 	return 0;
 }
 
+int xc_die_center_major(const struct xc_die *die)
+{
+	int i;
+	for (i = 0; i < die->num_majors; i++) {
+		if (die->majors[i].flags & XC_MAJ_CENTER)
+			return i;
+	}
+	HERE();
+	return -1;
+}
+
 const struct xc6_pkg_info *xc6_pkg_info(enum xc6_pkg pkg)
 {
 	// ug382 table 1-6 page 25

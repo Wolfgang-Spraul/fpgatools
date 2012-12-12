@@ -95,6 +95,8 @@ struct xc_die
 
 const struct xc_die* xc_die_info(int idcode);
 
+int xc_die_center_major(const struct xc_die *die);
+
 enum xc6_pkg { TQG144, FTG256, CSG324, FGG484 };
 #define XC6_NUM_GCLK_PINS 32
 
@@ -130,6 +132,8 @@ const struct xc6_pkg_info *xc6_pkg_info(enum xc6_pkg pkg);
 
 #define XC6_HCLK_BYTES		2
 #define XC6_HCLK_BITS		(XC6_HCLK_BYTES*8)
+
+#define XC6_NULL_MAJOR		0
 
 #define XC6_IOB_MASK_IO				0x00FF00FFFF000000
 #define XC6_IOB_MASK_IN_TYPE			0x000000000000F000
@@ -427,3 +431,4 @@ void xc6_lut_bitmap(int lut_pos, int (*map)[64], int num_bits);
 #define XC6_L_A_FFSRINIT_1	63	// L-device only
 
 #define XC6_TYPE2_GCLK_REG_SW	 2 // bit 2 in 1st word
+#define XC6_CENTER_GCLK_MINOR	25

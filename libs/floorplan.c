@@ -31,11 +31,11 @@ int printf_tiles(FILE* f, struct fpga_model* model)
 			tile = &model->tiles[y*model->x_width + x];
 
 			if (tile->type != NA)
-				fprintf(f, "tile y%02i x%02i name %s\n", y, x,
+				fprintf(f, "tile y%i x%i name %s\n", y, x,
 					fpga_tiletype_str(tile->type));
 			if (tile->flags) {
 				int tf = tile->flags;
-				fprintf(f, "tile y%02i x%02i flags", y, x);
+				fprintf(f, "tile y%i x%i flags", y, x);
 
 				PRINT_FLAG(f, TF_FABRIC_ROUTING_COL);
 				PRINT_FLAG(f, TF_FABRIC_LOGIC_XM_COL);
@@ -79,7 +79,7 @@ static int printf_IOB(FILE* f, struct fpga_model* model,
 			type_count++;
 			continue;
 		}
-		snprintf(pref, sizeof(pref), "dev y%02i x%02i IOB %i",
+		snprintf(pref, sizeof(pref), "dev y%i x%i IOB %i",
 			y, x, type_count);
 		type_count++;
 
@@ -307,7 +307,7 @@ static int printf_LOGIC(FILE* f, struct fpga_model* model,
 			type_count++;
 			continue;
 		}
-		snprintf(pref, sizeof(pref), "dev y%02i x%02i LOGIC %i",
+		snprintf(pref, sizeof(pref), "dev y%i x%i LOGIC %i",
 			y, x, type_count);
 		type_count++;
 
@@ -676,7 +676,7 @@ static int printf_BUFGMUX(FILE* f, struct fpga_model* model,
 			type_count++;
 			continue;
 		}
-		snprintf(pref, sizeof(pref), "dev y%02i x%02i BUFGMUX %i",
+		snprintf(pref, sizeof(pref), "dev y%i x%i BUFGMUX %i",
 			y, x, type_count++);
 		if (!config_only)
 			fprintf(f, "%s\n", pref);
@@ -767,7 +767,7 @@ static int printf_BUFIO(FILE* f, struct fpga_model* model,
 			type_count++;
 			continue;
 		}
-		snprintf(pref, sizeof(pref), "dev y%02i x%02i BUFIO %i",
+		snprintf(pref, sizeof(pref), "dev y%i x%i BUFIO %i",
 			y, x, type_count++);
 		if (!config_only)
 			fprintf(f, "%s\n", pref);
@@ -847,7 +847,7 @@ static int printf_BSCAN(FILE* f, struct fpga_model* model,
 			type_count++;
 			continue;
 		}
-		snprintf(pref, sizeof(pref), "dev y%02i x%02i BSCAN %i",
+		snprintf(pref, sizeof(pref), "dev y%i x%i BSCAN %i",
 			y, x, type_count++);
 		if (!config_only)
 			fprintf(f, "%s\n", pref);
@@ -940,7 +940,7 @@ int printf_devices(FILE* f, struct fpga_model* model, int config_only)
 				    || tile->devs[i].type == DEV_BUFIO
 				    || tile->devs[i].type == DEV_BSCAN)
 					continue; // handled earlier
-				fprintf(f, "dev y%02i x%02i %s\n", y, x,
+				fprintf(f, "dev y%i x%i %s\n", y, x,
 					fdev_type2str(tile->devs[i].type));
 			}
 		}
@@ -982,7 +982,7 @@ int printf_ports(FILE* f, struct fpga_model* model)
 					first_port_printed = 1;
 					fprintf(f, "\n");
 				}
-				fprintf(f, "port y%02i x%02i %s\n",
+				fprintf(f, "port y%i x%i %s\n",
 					y, x, conn_point_name_src);
 			}
 		}
@@ -1035,12 +1035,12 @@ int printf_conns(FILE* f, struct fpga_model* model)
 						first_conn_printed = 1;
 						fprintf(f, "\n");
 					}
-					sprintf(tmp_line, "conn y%02i x%02i %s ",
+					sprintf(tmp_line, "conn y%i x%i %s ",
 						y, x, conn_point_name_src);
 					k = strlen(tmp_line);
 					while (k < 45)
 						tmp_line[k++] = ' ';
-					sprintf(&tmp_line[k], "y%02i x%02i %s\n",
+					sprintf(&tmp_line[k], "y%i x%i %s\n",
 						other_tile_y, other_tile_x, other_tile_connpt_str);
 					fprintf(f, "%s", tmp_line);
 				}
@@ -1065,7 +1065,7 @@ int printf_switches(FILE* f, struct fpga_model* model)
 					first_switch_printed = 1;	
 					fprintf(f, "\n");
 				}
-				fprintf(f, "sw y%02i x%02i %s\n",
+				fprintf(f, "sw y%i x%i %s\n",
 					y, x, fpga_switch_print(model, y, x, i));
 			}
 		}
@@ -1249,7 +1249,7 @@ static void read_dev_line(struct fpga_model* model, const char* line, int start)
 	dev_type_idx = to_i(&line[idx_beg], idx_end-idx_beg);
 	dev_idx = fpga_dev_idx(model, y_coord, x_coord, dev_type, dev_type_idx);
 	if (dev_idx == NO_DEV) {
-		fprintf(stderr, "%s:%i y%02i x%02i dev_type %i "
+		fprintf(stderr, "%s:%i y%i x%i dev_type %i "
 			"dev_type_idx %i dev_idx %i\n",
 			__FILE__, __LINE__, y_coord, x_coord, dev_type,
 			dev_type_idx, dev_idx);

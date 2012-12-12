@@ -306,10 +306,11 @@ void is_in_row(const struct fpga_model* model, int y,
 	int* row_num, int* row_pos);
 
 // which_row() and pos_in_row() return -1 if y is outside of a row
-int which_row(int y, struct fpga_model* model);
-int pos_in_row(int y, struct fpga_model* model);
+int which_row(int y, struct fpga_model *model);
+int pos_in_row(int y, struct fpga_model *model);
 // regular_row_pos() returns the index (0..15) without hclk, or -1 if y is a hclk.
-int regular_row_pos(int y, struct fpga_model* model);
+int regular_row_pos(int y, struct fpga_model *model);
+int row_to_hclk(int row, struct fpga_model *model);
 int y_to_hclk(int y, struct fpga_model *model);
 
 const char* logicin_s(int wire, int routing_io);

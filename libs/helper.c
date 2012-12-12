@@ -495,6 +495,21 @@ void frame_set_bit(uint8_t *frame_d, int bit)
 	frame_d[(bit/16)*2 + !((bit/8)%2)] |= v;
 }
 
+// see ug380, table 2-5, bit ordering
+int frame_get_pinword(const void *bits)
+{
+	int byte0, byte1;
+	byte0 = ((uint8_t*)bits)[0];
+	byte1 = ((uint8_t*)bits)[1];
+	return byte0 << 8 | byte1;
+}
+
+void frame_set_pinword(void* bits, int v)
+{
+	((uint8_t*)bits)[0] = v >> 8;
+	((uint8_t*)bits)[1] = v & 0xFF;
+}
+
 uint8_t frame_get_u8(const uint8_t *frame_d)
 {
 	uint8_t v = 0;
@@ -504,6 +519,7 @@ uint8_t frame_get_u8(const uint8_t *frame_d)
 	return v;
 }
 
+// see ug380, table 2-5, bit ordering
 uint16_t frame_get_u16(const uint8_t *frame_d)
 {
 	uint16_t high_b, low_b;
@@ -608,6 +624,14 @@ void frame_set_lut64(uint8_t* two_minors, int v32, uint64_t v)
 	frame_set_u32(&two_minors[FRAME_SIZE + off_in_frame], m1);
 }
 
+// see ug380, table 2-5, bit ordering
+static int xc6_bit2pin(int bit)
+{
+	int pin = bit % XC6_WORD_BITS;
+	if (pin >= 8) return 15-(pin-8);
+	return 7-pin;
+}
+
 int printf_frames(const uint8_t* bits, int max_frames,
 	int row, int major, int minor, int print_empty, int no_clock)
 {
@@ -645,9 +669,10 @@ int printf_frames(const uint8_t* bits, int max_frames,
 			i_without_clk = i;
 			if (i_without_clk >= 528)
 				i_without_clk -= 16;
-			snprintf(suffix, sizeof(suffix), "64*%i+%i 256*%i+%i", 
+			snprintf(suffix, sizeof(suffix), "64*%i+%i 256*%i+%i pin %i", 
 				i_without_clk/64, i_without_clk%64,
-				i_without_clk/256, i_without_clk%256);
+				i_without_clk/256, i_without_clk%256,
+				xc6_bit2pin(i_without_clk));
 			printf("%sbit %i %s\n", prefix, i, suffix);
 		}
 		return 1;
@@ -664,8 +689,8 @@ void printf_clock(const uint8_t* frame, int row, int major, int minor)
 	int i;
 	for (i = 0; i < 16; i++) {
 		if (frame_get_bit(frame, 512 + i))
-			printf("r%i ma%i mi%i clock %i\n",
-				row, major, minor, i);
+			printf("r%i ma%i mi%i clock %i pin %i\n",
+				row, major, minor, i, xc6_bit2pin(i));
 	}
 }
 

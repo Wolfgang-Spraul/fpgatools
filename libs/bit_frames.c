@@ -9,8 +9,6 @@
 #include "bit.h"
 #include "control.h"
 
-#define HCLK_BYTES 2
-
 static uint8_t* get_first_minor(struct fpga_bits* bits, int row, int major)
 {
 	int i, num_frames;
@@ -709,7 +707,7 @@ static int extract_logic(struct extract_state* es)
 			if (row_pos > 8) row_pos--;
 			u8_p = get_first_minor(es->bits, row, es->model->x_major[x]);
 			byte_off = row_pos * 8;
-			if (row_pos >= 8) byte_off += HCLK_BYTES;
+			if (row_pos >= 8) byte_off += XC6_HCLK_BYTES;
 
 			//
 			// Step 1:
@@ -1131,19 +1129,19 @@ static int extract_logic(struct extract_state* es)
 			//
 
 		   	if (mi20) {
-				fprintf(stderr, "#E %s:%i y%02i x%02i l%i "
+				fprintf(stderr, "#E %s:%i y%i x%i l%i "
 				  "mi20 0x%016lX\n",
 				  __FILE__, __LINE__, y, x, l_col, mi20);
 				continue;
 			}
 		   	if (mi23_M) {
-				fprintf(stderr, "#E %s:%i y%02i x%02i l%i "
+				fprintf(stderr, "#E %s:%i y%i x%i l%i "
 				  "mi23_M 0x%016lX\n",
 				  __FILE__, __LINE__, y, x, l_col, mi23_M);
 				continue;
 			}
 		   	if (mi2526) {
-				fprintf(stderr, "#E %s:%i y%02i x%02i l%i "
+				fprintf(stderr, "#E %s:%i y%i x%i l%i "
 				  "mi2526 0x%016lX\n",
 				  __FILE__, __LINE__, y, x, l_col, mi2526);
 				continue;
@@ -1609,7 +1607,7 @@ static int extract_logic_switches(struct extract_state* es, int y, int x)
 	if (row_pos > 8) row_pos--;
 	u8_p = get_first_minor(es->bits, row, es->model->x_major[x]);
 	byte_off = row_pos * 8;
-	if (row_pos >= 8) byte_off += HCLK_BYTES;
+	if (row_pos >= 8) byte_off += XC6_HCLK_BYTES;
 
 	if (has_device_type(es->model, y, x, DEV_LOGIC, LOGIC_M))
 		minor = 26;
@@ -1792,13 +1790,37 @@ struct iologic_sw_pos s_bot_outer_io_swpos[] =
 	{{0}}
 };
 
+static int add_yx_switch(struct extract_state *es,
+	int y, int x, const char *from, const char *to)
+{
+	str16_t from_str_i, to_str_i;
+	swidx_t sw_idx;
+
+	RC_CHECK(es->model);
+
+	from_str_i = strarray_find(&es->model->str, from);
+	to_str_i = strarray_find(&es->model->str, to);
+	RC_ASSERT(es->model, from_str_i != STRIDX_NO_ENTRY
+		&& to_str_i != STRIDX_NO_ENTRY);
+
+	sw_idx = fpga_switch_lookup(es->model, y, x,
+		from_str_i, to_str_i);
+	RC_ASSERT(es->model, sw_idx != NO_SWITCH);
+
+	RC_ASSERT(es->model, es->num_yx_pos < MAX_YX_SWITCHES);
+	es->yx_pos[es->num_yx_pos].y = y;
+	es->yx_pos[es->num_yx_pos].x = x;
+	es->yx_pos[es->num_yx_pos].idx = sw_idx;
+	es->num_yx_pos++;
+
+	RC_RETURN(es->model);
+}
+
 static int extract_iologic_switches(struct extract_state* es, int y, int x)
 {
 	int row_num, row_pos, bit_in_frame, i, j, rc;
 	uint8_t* minor0_p;
 	struct iologic_sw_pos* sw_pos;
-	str16_t from_str_i, to_str_i;
-	swidx_t sw_idx;
 
 	RC_CHECK(es->model);
 	// From y/x coordinate, determine major, row, bit offset
@@ -1837,23 +1859,8 @@ static int extract_iologic_switches(struct extract_state* es, int y, int x)
 		}
 		if (!j || sw_pos[i].minor[j] != -1)
 			continue;
-		for (j = 0; j < MAX_IOLOGIC_SWBLOCK && sw_pos[i].to[j]; j++) {
-			from_str_i = strarray_find(&es->model->str, sw_pos[i].from[j]);
-			to_str_i = strarray_find(&es->model->str, sw_pos[i].to[j]);
-			if (from_str_i == STRIDX_NO_ENTRY
-			    || to_str_i == STRIDX_NO_ENTRY)
-				FAIL(EINVAL);
-			sw_idx = fpga_switch_lookup(es->model, y, x,
-				from_str_i, to_str_i);
-			if (sw_idx == NO_SWITCH) FAIL(EINVAL);
-
-			if (es->num_yx_pos >= MAX_YX_SWITCHES)
-				{ FAIL(ENOTSUP); }
-			es->yx_pos[es->num_yx_pos].y = y;
-			es->yx_pos[es->num_yx_pos].x = x;
-			es->yx_pos[es->num_yx_pos].idx = sw_idx;
-			es->num_yx_pos++;
-		}
+		for (j = 0; j < MAX_IOLOGIC_SWBLOCK && sw_pos[i].to[j]; j++)
+			add_yx_switch(es, y, x, sw_pos[i].from[j], sw_pos[i].to[j]);
 		for (j = 0; sw_pos[i].minor[j] != -1; j++)
 			frame_clear_bit(&minor0_p[sw_pos[i].minor[j]
 			  *FRAME_SIZE], bit_in_frame+sw_pos[i].b64[j]);
@@ -1867,9 +1874,88 @@ fail:
 	return rc;
 }
 
-static int extract_switches(struct extract_state* es)
+static int extract_center_switches(struct extract_state *es)
 {
-	int x, y, rc;
+	int center_row, center_major, word, i;
+	uint8_t *minor_p;
+
+	RC_CHECK(es->model);
+	center_row = es->model->die->num_rows/2;
+	center_major = xc_die_center_major(es->model->die);
+	minor_p = get_first_minor(es->bits, center_row,
+		center_major) + XC6_CENTER_GCLK_MINOR*FRAME_SIZE;
+	word = frame_get_pinword(minor_p + 15*8+XC6_HCLK_BYTES);
+	if (word) {
+		for (i = 0; i < 16; i++) {
+			if (!(word & (1<<i))) continue;
+			add_yx_switch(es,
+				es->model->center_y, es->model->center_x,
+				pf("CLKC_CKLR%i", i), pf("CLKC_GCLK%i", i));
+		}
+		frame_set_pinword(minor_p + 15*8+XC6_HCLK_BYTES, 0);
+	}
+	word = frame_get_pinword(minor_p + 15*8+XC6_HCLK_BYTES + XC6_WORD_BYTES);
+	if (word) {
+		for (i = 0; i < 16; i++) {
+			if (!(word & (1<<i))) continue;
+			add_yx_switch(es,
+				es->model->center_y, es->model->center_x,
+				pf("CLKC_CKTB%i", i), pf("CLKC_GCLK%i", i));
+		}
+		frame_set_pinword(minor_p + 15*8+XC6_HCLK_BYTES + XC6_WORD_BYTES, 0);
+	}
+	RC_RETURN(es->model);
+}
+
+static int extract_hclk_switches(struct extract_state *es)
+{
+	int word, cur_row, cur_minor, cur_pin, i, hclk_y;
+	uint8_t *ma0_bits;
+
+	RC_CHECK(es->model);
+	for (cur_row = 0; cur_row < es->model->die->num_rows; cur_row++) {
+		hclk_y = row_to_hclk(cur_row, es->model);
+		RC_ASSERT(es->model, hclk_y != -1);
+		ma0_bits = get_first_minor(es->bits, cur_row, XC6_NULL_MAJOR);
+		for (cur_minor = 0; cur_minor <= 2; cur_minor++) {
+			// left
+			word = frame_get_pinword(ma0_bits + cur_minor*FRAME_SIZE + 8*8+XC6_HCLK_BYTES);
+			if (word) {
+				for (i = 0; i <= 16/3; i++) { // 0-5
+					cur_pin = cur_minor + i*3;
+					if (cur_pin > 15) break;
+					if (!(word & (1<<cur_pin))) continue;
+					add_yx_switch(es, hclk_y, es->model->center_x,
+						pf("CLKV_GCLKH_MAIN%i_FOLD", cur_pin),
+						pf("CLKV_GCLKH_L%i", cur_pin));
+					word &= ~(1<<cur_pin);
+				}
+				if (word) HERE();
+				frame_set_pinword(ma0_bits + cur_minor*FRAME_SIZE + 8*8+XC6_HCLK_BYTES, word);
+			}
+			// right
+			word = frame_get_pinword(ma0_bits + cur_minor*FRAME_SIZE + 8*8+XC6_HCLK_BYTES + 4);
+			if (word) {
+				for (i = 0; i <= 16/3; i++) { // 0-5
+					cur_pin = cur_minor + i*3;
+					if (cur_pin > 15) break;
+					if (!(word & (1<<cur_pin))) continue;
+					add_yx_switch(es, hclk_y, es->model->center_x,
+						pf("CLKV_GCLKH_MAIN%i_FOLD", cur_pin),
+						pf("CLKV_GCLKH_R%i", cur_pin));
+					word &= ~(1<<cur_pin);
+				}
+				if (word) HERE();
+				frame_set_pinword(ma0_bits + cur_minor*FRAME_SIZE + 8*8+XC6_HCLK_BYTES, word + 4);
+			}
+		}
+	}
+	RC_RETURN(es->model);
+}
+
+static int extract_switches(struct extract_state *es)
+{
+	int x, y;
 
 	RC_CHECK(es->model);
 	for (x = 0; x < es->model->x_width; x++) {
@@ -1880,24 +1966,21 @@ static int extract_switches(struct extract_state* es)
 			    && y < es->model->y_height-BOT_IO_TILES
 			    && !is_aty(Y_ROW_HORIZ_AXSYMM|Y_CHIP_HORIZ_REGS,
 					es->model, y)) {
-				rc = extract_routing_switches(es, y, x);
-				if (rc) FAIL(rc);
+				extract_routing_switches(es, y, x);
 			}
 			// logic switches
 			if (has_device(es->model, y, x, DEV_LOGIC)) {
-				rc = extract_logic_switches(es, y, x);
-				if (rc) FAIL(rc);
+				extract_logic_switches(es, y, x);
 			}
 			// iologic switches
 			if (has_device(es->model, y, x, DEV_ILOGIC)) {
-				rc = extract_iologic_switches(es, y, x);
-				if (rc) FAIL(rc);
+				extract_iologic_switches(es, y, x);
 			}
 		}
 	}
-	return 0;
-fail:
-	return rc;
+	extract_center_switches(es);
+	extract_hclk_switches(es);
+	RC_RETURN(es->model);
 }
 
 static int construct_extract_state(struct extract_state* es,
@@ -2153,7 +2236,7 @@ static int write_iologic_sw(struct fpga_bits* bits, struct fpga_model* model,
 		if (!str_sw[i].to_str)
 			continue;
 		fprintf(stderr, "#E %s:%i unsupported switch "
-			"y%02i x%02i %s -> %s\n", __FILE__, __LINE__,
+			"y%i x%i %s -> %s\n", __FILE__, __LINE__,
 			y, x, str_sw[i].from_str, str_sw[i].to_str);
 	}
 	free(str_sw);
@@ -2194,7 +2277,7 @@ static int write_switches(struct fpga_bits* bits, struct fpga_model* model)
 				if (!(tile->switches[i] & SWITCH_USED))
 					continue;
 				fprintf(stderr, "#E %s:%i unsupported switch "
-					"y%02i x%02i %s\n", __FILE__, __LINE__,
+					"y%i x%i %s\n", __FILE__, __LINE__,
 					y, x,
 					fpga_switch_print(model, y, x, i));
 			}
@@ -2232,7 +2315,7 @@ static int write_logic(struct fpga_bits* bits, struct fpga_model* model)
 			if (row_pos > 8) row_pos--;
 			u8_p = get_first_minor(bits, row, model->x_major[x]);
 			byte_off = row_pos * 8;
-			if (row_pos >= 8) byte_off += HCLK_BYTES;
+			if (row_pos >= 8) byte_off += XC6_HCLK_BYTES;
 
 			if (xm_col) {
 				// X device

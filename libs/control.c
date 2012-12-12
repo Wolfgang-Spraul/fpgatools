@@ -320,7 +320,7 @@ struct fpga_device* fdev_p(struct fpga_model* model,
 {
 	dev_idx_t dev_idx = fpga_dev_idx(model, y, x, type, type_idx);
 	if (dev_idx == NO_DEV) {
-		fprintf(stderr, "#E %s:%i fdev_p() y%02i x%02i type %i/%i not"
+		fprintf(stderr, "#E %s:%i fdev_p() y%i x%i type %i/%i not"
 			" found\n", __FILE__, __LINE__, y, x, type, type_idx);
 		return 0;
 	}
@@ -475,7 +475,7 @@ void fdev_print_required_pins(struct fpga_model* model, int y, int x,
 	// and the caller should not suddenly be working with old
 	// required pins when the print() function is not called.
 
-	printf("y%02i x%02i %s %i inpin", y, x, fdev_type2str(type), type_idx);
+	printf("y%i x%i %s %i inpin", y, x, fdev_type2str(type), type_idx);
 	if (!dev->pinw_req_in)
 		printf(" -\n");
 	else {
@@ -484,7 +484,7 @@ void fdev_print_required_pins(struct fpga_model* model, int y, int x,
 		printf("\n");
 	}
 
-	printf("y%02i x%02i %s %i outpin", y, x, fdev_type2str(type), type_idx);
+	printf("y%i x%i %s %i outpin", y, x, fdev_type2str(type), type_idx);
 	if (dev->pinw_req_total <= dev->pinw_req_in)
 		printf(" -\n");
 	else {
@@ -1876,7 +1876,7 @@ void printf_swchain(struct fpga_model* model, int y, int x,
 	struct sw_chain chain;
 	int count = 0;
 
-	printf("printf_swchain() y%02i x%02i %s blist_len %i\n",
+	printf("printf_swchain() y%i x%i %s blist_len %i\n",
 		y, x, strarray_lookup(&model->str, sw),
 		block_list_len ? *block_list_len : 0);
 	if (construct_sw_chain(&chain, model, y, x, sw, from_to, max_depth,
@@ -1900,7 +1900,7 @@ void printf_swconns(struct fpga_model* model, int y, int x,
 	if (construct_sw_conns(&conns, model, y, x, sw, from_to, max_depth))
 		{ HERE(); return; }
 	while (fpga_switch_conns(&conns) != NO_CONN) {
-		printf("sw %s conn y%02i x%02i %s\n", fmt_swset(model, y, x,
+		printf("sw %s conn y%i x%i %s\n", fmt_swset(model, y, x,
 			&conns.chain.set, from_to),
 			conns.dest_y, conns.dest_x,
 			strarray_lookup(&model->str, conns.dest_str_i));
@@ -1919,7 +1919,7 @@ int fpga_switch_to_yx(struct switch_to_yx* p)
 
 	RC_CHECK(p->model);
 #ifdef DBG_SWITCH_TO_YX
-	printf("fpga_switch_to_yx() %s y%02i-x%02i-%s yx_req %Xh flags %Xh\n",
+	printf("fpga_switch_to_yx() %s y%i-x%i-%s yx_req %Xh flags %Xh\n",
 		p->from_to == SW_FROM ? "SW_FROM" : "SW_TO",
 		p->y, p->x, strarray_lookup(&p->model->str, p->start_switch),
 		p->yx_req, p->flags);
@@ -1934,7 +1934,7 @@ int fpga_switch_to_yx(struct switch_to_yx* p)
 		if (!is_atyx(p->yx_req, p->model, conns.dest_y, conns.dest_x))
 			continue;
 #ifdef DBG_SWITCH_TO_YX
-		printf(" sw %s conn y%02i x%02i %s\n",
+		printf(" sw %s conn y%i x%i %s\n",
 			fmt_swset(p->model, p->y, p->x,
 				&conns.chain.set, p->from_to),
 			conns.dest_y, conns.dest_x,
@@ -1977,10 +1977,10 @@ int fpga_switch_to_yx(struct switch_to_yx* p)
 
 void printf_switch_to_yx_result(struct switch_to_yx* p)
 {
-	printf("switch_to_yx() from y%02i x%02i connpt %s (%s)\n",
+	printf("switch_to_yx() from y%i x%i connpt %s (%s)\n",
 		p->y, p->x, strarray_lookup(&p->model->str, p->start_switch),
 		p->from_to == SW_FROM ? "SW_FROM" : "SW_TO");
-	printf(" %s y%02i x%02i %s via %s\n",
+	printf(" %s y%i x%i %s via %s\n",
 		p->from_to == SW_FROM ? "to" : "from",
 		p->dest_y, p->dest_x,
 		strarray_lookup(&p->model->str, p->dest_connpt),
@@ -2032,7 +2032,7 @@ int fpga_switch_to_rel(struct switch_to_rel *p)
 
 	RC_CHECK(p->model);
 #ifdef DBG_SWITCH_TO_REL
-	printf("fpga_switch_to_rel() %s y%02i-x%02i-%s flags %Xh rel_y %i rel_x %i target_connpt %s\n",
+	printf("fpga_switch_to_rel() %s y%i-x%i-%s flags %Xh rel_y %i rel_x %i target_connpt %s\n",
 		p->from_to == SW_FROM ? "SW_FROM" : "SW_TO",
 		p->start_y, p->start_x, strarray_lookup(&p->model->str, p->start_switch),
 		p->flags, p->rel_y, p->rel_x,
@@ -2046,12 +2046,17 @@ int fpga_switch_to_rel(struct switch_to_rel *p)
 	best_y = -1;
 	while (fpga_switch_conns(&conns) != NO_CONN) {
 #ifdef DBG_SWITCH_TO_REL
-		printf(" sw %s conn y%02i x%02i %s\n",
+		printf(" sw %s conn y%i x%i %s\n",
 			fmt_swset(p->model, p->start_y, p->start_x,
 				&conns.chain.set, p->from_to),
 			conns.dest_y, conns.dest_x,
 			strarray_lookup(&p->model->str, conns.dest_str_i));
 #endif
+		// Do not continue with connections that do not lead to
+		// a switch.
+		if (fpga_switch_first(p->model, conns.dest_y, conns.dest_x,
+			conns.dest_str_i, SW_FROM) == NO_SWITCH)
+			continue;
 		if (conns.dest_y != p->start_y + p->rel_y
 		    || conns.dest_x != p->start_x + p->rel_x) {
 			if (!(p->flags & SWTO_REL_WEAK_TARGET))
@@ -2085,7 +2090,7 @@ int fpga_switch_to_rel(struct switch_to_rel *p)
 #ifdef DBG_SWITCH_TO_REL
 		printf(" sw %s\n", fmt_swset(p->model, p->start_y, p->start_x,
 			&best_set, p->from_to));
-		printf(" dest y%02i-x%02i-%s\n", best_y, best_x,
+		printf(" dest y%i-x%i-%s\n", best_y, best_x,
 			strarray_lookup(&p->model->str, best_connpt));
 #endif
 		p->set = best_set;
@@ -2099,10 +2104,10 @@ int fpga_switch_to_rel(struct switch_to_rel *p)
 
 void printf_switch_to_rel_result(struct switch_to_rel* p)
 {
-	printf("switch_to_rel() from y%02i x%02i connpt %s (%s)\n",
+	printf("switch_to_rel() from y%i x%i connpt %s (%s)\n",
 		p->start_y, p->start_x, strarray_lookup(&p->model->str, p->start_switch),
 		p->from_to == SW_FROM ? "SW_FROM" : "SW_TO");
-	printf(" %s y%02i x%02i %s via %s\n",
+	printf(" %s y%i x%i %s via %s\n",
 		p->from_to == SW_FROM ? "to" : "from",
 		p->dest_y, p->dest_x,
 		strarray_lookup(&p->model->str, p->dest_connpt),
@@ -2323,7 +2328,7 @@ static void fprintf_inout_pin(FILE* f, struct fpga_model* model,
    	pin_str = fdev_pinw_idx2str(tile->devs[dev_idx].type, pinw_i);
 	if (!pin_str) { HERE(); return; }
 
-	snprintf(buf, sizeof(buf), "net %i %s y%02i x%02i %s %i pin %s\n",
+	snprintf(buf, sizeof(buf), "net %i %s y%i x%i %s %i pin %s\n",
 		net_i, in_pin ? "in" : "out", el->y, el->x,
 		fdev_type2str(tile->devs[dev_idx].type),
 		fdev_typeidx(model, el->y, el->x, dev_idx),
@@ -2344,7 +2349,7 @@ void fnet_printf(FILE* f, struct fpga_model* model, net_idx_t net_i)
 			continue;
 		}
 		// switch
-		fprintf(f, "net %i sw y%02i x%02i %s\n",
+		fprintf(f, "net %i sw y%i x%i %s\n",
 			net_i, net->el[i].y, net->el[i].x,
 			fpga_switch_print(model, net->el[i].y,
 				net->el[i].x, net->el[i].idx));

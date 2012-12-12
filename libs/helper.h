@@ -79,6 +79,9 @@ int frame_get_bit(const uint8_t* frame_d, int bit);
 void frame_clear_bit(uint8_t* frame_d, int bit);
 void frame_set_bit(uint8_t* frame_d, int bit);
 
+int frame_get_pinword(const void *bits);
+void frame_set_pinword(void* bits, int v);
+
 uint8_t frame_get_u8(const uint8_t* frame_d);
 uint16_t frame_get_u16(const uint8_t* frame_d);
 uint32_t frame_get_u32(const uint8_t* frame_d);

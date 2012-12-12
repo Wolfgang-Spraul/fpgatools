@@ -149,7 +149,7 @@ static int add_connpt_name_i(struct fpga_model *model, int y, int x,
 	if (i < tile->num_conn_point_names) {
 		if (warn_dup)
 			fprintf(stderr, "Duplicate connection point name "
-				"y%02i x%02u %s\n", y, x,
+				"y%i x%i %s\n", y, x,
 				strarray_lookup(&model->str, name_i));
 	} else
 		// This is the first connection under name, add name.
@@ -233,8 +233,8 @@ static int add_conn_uni_i(struct fpga_model *model,
 
 	RC_CHECK(model);
 #ifdef DBG_ADD_CONN_UNI
-	fprintf(stderr, "add_conn_uni_i() from y%02i x%02i %s connpt %i"
-		" to y%02i x%02i %s\n", from_y, from_x,
+	fprintf(stderr, "add_conn_uni_i() from y%i x%i %s connpt %i"
+		" to y%i x%i %s\n", from_y, from_x,
 		strarray_lookup(&model->str, from_name), *from_connpt_o,
 		to_y, to_x, strarray_lookup(&model->str, to_name));
 #endif
@@ -257,12 +257,12 @@ static int add_conn_uni_i(struct fpga_model *model,
 		if (tile->conn_point_dests[j*3] == to_x
 		    && tile->conn_point_dests[j*3+1] == to_y
 		    && tile->conn_point_dests[j*3+2] == to_name) {
-			fprintf(stderr, "Duplicate conn (num_conn_point_dests %i): y%02i x%02i %s - y%02i x%02i %s.\n",
+			fprintf(stderr, "Duplicate conn (num_conn_point_dests %i): y%i x%i %s - y%i x%i %s.\n",
 				num_conn_point_dests_for_this_wire,
 				from_y, from_x, strarray_lookup(&model->str, from_name),
 				to_y, to_x, strarray_lookup(&model->str, to_name));
 			for (j = conn_start; j < conn_start + num_conn_point_dests_for_this_wire; j++) {
-				fprintf(stderr, "c%i: y%02i x%02i %s -> y%02i x%02i %s\n", j,
+				fprintf(stderr, "c%i: y%i x%i %s -> y%i x%i %s\n", j,
 					from_y, from_x, strarray_lookup(&model->str, from_name),
 					tile->conn_point_dests[j*3+1], tile->conn_point_dests[j*3],
 					strarray_lookup(&model->str, tile->conn_point_dests[j*3+2]));
@@ -288,10 +288,10 @@ static int add_conn_uni_i(struct fpga_model *model,
 	for (j = (*from_connpt_o)+1; j < tile->num_conn_point_names; j++)
 		tile->conn_point_names[j*2]++;
 #ifdef DBG_ADD_CONN_UNI
-	fprintf(stderr, " conn_point_dests for y%02i x%02i %s now:\n",
+	fprintf(stderr, " conn_point_dests for y%i x%i %s now:\n",
 		from_y, from_x, strarray_lookup(&model->str, from_name));
 	for (j = conn_start; j < conn_start + num_conn_point_dests_for_this_wire+1; j++) {
-		fprintf(stderr, "  c%i: y%02i x%02i %s -> y%02i x%02i %s\n",
+		fprintf(stderr, "  c%i: y%i x%i %s -> y%i x%i %s\n",
 			j, from_y, from_x, strarray_lookup(&model->str, from_name),
 			tile->conn_point_dests[j*3+1], tile->conn_point_dests[j*3],
 			strarray_lookup(&model->str, tile->conn_point_dests[j*3+2]));
@@ -792,20 +792,25 @@ int regular_row_pos(int y, struct fpga_model* model)
 	return row_pos;
 }
 
-int y_to_hclk(int y, struct fpga_model *model)
+int row_to_hclk(int row, struct fpga_model *model)
 {
-	int row_num, row_pos, hclk_pos;
-
-	is_in_row(model, y, &row_num, &row_pos);
-	if (row_num == -1
-	    || row_pos == -1 || row_pos == HCLK_POS)
-		{ HERE(); return -1; }
-	hclk_pos = model->y_height - BOT_LAST_REGULAR_O - row_num*ROW_SIZE - HCLK_POS;
+	int hclk_pos = model->y_height - BOT_LAST_REGULAR_O - row*ROW_SIZE - HCLK_POS;
 	if (hclk_pos < model->center_y)
 		hclk_pos--; // center regs
 	if (hclk_pos < TOP_FIRST_REGULAR)
 		{ HERE(); return -1; }
 	return hclk_pos;
+}
+
+int y_to_hclk(int y, struct fpga_model *model)
+{
+	int row_num, row_pos;
+
+	is_in_row(model, y, &row_num, &row_pos);
+	if (row_num == -1
+	    || row_pos == -1 || row_pos == HCLK_POS)
+		{ HERE(); return -1; }
+	return row_to_hclk(row_num, model);
 }
 
 const char* logicin_s(int wire, int routing_io)

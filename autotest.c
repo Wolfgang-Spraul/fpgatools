@@ -71,6 +71,11 @@ static int diff_printf(struct test_state* tstate)
 	FILE* dest_f = 0;
 	int rc;
 
+	if (tstate->cmdline_count != -1
+	    && tstate->next_diff_counter >= tstate->cmdline_skip + tstate->cmdline_count + 1) {
+		printf("\nO Finished %i tests.\n", tstate->cmdline_count);
+		exit(0);
+	}
 	if (tstate->dry_run) {
 		printf("O Dry run, skipping diff %i.\n", tstate->next_diff_counter++);
 		return 0;
@@ -78,11 +83,6 @@ static int diff_printf(struct test_state* tstate)
 	if (tstate->cmdline_skip >= tstate->next_diff_counter) {
 		printf("O Skipping diff %i.\n", tstate->next_diff_counter++);
 		return 0;
-	}
-	if (tstate->cmdline_count != -1
-	    && tstate->next_diff_counter >= tstate->cmdline_skip + tstate->cmdline_count + 1) {
-		printf("\nO Finished %i tests.\n", tstate->cmdline_count);
-		exit(0);
 	}
 
 	snprintf(path, sizeof(path), "%s/autotest_%s_%06i", tstate->tmp_dir,
@@ -970,7 +970,7 @@ static int test_iob_config(struct test_state* tstate)
 		for (i = 0; (name = fpga_enum_iob(tstate->model, i, &iob_y,
 			&iob_x, &iob_type_idx)); i++) {
 			if (tstate->dry_run)
-				printf("IOB %s y%02i x%02i i%i\n", name,
+				printf("IOB %s y%i x%i i%i\n", name,
 					iob_y, iob_x, iob_type_idx);
 			rc = fdev_iob_IMUX(tstate->model, iob_y, iob_x,
 				iob_type_idx, IMUX_I);
@@ -1744,53 +1744,106 @@ static int test_clock_routing(struct test_state* tstate)
 {
 	int rc, i, iob_clk_y, iob_clk_x, iob_clk_type_idx;
 	int logic_y, logic_x, logic_type_idx;
+	int y;
 	net_idx_t clock_net;
 
 	tstate->diff_to_null = 1;
+
+	//
+	// first round over all gclk pins to the same logic dev
+	//
+
 	for (i = 0; i < tstate->model->pkg->num_gclk_pins; i++) {
 		if (!tstate->model->pkg->gclk_pin[i])
 			continue;
-		rc = fpga_find_iob(tstate->model, tstate->model->pkg->gclk_pin[i],
+		fpga_find_iob(tstate->model, tstate->model->pkg->gclk_pin[i],
 			&iob_clk_y, &iob_clk_x, &iob_clk_type_idx);
-		if (rc) FAIL(rc);
-		printf("\nO test %i: gclk pin %s (y%02i x%02i IOB %i)\n",
+		RC_CHECK(tstate->model);
+		printf("\nO test %i: gclk pin %s (y%i x%i IOB %i)\n",
 			tstate->next_diff_counter, tstate->model->pkg->gclk_pin[i],
 			iob_clk_y, iob_clk_x, iob_clk_type_idx);
-		rc = fdev_iob_input(tstate->model, iob_clk_y, iob_clk_x,
+		fdev_iob_input(tstate->model, iob_clk_y, iob_clk_x,
 			iob_clk_type_idx, IO_LVCMOS33);
-		if (rc) FAIL(rc);
 
 		logic_y = 58;
 		logic_x = 13;
 		logic_type_idx = DEV_LOG_M_OR_L;
 
-		rc = fdev_logic_a2d_lut(tstate->model, logic_y, logic_x,
+		fdev_logic_a2d_lut(tstate->model, logic_y, logic_x,
 			logic_type_idx, LUT_A, 6, "A1", ZTERM);
-		if (rc) FAIL(rc);
-		rc = fdev_set_required_pins(tstate->model, logic_y, logic_x,
+
+		fdev_set_required_pins(tstate->model, logic_y, logic_x,
 			DEV_LOGIC, logic_type_idx);
-		if (rc) FAIL(rc);
-		
 		if (tstate->dry_run)
 			fdev_print_required_pins(tstate->model,
 				logic_y, logic_x, DEV_LOGIC, logic_type_idx);
 
-		rc = fnet_new(tstate->model, &clock_net);
-		if (rc) FAIL(rc);
-		rc = fnet_add_port(tstate->model, clock_net, iob_clk_y,
+		fnet_new(tstate->model, &clock_net);
+		RC_CHECK(tstate->model);
+		fnet_add_port(tstate->model, clock_net, iob_clk_y,
 			iob_clk_x, DEV_IOB, iob_clk_type_idx, IOB_OUT_I);
-		if (rc) FAIL(rc);
-		rc = fnet_add_port(tstate->model, clock_net, logic_y, logic_x,
+		fnet_add_port(tstate->model, clock_net, logic_y, logic_x,
 			DEV_LOGIC, logic_type_idx, LI_CLK);
-		if (rc) FAIL(rc);
-		rc = fnet_autoroute(tstate->model, clock_net);
-		if (rc) FAIL(rc);
+		fnet_autoroute(tstate->model, clock_net);
 
 		if ((rc = diff_printf(tstate))) FAIL(rc);
 
 		fnet_delete(tstate->model, clock_net);
 		fdev_delete(tstate->model, logic_y, logic_x, DEV_LOGIC,
 			logic_type_idx);
+		fdev_delete(tstate->model, iob_clk_y, iob_clk_x, DEV_IOB,
+			iob_clk_type_idx);
+	}
+
+	//
+	// Second round over left and right gclk pins only (that's enough
+	// to reach all 16 gclk wires in the center). Then going to the
+	// left and right side of all hclk rows top-down.
+	//
+
+	for (i = 0; i < tstate->model->pkg->num_gclk_pins; i++) {
+		if (!tstate->model->pkg->gclk_pin[i])
+			continue;
+		fpga_find_iob(tstate->model, tstate->model->pkg->gclk_pin[i],
+			&iob_clk_y, &iob_clk_x, &iob_clk_type_idx);
+		RC_CHECK(tstate->model);
+		// skip top and bottom iobs
+		if (iob_clk_x != LEFT_OUTER_COL
+		    && iob_clk_x != tstate->model->x_width-RIGHT_OUTER_O)
+			continue;
+		fdev_iob_input(tstate->model, iob_clk_y, iob_clk_x,
+			iob_clk_type_idx, IO_LVCMOS33);
+
+		for (y = TOP_FIRST_REGULAR; y < tstate->model->y_height - BOT_LAST_REGULAR_O; y++) {
+			if (!is_aty(Y_ROW_HORIZ_AXSYMM, tstate->model, y))
+				continue;
+			logic_type_idx = DEV_LOG_M_OR_L;
+			logic_y = y-3;
+			for (logic_x = 13; logic_x <= 26; logic_x += 13) {
+				fdev_logic_a2d_lut(tstate->model, logic_y, logic_x,
+					logic_type_idx, LUT_A, 6, "A1", ZTERM);
+
+				fdev_set_required_pins(tstate->model, logic_y, logic_x,
+					DEV_LOGIC, logic_type_idx);
+				if (tstate->dry_run)
+					fdev_print_required_pins(tstate->model,
+						logic_y, logic_x, DEV_LOGIC, logic_type_idx);
+
+				fnet_new(tstate->model, &clock_net);
+				RC_CHECK(tstate->model);
+				fnet_add_port(tstate->model, clock_net, iob_clk_y,
+					iob_clk_x, DEV_IOB, iob_clk_type_idx, IOB_OUT_I);
+				fnet_add_port(tstate->model, clock_net, logic_y, logic_x,
+					DEV_LOGIC, logic_type_idx, LI_CLK);
+				fnet_autoroute(tstate->model, clock_net);
+
+				if ((rc = diff_printf(tstate))) FAIL(rc);
+
+				fnet_delete(tstate->model, clock_net);
+				fdev_delete(tstate->model, logic_y, logic_x, DEV_LOGIC,
+					logic_type_idx);
+			}
+		}
 		fdev_delete(tstate->model, iob_clk_y, iob_clk_x, DEV_IOB,
 			iob_clk_type_idx);
 	}
