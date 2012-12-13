@@ -734,7 +734,8 @@ static int test_iologic_switches2(struct test_state* tstate, int iob_y, int iob_
 	
 		if (construct_sw_chain(&chain, tstate->model, switch_to.dest_y,
 			switch_to.dest_x, switch_to.dest_connpt, from_to,
-			/*max_depth*/ -1, /*block_list*/ 0, /*block_list_len*/ 0))
+			/*max_depth*/ -1, SWCHAIN_DEFAULT,
+			/*block_list*/ 0, /*block_list_len*/ 0))
 			FAIL(EINVAL);
 		while (fpga_switch_chain(&chain) != NO_CONN) {
 	
@@ -1765,7 +1766,7 @@ static int test_clock_routing(struct test_state* tstate)
 		fdev_iob_input(tstate->model, iob_clk_y, iob_clk_x,
 			iob_clk_type_idx, IO_LVCMOS33);
 
-		logic_y = 58;
+		logic_y = 65; // down from hclk at 62
 		logic_x = 13;
 		logic_type_idx = DEV_LOG_M_OR_L;
 
@@ -1818,7 +1819,7 @@ static int test_clock_routing(struct test_state* tstate)
 			if (!is_aty(Y_ROW_HORIZ_AXSYMM, tstate->model, y))
 				continue;
 			logic_type_idx = DEV_LOG_M_OR_L;
-			logic_y = y-3;
+			logic_y = y-3; // up from hclk
 			for (logic_x = 13; logic_x <= 26; logic_x += 13) {
 				fdev_logic_a2d_lut(tstate->model, logic_y, logic_x,
 					logic_type_idx, LUT_A, 6, "A1", ZTERM);

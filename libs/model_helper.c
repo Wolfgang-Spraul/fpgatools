@@ -732,10 +732,6 @@ int is_atyx(int check, struct fpga_model* model, int y, int x)
 		|| x > model->x_width-RIGHT_IO_ROUTING_O
 		|| y <= TOP_INNER_ROW
 		|| y >= model->y_height-BOT_INNER_ROW )) return 1;
-	if (check & YX_ROUTING_BOUNDARY
-	    && is_atyx(YX_ROUTING_TILE, model, y, x)
-	    && (x == LEFT_IO_ROUTING || x == model->x_width-RIGHT_IO_ROUTING_O
-	        || y == TOP_FIRST_REGULAR || y == model->y_height-BOT_LAST_REGULAR_O)) return 1;
 	if (check & YX_X_CENTER_CMTPLL
 	    && is_atx(X_CENTER_CMTPLL_COL, model, x)) return 1;
 	if (check & YX_Y_CENTER
@@ -1905,6 +1901,29 @@ enum extra_wires fpga_str2wire(const char* str)
 			}
 		}
 	}
+	if (!strcmp(_str, "GFAN0")) return GFAN0;
+	if (!strcmp(_str, "GFAN1")) return GFAN1;
+	if (!strcmp(_str, "CLK0")) return CLK0;
+	if (!strcmp(_str, "CLK1")) return CLK1;
+	if (!strcmp(_str, "SR0")) return SR0;
+	if (!strcmp(_str, "SR1")) return SR1;
+	if (!strcmp(_str, "GND_WIRE")) return GND_WIRE;
+	if (!strcmp(_str, "VCC_WIRE")) return VCC_WIRE;
+	if (!strcmp(_str, "FAN_B")) return FAN_B;
+	if (!strncmp(_str, "LOGICIN", 7)) {
+		if (!strcmp(&_str[7], "20")) return LOGICIN20;
+		if (!strcmp(&_str[7], "21")) return LOGICIN21;
+		if (!strcmp(&_str[7], "44")) return LOGICIN44;
+		if (!strcmp(&_str[7], "52")) return LOGICIN52;
+		if (!strcmp(&_str[7], "_N21")) return LOGICIN_N21;
+		if (!strcmp(&_str[7], "_N28")) return LOGICIN_N28;
+		if (!strcmp(&_str[7], "_N52")) return LOGICIN_N52;
+		if (!strcmp(&_str[7], "_N60")) return LOGICIN_N60;
+		if (!strcmp(&_str[7], "_S20")) return LOGICIN_S20;
+		if (!strcmp(&_str[7], "_S36")) return LOGICIN_S36;
+		if (!strcmp(&_str[7], "_S44")) return LOGICIN_S44;
+		if (!strcmp(&_str[7], "_S62")) return LOGICIN_S62;
+	}
 	if ((wtype = base2wire(_str))) {
 		flags = 0;
 		if (_str[3] == 'B')
@@ -1931,29 +1950,6 @@ enum extra_wires fpga_str2wire(const char* str)
 			if (num != -1)
 				return DW + ((wtype*4 + num)|flags);
 		}
-	}
-	if (!strcmp(_str, "GFAN0")) return GFAN0;
-	if (!strcmp(_str, "GFAN1")) return GFAN1;
-	if (!strcmp(_str, "CLK0")) return CLK0;
-	if (!strcmp(_str, "CLK1")) return CLK1;
-	if (!strcmp(_str, "SR0")) return SR0;
-	if (!strcmp(_str, "SR1")) return SR1;
-	if (!strcmp(_str, "GND_WIRE")) return GND_WIRE;
-	if (!strcmp(_str, "VCC_WIRE")) return VCC_WIRE;
-	if (!strcmp(_str, "FAN_B")) return FAN_B;
-	if (!strncmp(_str, "LOGICIN", 7)) {
-		if (!strcmp(&_str[7], "20")) return LOGICIN20;
-		if (!strcmp(&_str[7], "21")) return LOGICIN21;
-		if (!strcmp(&_str[7], "44")) return LOGICIN44;
-		if (!strcmp(&_str[7], "52")) return LOGICIN52;
-		if (!strcmp(&_str[7], "_N21")) return LOGICIN_N21;
-		if (!strcmp(&_str[7], "_N28")) return LOGICIN_N28;
-		if (!strcmp(&_str[7], "_N52")) return LOGICIN_N52;
-		if (!strcmp(&_str[7], "_N60")) return LOGICIN_N60;
-		if (!strcmp(&_str[7], "_S20")) return LOGICIN_S20;
-		if (!strcmp(&_str[7], "_S36")) return LOGICIN_S36;
-		if (!strcmp(&_str[7], "_S44")) return LOGICIN_S44;
-		if (!strcmp(&_str[7], "_S62")) return LOGICIN_S62;
 	}
 	HERE();
 	return NO_WIRE;

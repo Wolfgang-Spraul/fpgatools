@@ -1308,7 +1308,7 @@ enum wire_type base2wire(const char* str)
 	if (!strncmp(str, "WW4", 3)) return W_WW4;
 	if (!strncmp(str, "NW4", 3)) return W_NW4;
 
-	HERE();
+	fprintf(stderr, "#E %s:%i base2wire() %s unknown\n", __FILE__, __LINE__, str);
 	return 0;
 }
 

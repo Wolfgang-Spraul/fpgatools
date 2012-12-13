@@ -9,6 +9,7 @@
 #include "control.h"
  
 #undef DBG_ENUM_SWITCH
+#undef DBG_SWITCH_CONNS
 #undef DBG_SWITCH_TO_YX
 #undef DBG_SWITCH_TO_REL
 
@@ -1580,13 +1581,14 @@ const char* fmt_swset(struct fpga_model* model, int y, int x,
 
 int construct_sw_chain(struct sw_chain* chain, struct fpga_model* model,
 	int y, int x, str16_t start_switch, int from_to, int max_depth,
-	swidx_t* block_list, int block_list_len)
+	int flags, swidx_t* block_list, int block_list_len)
 {
 	RC_CHECK(model);
 #ifdef DBG_ENUM_SWITCH
-	printf("construct_sw_chain() %s (%s)\n",
+	printf("construct_sw_chain() %s (%s) flags %Xh\n",
 		strarray_lookup(&model->str, start_switch),
-		(from_to == SW_FROM) ? "SW_FROM" : "SW_TO");
+		(from_to == SW_FROM) ? "SW_FROM" : "SW_TO",
+		flags);
 #endif
 	memset(chain, 0, sizeof(*chain));
 	chain->model = model;
@@ -1594,6 +1596,7 @@ int construct_sw_chain(struct sw_chain* chain, struct fpga_model* model,
 	chain->x = x;
 	chain->from_to = from_to;
 	chain->max_depth = (max_depth < 0) ? SW_SET_SIZE : max_depth;
+	chain->flags = flags;
 	if (block_list) {
 		chain->block_list = block_list;
 		chain->block_list_len = block_list_len;
@@ -1665,7 +1668,8 @@ int fpga_switch_chain(struct sw_chain* ch)
 			if (idx == NO_SWITCH)
 				break;
 			ch->set.sw[ch->set.len-1] = idx;
-			if (!fpga_switch_is_used(ch->model, ch->y, ch->x, idx)
+			if ((!(ch->flags & SWCHAIN_EXCLUDING_USED)
+			     || !fpga_switch_is_used(ch->model, ch->y, ch->x, idx))
 			    && switch_list_contains(ch->model, ch->y, ch->x,
 				ch->block_list, ch->block_list_len, idx)
 					== NO_SWITCH)
@@ -1718,7 +1722,8 @@ int fpga_switch_chain(struct sw_chain* ch)
 				ch->model, ch->y, ch->x,
 				child_from_to));
 #endif
-			if (fpga_switch_is_used(ch->model, ch->y, ch->x, idx))
+			if (ch->flags & SWCHAIN_EXCLUDING_USED
+			    && fpga_switch_is_used(ch->model, ch->y, ch->x, idx))
 				level_down = 0;
 
 			if (level_down) {
@@ -1784,7 +1789,8 @@ int fpga_switch_chain(struct sw_chain* ch)
 				ch->model, ch->y, ch->x,
 				ch->set.sw[ch->set.len-1], ch->from_to);
 			if (ch->set.sw[ch->set.len-1] != NO_SWITCH) {
-				if (fpga_switch_is_used(ch->model, ch->y,
+				if (ch->flags & SWCHAIN_EXCLUDING_USED
+				    && fpga_switch_is_used(ch->model, ch->y,
 					ch->x, ch->set.sw[ch->set.len-1])) {
 #ifdef DBG_ENUM_SWITCH
 					printf(" skipping used %s\n",
@@ -1822,7 +1828,8 @@ int construct_sw_conns(struct sw_conns* conns, struct fpga_model* model,
 	RC_CHECK(model);
 	memset(conns, 0, sizeof(*conns));
 	construct_sw_chain(&conns->chain, model, y, x, start_switch,
-		from_to, max_depth, /*block_list*/ 0, /*block_list_len*/ 0);
+		from_to, max_depth, SWCHAIN_DEFAULT,
+		/*block_list*/ 0, /*block_list_len*/ 0);
 	RC_RETURN(model);
 }
 
@@ -1838,11 +1845,18 @@ int fpga_switch_conns(struct sw_conns* conns)
 
 	if (!conns->chain.set.len) { HERE(); goto internal_error; }
 
+#ifdef DBG_SWITCH_TO_YX
+	printf("fpga_switch_conns() dest_i %i num_dests %i\n", conns->dest_i, conns->num_dests);
+#endif
 	// on the first call, both dest_i and num_dests are 0
 	while (conns->dest_i >= conns->num_dests) {
 		fpga_switch_chain(&conns->chain);
-		if (conns->chain.set.len == 0)
+		if (conns->chain.set.len == 0) {
+#ifdef DBG_SWITCH_TO_YX
+			printf(" no more switches\n");
+#endif
 			return NO_CONN;
+		}
 		end_of_chain_str = fpga_switch_str_i(conns->chain.model,
 			conns->chain.y, conns->chain.x,
 			conns->chain.set.sw[conns->chain.set.len-1],
@@ -1853,8 +1867,17 @@ int fpga_switch_conns(struct sw_conns* conns)
 		fpga_connpt_find(conns->chain.model, conns->chain.y,
 			conns->chain.x, end_of_chain_str,
 			&conns->connpt_dest_start, &conns->num_dests);
-		if (conns->num_dests)
+		if (conns->num_dests) {
+#ifdef DBG_SWITCH_TO_YX
+			printf(" %s: %i conns\n", strarray_lookup(&conns->chain.model->str,
+				end_of_chain_str), conns->num_dests);
+#endif
 			break;
+		}
+#ifdef DBG_SWITCH_TO_YX
+		printf(" %s: no conns\n", strarray_lookup(
+			&conns->chain.model->str, end_of_chain_str));
+#endif
 	}
 	fpga_conn_dest(conns->chain.model, conns->chain.y, conns->chain.x,
 		conns->connpt_dest_start + conns->dest_i,
@@ -1880,6 +1903,7 @@ void printf_swchain(struct fpga_model* model, int y, int x,
 		y, x, strarray_lookup(&model->str, sw),
 		block_list_len ? *block_list_len : 0);
 	if (construct_sw_chain(&chain, model, y, x, sw, from_to, max_depth,
+		SWCHAIN_DEFAULT,
 		block_list, block_list_len ? *block_list_len : 0))
 		{ HERE(); return; }
 	while (fpga_switch_chain(&chain) != NO_CONN) {

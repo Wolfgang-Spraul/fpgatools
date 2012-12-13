@@ -203,6 +203,9 @@ const char* fmt_swset(struct fpga_model* model, int y, int x,
 // of switches in a tile, currently 3459 in a slx9 routing tile.
 #define MAX_SWITCHBOX_SIZE 4000
 
+#define SWCHAIN_DEFAULT		0
+#define SWCHAIN_EXCLUDING_USED	0x0001
+
 struct sw_chain
 {
 	// start and recurring values:
@@ -211,6 +214,7 @@ struct sw_chain
 	int x;
 	int from_to;
 	int max_depth;
+	int flags;
 	//
 	// block_list works as if all switches from or to the ones
 	// on the block list are blocked, that is the recursion will
@@ -233,7 +237,7 @@ struct sw_chain
 
 int construct_sw_chain(struct sw_chain* chain, struct fpga_model* model,
 	int y, int x, str16_t start_switch, int from_to, int max_depth,
-	swidx_t* block_list, int block_list_len);
+	int flags, swidx_t* block_list, int block_list_len);
 void destruct_sw_chain(struct sw_chain* chain);
 
 // Returns 0 if another switchset is returned in chain, or

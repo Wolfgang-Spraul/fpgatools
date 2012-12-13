@@ -13,6 +13,7 @@ static uint8_t* get_first_minor(struct fpga_bits* bits, int row, int major)
 {
 	int i, num_frames;
 
+	if (row < 0) { HERE(); return 0; }
 	num_frames = 0;
 	for (i = 0; i < major; i++)
 		num_frames += get_major_minors(XC6SLX9, i);
@@ -593,6 +594,7 @@ static int extract_type2(struct extract_state* es)
 
 			//
 			// find and enable reg-switch for gclk_pin[i]
+			// the writing equivalent is in write_inner_term_sw()
 			//
 
 			fpga_find_iob(es->model, es->model->pkg->gclk_pin[i],
@@ -1907,12 +1909,14 @@ static int extract_center_switches(struct extract_state *es)
 	RC_RETURN(es->model);
 }
 
-static int extract_hclk_switches(struct extract_state *es)
+static int extract_gclk_center_vert_sw(struct extract_state *es)
 {
 	int word, cur_row, cur_minor, cur_pin, i, hclk_y;
 	uint8_t *ma0_bits;
 
 	RC_CHECK(es->model);
+	// Switches in the vertical center column that are routing gclk
+	// signals to the left and right side of the chip.
 	for (cur_row = 0; cur_row < es->model->die->num_rows; cur_row++) {
 		hclk_y = row_to_hclk(cur_row, es->model);
 		RC_ASSERT(es->model, hclk_y != -1);
@@ -1946,11 +1950,93 @@ static int extract_hclk_switches(struct extract_state *es)
 					word &= ~(1<<cur_pin);
 				}
 				if (word) HERE();
-				frame_set_pinword(ma0_bits + cur_minor*FRAME_SIZE + 8*8+XC6_HCLK_BYTES, word + 4);
+				frame_set_pinword(ma0_bits + cur_minor*FRAME_SIZE + 8*8+XC6_HCLK_BYTES + 4, word);
 			}
 		}
 	}
 	RC_RETURN(es->model);
+}
+
+static int extract_gclk_hclk_updown_sw(struct extract_state *es)
+{
+	int word, cur_row, x, gclk_pin, hclk_y;
+	uint8_t *mi0_bits;
+
+	RC_CHECK(es->model);
+	// Switches in each horizontal hclk row that are routing
+	// gclk signals and and down to the clocked devices.
+
+	// todo: clk access in left and right IO devs, center devs,
+	// 	 bram and macc devs as well as special devs not tested
+	//       yet (only XM logic devs tested).
+	for (cur_row = 0; cur_row < es->model->die->num_rows; cur_row++) {
+		hclk_y = row_to_hclk(cur_row, es->model);
+		RC_ASSERT(es->model, hclk_y != -1);
+		for (x = LEFT_IO_ROUTING; x <= es->model->x_width-RIGHT_IO_ROUTING_O; x++) {
+			if (!is_atx(X_ROUTING_COL, es->model, x))
+				continue;
+			mi0_bits = get_first_minor(es->bits, cur_row, es->model->x_major[x]);
+			// each minor (0:15) stores the configuration bits for one gclk
+			// pin (in the hclk bytes of the minor)
+			for (gclk_pin = 0; gclk_pin <= 15; gclk_pin++) {
+				word = frame_get_pinword(mi0_bits + gclk_pin*FRAME_SIZE + XC6_HCLK_POS);
+				if (word & (1<<XC6_HCLK_GCLK_UP_PIN)) {
+					add_yx_switch(es, hclk_y, x,
+						pf("HCLK_GCLK%i_INT", gclk_pin),
+						pf("HCLK_GCLK_UP%i", gclk_pin));
+					word &= ~(1<<XC6_HCLK_GCLK_UP_PIN);
+				}
+				if (word & (1<<XC6_HCLK_GCLK_DOWN_PIN)) {
+					add_yx_switch(es, hclk_y, x,
+						pf("HCLK_GCLK%i_INT", gclk_pin),
+						pf("HCLK_GCLK%i", gclk_pin));
+					word &= ~(1<<XC6_HCLK_GCLK_DOWN_PIN);
+				}
+				if (word) HERE();
+				frame_set_pinword(mi0_bits + gclk_pin*FRAME_SIZE + XC6_HCLK_POS, word);
+			}
+		}
+	}
+	RC_RETURN(es->model);
+}
+
+static int write_hclk_sw(struct fpga_bits *bits, struct fpga_model *model,
+	int y, int x)
+{
+	uint8_t *mi0_bits;
+	struct fpga_tile *tile;
+	const char *from_str, *to_str;
+	int i, j, gclk_pin_from, gclk_pin_to, up, word;
+
+	RC_CHECK(model);
+
+	mi0_bits = get_first_minor(bits, which_row(y, model), model->x_major[x]);
+	RC_ASSERT(model, mi0_bits);
+
+	tile = YX_TILE(model, y, x);
+	for (i = 0; i < tile->num_switches; i++) {
+		if (!(tile->switches[i] & SWITCH_USED))
+			continue;
+		from_str = fpga_switch_str(model, y, x, i, SW_FROM);
+		to_str = fpga_switch_str(model, y, x, i, SW_TO);
+
+		j = sscanf(from_str, "HCLK_GCLK%i_INT", &gclk_pin_from);
+		RC_ASSERT(model, j == 1);
+		j = sscanf(to_str, "HCLK_GCLK%i", &gclk_pin_to);
+		if (j == 1)
+			up = 0; // down
+		else {
+			j = sscanf(to_str, "HCLK_GCLK_UP%i", &gclk_pin_to);
+			RC_ASSERT(model, j == 1);
+			up = 1;
+		}
+		RC_ASSERT(model, gclk_pin_from == gclk_pin_to);
+
+		word = frame_get_pinword(mi0_bits + gclk_pin_from*FRAME_SIZE + XC6_HCLK_POS);
+		word |= 1 << (up ? XC6_HCLK_GCLK_UP_PIN : XC6_HCLK_GCLK_DOWN_PIN);
+		frame_set_pinword(mi0_bits + gclk_pin_from*FRAME_SIZE + XC6_HCLK_POS, word);
+	}
+	RC_RETURN(model);
 }
 
 static int extract_switches(struct extract_state *es)
@@ -1979,7 +2065,8 @@ static int extract_switches(struct extract_state *es)
 		}
 	}
 	extract_center_switches(es);
-	extract_hclk_switches(es);
+	extract_gclk_center_vert_sw(es);
+	extract_gclk_hclk_updown_sw(es);
 	RC_RETURN(es->model);
 }
 
@@ -2245,12 +2332,99 @@ fail:
 	return rc;
 }
 
+static int write_inner_term_sw(struct fpga_bits *bits,
+	struct fpga_model *model, int y, int x)
+{
+	struct fpga_tile *tile;
+	const char *from_str, *from_found, *to_str, *to_found;
+	int i, j, from_idx, to_idx;
+
+	RC_CHECK(model);
+
+	tile = YX_TILE(model, y, x);
+	for (i = 0; i < tile->num_switches; i++) {
+		if (!(tile->switches[i] & SWITCH_USED))
+			continue;
+
+		from_str = fpga_switch_str(model, y, x, i, SW_FROM);
+		to_str = fpga_switch_str(model, y, x, i, SW_TO);
+		RC_ASSERT(model, from_str && to_str);
+
+		if (strstr(from_str, "IBUF")
+		    && strstr(to_str, "CLKPIN"))
+			continue;
+		if ((from_found = strstr(from_str, "CLKPIN"))
+		    && (to_found = strstr(to_str, "CKPIN"))) {
+			struct switch_to_yx_l2 switch_to_yx_l2;
+			int iob_y, iob_x, iob_idx;
+			struct fpga_device *iob_dev;
+
+			from_idx = atoi(&from_found[6]);
+			to_idx = atoi(&to_found[5]);
+			RC_ASSERT(model, from_idx == to_idx);
+
+			// follow switches backwards to IOB
+			switch_to_yx_l2.l1.yx_req = YX_DEV_IOB;
+			switch_to_yx_l2.l1.flags = SWTO_YX_DEF;
+			switch_to_yx_l2.l1.model = model;
+			switch_to_yx_l2.l1.y = y;
+			switch_to_yx_l2.l1.x = x;
+			switch_to_yx_l2.l1.start_switch = fpga_switch_str_i(model, y, x, i, SW_TO);
+			switch_to_yx_l2.l1.from_to = SW_TO;
+			fpga_switch_to_yx_l2(&switch_to_yx_l2);
+			RC_ASSERT(model, switch_to_yx_l2.l1.set.len);
+
+			// find matching gclk pin
+			for (j = 0; j < model->pkg->num_gclk_pins; j++) {
+				if (!model->pkg->gclk_pin[j])
+					continue;
+
+				fpga_find_iob(model, model->pkg->gclk_pin[j],
+					&iob_y, &iob_x, &iob_idx);
+				RC_CHECK(model);
+				if (iob_y != switch_to_yx_l2.l1.dest_y
+				    || iob_x != switch_to_yx_l2.l1.dest_x)
+					continue;
+				iob_dev = fdev_p(model, iob_y, iob_x, DEV_IOB, iob_idx);
+				RC_ASSERT(model, iob_dev);
+
+				if (fpga_switch_lookup(model, iob_y, iob_x,
+					iob_dev->pinw[IOB_OUT_I],
+					switch_to_yx_l2.l1.dest_connpt) != NO_SWITCH)
+					break;
+			}
+			// set bit
+			if (j < model->pkg->num_gclk_pins) {
+				uint16_t u16;
+				int bits_off;
+
+				bits_off = IOB_DATA_START
+					+ model->pkg->gclk_type2_o[j]*XC6_WORD_BYTES
+					+ XC6_TYPE2_GCLK_REG_SW/XC6_WORD_BITS;
+				u16 = frame_get_u16(&bits->d[bits_off]);
+				u16 |= 1<<(XC6_TYPE2_GCLK_REG_SW%XC6_WORD_BITS);
+				frame_set_u16(&bits->d[bits_off], u16);
+				continue;
+			}
+			// fall-through to unsupported
+		}
+		fprintf(stderr, "#E %s:%i unsupported switch "
+			"y%i x%i %s -> %s\n", __FILE__, __LINE__,
+			y, x, from_str, to_str);
+	}
+	RC_RETURN(model);
+}
+
 static int write_switches(struct fpga_bits* bits, struct fpga_model* model)
 {
 	struct fpga_tile* tile;
-	int x, y, i, rc;
+	int x, y, i;
 
 	RC_CHECK(model);
+	// We need to identify and take out each enabled switch, whether it
+	// leads to enabled bits or not. That way we can print unsupported
+	// switches at the end and keep our model alive and maintainable
+	// over time.
 	for (x = 0; x < model->x_width; x++) {
 		for (y = 0; y < model->y_height; y++) {
 			if (is_atx(X_ROUTING_COL, model, x)
@@ -2258,20 +2432,25 @@ static int write_switches(struct fpga_bits* bits, struct fpga_model* model)
 			    && y < model->y_height-BOT_IO_TILES
 			    && !is_aty(Y_ROW_HORIZ_AXSYMM|Y_CHIP_HORIZ_REGS,
 					model, y)) {
-				rc = write_routing_sw(bits, model, y, x);
-				if (rc) FAIL(rc);
+				write_routing_sw(bits, model, y, x);
 				continue;
 			}
 			if (is_atyx(YX_DEV_ILOGIC, model, y, x)) {
-				rc = write_iologic_sw(bits, model, y, x);
-				if (rc) FAIL(rc);
+				write_iologic_sw(bits, model, y, x);
 				continue;
 			}
-			// todo: there are probably switches in logic and
-			//       iob that need bits, and switches in other
-			//       tiles that need no bits...
 			if (is_atyx(YX_DEV_LOGIC|YX_DEV_IOB, model, y, x))
 				continue;
+			if (is_atx(X_ROUTING_COL, model, x)
+			    && is_aty(Y_ROW_HORIZ_AXSYMM, model, y)) {
+				write_hclk_sw(bits, model, y, x);
+				continue;
+			}
+			if (is_atyx(YX_INNER_TERM, model, y, x)) {
+				write_inner_term_sw(bits, model, y, x);
+				continue;
+			}
+			// print unsupported switches
 			tile = YX_TILE(model, y, x);
 			for (i = 0; i < tile->num_switches; i++) {
 				if (!(tile->switches[i] & SWITCH_USED))
@@ -2283,9 +2462,7 @@ static int write_switches(struct fpga_bits* bits, struct fpga_model* model)
 			}
 		}
 	}
-	return 0;
-fail:
-	return rc;
+	RC_RETURN(model);
 }
 
 static int write_logic(struct fpga_bits* bits, struct fpga_model* model)

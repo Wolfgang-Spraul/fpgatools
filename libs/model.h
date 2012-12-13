@@ -292,10 +292,9 @@ int is_atx(int check, struct fpga_model* model, int x);
 // outside_of_routing is true for anything outside of the outer
 // boundary of the regular routing area.
 #define YX_OUTSIDE_OF_ROUTING	0x0400
-#define YX_ROUTING_BOUNDARY	0x0800
-#define YX_X_CENTER_CMTPLL	0x1000
-#define YX_Y_CENTER		0x2000
-#define YX_CENTER		0x4000
+#define YX_X_CENTER_CMTPLL	0x0800
+#define YX_Y_CENTER		0x1000
+#define YX_CENTER		0x2000
 
 int is_atyx(int check, struct fpga_model* model, int y, int x);
 

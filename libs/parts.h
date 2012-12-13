@@ -130,8 +130,12 @@ const struct xc6_pkg_info *xc6_pkg_info(enum xc6_pkg pkg);
 #define XC6_WORD_BYTES		2
 #define XC6_WORD_BITS		(XC6_WORD_BYTES*8)
 
+#define XC6_HCLK_POS		64
 #define XC6_HCLK_BYTES		2
 #define XC6_HCLK_BITS		(XC6_HCLK_BYTES*8)
+
+#define XC6_HCLK_GCLK_UP_PIN	0
+#define XC6_HCLK_GCLK_DOWN_PIN	1
 
 #define XC6_NULL_MAJOR		0
 
