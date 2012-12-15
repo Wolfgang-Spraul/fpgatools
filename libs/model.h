@@ -346,7 +346,8 @@ typedef int dev_idx_t;
 typedef int dev_type_idx_t;
 
 #define NO_DEV -1
-#define FPGA_DEV(model, y, x, dev_idx)	(&YX_TILE(model, y, x)->devs[dev_idx])
+#define FPGA_DEV(model, y, x, dev_idx) \
+		((dev_idx == NO_DEV) ? 0 : (&YX_TILE(model, y, x)->devs[dev_idx]))
 
 //
 // DEV_LOGIC

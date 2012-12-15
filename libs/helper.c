@@ -131,6 +131,10 @@ static int bool_eval(const char *expr, int len, const int *var)
 {
 	int i, negate, result, oplen;
 
+	if (len == 1) {
+		if (*expr == '1') return 1;
+		if (*expr == '0') return 0;
+	}
 	oplen = bool_nextlen(expr, len);
 	if (oplen < 1) goto fail;
 	i = 0;
@@ -192,14 +196,19 @@ uint64_t map_bits(uint64_t u64, int num_bits, int *src_pos)
 
 int bool_str2bits(const char *str, uint64_t *u64, int num_bits)
 {
-	int i, j, bool_res, rc, vars[6];
+	int i, j, bool_res, rc, str_len, vars[6];
 
-	if (num_bits != 32 && num_bits != 64) HERE();
-	*u64 = 0;
+	if (num_bits == 64)
+		*u64 = 0;
+	else if (num_bits == 32)
+		*u64 &= 0xFFFFFFFF00000000;
+	else FAIL(EINVAL);
+
+	str_len = strlen(str);
 	for (i = 0; i < num_bits; i++) {
 		for (j = 0; j < sizeof(vars)/sizeof(*vars); j++)
 			vars[j] = (i & (1<<j)) != 0;
-		bool_res = bool_eval(str, strlen(str), vars);
+		bool_res = bool_eval(str, str_len, vars);
 		if (bool_res == -1) FAIL(EINVAL);
 		if (bool_res) *u64 |= 1ULL<<i;
 	}
@@ -332,27 +341,6 @@ const char* bool_bits2str(uint64_t u64, int num_bits)
 	// TODO: This could be further simplified, see Petrick's method.
 	// XOR don't simplify well, try A2@A3
 	return str;
-}
-
-int parse_boolexpr(const char *expr, uint64_t *lut)
-{
-	int i, j, result, vars[6];
-
-	*lut = 0;
-	for (i = 0; i < 64; i++) {
-		memcpy(vars, lut_base_vars, sizeof(vars));
-		for (j = 0; j < 6; j++) {
-			if (j != 2 && (i & (1<<j)))
-				vars[j] = !vars[j];
-		}
-		if (((i&8) != 0) ^ ((i&4) != 0))
-			vars[2] = 1;
-		// todo: flip_b0 and different base values missing
-		result = bool_eval(expr, strlen(expr), vars);
-		if (result == -1) return -1;
-		if (result) *lut |= 1LL<<i;
-	}
-	return 0;
 }
 
 void printf_type2(uint8_t *d, int len, int inpos, int num_entries)

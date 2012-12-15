@@ -59,19 +59,19 @@ int main(int argc, char** argv)
 	logic_cfg.a2d[LUT_A].ff_mux = MUX_XOR;
 	logic_cfg.a2d[LUT_A].ff_srinit = FF_SRINIT0;
 	logic_cfg.a2d[LUT_B].lut6 = "(A6+~A6)*(A5)";
-	logic_cfg.a2d[LUT_B].lut5 = "1";
+	logic_cfg.a2d[LUT_B].lut5 = "0";
 	logic_cfg.a2d[LUT_B].cy0 = CY0_O5;
 	logic_cfg.a2d[LUT_B].ff = FF_FF;
 	logic_cfg.a2d[LUT_B].ff_mux = MUX_XOR;
 	logic_cfg.a2d[LUT_B].ff_srinit = FF_SRINIT0;
 	logic_cfg.a2d[LUT_C].lut6 = "(A6+~A6)*(A5)";
-	logic_cfg.a2d[LUT_C].lut5 = "1";
+	logic_cfg.a2d[LUT_C].lut5 = "0";
 	logic_cfg.a2d[LUT_C].cy0 = CY0_O5;
 	logic_cfg.a2d[LUT_C].ff = FF_FF;
 	logic_cfg.a2d[LUT_C].ff_mux = MUX_XOR;
 	logic_cfg.a2d[LUT_C].ff_srinit = FF_SRINIT0;
 	logic_cfg.a2d[LUT_D].lut6 = "(A6+~A6)*(A5)";
-	logic_cfg.a2d[LUT_D].lut5 = "1";
+	logic_cfg.a2d[LUT_D].lut5 = "0";
 	logic_cfg.a2d[LUT_D].cy0 = CY0_O5;
 	logic_cfg.a2d[LUT_D].ff = FF_FF;
 	logic_cfg.a2d[LUT_D].ff_mux = MUX_XOR;
@@ -86,6 +86,7 @@ int main(int argc, char** argv)
 	logic_y = 57;
 	logic_cfg.precyinit = 0;
 	logic_cfg.a2d[LUT_A].lut6 = "(A6+~A6)*(A5)";
+	logic_cfg.a2d[LUT_A].lut5 = "0";
 	fdev_logic_setconf(&model, logic_y, logic_x, logic_type_idx, &logic_cfg);
 
 	logic_y = 56;

@@ -2614,93 +2614,376 @@ static int write_switches(struct fpga_bits* bits, struct fpga_model* model)
 	RC_RETURN(model);
 }
 
+static int is_latch(struct fpga_device *dev)
+{
+	int i;
+	// todo: there are a lot more checks we can do to determine whether
+	//       the entire device is properly configured as a latch or not...
+	for (i = LUT_A; i <= LUT_D; i++) {
+		if (dev->u.logic.a2d[i].ff == FF_LATCH
+		    || dev->u.logic.a2d[i].ff == FF_OR2L
+		    || dev->u.logic.a2d[i].ff == FF_AND2L)
+			return 1;
+	}
+	return 0;
+}
+
+static int str2lut(uint64_t *lut, int lut_pos, const struct fpgadev_logic_a2d *a2d)
+{
+	int lut6_used, lut5_used, lut_map[64], rc;
+	uint64_t u64;
+
+	lut6_used = a2d->lut6 && a2d->lut6[0];
+	lut5_used = a2d->lut5 && a2d->lut5[0];
+	if (!lut6_used && !lut5_used)
+		return 0;
+
+	if (lut5_used) {
+		if (!lut6_used) u64 = 0;
+		else {
+			rc = bool_str2bits(a2d->lut6, &u64, 32);
+			if (rc) FAIL(rc);
+			u64 <<= 32;
+		}
+		rc = bool_str2bits(a2d->lut5, &u64, 32);
+		if (rc) FAIL(rc);
+		xc6_lut_bitmap(lut_pos, &lut_map, 32);
+	} else {
+		// lut6_used only
+		rc = bool_str2bits(a2d->lut6, &u64, 64);
+		if (rc) FAIL(rc);
+		xc6_lut_bitmap(lut_pos, &lut_map, 64);
+	}
+	*lut = map_bits(u64, 64, lut_map);
+	return 0;
+fail:
+	return rc;
+}
+	
 static int write_logic(struct fpga_bits* bits, struct fpga_model* model)
 {
-	int dev_idx, row, row_pos, xm_col, rc;
-	int x, y, byte_off;
-	struct fpga_device* dev;
-	uint64_t u64;
+	int dev_idx, row, row_pos, xm_col;
+	int x, y, byte_off, rc;
+	uint64_t lut_X[4], lut_ML[4]; // LUT_A-LUT_D
+	uint64_t mi20, mi23_M, mi2526;
 	uint8_t* u8_p;
+	struct fpga_device* dev_ml, *dev_x;
 
 	RC_CHECK(model);
 	for (x = LEFT_SIDE_WIDTH; x < model->x_width-RIGHT_SIDE_WIDTH; x++) {
 		xm_col = is_atx(X_FABRIC_LOGIC_XM_COL, model, x);
 		if (!xm_col && !is_atx(X_FABRIC_LOGIC_XL_COL, model, x))
 			continue;
-
 		for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
 			if (!has_device(model, y, x, DEV_LOGIC))
 				continue;
 
-			row = which_row(y, model);
-			row_pos = pos_in_row(y, model);
-			if (row == -1 || row_pos == -1 || row_pos == 8) {
-				HERE();
-				continue;
-			}
-			if (row_pos > 8) row_pos--;
+			is_in_row(model, y, &row, &row_pos);
+			RC_ASSERT(model, row != -1 && row_pos != -1 && row_pos != HCLK_POS);
+			if (row_pos > HCLK_POS) row_pos--;
+
 			u8_p = get_first_minor(bits, row, model->x_major[x]);
 			byte_off = row_pos * 8;
 			if (row_pos >= 8) byte_off += XC6_HCLK_BYTES;
 
+			//
+			// 1) check current bits
+			//
+
+			mi20 = frame_get_u64(u8_p + 20*FRAME_SIZE + byte_off) & XC6_MI20_LOGIC_MASK;
 			if (xm_col) {
-				// X device
-				dev_idx = fpga_dev_idx(model, y, x, DEV_LOGIC, DEV_LOG_X);
-				if (dev_idx == NO_DEV) FAIL(EINVAL);
-				dev = FPGA_DEV(model, y, x, dev_idx);
-				if (dev->instantiated) {
-					u64 = 0x000000B000600086ULL;
-					frame_set_u64(u8_p + 26*FRAME_SIZE + byte_off, u64);
+				mi23_M = frame_get_u64(u8_p + 23*FRAME_SIZE + byte_off);
+				mi2526 = frame_get_u64(u8_p + 26*FRAME_SIZE + byte_off);
+				lut_ML[LUT_A] = frame_get_lut64(u8_p + 24*FRAME_SIZE, row_pos*2+1);
+				lut_ML[LUT_B] = frame_get_lut64(u8_p + 21*FRAME_SIZE, row_pos*2+1);
+				lut_ML[LUT_C] = frame_get_lut64(u8_p + 24*FRAME_SIZE, row_pos*2);
+				lut_ML[LUT_D] = frame_get_lut64(u8_p + 21*FRAME_SIZE, row_pos*2);
+				lut_X[LUT_A] = frame_get_lut64(u8_p + 27*FRAME_SIZE, row_pos*2+1);
+				lut_X[LUT_B] = frame_get_lut64(u8_p + 29*FRAME_SIZE, row_pos*2+1);
+				lut_X[LUT_C] = frame_get_lut64(u8_p + 27*FRAME_SIZE, row_pos*2);
+				lut_X[LUT_D] = frame_get_lut64(u8_p + 29*FRAME_SIZE, row_pos*2);
+			} else { // xl
+				mi23_M = 0;
+				mi2526 = frame_get_u64(u8_p + 25*FRAME_SIZE + byte_off);
+				lut_ML[LUT_A] = frame_get_lut64(u8_p + 23*FRAME_SIZE, row_pos*2+1);
+				lut_ML[LUT_B] = frame_get_lut64(u8_p + 21*FRAME_SIZE, row_pos*2+1);
+				lut_ML[LUT_C] = frame_get_lut64(u8_p + 23*FRAME_SIZE, row_pos*2);
+				lut_ML[LUT_D] = frame_get_lut64(u8_p + 21*FRAME_SIZE, row_pos*2);
+				lut_X[LUT_A] = frame_get_lut64(u8_p + 26*FRAME_SIZE, row_pos*2+1);
+				lut_X[LUT_B] = frame_get_lut64(u8_p + 28*FRAME_SIZE, row_pos*2+1);
+				lut_X[LUT_C] = frame_get_lut64(u8_p + 26*FRAME_SIZE, row_pos*2);
+				lut_X[LUT_D] = frame_get_lut64(u8_p + 28*FRAME_SIZE, row_pos*2);
+			}
+			// Except for XC6_ML_CIN_USED (which is set by a switch elsewhere),
+			// everything else should be 0.
+			if (mi20 || mi23_M || (mi2526 & ~XC6_ML_CIN_USED)
+			    || lut_ML[LUT_A] || lut_ML[LUT_B] || lut_ML[LUT_C] || lut_ML[LUT_D]
+			    || lut_X[LUT_A] || lut_X[LUT_B] || lut_X[LUT_C] || lut_X[LUT_D]) {
+				HERE();
+				continue;
+			}
 
-					if (dev->u.logic.a2d[LUT_A].lut6
-					    && dev->u.logic.a2d[LUT_A].lut6[0]) {
-						HERE(); // not supported
-					}
-					if (dev->u.logic.a2d[LUT_B].lut6
-					    && dev->u.logic.a2d[LUT_B].lut6[0]) {
-						HERE(); // not supported
-					}
-					if (dev->u.logic.a2d[LUT_C].lut6
-					    && dev->u.logic.a2d[LUT_C].lut6[0]) {
-						HERE(); // not supported
-					}
-					if (dev->u.logic.a2d[LUT_D].lut6
-					    && dev->u.logic.a2d[LUT_D].lut6[0]) {
-						rc = parse_boolexpr(dev->u.logic.a2d[LUT_D].lut6, &u64);
-						if (rc) FAIL(rc);
-						write_lut64(u8_p + 29*FRAME_SIZE, byte_off*8, u64);
-					}
-				}
+			//
+			// 2) go through config to assemble bits
+			//
 
-				// M device
-				dev_idx = fpga_dev_idx(model, y, x, DEV_LOGIC, DEV_LOG_M_OR_L);
-				if (dev_idx == NO_DEV) FAIL(EINVAL);
-				dev = FPGA_DEV(model, y, x, dev_idx);
-				if (dev->instantiated) {
-					HERE();
-				}
-			} else {
-				// X device
-				dev_idx = fpga_dev_idx(model, y, x, DEV_LOGIC, DEV_LOG_X);
-				if (dev_idx == NO_DEV) FAIL(EINVAL);
-				dev = FPGA_DEV(model, y, x, dev_idx);
-				if (dev->instantiated) {
-					HERE();
-				}
+			dev_idx = fpga_dev_idx(model, y, x, DEV_LOGIC, DEV_LOG_X);
+			dev_x = FPGA_DEV(model, y, x, dev_idx);
+			RC_ASSERT(model, dev_x);
+			dev_idx = fpga_dev_idx(model, y, x, DEV_LOGIC, DEV_LOG_M_OR_L);
+			dev_ml = FPGA_DEV(model, y, x, dev_idx);
+			RC_ASSERT(model, dev_ml);
 
-				// L device
-				dev_idx = fpga_dev_idx(model, y, x, DEV_LOGIC, DEV_LOG_M_OR_L);
-				if (dev_idx == NO_DEV) FAIL(EINVAL);
-				dev = FPGA_DEV(model, y, x, dev_idx);
-				if (dev->instantiated) {
-					HERE();
+			//
+			// 2.1) mi20
+			//
+
+			// X device
+			if (dev_x->instantiated) {
+				if (dev_x->u.logic.a2d[LUT_A].ff5_srinit == FF_SRINIT1)
+					mi20 |= 1ULL << XC6_X_A5_FFSRINIT_1;
+				if (dev_x->u.logic.a2d[LUT_B].ff5_srinit == FF_SRINIT1)
+					mi20 |= 1ULL << XC6_X_B5_FFSRINIT_1;
+				if (dev_x->u.logic.a2d[LUT_C].ff5_srinit == FF_SRINIT1)
+					mi20 |= 1ULL << XC6_X_C5_FFSRINIT_1;
+				if (dev_x->u.logic.a2d[LUT_D].ff5_srinit == FF_SRINIT1)
+					mi20 |= 1ULL << XC6_X_D5_FFSRINIT_1;
+
+				if (dev_x->u.logic.a2d[LUT_C].ff_srinit == FF_SRINIT1)
+					mi20 |= 1ULL << XC6_X_C_FFSRINIT_1;
+			}
+
+			// M or L device
+			if (dev_ml->instantiated) {
+				if (dev_ml->u.logic.a2d[LUT_A].ff5_srinit == FF_SRINIT1)
+					mi20 |= 1ULL << XC6_ML_A5_FFSRINIT_1;
+				if (dev_ml->u.logic.a2d[LUT_B].ff5_srinit == FF_SRINIT1)
+					mi20 |= 1ULL << XC6_ML_B5_FFSRINIT_1;
+				if (dev_ml->u.logic.a2d[LUT_C].ff5_srinit == FF_SRINIT1)
+					mi20 |= 1ULL << XC6_ML_C5_FFSRINIT_1;
+				if (dev_ml->u.logic.a2d[LUT_D].ff5_srinit == FF_SRINIT1)
+					mi20 |= 1ULL << XC6_ML_D5_FFSRINIT_1;
+
+				if (xm_col // M-device only
+				    && dev_ml->u.logic.a2d[LUT_A].ff_srinit == FF_SRINIT1)
+					mi20 |= 1ULL << XC6_M_A_FFSRINIT_1;
+			}
+
+			//
+			// 2.2) mi2526
+			//
+
+			// X device
+			if (dev_x->instantiated) {
+				if (dev_x->u.logic.a2d[LUT_D].out_mux != MUX_5Q)
+					mi2526 |= 1ULL << XC6_X_D_OUTMUX_O5; // default-set
+				if (dev_x->u.logic.a2d[LUT_C].out_mux != MUX_5Q)
+					mi2526 |= 1ULL << XC6_X_C_OUTMUX_O5; // default-set
+				if (dev_x->u.logic.a2d[LUT_D].ff_srinit == FF_SRINIT1)
+					mi2526 |= 1ULL << XC6_X_D_FFSRINIT_1;
+				if (dev_x->u.logic.a2d[LUT_B].out_mux != MUX_5Q)
+					mi2526 |= 1ULL << XC6_X_B_OUTMUX_O5; // default-set
+				if (dev_x->u.logic.clk_inv == CLKINV_B)
+					mi2526 |= 1ULL << XC6_X_CLK_B;
+				if (dev_x->u.logic.a2d[LUT_D].ff_mux != MUX_O6)
+					mi2526 |= 1ULL << XC6_X_D_FFMUX_X; // default-set
+				if (dev_x->u.logic.a2d[LUT_C].ff_mux != MUX_O6)
+					mi2526 |= 1ULL << XC6_X_C_FFMUX_X; // default-set
+				if (dev_x->u.logic.ce_used)
+					mi2526 |= 1ULL << XC6_X_CE_USED;
+				if (dev_x->u.logic.a2d[LUT_B].ff_mux != MUX_O6)
+					mi2526 |= 1ULL << XC6_X_B_FFMUX_X; // default-set
+				if (dev_x->u.logic.a2d[LUT_A].ff_mux != MUX_O6)
+					mi2526 |= 1ULL << XC6_X_A_FFMUX_X; // default-set
+				if (dev_x->u.logic.a2d[LUT_B].ff_srinit == FF_SRINIT1)
+					mi2526 |= 1ULL << XC6_X_B_FFSRINIT_1;
+				if (dev_x->u.logic.a2d[LUT_A].out_mux != MUX_5Q)
+					mi2526 |= 1ULL << XC6_X_A_OUTMUX_O5; // default-set
+				if (dev_x->u.logic.sr_used)
+					mi2526 |= 1ULL << XC6_X_SR_USED;
+				if (dev_x->u.logic.sync_attr == SYNCATTR_SYNC)
+					mi2526 |= 1ULL << XC6_X_SYNC;
+				if (is_latch(dev_x))
+					mi2526 |= 1ULL << XC6_X_ALL_LATCH;
+				if (dev_x->u.logic.a2d[LUT_A].ff_srinit == FF_SRINIT1)
+					mi2526 |= 1ULL << XC6_X_A_FFSRINIT_1;
+			}
+
+			// M or L device
+			if (dev_ml->instantiated) {
+				if (dev_ml->u.logic.a2d[LUT_D].cy0 == CY0_O5)
+					mi2526 |= 1ULL << XC6_ML_D_CY0_O5;
+				if (dev_ml->u.logic.a2d[LUT_D].ff_srinit == FF_SRINIT1)
+					mi2526 |= 1ULL << XC6_ML_D_FFSRINIT_1;
+				if (dev_ml->u.logic.a2d[LUT_C].ff_srinit == FF_SRINIT1)
+					mi2526 |= 1ULL << XC6_ML_C_FFSRINIT_1;
+				if (dev_ml->u.logic.a2d[LUT_C].cy0 == CY0_O5)
+					mi2526 |= 1ULL << XC6_ML_C_CY0_O5;
+				switch (dev_ml->u.logic.a2d[LUT_D].out_mux) {
+					case MUX_O6: mi2526 |= XC6_ML_D_OUTMUX_O6 << XC6_ML_D_OUTMUX_O; break;
+					case MUX_XOR: mi2526 |= XC6_ML_D_OUTMUX_XOR << XC6_ML_D_OUTMUX_O; break;
+					case MUX_O5: mi2526 |= XC6_ML_D_OUTMUX_O5 << XC6_ML_D_OUTMUX_O; break;
+					case MUX_CY: mi2526 |= XC6_ML_D_OUTMUX_CY << XC6_ML_D_OUTMUX_O; break;
+					case MUX_5Q: mi2526 |= XC6_ML_D_OUTMUX_5Q << XC6_ML_D_OUTMUX_O; break;
 				}
+				switch (dev_ml->u.logic.a2d[LUT_D].ff_mux) {
+					// XC6_ML_D_FFMUX_O6 is 0
+					case MUX_O5: mi2526 |= XC6_ML_D_FFMUX_O5 << XC6_ML_D_FFMUX_O; break;
+					case MUX_X: mi2526 |= XC6_ML_D_FFMUX_X << XC6_ML_D_FFMUX_O; break;
+					case MUX_XOR: mi2526 |= XC6_ML_D_FFMUX_XOR << XC6_ML_D_FFMUX_O; break;
+					case MUX_CY: mi2526 |= XC6_ML_D_FFMUX_CY << XC6_ML_D_FFMUX_O; break;
+				}
+				if (is_latch(dev_ml))
+					mi2526 |= 1ULL << XC6_ML_ALL_LATCH;
+				if (dev_ml->u.logic.sr_used)
+					mi2526 |= 1ULL << XC6_ML_SR_USED;
+				if (dev_ml->u.logic.sync_attr == SYNCATTR_SYNC)
+					mi2526 |= 1ULL << XC6_ML_SYNC;
+				if (dev_ml->u.logic.ce_used)
+					mi2526 |= 1ULL << XC6_ML_CE_USED;
+				switch (dev_ml->u.logic.a2d[LUT_C].out_mux) {
+					case MUX_XOR: mi2526 |= XC6_ML_C_OUTMUX_XOR << XC6_ML_C_OUTMUX_O; break;
+					case MUX_O6: mi2526 |= XC6_ML_C_OUTMUX_O6 << XC6_ML_C_OUTMUX_O; break;
+					case MUX_5Q: mi2526 |= XC6_ML_C_OUTMUX_5Q << XC6_ML_C_OUTMUX_O; break;
+					case MUX_CY: mi2526 |= XC6_ML_C_OUTMUX_CY << XC6_ML_C_OUTMUX_O; break;
+					case MUX_O5: mi2526 |= XC6_ML_C_OUTMUX_O5 << XC6_ML_C_OUTMUX_O; break;
+					case MUX_F7: mi2526 |= XC6_ML_C_OUTMUX_F7 << XC6_ML_C_OUTMUX_O; break;
+				}
+				switch (dev_ml->u.logic.a2d[LUT_C].ff_mux) {
+					// XC6_ML_C_FFMUX_O6 is 0
+					case MUX_O5: mi2526 |= XC6_ML_C_FFMUX_O5 << XC6_ML_C_FFMUX_O; break;
+					case MUX_X: mi2526 |= XC6_ML_C_FFMUX_X << XC6_ML_C_FFMUX_O; break;
+					case MUX_F7: mi2526 |= XC6_ML_C_FFMUX_F7 << XC6_ML_C_FFMUX_O; break;
+					case MUX_XOR: mi2526 |= XC6_ML_C_FFMUX_XOR << XC6_ML_C_FFMUX_O; break;
+					case MUX_CY: mi2526 |= XC6_ML_C_FFMUX_CY << XC6_ML_C_FFMUX_O; break;
+				}
+				switch (dev_ml->u.logic.a2d[LUT_B].out_mux) {
+					case MUX_5Q: mi2526 |= XC6_ML_B_OUTMUX_5Q << XC6_ML_B_OUTMUX_O; break;
+					case MUX_F8: mi2526 |= XC6_ML_B_OUTMUX_F8 << XC6_ML_B_OUTMUX_O; break;
+					case MUX_XOR: mi2526 |= XC6_ML_B_OUTMUX_XOR << XC6_ML_B_OUTMUX_O; break;
+					case MUX_CY: mi2526 |= XC6_ML_B_OUTMUX_CY << XC6_ML_B_OUTMUX_O; break;
+					case MUX_O6: mi2526 |= XC6_ML_B_OUTMUX_O6 << XC6_ML_B_OUTMUX_O; break;
+					case MUX_O5: mi2526 |= XC6_ML_B_OUTMUX_O5 << XC6_ML_B_OUTMUX_O; break;
+				}
+				if (dev_ml->u.logic.clk_inv == CLKINV_B)
+					mi2526 |= 1ULL << XC6_ML_CLK_B;
+				switch (dev_ml->u.logic.a2d[LUT_B].ff_mux) {
+					// XC6_ML_B_FFMUX_O6 is 0
+					case MUX_XOR: mi2526 |= XC6_ML_B_FFMUX_XOR << XC6_ML_B_FFMUX_O; break;
+					case MUX_O5: mi2526 |= XC6_ML_B_FFMUX_O5 << XC6_ML_B_FFMUX_O; break;
+					case MUX_CY: mi2526 |= XC6_ML_B_FFMUX_CY << XC6_ML_B_FFMUX_O; break;
+					case MUX_X: mi2526 |= XC6_ML_B_FFMUX_X << XC6_ML_B_FFMUX_O; break;
+					case MUX_F8: mi2526 |= XC6_ML_B_FFMUX_F8 << XC6_ML_B_FFMUX_O; break;
+				}
+				switch (dev_ml->u.logic.a2d[LUT_A].ff_mux) {
+					// XC6_ML_A_FFMUX_O6 is 0
+					case MUX_XOR: mi2526 |= XC6_ML_A_FFMUX_XOR << XC6_ML_A_FFMUX_O; break;
+					case MUX_X: mi2526 |= XC6_ML_A_FFMUX_X << XC6_ML_A_FFMUX_O; break;
+					case MUX_O5: mi2526 |= XC6_ML_A_FFMUX_O5 << XC6_ML_A_FFMUX_O; break;
+					case MUX_CY: mi2526 |= XC6_ML_A_FFMUX_CY << XC6_ML_A_FFMUX_O; break;
+					case MUX_F7: mi2526 |= XC6_ML_A_FFMUX_F7 << XC6_ML_A_FFMUX_O; break;
+				}
+				switch (dev_ml->u.logic.a2d[LUT_A].out_mux) {
+					case MUX_5Q: mi2526 |= XC6_ML_A_OUTMUX_5Q << XC6_ML_A_OUTMUX_O; break;
+					case MUX_F7: mi2526 |= XC6_ML_A_OUTMUX_F7 << XC6_ML_A_OUTMUX_O; break;
+					case MUX_XOR: mi2526 |= XC6_ML_A_OUTMUX_XOR << XC6_ML_A_OUTMUX_O; break;
+					case MUX_CY: mi2526 |= XC6_ML_A_OUTMUX_CY << XC6_ML_A_OUTMUX_O; break;
+					case MUX_O6: mi2526 |= XC6_ML_A_OUTMUX_O6 << XC6_ML_A_OUTMUX_O; break;
+					case MUX_O5: mi2526 |= XC6_ML_A_OUTMUX_O5 << XC6_ML_A_OUTMUX_O; break;
+				}
+				if (dev_ml->u.logic.a2d[LUT_B].cy0 == CY0_O5)
+					mi2526 |= 1ULL << XC6_ML_B_CY0_O5;
+				if (dev_ml->u.logic.precyinit == PRECYINIT_AX)
+					mi2526 |= 1ULL << XC6_ML_PRECYINIT_AX;
+				else if (dev_ml->u.logic.precyinit == PRECYINIT_1)
+					mi2526 |= 1ULL << XC6_ML_PRECYINIT_1;
+				if (dev_ml->u.logic.a2d[LUT_B].ff_srinit == FF_SRINIT1)
+					mi2526 |= 1ULL << XC6_ML_B_FFSRINIT_1;
+				if (dev_ml->u.logic.a2d[LUT_A].cy0 == CY0_O5)
+					mi2526 |= 1ULL << XC6_ML_A_CY0_O5;
+				if (!xm_col && dev_ml->u.logic.a2d[LUT_A].ff_srinit == FF_SRINIT1)
+					mi2526 |= 1ULL << XC6_L_A_FFSRINIT_1;
+			}
+
+			//
+			// 2.3) luts
+			//
+
+			// X device
+			if (dev_x->instantiated) {
+				rc = str2lut(&lut_X[LUT_A], xm_col
+					? XC6_LMAP_XM_X_A : XC6_LMAP_XL_X_A,
+					&dev_x->u.logic.a2d[LUT_A]);
+				RC_ASSERT(model, !rc);
+				rc = str2lut(&lut_X[LUT_B], xm_col
+					? XC6_LMAP_XM_X_B : XC6_LMAP_XL_X_B,
+					&dev_x->u.logic.a2d[LUT_B]);
+				RC_ASSERT(model, !rc);
+				rc = str2lut(&lut_X[LUT_C], xm_col
+					? XC6_LMAP_XM_X_C : XC6_LMAP_XL_X_C,
+					&dev_x->u.logic.a2d[LUT_C]);
+				RC_ASSERT(model, !rc);
+				rc = str2lut(&lut_X[LUT_D], xm_col
+					? XC6_LMAP_XM_X_D : XC6_LMAP_XL_X_D,
+					&dev_x->u.logic.a2d[LUT_D]);
+				RC_ASSERT(model, !rc);
+			}
+			// M or L device
+			if (dev_ml->instantiated) {
+				rc = str2lut(&lut_ML[LUT_A], xm_col
+					? XC6_LMAP_XM_M_A : XC6_LMAP_XL_L_A,
+					&dev_ml->u.logic.a2d[LUT_A]);
+				RC_ASSERT(model, !rc);
+				rc = str2lut(&lut_ML[LUT_B], xm_col
+					? XC6_LMAP_XM_M_B : XC6_LMAP_XL_L_B,
+					&dev_ml->u.logic.a2d[LUT_B]);
+				RC_ASSERT(model, !rc);
+				rc = str2lut(&lut_ML[LUT_C], xm_col
+					? XC6_LMAP_XM_M_C : XC6_LMAP_XL_L_C,
+					&dev_ml->u.logic.a2d[LUT_C]);
+				RC_ASSERT(model, !rc);
+				rc = str2lut(&lut_ML[LUT_D], xm_col
+					? XC6_LMAP_XM_M_D : XC6_LMAP_XL_L_D,
+					&dev_ml->u.logic.a2d[LUT_D]);
+				RC_ASSERT(model, !rc);
+			}
+
+			//
+			// 3) write bits
+			//
+
+			// logic devs occupy only some bits in mi20, so we merge
+			// with the others (switches).
+			frame_set_u64(u8_p + 20*FRAME_SIZE + byte_off,
+				(frame_get_u64(u8_p + 20*FRAME_SIZE + byte_off) & ~XC6_MI20_LOGIC_MASK)
+					| mi20);
+			if (xm_col) {
+				frame_set_u64(u8_p + 23*FRAME_SIZE + byte_off, mi23_M);
+				frame_set_u64(u8_p + 26*FRAME_SIZE + byte_off, mi2526);
+				frame_set_lut64(u8_p + 24*FRAME_SIZE, row_pos*2+1, lut_ML[LUT_A]);
+				frame_set_lut64(u8_p + 21*FRAME_SIZE, row_pos*2+1, lut_ML[LUT_B]);
+				frame_set_lut64(u8_p + 24*FRAME_SIZE, row_pos*2, lut_ML[LUT_C]);
+				frame_set_lut64(u8_p + 21*FRAME_SIZE, row_pos*2, lut_ML[LUT_D]);
+				frame_set_lut64(u8_p + 27*FRAME_SIZE, row_pos*2+1, lut_X[LUT_A]);
+				frame_set_lut64(u8_p + 29*FRAME_SIZE, row_pos*2+1, lut_X[LUT_B]);
+				frame_set_lut64(u8_p + 27*FRAME_SIZE, row_pos*2, lut_X[LUT_C]);
+				frame_set_lut64(u8_p + 29*FRAME_SIZE, row_pos*2, lut_X[LUT_D]);
+			} else { // xl
+				// mi23 is unused in xl cols - no need to write it
+				RC_ASSERT(model, !mi23_M);
+				frame_set_u64(u8_p + 25*FRAME_SIZE + byte_off, mi2526);
+				frame_set_lut64(u8_p + 23*FRAME_SIZE, row_pos*2+1, lut_ML[LUT_A]);
+				frame_set_lut64(u8_p + 21*FRAME_SIZE, row_pos*2+1, lut_ML[LUT_B]);
+				frame_set_lut64(u8_p + 23*FRAME_SIZE, row_pos*2, lut_ML[LUT_C]);
+				frame_set_lut64(u8_p + 21*FRAME_SIZE, row_pos*2, lut_ML[LUT_D]);
+				frame_set_lut64(u8_p + 26*FRAME_SIZE, row_pos*2+1, lut_X[LUT_A]);
+				frame_set_lut64(u8_p + 28*FRAME_SIZE, row_pos*2+1, lut_X[LUT_B]);
+				frame_set_lut64(u8_p + 26*FRAME_SIZE, row_pos*2, lut_X[LUT_C]);
+				frame_set_lut64(u8_p + 28*FRAME_SIZE, row_pos*2, lut_X[LUT_D]);
 			}
 		}
 	}
-	return 0;
-fail:
-	return rc;
+	RC_RETURN(model);
 }
 
 int write_model(struct fpga_bits* bits, struct fpga_model* model)
