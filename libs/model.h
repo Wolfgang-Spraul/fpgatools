@@ -311,6 +311,8 @@ int pos_in_row(int y, struct fpga_model *model);
 int regular_row_pos(int y, struct fpga_model *model);
 int row_to_hclk(int row, struct fpga_model *model);
 int y_to_hclk(int y, struct fpga_model *model);
+// returns -1 if we are at TOP_FIRST_REGULAR
+int regular_row_up(int y, struct fpga_model *model);
 
 const char* logicin_s(int wire, int routing_io);
 
@@ -347,7 +349,7 @@ typedef int dev_type_idx_t;
 
 #define NO_DEV -1
 #define FPGA_DEV(model, y, x, dev_idx) \
-		((dev_idx == NO_DEV) ? 0 : (&YX_TILE(model, y, x)->devs[dev_idx]))
+		(((dev_idx) == NO_DEV) ? 0 : (&YX_TILE(model, y, x)->devs[dev_idx]))
 
 //
 // DEV_LOGIC

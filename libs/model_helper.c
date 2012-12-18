@@ -749,7 +749,7 @@ void is_in_row(const struct fpga_model* model, int y,
 
 	if (row_num) *row_num = -1;
 	if (row_pos) *row_pos = -1;
-	if (y < TOP_IO_TILES) return;
+	if (y < TOP_IO_TILES) return; // handles y==-1
 	// normalize y to beginning of rows
 	y -= TOP_IO_TILES;
 
@@ -807,6 +807,15 @@ int y_to_hclk(int y, struct fpga_model *model)
 	    || row_pos == -1 || row_pos == HCLK_POS)
 		{ HERE(); return -1; }
 	return row_to_hclk(row_num, model);
+}
+
+int regular_row_up(int y, struct fpga_model *model)
+{
+	if (y <= TOP_FIRST_REGULAR) return -1;
+	y--;
+	if (is_aty(Y_CHIP_HORIZ_REGS|Y_ROW_HORIZ_AXSYMM, model, y))
+		y--;
+	return y;
 }
 
 const char* logicin_s(int wire, int routing_io)

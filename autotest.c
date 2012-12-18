@@ -217,6 +217,7 @@ static int test_logic_net_l2(struct test_state* tstate, int y, int x,
 		switch_to.x = x;
 		switch_to.start_switch = dev->pinw[dev->pinw_req_for_cfg[i]];
 		switch_to.from_to = from_to;
+		switch_to.exclusive_net = NO_NET;
 		rc = fpga_switch_to_yx(&switch_to);
 		if (rc) FAIL(rc);
 		if (dbg)
@@ -319,6 +320,7 @@ static int test_logic_net_l1(struct test_state* tstate, int y, int x,
 		switch_to.x = x;
 		switch_to.start_switch = dev->pinw[dev->pinw_req_for_cfg[i]];
 		switch_to.from_to = from_to;
+		switch_to.exclusive_net = NO_NET;
 		rc = fpga_switch_to_yx(&switch_to);
 		if (rc) FAIL(rc);
 		if (tstate->dry_run)
@@ -474,6 +476,7 @@ int test_routing_sw_from_iob(struct test_state* tstate,
 	switch_to.x = iob_x;
 	switch_to.start_switch = iob_dev->pinw[IOB_IN_O];
 	switch_to.from_to = SW_TO;
+	switch_to.exclusive_net = NO_NET;
 	rc = fpga_switch_to_yx(&switch_to);
 	if (rc) FAIL(rc);
 	if (tstate->dry_run)
@@ -489,6 +492,7 @@ int test_routing_sw_from_iob(struct test_state* tstate,
 	switch_to.x = switch_to.dest_x;
 	switch_to.start_switch = switch_to.dest_connpt;
 	switch_to.from_to = SW_TO;
+	switch_to.exclusive_net = NO_NET;
 	rc = fpga_switch_to_yx(&switch_to);
 	if (rc) FAIL(rc);
 	rc = fnet_add_sw(tstate->model, net, switch_to.y,
@@ -504,6 +508,7 @@ int test_routing_sw_from_iob(struct test_state* tstate,
 	switch_to.x = switch_to.dest_x;
 	switch_to.start_switch = switch_to.dest_connpt;
 	switch_to.from_to = SW_TO;
+	switch_to.exclusive_net = NO_NET;
 	rc = fpga_switch_to_yx(&switch_to);
 	if (rc) FAIL(rc);
 	if (tstate->dry_run)
@@ -581,7 +586,7 @@ static int test_routing_sw_from_logic(struct test_state* tstate,
 			if (rc) FAIL(rc);
 		
 			rc = construct_sw_conns(&conns, tstate->model, swto.dest_y, swto.dest_x,
-				swto.dest_connpt, SW_TO, /*max_depth*/ 1);
+				swto.dest_connpt, SW_TO, /*max_depth*/ 1, NO_NET);
 			if (rc) FAIL(rc);
 				
 			while (fpga_switch_conns(&conns) != NO_CONN) {
@@ -727,6 +732,7 @@ static int test_iologic_switches2(struct test_state* tstate, int iob_y, int iob_
 		switch_to.x = iob_x;
 		switch_to.start_switch = iob_dev->pinw[iob_dev->pinw_req_for_cfg[i]];
 		switch_to.from_to = from_to;
+		switch_to.exclusive_net = NO_NET;
 		rc = fpga_switch_to_yx(&switch_to);
 		if (rc) FAIL(rc);
 		if (tstate->dry_run)
@@ -734,8 +740,7 @@ static int test_iologic_switches2(struct test_state* tstate, int iob_y, int iob_
 	
 		if (construct_sw_chain(&chain, tstate->model, switch_to.dest_y,
 			switch_to.dest_x, switch_to.dest_connpt, from_to,
-			/*max_depth*/ -1, SWCHAIN_DEFAULT,
-			/*block_list*/ 0, /*block_list_len*/ 0))
+			/*max_depth*/ -1, NO_NET, /*block_list*/ 0, /*block_list_len*/ 0))
 			FAIL(EINVAL);
 		while (fpga_switch_chain(&chain) != NO_CONN) {
 	
@@ -1069,8 +1074,8 @@ static int test_logic(struct test_state* tstate, int y, int x, int type_idx,
 		    || (latch_logic
 			&& (dev->pinw_req_for_cfg[i] == LI_CLK
 			    || dev->pinw_req_for_cfg[i] == LI_CE))) {
-			rc = fnet_route_to_inpins_s(tstate->model,
-				pinw_nets[i], "VCC_WIRE");
+			rc = fnet_vcc_gnd(tstate->model, pinw_nets[i],
+				/*is_vcc*/ 1);
 			if (rc) FAIL(rc);
 		}
 	}
@@ -1785,7 +1790,7 @@ static int test_clock_routing(struct test_state* tstate)
 			iob_clk_x, DEV_IOB, iob_clk_type_idx, IOB_OUT_I);
 		fnet_add_port(tstate->model, clock_net, logic_y, logic_x,
 			DEV_LOGIC, logic_type_idx, LI_CLK);
-		fnet_autoroute(tstate->model, clock_net);
+		fnet_route(tstate->model, clock_net);
 
 		if ((rc = diff_printf(tstate))) FAIL(rc);
 
@@ -1836,7 +1841,7 @@ static int test_clock_routing(struct test_state* tstate)
 					iob_clk_x, DEV_IOB, iob_clk_type_idx, IOB_OUT_I);
 				fnet_add_port(tstate->model, clock_net, logic_y, logic_x,
 					DEV_LOGIC, logic_type_idx, LI_CLK);
-				fnet_autoroute(tstate->model, clock_net);
+				fnet_route(tstate->model, clock_net);
 
 				if ((rc = diff_printf(tstate))) FAIL(rc);
 

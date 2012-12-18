@@ -5,6 +5,9 @@
 // For details see the UNLICENSE file at the root of the source tree.
 //
 
+typedef int net_idx_t; // net indices are 1-based
+#define NO_NET 0
+
 const char* fpga_enum_iob(struct fpga_model* model, int enum_idx,
 	int* y, int* x, dev_type_idx_t* type_idx);
 int fpga_find_iob(struct fpga_model* model, const char* sitename,
@@ -135,6 +138,8 @@ typedef int swidx_t; // swidx_t is an index into the uint32_t switches array
 // *) some wires that go 'everywhere' like GFAN (70)
 #define SW_SET_SIZE 128
 
+// todo: maybe it's better to stop using this structure and use two
+//	 separate parameters instead (swidx_t* and len).
 struct sw_set
 {
 	swidx_t sw[SW_SET_SIZE];
@@ -203,9 +208,6 @@ const char* fmt_swset(struct fpga_model* model, int y, int x,
 // of switches in a tile, currently 3459 in a slx9 routing tile.
 #define MAX_SWITCHBOX_SIZE 4000
 
-#define SWCHAIN_DEFAULT		0
-#define SWCHAIN_EXCLUDING_USED	0x0001
-
 struct sw_chain
 {
 	// start and recurring values:
@@ -214,7 +216,10 @@ struct sw_chain
 	int x;
 	int from_to;
 	int max_depth;
-	int flags;
+	// exclusive_net will skip switches that are in use by any
+	// net other than exclusive_net.
+	// Set to NO_NET to accept any switch.
+	net_idx_t exclusive_net;
 	//
 	// block_list works as if all switches from or to the ones
 	// on the block list are blocked, that is the recursion will
@@ -237,7 +242,7 @@ struct sw_chain
 
 int construct_sw_chain(struct sw_chain* chain, struct fpga_model* model,
 	int y, int x, str16_t start_switch, int from_to, int max_depth,
-	int flags, swidx_t* block_list, int block_list_len);
+	net_idx_t exclusive_net, swidx_t* block_list, int block_list_len);
 void destruct_sw_chain(struct sw_chain* chain);
 
 // Returns 0 if another switchset is returned in chain, or
@@ -257,7 +262,8 @@ struct sw_conns
 };
 
 int construct_sw_conns(struct sw_conns* conns, struct fpga_model* model,
-	int y, int x, str16_t start_switch, int from_to, int max_depth);
+	int y, int x, str16_t start_switch, int from_to, int max_depth,
+	net_idx_t exclusive_net);
 void destruct_sw_conns(struct sw_conns* conns);
 
 // Returns 0 if another connection is returned in conns, or
@@ -275,8 +281,6 @@ void printf_swconns(struct fpga_model* model, int y, int x,
 // SWTO_YX_CLOSEST finds the closest tile that satisfies
 // the YX requirement.
 #define SWTO_YX_CLOSEST			0x0001
-#define SWTO_YX_TARGET_CONNPT		0x0002
-#define SWTO_YX_MAX_SWITCH_DEPTH	0x0004
 
 struct switch_to_yx
 {
@@ -288,8 +292,7 @@ struct switch_to_yx
 	int x;
 	str16_t start_switch;
 	int from_to;
-	int max_switch_depth; // only if SWTO_YX_MAX_SWITCH_DEPTH is set
-	str16_t target_connpt; // only if SWTO_YX_TARGET_CONNPT is set
+	net_idx_t exclusive_net; // can be NO_NET
 
 	// output:
 	struct sw_set set;
@@ -316,7 +319,7 @@ struct switch_to_yx_l2
 int fpga_switch_to_yx_l2(struct switch_to_yx_l2 *p);
 
 #define SWTO_REL_DEFAULT	0
-// If a connection to the actal target is not found,
+// If a connection to the actual target is not found,
 // WEAK_TARGET will allow to return the connection that
 // reaches as close as possible to the x/y target.
 #define SWTO_REL_WEAK_TARGET	0x0001
@@ -376,14 +379,16 @@ struct fpga_net
 	struct net_el el[MAX_NET_LEN];
 };
 
-typedef int net_idx_t; // net indices are 1-based
-#define NO_NET 0
-
 int fnet_new(struct fpga_model* model, net_idx_t* new_idx);
 void fnet_delete(struct fpga_model* model, net_idx_t net_idx);
 // start a new enumeration by calling with last==NO_NET
 int fnet_enum(struct fpga_model* model, net_idx_t last, net_idx_t* next);
 struct fpga_net* fnet_get(struct fpga_model* model, net_idx_t net_i);
+void fnet_free_all(struct fpga_model* model);
+
+int fpga_swset_in_other_net(struct fpga_model *model, int y, int x,
+	const swidx_t* sw, int len, net_idx_t our_net);
+
 int fnet_add_port(struct fpga_model* model, net_idx_t net_i,
 	int y, int x, enum fpgadev_type type, dev_type_idx_t type_idx,
 	pinw_idx_t pinw_idx);
@@ -391,20 +396,9 @@ int fnet_add_sw(struct fpga_model* model, net_idx_t net_i,
 	int y, int x, const swidx_t* switches, int num_sw);
 int fnet_remove_sw(struct fpga_model* model, net_idx_t net_i,
 	int y, int x, const swidx_t* switches, int num_sw);
-void fnet_free_all(struct fpga_model* model);
+int fnet_remove_all_sw(struct fpga_model* model, net_idx_t net_i);
 void fnet_printf(FILE* f, struct fpga_model* model, net_idx_t net_i);
 
-int fnet_autoroute(struct fpga_model* model, net_idx_t net_i);
-
-int fnet_route_to_inpins(struct fpga_model* model, net_idx_t net_i,
-	str16_t from);
-int fnet_route_to_inpins_s(struct fpga_model* model, net_idx_t net_i,
-	const char* from);
-
-//
-// routing
-//
-
-int froute_direct(struct fpga_model* model, int start_y, int start_x,
-	str16_t start_pt, int end_y, int end_x, str16_t end_pt,
-	struct sw_set* start_set, struct sw_set* end_set);
+int fnet_route(struct fpga_model* model, net_idx_t net_i);
+// is_vcc == 1 for a vcc net, is_vcc == 0 for a gnd net
+int fnet_vcc_gnd(struct fpga_model* model, net_idx_t net_i, int is_vcc);

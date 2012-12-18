@@ -2548,6 +2548,51 @@ static int write_inner_term_sw(struct fpga_bits *bits,
 	RC_RETURN(model);
 }
 
+static int write_logic_sw(struct fpga_bits *bits,
+	struct fpga_model *model, int y, int x)
+{
+	struct fpga_tile *tile;
+	const char *from_str, *to_str;
+	int i, row, row_pos, xm_col, byte_off, frame_off;
+	uint64_t mi2526;
+	uint8_t* u8_p;
+
+	RC_CHECK(model);
+
+	tile = YX_TILE(model, y, x);
+	for (i = 0; i < tile->num_switches; i++) {
+		if (!(tile->switches[i] & SWITCH_USED))
+			continue;
+		from_str = fpga_switch_str(model, y, x, i, SW_FROM);
+		to_str = fpga_switch_str(model, y, x, i, SW_TO);
+		RC_ASSERT(model, from_str && to_str);
+
+		xm_col = has_device_type(model, y, x, DEV_LOGIC, LOGIC_M);
+		if ((xm_col
+		     && !strcmp(from_str, "M_COUT")
+		     && !strcmp(to_str, "M_COUT_N"))
+		    || (!xm_col
+			&& !strcmp(from_str, "XL_COUT")
+			&& !strcmp(to_str, "XL_COUT_N"))) {
+
+			is_in_row(model, regular_row_up(y, model), &row, &row_pos);
+			RC_ASSERT(model, row != -1 && row_pos != -1 && row_pos != HCLK_POS);
+			if (row_pos > HCLK_POS) row_pos--;
+
+			u8_p = get_first_minor(bits, row, model->x_major[x]);
+			byte_off = row_pos * 8;
+			if (row_pos >= 8) byte_off += XC6_HCLK_BYTES;
+
+			frame_off = (xm_col?26:25)*FRAME_SIZE + byte_off;
+			mi2526 = frame_get_u64(u8_p + frame_off);
+			RC_ASSERT(model, !(mi2526 & (1ULL << XC6_ML_CIN_USED)));
+			mi2526 |= 1ULL << XC6_ML_CIN_USED;
+			frame_set_u64(u8_p + frame_off, mi2526);
+		}
+	}
+	RC_RETURN(model);
+}
+
 static int write_switches(struct fpga_bits* bits, struct fpga_model* model)
 {
 	struct fpga_tile* tile;
@@ -2573,7 +2618,11 @@ static int write_switches(struct fpga_bits* bits, struct fpga_model* model)
 				write_iologic_sw(bits, model, y, x);
 				continue;
 			}
-			if (is_atyx(YX_DEV_LOGIC|YX_DEV_IOB, model, y, x))
+			if (is_atyx(YX_DEV_LOGIC, model, y, x)) {
+				write_logic_sw(bits, model, y, x);
+				continue;
+			}
+			if (is_atyx(YX_DEV_IOB, model, y, x))
 				continue;
 			if (is_atx(X_ROUTING_COL, model, x)
 			    && is_aty(Y_ROW_HORIZ_AXSYMM, model, y)) {
