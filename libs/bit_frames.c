@@ -2765,7 +2765,7 @@ static int write_logic(struct fpga_bits* bits, struct fpga_model* model)
 			}
 			// Except for XC6_ML_CIN_USED (which is set by a switch elsewhere),
 			// everything else should be 0.
-			if (mi20 || mi23_M || (mi2526 & ~XC6_ML_CIN_USED)
+			if (mi20 || mi23_M || (mi2526 & ~(1ULL<<XC6_ML_CIN_USED))
 			    || lut_ML[LUT_A] || lut_ML[LUT_B] || lut_ML[LUT_C] || lut_ML[LUT_D]
 			    || lut_X[LUT_A] || lut_X[LUT_B] || lut_X[LUT_C] || lut_X[LUT_D]) {
 				HERE();

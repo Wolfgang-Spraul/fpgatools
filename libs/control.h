@@ -138,8 +138,6 @@ typedef int swidx_t; // swidx_t is an index into the uint32_t switches array
 // *) some wires that go 'everywhere' like GFAN (70)
 #define SW_SET_SIZE 128
 
-// todo: maybe it's better to stop using this structure and use two
-//	 separate parameters instead (swidx_t* and len).
 struct sw_set
 {
 	swidx_t sw[SW_SET_SIZE];
@@ -250,6 +248,10 @@ void destruct_sw_chain(struct sw_chain* chain);
 // set.len is 0 when there are no more switches in the tree
 int fpga_switch_chain(struct sw_chain* chain);
 
+int fpga_multi_switch_lookup(struct fpga_model *model, int y, int x,
+	str16_t from_sw, str16_t to_sw, int max_depth, net_idx_t exclusive_net,
+	struct sw_set *sw_set);
+
 struct sw_conns
 {
 	struct sw_chain chain;
@@ -269,6 +271,10 @@ void destruct_sw_conns(struct sw_conns* conns);
 // Returns 0 if another connection is returned in conns, or
 // NO_CONN (-1) if there is no other connection.
 int fpga_switch_conns(struct sw_conns* conns);
+
+int fpga_first_conn(struct fpga_model *model, int sw_y, int sw_x, str16_t sw_str,
+	int from_to, int max_depth, net_idx_t exclusive_net,
+	struct sw_set *sw_set, int *dest_y, int *dest_x, str16_t *dest_connpt);
 
 // max_depth can be -1 for internal maximum (SW_SET_SIZE)
 void printf_swchain(struct fpga_model* model, int y, int x,

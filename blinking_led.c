@@ -117,43 +117,68 @@ int main(int argc, char** argv)
 	fnet_new(&model, &net);
 	fnet_add_port(&model, net, 55, 13, DEV_LOGIC, DEV_LOG_M_OR_L, LI_A6);
 	fnet_add_port(&model, net, 55, 13, DEV_LOGIC, DEV_LOG_M_OR_L, LI_B6);
-	fnet_add_port(&model, net, 55, 13, DEV_LOGIC, DEV_LOG_M_OR_L, LI_C6);
-	fnet_add_port(&model, net, 55, 13, DEV_LOGIC, DEV_LOG_M_OR_L, LI_D6);
 	fnet_vcc_gnd(&model, net, /*is_vcc*/ 1);
+
 	fnet_new(&model, &net);
 	fnet_add_port(&model, net, 56, 13, DEV_LOGIC, DEV_LOG_M_OR_L, LI_A6);
 	fnet_add_port(&model, net, 56, 13, DEV_LOGIC, DEV_LOG_M_OR_L, LI_B6);
 	fnet_add_port(&model, net, 56, 13, DEV_LOGIC, DEV_LOG_M_OR_L, LI_C6);
 	fnet_add_port(&model, net, 56, 13, DEV_LOGIC, DEV_LOG_M_OR_L, LI_D6);
 	fnet_vcc_gnd(&model, net, /*is_vcc*/ 1);
+
 	fnet_new(&model, &net);
 	fnet_add_port(&model, net, 57, 13, DEV_LOGIC, DEV_LOG_M_OR_L, LI_A6);
 	fnet_add_port(&model, net, 57, 13, DEV_LOGIC, DEV_LOG_M_OR_L, LI_B6);
 	fnet_add_port(&model, net, 57, 13, DEV_LOGIC, DEV_LOG_M_OR_L, LI_C6);
 	fnet_add_port(&model, net, 57, 13, DEV_LOGIC, DEV_LOG_M_OR_L, LI_D6);
 	fnet_vcc_gnd(&model, net, /*is_vcc*/ 1);
+
 	fnet_new(&model, &net);
 	fnet_add_port(&model, net, 58, 13, DEV_LOGIC, DEV_LOG_M_OR_L, LI_A6);
 	fnet_add_port(&model, net, 58, 13, DEV_LOGIC, DEV_LOG_M_OR_L, LI_B6);
+	fnet_add_port(&model, net, 58, 13, DEV_LOGIC, DEV_LOG_M_OR_L, LI_C6);
+	fnet_add_port(&model, net, 58, 13, DEV_LOGIC, DEV_LOG_M_OR_L, LI_D6);
 	fnet_vcc_gnd(&model, net, /*is_vcc*/ 1);
 
 	// carry chain
-#if 0
 	fnet_new(&model, &net);
-	fnet_add_port(&model, net, 55, 13, DEV_LOGIC, DEV_LOG_M_OR_L, LO_COUT);
-	fnet_add_port(&model, net, 56, 13, DEV_LOGIC, DEV_LOG_M_OR_L, LI_CIN);
-	fnet_route(&model, net);
-
-	fnet_new(&model, &net);
+	fnet_add_port(&model, net, 55, 13, DEV_LOGIC, DEV_LOG_M_OR_L, LI_CIN);
 	fnet_add_port(&model, net, 56, 13, DEV_LOGIC, DEV_LOG_M_OR_L, LO_COUT);
-	fnet_add_port(&model, net, 57, 13, DEV_LOGIC, DEV_LOG_M_OR_L, LI_CIN);
 	fnet_route(&model, net);
 
 	fnet_new(&model, &net);
+	fnet_add_port(&model, net, 56, 13, DEV_LOGIC, DEV_LOG_M_OR_L, LI_CIN);
 	fnet_add_port(&model, net, 57, 13, DEV_LOGIC, DEV_LOG_M_OR_L, LO_COUT);
-	fnet_add_port(&model, net, 58, 13, DEV_LOGIC, DEV_LOG_M_OR_L, LI_CIN);
 	fnet_route(&model, net);
-#endif
+
+	fnet_new(&model, &net);
+	fnet_add_port(&model, net, 57, 13, DEV_LOGIC, DEV_LOG_M_OR_L, LI_CIN);
+	fnet_add_port(&model, net, 58, 13, DEV_LOGIC, DEV_LOG_M_OR_L, LO_COUT);
+	fnet_route(&model, net);
+
+	// bit chain
+	{
+		int out_pin[] = {LO_AQ, LO_BQ, LO_CQ, LO_DQ};
+		int in_pin[] = {LI_A5, LI_B5, LI_C5, LI_D5};
+		int cur_y, i;
+
+		for (cur_y = 58; cur_y >= 55; cur_y--) {
+			for (i = 0; i < 4; i++) {
+				if (cur_y == 55 && i >= 2)
+					break;
+				fnet_new(&model, &net);
+				fnet_add_port(&model, net, cur_y, 13, DEV_LOGIC, DEV_LOG_M_OR_L, out_pin[i]);
+				fnet_add_port(&model, net, cur_y, 13, DEV_LOGIC, DEV_LOG_M_OR_L, in_pin[i]);
+				fnet_route(&model, net);
+			}
+		}
+	}
+	fnet_new(&model, &net);
+	fnet_add_port(&model, net, 55, 13, DEV_LOGIC, DEV_LOG_M_OR_L, LO_CQ);
+	fnet_add_port(&model, net, 55, 13, DEV_LOGIC, DEV_LOG_M_OR_L, LI_C5);
+//	fnet_add_port(&model, net, iob_led_y, iob_led_x, DEV_IOB,
+//		iob_led_type_idx, IOB_IN_O);
+	fnet_route(&model, net);
 
 	write_floorplan(stdout, &model, FP_DEFAULT);
 	return fpga_free_model(&model);
