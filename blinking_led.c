@@ -176,8 +176,8 @@ int main(int argc, char** argv)
 	fnet_new(&model, &net);
 	fnet_add_port(&model, net, 55, 13, DEV_LOGIC, DEV_LOG_M_OR_L, LO_CQ);
 	fnet_add_port(&model, net, 55, 13, DEV_LOGIC, DEV_LOG_M_OR_L, LI_C5);
-//	fnet_add_port(&model, net, iob_led_y, iob_led_x, DEV_IOB,
-//		iob_led_type_idx, IOB_IN_O);
+	fnet_add_port(&model, net, iob_led_y, iob_led_x, DEV_IOB,
+		iob_led_type_idx, IOB_IN_O);
 	fnet_route(&model, net);
 
 	write_floorplan(stdout, &model, FP_DEFAULT);

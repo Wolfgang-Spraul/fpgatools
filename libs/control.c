@@ -2536,6 +2536,12 @@ static int fpga_switch_2sets(struct fpga_model* model, int from_y, int from_x,
 	construct_sw_conns(&conns, model, from_y, from_x, from_pt,
 		SW_FROM, /*max_depth*/ 2, NO_NET);
 	while (fpga_switch_conns(&conns) != NO_CONN) {
+#ifdef DBG_SWITCH_2SETS
+		printf(" sw %s conn y%i-x%i-%s\n", fmt_swset(model, from_y,
+			from_x, &conns.chain.set, SW_FROM),
+			conns.dest_y, conns.dest_x,
+			strarray_lookup(&model->str, conns.dest_str_i));
+#endif
 		if (conns.dest_y != to_y
 		    || conns.dest_x != to_x) continue;
 		for (i = 0; i < to_switches.len; i++) {
@@ -2551,6 +2557,72 @@ static int fpga_switch_2sets(struct fpga_model* model, int from_y, int from_x,
 	destruct_sw_conns(&conns);
 	from_set->len = 0;
 	to_set->len = 0;
+	RC_RETURN(model);
+}
+
+static int fnet_dir_route(struct fpga_model* model, int from_y, int from_x,
+	str16_t from_pt, int to_y, int to_x, str16_t to_pt, net_idx_t net_i)
+{
+	struct sw_set from_set, to_set;
+	struct switch_to_rel switch_to_rel;
+	int dist;
+
+	RC_CHECK(model);
+	do {
+		fpga_switch_2sets(model, from_y, from_x, from_pt, to_y, to_x, to_pt,
+			&from_set, &to_set);
+		RC_CHECK(model);
+		if (from_set.len && to_set.len) {
+			fnet_add_sw(model, net_i, from_y, from_x, from_set.sw, from_set.len);
+			fnet_add_sw(model, net_i, to_y, to_x, to_set.sw, to_set.len);
+			RC_RETURN(model);
+		}
+		dist = abs(to_y - from_y) + abs(to_x - from_x);
+
+		// Go through all single-depth conns and try
+		// switch_2sets from there.
+		if (dist <= 4) {
+			struct sw_conns sw_conns;
+
+			construct_sw_conns(&sw_conns, model, from_y, from_x,
+				from_pt, SW_FROM, /*max_depth*/ 1, net_i);
+			RC_CHECK(model);
+			while (fpga_switch_conns(&sw_conns) != NO_CONN) {
+				if ((fpga_switch_first(model, sw_conns.dest_y, sw_conns.dest_x,
+					sw_conns.dest_str_i, SW_FROM) == NO_SWITCH)
+				    || (abs(sw_conns.dest_y - from_y) + abs(sw_conns.dest_x - from_x) >= dist))
+					continue;
+				fpga_switch_2sets(model, sw_conns.dest_y,
+					sw_conns.dest_x, sw_conns.dest_str_i,
+					to_y, to_x, to_pt, &from_set, &to_set);
+				RC_CHECK(model);
+				if (from_set.len && to_set.len) {
+					fnet_add_sw(model, net_i, from_y, from_x, sw_conns.chain.set.sw, sw_conns.chain.set.len);
+					fnet_add_sw(model, net_i, sw_conns.dest_y, sw_conns.dest_x, from_set.sw, from_set.len);
+					fnet_add_sw(model, net_i, to_y, to_x, to_set.sw, to_set.len);
+					destruct_sw_conns(&sw_conns);
+					RC_RETURN(model);
+				}
+			}
+			destruct_sw_conns(&sw_conns);
+		}
+		switch_to_rel.model = model;
+		switch_to_rel.start_y = from_y;
+		switch_to_rel.start_x = from_x;
+		switch_to_rel.start_switch = from_pt;
+		switch_to_rel.from_to = SW_FROM;
+		switch_to_rel.flags = SWTO_REL_WEAK_TARGET;
+		switch_to_rel.rel_y = to_y - from_y;
+		switch_to_rel.rel_x = to_x - from_x;
+		switch_to_rel.target_connpt = STRIDX_NO_ENTRY;
+		fpga_switch_to_rel(&switch_to_rel);
+		RC_ASSERT(model, switch_to_rel.set.len);
+		fnet_add_sw(model, net_i, switch_to_rel.start_y, switch_to_rel.start_x,
+			switch_to_rel.set.sw, switch_to_rel.set.len);
+		from_y = switch_to_rel.dest_y;
+		from_x = switch_to_rel.dest_x;
+		from_pt = switch_to_rel.dest_connpt;
+	} while (1);
 	RC_RETURN(model);
 }
 
@@ -2804,7 +2876,7 @@ static int fnet_route_logic_to_iob(struct fpga_model *model, net_idx_t net_i, in
 		switch_to_rel.set.len);
 
 	// route from logic routing to ilogic routing
-	fpga_switch_2sets_add(model, switch_to_rel.dest_y,
+	fnet_dir_route(model, switch_to_rel.dest_y,
 		switch_to_rel.dest_x, switch_to_rel.dest_connpt,
 		switch_to_yx.dest_y, switch_to_yx.dest_x, switch_to_yx.dest_connpt,
 		net_i);
