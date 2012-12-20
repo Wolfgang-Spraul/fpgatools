@@ -60,20 +60,24 @@ Design Principles
 - automatic test suite
 - public domain software
 
-TODO (as of November, 2012)
+TODO (as of January, 2013)
 
 short-term (1 month):
-* example: blinking_led
 * example: counter (including clock, jtag)
+* support xc6slx9-ftg256
+
+mid-term (6 months):
+* example: j1 soc
+* llvm backend
+* maybe fp2bit should natively write ieee1532 and separate tools convert
+  from ieee1532 to .bit and other formats
+* configuration of bram and macc blocks, bram initialization data
+* more cases in logic block configuration
 * autotest: fix bugs in lut_encoding, logic_cfg, routing_sw, io_sw tests
 * autotest: protect stderr of diff executable in autotest log
 * 3 Debian packages: libfpga, libfpga-doc, fpgatools
-
-mid-term (6 months):
 * support chips other than xc6slx9, maybe an ftg256 or fgg484-packaged
   xc6 or the xc7a100
-* more cases in logic block configuration
-* configuration of bram and macc blocks, bram initialization data
 * write standard design elements for libfpga-stdlib library
 * several places might benefit from a bison parser:
   - switchbox description into bit parser/generator (bit_frames.c)
@@ -95,6 +99,10 @@ long-term (>6 months):
 * design fpga core that uses high-speed icap/reconfig to process data
 
 ChangeLog
+
+2012-12-20
+* Second design verified: blinking_led is a clocked design where the clock
+  increments a counter and the highest bit of the counter drives a LED.
 
 2012-09-24
 * First design verified: hello_world is an unclocked AND gate design
