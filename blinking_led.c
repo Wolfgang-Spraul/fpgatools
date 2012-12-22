@@ -27,19 +27,37 @@
 int main(int argc, char** argv)
 {
 	struct fpga_model model;
+	int param_bits;
+	const char *param_clock_pin, *param_led_pin;
 	int iob_clk_y, iob_clk_x, iob_clk_type_idx;
 	int iob_led_y, iob_led_x, iob_led_type_idx;
 	int logic_y, logic_x, logic_type_idx;
 	struct fpgadev_logic logic_cfg;
 	net_idx_t net;
 
-	fpga_build_model(&model, XC6SLX9, TQG144);
+	if (cmdline_help(argc, argv)) {
+		printf( "       %*s [-Dbits=14|23]\n"
+			"       %*s [-Dclock_pin=P55|...]\n"
+			"       %*s [-Dled_pin=P48|...]\n"
+			"\n", (int) strlen(*argv), "",
+			(int) strlen(*argv), "", (int) strlen(*argv), "");
+		return 0;
+	}
+	if (!(param_bits = cmdline_intvar(argc, argv, "bits")))
+		param_bits = 14;
+	if (!(param_clock_pin = cmdline_strvar(argc, argv, "clock_pin")))
+		param_clock_pin = "P55";
+	if (!(param_led_pin = cmdline_strvar(argc, argv, "led_pin")))
+		param_led_pin = "P48";
 
-	fpga_find_iob(&model, "P55", &iob_clk_y, &iob_clk_x, &iob_clk_type_idx);
+	fpga_build_model(&model, cmdline_part(argc, argv),
+		cmdline_package(argc, argv));
+
+	fpga_find_iob(&model, param_clock_pin, &iob_clk_y, &iob_clk_x, &iob_clk_type_idx);
 	fdev_iob_input(&model, iob_clk_y, iob_clk_x, iob_clk_type_idx,
 		IO_LVCMOS33);
 
-	fpga_find_iob(&model, "P48", &iob_led_y, &iob_led_x, &iob_led_type_idx);
+	fpga_find_iob(&model, param_led_pin, &iob_led_y, &iob_led_x, &iob_led_type_idx);
 	fdev_iob_output(&model, iob_led_y, iob_led_x, iob_led_type_idx,
 		IO_LVCMOS25);
 	fdev_iob_slew(&model, iob_led_y, iob_led_x, iob_led_type_idx,
@@ -51,7 +69,7 @@ int main(int argc, char** argv)
 	logic_x = 13;
 	logic_type_idx = DEV_LOG_M_OR_L;
 
-	memset(&logic_cfg, 0, sizeof(logic_cfg));
+	CLEAR(logic_cfg);
 	logic_cfg.a2d[LUT_A].lut6 = "(A6+~A6)*(~A5)";
 	logic_cfg.a2d[LUT_A].lut5 = "1";
 	logic_cfg.a2d[LUT_A].cy0 = CY0_O5;
@@ -100,7 +118,7 @@ int main(int argc, char** argv)
 	logic_cfg.a2d[LUT_C].ff = FF_FF;
 	logic_cfg.a2d[LUT_C].ff_mux = MUX_XOR;
 	logic_cfg.a2d[LUT_C].ff_srinit = FF_SRINIT0;
-	memset(&logic_cfg.a2d[LUT_D], 0, sizeof(logic_cfg.a2d[LUT_D]));
+	CLEAR(logic_cfg.a2d[LUT_D]);
 	fdev_logic_setconf(&model, logic_y, logic_x, logic_type_idx, &logic_cfg);
 
 	// clock to logic devs

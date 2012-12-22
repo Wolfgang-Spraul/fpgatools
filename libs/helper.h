@@ -26,6 +26,7 @@
 #define FAIL(code)	do { HERE(); rc = (code); goto fail; } while (0)
 #define XOUT()		do { HERE(); goto xout; } while (0)
 #define ASSERT(what)	do { if (!(what)) FAIL(EINVAL); } while (0)
+#define CLEAR(x)	memset(&(x), 0, sizeof(x))
 
 #define RC_CHECK(model)		do { if ((model)->rc) RC_RETURN(model); } while (0)
 #define RC_ASSERT(model, what)	do { RC_CHECK(model); if (!(what)) RC_FAIL(model, EINVAL); } while (0)
@@ -159,3 +160,9 @@ int strarray_stash(struct hashed_strarray* array, const char* str, int idx);
 int strarray_used_slots(struct hashed_strarray* array);
 
 int row_pos_to_y(int num_rows, int row, int pos);
+
+int cmdline_help(int argc, char **argv);
+int cmdline_part(int argc, char **argv);
+int cmdline_package(int argc, char **argv);
+const char *cmdline_strvar(int argc, char **argv, const char *var);
+int cmdline_intvar(int argc, char **argv, const char *var);

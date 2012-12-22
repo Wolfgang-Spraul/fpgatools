@@ -1092,3 +1092,76 @@ int row_pos_to_y(int num_rows, int row, int pos)
 		y++; // hclk in row
 	return y;
 }
+
+int cmdline_help(int argc, char **argv)
+{
+	int i;
+	for (i = 1; i < argc; i++) {
+		if (!strcmp(argv[i], "--help")) {
+			printf( "\n"
+				"%s floorplan\n"
+				"\n"
+				"Usage: %s [--part=xc6slx9]\n"
+				"       %*s [--package=tqg144|ftg256]\n"
+				"       %*s [--help]\n",
+				*argv, *argv, (int) strlen(*argv), "",
+				(int) strlen(*argv), "");
+			return 1;
+		}
+	}
+	return 0;
+}
+
+int cmdline_part(int argc, char **argv)
+{
+	int i;
+	for (i = 1; i < argc; i++) {
+		if (!strcmp(argv[i], "--part=xc6slx9"))
+			return XC6SLX9;
+	}
+	return XC6SLX9;
+}
+
+int cmdline_package(int argc, char **argv)
+{
+	int i;
+	for (i = 1; i < argc; i++) {
+		if (!strcmp(argv[i], "--package=tqg144"))
+			return TQG144;
+		if (!strcmp(argv[i], "--package=ftg256"))
+			return FTG256;
+	}
+	return TQG144;
+}
+
+const char *cmdline_strvar(int argc, char **argv, const char *var)
+{
+	enum { NUM_BUFS = 32, BUF_SIZE = 256 };
+	static char buf[NUM_BUFS][BUF_SIZE];
+	static int last_buf = 0;
+	char scan_str[128];
+	int i, next_buf;
+
+	next_buf = (last_buf+1)%NUM_BUFS;
+	snprintf(scan_str, sizeof(scan_str), "-D%s=%%s", var);
+	for (i = 1; i < argc; i++) {
+		if (sscanf(argv[i], scan_str, buf[next_buf]) == 1) {
+			last_buf = next_buf;
+			return buf[last_buf];
+		}
+	}
+	return 0;
+}
+
+int cmdline_intvar(int argc, char **argv, const char *var)
+{
+	char buf[128];
+	int i, out_int;
+
+	snprintf(buf, sizeof(buf), "-D%s=%%i", var);
+	for (i = 1; i < argc; i++) {
+		if (sscanf(argv[i], buf, &out_int) == 1)
+			return out_int;
+	}
+	return 0;
+}
