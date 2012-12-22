@@ -43,6 +43,10 @@ else
     DEPEND	= $(DEPEND_quiet)
     RANLIB	= $(RANLIB_quiet)
 endif
+# because all sub Makefiles also include this file, no need to pass down
+# these variables. or we risk producing "@echo ... && @echo ... && cc .."
+# which is not correct.
+unexport CC AR DEPEND RANLIB
 
 # ----- Dependencies ----------------------------------------------------------
 
