@@ -37,14 +37,29 @@ clean:
 
 %.bit:
 	@echo ""
-	@echo "Compile $@ by yourself. copy the bits file here"
+	@echo "Move the config bits file: <$@> here."
 	@echo ""
 	@exit 1
 
-test: test-counter test-blinking test-hello_world
+test: test-hello_world test-blinking test-counter
+
+hello_world.bit:
+	make -C .. hello_world fp2bit
+	../hello_world | ../fp2bit - $@
+
+test-hello_world: hello_world.bit mini-jtag
+	./mini-jtag load $<
+	sleep 2
+
+blinking.bit:
+	make -C .. blinking_led fp2bit
+	../blinking_led | ../fp2bit - $@
+
+test-blinking: blinking.bit mini-jtag
+	./mini-jtag load $<
+	sleep 2
 
 test-counter: counter.bit mini-jtag
-	@./mini-jtag reset
 	@./mini-jtag load $<
 	@echo "Read counter registers (1 ~ 5)"
 	@./mini-jtag read 0		# read version
@@ -68,18 +83,3 @@ test-counter: counter.bit mini-jtag
 	@sleep 1
 	@./mini-jtag read 4		# read counter
 	@./mini-jtag write 1 0		# disable counter
-
-test-blinking: blinking.bit mini-jtag
-	./mini-jtag reset
-	./mini-jtag idcode
-	./mini-jtag load $<
-	sleep 2
-	./mini-jtag reset
-
-hello_world.bit:
-	make -C ../
-	../hello_world | ../fp2bit - $@
-
-test-hello_world: hello_world.bit
-	./mini-jtag reset
-	./mini-jtag load $<

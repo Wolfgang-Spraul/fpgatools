@@ -61,6 +61,13 @@ static void rev_dump(uint8_t *buf, uint16_t len)
 		printf("%02x ", buf[i]);
 }
 
+static void brd_reset(struct ftdi_context *ftdi)
+{
+	tap_reset_rti(ftdi);
+	tap_shift_ir(ftdi, JPROGRAM);
+	tap_reset_rti(ftdi);
+}
+
 static void usage(char *name)
 {
 	fprintf(stderr,
@@ -138,11 +145,8 @@ int main(int argc, char **argv)
 		printf("\n");
 	}
 
-	if (!strcmp (argv[1], "reset")) {
-		tap_reset_rti(&ftdi);
-		tap_shift_ir(&ftdi, JPROGRAM);
-		tap_reset_rti(&ftdi);
-	}
+	if (!strcmp (argv[1], "reset"))
+		brd_reset(&ftdi);
 
 	if (!strcmp (argv[1], "load")) {
 		int i;
@@ -194,9 +198,9 @@ int main(int argc, char **argv)
 		for (u = 0; u < bs->length; u++)
 			dr_data[u] = rev8(bs->data[u]);
 
-		tap_reset_rti(&ftdi);
-		tap_shift_ir(&ftdi, CFG_IN);
+		brd_reset(&ftdi);
 
+		tap_shift_ir(&ftdi, CFG_IN);
 		tap_shift_dr_bits(&ftdi, dr_data, bs->length * 8, NULL);
 
 		/* ug380.pdf
