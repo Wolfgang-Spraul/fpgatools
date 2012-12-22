@@ -16,7 +16,7 @@ CFLAGS_DBG = -fno-omit-frame-pointer -ggdb
 CFLAGS += $(CFLAGS_DBG)
 
 CFLAGS += -Wall -Wshadow -Wmissing-prototypes -Wmissing-declarations \
-	-Wno-format-zero-length -Ofast
+	-Wno-format-zero-length -O2
 
 # ----- Verbosity control -----------------------------------------------------
 
