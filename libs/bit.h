@@ -49,8 +49,10 @@ struct fpga_config_reg_rw
 	union {
 		int int_v;
 		int far[2]; // 0 (FAR_MAJ_O) = major, 1 (FAR_MIN_O) = minor
-	};
+	} u;
 };
+#define int_v u.int_v
+#define far u.far
 
 enum {
 	CMD_NULL = 0, CMD_WCFG, CMD_MFW, CMD_LFRM, CMD_RCFG, CMD_START,
