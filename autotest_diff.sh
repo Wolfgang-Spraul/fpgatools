@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 diff -U 0 $1 $2 > ${2%.*}.fp_diff
 
 ./fp2bit $2 ${2%.*}.f2b || exit $?
