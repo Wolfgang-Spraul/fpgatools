@@ -174,7 +174,7 @@ int fpga_swset_is_used(struct fpga_model* model, int y, int x,
 
 // When calling, same_len must contain the size of the
 // same_sw array. Upon return same_len returns how many
-// switches were found and writen to same_sw.
+// switches were found and written to same_sw.
 int fpga_switch_same_fromto(struct fpga_model* model, int y, int x,
 	swidx_t sw, int from_to, swidx_t* same_sw, int *same_len);
 // fpga_switch_lookup() returns NO_SWITCH if switch not found.

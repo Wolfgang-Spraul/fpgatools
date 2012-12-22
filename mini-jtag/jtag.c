@@ -18,7 +18,7 @@ int tap_tms(struct ftdi_context *ftdi, int tms, uint8_t bit7)
 {
 	uint8_t buf[3];
 	buf[0] = MPSSE_WRITE_TMS|MPSSE_LSB|MPSSE_BITMODE|MPSSE_WRITE_NEG;
-	buf[1] = 0;		/* value = lenght - 1 */
+	buf[1] = 0;		/* value = length - 1 */
 	buf[2] = (tms ? 0x01 : 0x00) | ((bit7 & 0x01) << 7);
 	if (ftdi_write_data(ftdi, buf, 3) != 3)
 		return -1;
