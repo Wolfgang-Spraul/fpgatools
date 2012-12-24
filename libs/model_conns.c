@@ -768,8 +768,8 @@ int add_conn_net_i(struct fpga_model *model, const struct w_net_i *net)
 			    && net->yx[j].x == net->yx[i].x)
 				continue;
 			for (k = 0; k <= net->wire_inc; k++) {
-				snprintf(i_str, sizeof(i_str), fpga_connpt_str(model, net->wire+k, net->yx[i].y, net->yx[i].x, net->yx[j].y, net->yx[j].x));
-				snprintf(j_str, sizeof(j_str), fpga_connpt_str(model, net->wire+k, net->yx[j].y, net->yx[j].x, net->yx[i].y, net->yx[i].x));
+				snprintf(i_str, sizeof(i_str), "%s", fpga_connpt_str(model, net->wire+k, net->yx[i].y, net->yx[i].x, net->yx[j].y, net->yx[j].x));
+				snprintf(j_str, sizeof(j_str), "%s", fpga_connpt_str(model, net->wire+k, net->yx[j].y, net->yx[j].x, net->yx[i].y, net->yx[i].x));
 				RC_ASSERT(model, i_str[0] && j_str[0]);
 				if ((rc = add_conn_bi(model,
 					net->yx[i].y, net->yx[i].x, i_str, 
