@@ -197,7 +197,9 @@ int main(int argc, char** argv)
 	if (rc) goto xout;
 	rc = print_nets(nets, &connpt_names);
 	if (rc) goto xout;
+	fclose(fp);
 	return EXIT_SUCCESS;
 xout:
+	if(fp) fclose(fp);
 	return EXIT_FAILURE;
 }

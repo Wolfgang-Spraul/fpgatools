@@ -12,7 +12,7 @@
 int main(int argc, char** argv)
 {
 	struct fpga_model model;
-	FILE* fp, *fbits;
+	FILE *fbits, *fp = 0;
 	int rc = -1;
 
 	fbits = 0;
@@ -45,9 +45,11 @@ int main(int argc, char** argv)
 
 	if ((rc = read_floorplan(&model, fp))) goto fail;
 	if ((rc = write_bitfile(fbits, &model))) goto fail;
+	fclose(fp);
 	fclose(fbits);
 	return EXIT_SUCCESS;
 fail:
+	if (fp) fclose(fp);
 	if (fbits) fclose(fbits);
 	return rc;
 }

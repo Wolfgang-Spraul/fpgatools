@@ -106,5 +106,6 @@ int main(int argc, char** argv)
 	fclose(fp);
 	return EXIT_SUCCESS;
 xout:
+	if (fp) fclose(fp);
 	return EXIT_FAILURE;
 }
