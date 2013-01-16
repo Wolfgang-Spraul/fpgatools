@@ -8,8 +8,6 @@
 typedef int net_idx_t; // net indices are 1-based
 #define NO_NET 0
 
-const char* fpga_enum_iob(struct fpga_model* model, int enum_idx,
-	int* y, int* x, dev_type_idx_t* type_idx);
 int fpga_find_iob(struct fpga_model* model, const char* sitename,
 	int* y, int* x, dev_type_idx_t* idx);
 

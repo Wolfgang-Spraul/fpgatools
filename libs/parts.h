@@ -244,12 +244,6 @@ int get_rightside_major(int idcode);
 int get_major_framestart(int idcode, int major);
 int get_frames_per_row(int idcode);
 
-const char* get_iob_sitename(int idcode, int idx);
-// returns -1 if sitename not found
-int find_iob_sitename(int idcode, const char* name);
-
-int xc_num_rows(int idcode);
-
 // The routing bitpos is relative to a tile, i.e. major (x)
 // and row/v64_i (y) are defined outside.
 struct xc6_routing_bitpos

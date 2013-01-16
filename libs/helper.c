@@ -1131,7 +1131,7 @@ int cmdline_package(int argc, char **argv)
 		if (!strcmp(argv[i], "--package=ftg256"))
 			return FTG256;
 	}
-	return TQG144;
+	return FTG256;
 }
 
 const char *cmdline_strvar(int argc, char **argv, const char *var)

@@ -1010,11 +1010,13 @@ static int dump_maj_macc(const uint8_t* bits, int row, int major)
 static int dump_bits(struct fpga_config* cfg)
 {
 	int idcode, num_rows, row, major, off, rc;
+	struct xc_die* die_info;
 
 	if (cfg->idcode_reg == -1) FAIL(EINVAL);
 	idcode = cfg->reg[cfg->idcode_reg].int_v;
-	num_rows = xc_num_rows(idcode);
-	if (num_rows < 1) FAIL(EINVAL);
+	die_info = xc_die_info(idcode);
+	if (!die_info) FAIL(EINVAL);
+	num_rows = die_info->num_rows;
 
 	// type0
 	for (major = 0; major <= get_rightside_major(idcode); major++) {

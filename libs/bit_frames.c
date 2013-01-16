@@ -107,25 +107,22 @@ static int find_es_switch(struct extract_state* es, int y, int x, swidx_t sw)
 
 static int write_type2(struct fpga_bits* bits, struct fpga_model* model)
 {
-	int i, y, x, type_idx, part_idx, dev_idx, first_iob, rc;
+	int y, x, type_idx, t2_idx, first_iob, rc;
 	struct fpga_device* dev;
 	uint64_t u64;
-	const char* name;
 
 	RC_CHECK(model);
 	first_iob = 0;
-	for (i = 0; (name = fpga_enum_iob(model, i, &y, &x, &type_idx)); i++) {
-		dev_idx = fpga_dev_idx(model, y, x, DEV_IOB, type_idx);
-		if (dev_idx == NO_DEV) FAIL(EINVAL);
-		dev = FPGA_DEV(model, y, x, dev_idx);
+	for (t2_idx = 0; t2_idx < model->die->num_t2_ios; t2_idx++) {
+		if (!model->die->t2_io[t2_idx].pair)
+			continue;
+		y = model->die->t2_io[t2_idx].y;
+		x = model->die->t2_io[t2_idx].x;
+		type_idx = model->die->t2_io[t2_idx].type_idx;
+		dev = fdev_p(model, y, x, DEV_IOB, type_idx);
+		RC_ASSERT(model, dev);
 		if (!dev->instantiated)
 			continue;
-
-		part_idx = find_iob_sitename(XC6SLX9, name);
-		if (part_idx == -1) {
-			HERE();
-			continue;
-		}
 
 		if (!first_iob) {
 			first_iob = 1;
@@ -163,7 +160,7 @@ static int write_type2(struct fpga_bits* bits, struct fpga_model* model)
 				HERE();
 
 			frame_set_u64(&bits->d[IOB_DATA_START
-				+ part_idx*IOB_ENTRY_LEN], u64);
+				+ t2_idx*IOB_ENTRY_LEN], u64);
 		} else if (dev->u.iob.ostandard[0]) {
 			if (!dev->u.iob.drive_strength
 			    || !dev->u.iob.slew
@@ -259,7 +256,7 @@ static int write_type2(struct fpga_bits* bits, struct fpga_model* model)
 			}
 
 			frame_set_u64(&bits->d[IOB_DATA_START
-				+ part_idx*IOB_ENTRY_LEN], u64);
+				+ t2_idx*IOB_ENTRY_LEN], u64);
 		} else HERE();
 	}
 	return 0;
@@ -269,31 +266,26 @@ fail:
 
 static int extract_iobs(struct extract_state* es)
 {
-	int i, iob_y, iob_x, iob_idx, dev_idx, first_iob, rc;
+	int i, iob_y, iob_x, iob_type_idx, first_iob;
 	uint64_t u64;
-	const char* iob_sitename;
-	struct fpga_device* dev;
+	struct fpga_device *dev;
 	struct fpgadev_iob cfg;
 
 	RC_CHECK(es->model);
 	first_iob = 0;
 	for (i = 0; i < es->model->die->num_t2_ios; i++) {
+		if (!es->model->die->t2_io[i].pair)
+			continue;
 		u64 = frame_get_u64(&es->bits->d[
 			IOB_DATA_START + i*IOB_ENTRY_LEN]);
 		if (!u64) continue;
 
-		iob_sitename = get_iob_sitename(XC6SLX9, i);
-		if (!iob_sitename) {
-			// The space for 6 IOBs on all four sides
-			// (6*8 = 48 bytes, *4=192 bytes) is used
-			// for clocks etc, so we ignore them here.
-			continue;
-		}
-		rc = fpga_find_iob(es->model, iob_sitename, &iob_y, &iob_x, &iob_idx);
-		if (rc) FAIL(rc);
-		dev_idx = fpga_dev_idx(es->model, iob_y, iob_x, DEV_IOB, iob_idx);
-		if (dev_idx == NO_DEV) FAIL(EINVAL);
-		dev = FPGA_DEV(es->model, iob_y, iob_x, dev_idx);
+		iob_y = es->model->die->t2_io[i].y;
+		iob_x = es->model->die->t2_io[i].x;
+		iob_type_idx = es->model->die->t2_io[i].type_idx;
+		dev = fdev_p(es->model, iob_y, iob_x, DEV_IOB, iob_type_idx);
+		RC_ASSERT(es->model, dev);
+
 		memset(&cfg, 0, sizeof(cfg));
 
 		if (!first_iob) {
@@ -560,13 +552,12 @@ static int extract_iobs(struct extract_state* es)
 		if (!u64) {
 			frame_set_u64(&es->bits->d[IOB_DATA_START
 				+ i*IOB_ENTRY_LEN], 0);
+			if (dev->instantiated) HERE();
 			dev->instantiated = 1;
 			dev->u.iob = cfg;
 		} else HERE();
 	}
 	return 0;
-fail:
-	return rc;
 }
 
 static int extract_type2(struct extract_state* es)
