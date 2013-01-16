@@ -13,7 +13,7 @@ int main(int argc, char** argv)
 {
 	struct fpga_model model;
 	int bit_header, bit_regs, bit_crc, fp_header, pull_model, file_arg, flags;
-	int print_swbits, rc = -1;
+	int rc = -1;
 	struct fpga_config config;
 
 	// parameters
@@ -22,7 +22,7 @@ int main(int argc, char** argv)
 			"\n"
 			"%s - bitstream to floorplan\n"
 			"Usage: %s [--bit-header] [--bit-regs] [--bit-crc] [--no-model]\n"
-			"       %*s [--no-fp-header] [--printf-swbits] <bitstream_file>\n"
+			"       %*s [--no-fp-header] <bitstream_file>\n"
 			"\n", argv[0], argv[0], (int) strlen(argv[0]), "");
 		goto fail;
 	}
@@ -32,7 +32,6 @@ int main(int argc, char** argv)
 	pull_model = 1;
 	fp_header = 1;
 	file_arg = 1;
-	print_swbits = 0;
 	while (file_arg < argc
 	       && !strncmp(argv[file_arg], "--", 2)) {
 		if (!strcmp(argv[file_arg], "--bit-header"))
@@ -45,20 +44,8 @@ int main(int argc, char** argv)
 			pull_model = 0;
 		else if (!strcmp(argv[file_arg], "--no-fp-header"))
 			fp_header = 0;
-		else if (!strcmp(argv[file_arg], "--printf-swbits"))
-			print_swbits = 1;
 		else break;
 		file_arg++;
-	}
-
-	// build model
-	if ((rc = fpga_build_model(&model, XC6SLX9, TQG144)))
-		FAIL(rc);
-
-	if (print_swbits) {
-		rc = printf_swbits(&model);
-		if (rc) FAIL(rc);
-		return 0;
 	}
 
 	// read binary configuration file
@@ -72,6 +59,15 @@ int main(int argc, char** argv)
 		fclose(fbits);
 		if (rc) FAIL(rc);
 	}
+
+	// build model
+	if (config.idcode_reg == -1) FAIL(EINVAL);
+	// todo: scanf package from header string, better default for part
+	//   1. cmd line
+	//   2. header string
+	//   3. part-default
+	if ((rc = fpga_build_model(&model, config.reg[config.idcode_reg].int_v,
+		cmdline_package(argc, argv)))) FAIL(rc);
 
 	// fill model from binary configuration
 	if (pull_model)

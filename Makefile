@@ -11,8 +11,8 @@ CFLAGS  += -I$(CURDIR)/libs
 
 LDFLAGS += -Wl,-rpath,$(CURDIR)/libs
 
-OBJS 	= autotest.o bit2fp.o draw_svg_tiles.o fp2bit.o hstrrep.o \
-	merge_seq.o new_fp.o pair2net.o sort_seq.o hello_world.o \
+OBJS 	= autotest.o bit2fp.o printf_swbits.o draw_svg_tiles.o fp2bit.o \
+	hstrrep.o merge_seq.o new_fp.o pair2net.o sort_seq.o hello_world.o \
 	blinking_led.o
 
 DYNAMIC_LIBS = libs/libfpga-model.so libs/libfpga-bit.so \
@@ -23,7 +23,7 @@ DYNAMIC_LIBS = libs/libfpga-model.so libs/libfpga-bit.so \
 .SECONDARY:
 .SECONDEXPANSION:
 
-all: new_fp fp2bit bit2fp draw_svg_tiles autotest hstrrep \
+all: new_fp fp2bit bit2fp printf_swbits draw_svg_tiles autotest hstrrep \
 	sort_seq merge_seq pair2net hello_world blinking_led
 
 include Makefile.common
@@ -168,8 +168,8 @@ compare_%_conns.fco: compare_%.fp sort_seq merge_seq
 compare_%_sw.fco: compare_%.fp
 	@cat $<|awk '{if ($$1=="sw") printf "%s %s %s %s %s\n",$$2,$$3,$$4,$$5,$$6}'|sort >$@
 
-compare_%_swbits.fco: bit2fp
-	@./bit2fp --printf-swbits | sort > $@
+compare_%_swbits.fco: printf_swbits
+	@./printf_swbits | sort > $@
 
 compare_%.fp: new_fp
 	@./new_fp >$@
@@ -198,6 +198,8 @@ fp2bit: fp2bit.o $(DYNAMIC_LIBS)
 
 bit2fp: bit2fp.o $(DYNAMIC_LIBS)
 
+printf_swbits: printf_swbits.o $(DYNAMIC_LIBS)
+
 new_fp: new_fp.o $(DYNAMIC_LIBS)
 
 draw_svg_tiles: CFLAGS += `pkg-config libxml-2.0 --cflags`
@@ -222,7 +224,7 @@ clean:
 	@make -C libs clean
 	rm -f $(OBJS) *.d
 	rm -f 	draw_svg_tiles new_fp hstrrep sort_seq merge_seq autotest
-	rm -f	fp2bit bit2fp pair2net hello_world blinking_led
+	rm -f	fp2bit bit2fp printf_swbits pair2net hello_world blinking_led
 	rm -f	xc6slx9.fp xc6slx9.svg
 	rm -f	$(DESIGN_GOLD) $(AUTOTEST_GOLD) $(COMPARE_GOLD)
 	rm -f	test.gold/compare_xc6slx9.fp

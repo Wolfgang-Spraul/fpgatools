@@ -12,8 +12,6 @@ const char* fpga_enum_iob(struct fpga_model* model, int enum_idx,
 	int* y, int* x, dev_type_idx_t* type_idx);
 int fpga_find_iob(struct fpga_model* model, const char* sitename,
 	int* y, int* x, dev_type_idx_t* idx);
-const char* fpga_iob_sitename(struct fpga_model* model, int y, int x,
-	dev_type_idx_t idx);
 
 //
 // When dealing with devices, there are two indices:

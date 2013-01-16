@@ -37,27 +37,30 @@ int main(int argc, char** argv)
 
 	if (cmdline_help(argc, argv)) {
 		printf( "       %*s [-Dbits=14|23]\n"
-			"       %*s [-Dclock_pin=P55|...]\n"
-			"       %*s [-Dled_pin=P48|...]\n"
+			"       %*s [-Dclock_pin=IO_L30N_GCLK0_USERCCLK_2|...]\n"
+			"       %*s [-Dled_pin=IO_L48P_D7_2|...]\n"
 			"\n", (int) strlen(*argv), "",
 			(int) strlen(*argv), "", (int) strlen(*argv), "");
 		return 0;
 	}
 	if (!(param_bits = cmdline_intvar(argc, argv, "bits")))
 		param_bits = 14;
+
 	if (!(param_clock_pin = cmdline_strvar(argc, argv, "clock_pin")))
-		param_clock_pin = "P55";
+		param_clock_pin = "IO_L30N_GCLK0_USERCCLK_2";
 	if (!(param_led_pin = cmdline_strvar(argc, argv, "led_pin")))
-		param_led_pin = "P48";
+		param_led_pin = "IO_L48P_D7_2";
 
 	fpga_build_model(&model, cmdline_part(argc, argv),
 		cmdline_package(argc, argv));
 
-	fpga_find_iob(&model, param_clock_pin, &iob_clk_y, &iob_clk_x, &iob_clk_type_idx);
+	fpga_find_iob(&model, xc6_find_pkg_pin(model.pkg, param_clock_pin),
+		&iob_clk_y, &iob_clk_x, &iob_clk_type_idx);
 	fdev_iob_input(&model, iob_clk_y, iob_clk_x, iob_clk_type_idx,
 		IO_LVCMOS33);
 
-	fpga_find_iob(&model, param_led_pin, &iob_led_y, &iob_led_x, &iob_led_type_idx);
+	fpga_find_iob(&model, xc6_find_pkg_pin(model.pkg, param_led_pin),
+		&iob_led_y, &iob_led_x, &iob_led_type_idx);
 	fdev_iob_output(&model, iob_led_y, iob_led_x, iob_led_type_idx,
 		IO_LVCMOS25);
 	fdev_iob_slew(&model, iob_led_y, iob_led_x, iob_led_type_idx,

@@ -163,50 +163,6 @@ int fpga_find_iob(struct fpga_model* model, const char* sitename,
 	return -1;
 }
 
-const char* fpga_iob_sitename(struct fpga_model* model, int y, int x,
-	dev_type_idx_t idx)
-{
-	int i;
-
-	if (y == TOP_OUTER_ROW) {
-		for (i = 0; i < sizeof(xc6slx9_iob_top)/sizeof(xc6slx9_iob_top[0]); i++) {
-			if (xc6slx9_iob_top[i].xy == x) {
-				if (idx < 0 || idx > 3) return 0;
-				return xc6slx9_iob_top[i].name[idx];
-			}
-		}
-		return 0;
-	}
-	if (y == model->y_height-BOT_OUTER_ROW) {
-		for (i = 0; i < sizeof(xc6slx9_iob_bottom)/sizeof(xc6slx9_iob_bottom[0]); i++) {
-			if (xc6slx9_iob_bottom[i].xy == x) {
-				if (idx < 0 || idx > 3) return 0;
-				return xc6slx9_iob_bottom[i].name[idx];
-			}
-		}
-		return 0;
-	}
-	if (x == LEFT_OUTER_COL) {
-		for (i = 0; i < sizeof(xc6slx9_iob_left)/sizeof(xc6slx9_iob_left[0]); i++) {
-			if (xc6slx9_iob_left[i].xy == y) {
-				if (idx < 0 || idx > 1) return 0;
-				return xc6slx9_iob_left[i].name[idx];
-			}
-		}
-		return 0;
-	}
-	if (x == model->x_width-RIGHT_OUTER_O) {
-		for (i = 0; i < sizeof(xc6slx9_iob_right)/sizeof(xc6slx9_iob_right[0]); i++) {
-			if (xc6slx9_iob_right[i].xy == y) {
-				if (idx < 0 || idx > 1) return 0;
-				return xc6slx9_iob_right[i].name[idx];
-			}
-		}
-		return 0;
-	}
-	return 0;
-}
-
 static void enum_x(struct fpga_model *model, enum fpgadev_type type,
 	int enum_i, int *y, int x, int *type_idx)
 {

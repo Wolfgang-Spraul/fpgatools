@@ -1748,7 +1748,7 @@ static int test_bscan_config(struct test_state* tstate)
 
 static int test_clock_routing(struct test_state* tstate)
 {
-	int rc, i, iob_clk_y, iob_clk_x, iob_clk_type_idx;
+	int rc, i, t2_io_idx, iob_clk_y, iob_clk_x, iob_clk_type_idx;
 	int logic_y, logic_x, logic_type_idx;
 	int y;
 	net_idx_t clock_net;
@@ -1759,15 +1759,16 @@ static int test_clock_routing(struct test_state* tstate)
 	// first round over all gclk pins to the same logic dev
 	//
 
-	for (i = 0; i < tstate->model->pkg->num_gclk_pins; i++) {
-		if (!tstate->model->pkg->gclk_pin[i])
-			continue;
-		fpga_find_iob(tstate->model, tstate->model->pkg->gclk_pin[i],
-			&iob_clk_y, &iob_clk_x, &iob_clk_type_idx);
-		RC_CHECK(tstate->model);
-		printf("\nO test %i: gclk pin %s (y%i x%i IOB %i)\n",
-			tstate->next_diff_counter, tstate->model->pkg->gclk_pin[i],
+	for (i = 0; i < tstate->model->die->num_gclk_pins; i++) {
+
+		t2_io_idx = tstate->model->die->gclk_t2_io_idx[i];
+		iob_clk_y = tstate->model->die->t2_io[t2_io_idx].y;
+		iob_clk_x = tstate->model->die->t2_io[t2_io_idx].x;
+		iob_clk_type_idx = tstate->model->die->t2_io[t2_io_idx].type_idx;
+		printf("\nO test %i: gclk %i (y%i x%i IOB %i)\n",
+			tstate->next_diff_counter, i,
 			iob_clk_y, iob_clk_x, iob_clk_type_idx);
+
 		fdev_iob_input(tstate->model, iob_clk_y, iob_clk_x,
 			iob_clk_type_idx, IO_LVCMOS33);
 
@@ -1807,12 +1808,13 @@ static int test_clock_routing(struct test_state* tstate)
 	// left and right side of all hclk rows top-down.
 	//
 
-	for (i = 0; i < tstate->model->pkg->num_gclk_pins; i++) {
-		if (!tstate->model->pkg->gclk_pin[i])
-			continue;
-		fpga_find_iob(tstate->model, tstate->model->pkg->gclk_pin[i],
-			&iob_clk_y, &iob_clk_x, &iob_clk_type_idx);
-		RC_CHECK(tstate->model);
+	for (i = 0; i < tstate->model->die->num_gclk_pins; i++) {
+
+		t2_io_idx = tstate->model->die->gclk_t2_io_idx[i];
+		iob_clk_y = tstate->model->die->t2_io[t2_io_idx].y;
+		iob_clk_x = tstate->model->die->t2_io[t2_io_idx].x;
+		iob_clk_type_idx = tstate->model->die->t2_io[t2_io_idx].type_idx;
+
 		// skip top and bottom iobs
 		if (iob_clk_x != LEFT_OUTER_COL
 		    && iob_clk_x != tstate->model->x_width-RIGHT_OUTER_O)

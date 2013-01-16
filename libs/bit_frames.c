@@ -269,16 +269,15 @@ fail:
 
 static int extract_iobs(struct extract_state* es)
 {
-	int i, num_iobs, iob_y, iob_x, iob_idx, dev_idx, first_iob, rc;
+	int i, iob_y, iob_x, iob_idx, dev_idx, first_iob, rc;
 	uint64_t u64;
 	const char* iob_sitename;
 	struct fpga_device* dev;
 	struct fpgadev_iob cfg;
 
 	RC_CHECK(es->model);
-	num_iobs = get_num_iobs(XC6SLX9);
 	first_iob = 0;
-	for (i = 0; i < num_iobs; i++) {
+	for (i = 0; i < es->model->die->num_t2_ios; i++) {
 		u64 = frame_get_u64(&es->bits->d[
 			IOB_DATA_START + i*IOB_ENTRY_LEN]);
 		if (!u64) continue;
@@ -572,22 +571,20 @@ fail:
 
 static int extract_type2(struct extract_state* es)
 {
-	int i, bits_off;
+	int gclk_i, bits_off;
 	uint16_t u16;
 
 	RC_CHECK(es->model);
 	extract_iobs(es);
-	for (i = 0; i < es->model->pkg->num_gclk_pins; i++) {
-		if (!es->model->pkg->gclk_pin[i])
-			continue;
+	for (gclk_i = 0; gclk_i < es->model->die->num_gclk_pins; gclk_i++) {
 		bits_off = IOB_DATA_START
-			+ es->model->pkg->gclk_type2_o[i]*XC6_WORD_BYTES
+			+ es->model->die->gclk_t2_switches[gclk_i]*XC6_WORD_BYTES
 			+ XC6_TYPE2_GCLK_REG_SW/XC6_WORD_BITS;
 		u16 = frame_get_u16(&es->bits->d[bits_off]);
 		if (!u16)
 			continue;
 		if (u16 & (1<<(XC6_TYPE2_GCLK_REG_SW%XC6_WORD_BITS))) {
-			int iob_y, iob_x, iob_idx;
+			int t2_io_idx, iob_y, iob_x, iob_type_idx;
 			struct fpga_device *iob_dev;
 			struct switch_to_yx_l2 switch_to_yx_l2;
 			struct switch_to_rel switch_to_rel;
@@ -597,10 +594,11 @@ static int extract_type2(struct extract_state* es)
 			// the writing equivalent is in write_inner_term_sw()
 			//
 
-			fpga_find_iob(es->model, es->model->pkg->gclk_pin[i],
-				&iob_y, &iob_x, &iob_idx);
-			RC_CHECK(es->model);
-			iob_dev = fdev_p(es->model, iob_y, iob_x, DEV_IOB, iob_idx);
+			t2_io_idx = es->model->die->gclk_t2_io_idx[gclk_i];
+			iob_y = es->model->die->t2_io[t2_io_idx].y;
+			iob_x = es->model->die->t2_io[t2_io_idx].x;
+			iob_type_idx = es->model->die->t2_io[t2_io_idx].type_idx;
+			iob_dev = fdev_p(es->model, iob_y, iob_x, DEV_IOB, iob_type_idx);
 			RC_ASSERT(es->model, iob_dev);
 
 			switch_to_yx_l2.l1.yx_req = YX_X_CENTER_CMTPLL | YX_Y_CENTER;
@@ -2489,7 +2487,7 @@ static int write_inner_term_sw(struct fpga_bits *bits,
 		if ((from_found = strstr(from_str, "CLKPIN"))
 		    && (to_found = strstr(to_str, "CKPIN"))) {
 			struct switch_to_yx_l2 switch_to_yx_l2;
-			int iob_y, iob_x, iob_idx;
+			int t2_io_idx, iob_y, iob_x, iob_type_idx;
 			struct fpga_device *iob_dev;
 
 			from_idx = atoi(&from_found[6]);
@@ -2508,17 +2506,16 @@ static int write_inner_term_sw(struct fpga_bits *bits,
 			RC_ASSERT(model, switch_to_yx_l2.l1.set.len);
 
 			// find matching gclk pin
-			for (j = 0; j < model->pkg->num_gclk_pins; j++) {
-				if (!model->pkg->gclk_pin[j])
-					continue;
+			for (j = 0; j < model->die->num_gclk_pins; j++) {
+				t2_io_idx = model->die->gclk_t2_io_idx[j];
+				iob_y = model->die->t2_io[t2_io_idx].y;
+				iob_x = model->die->t2_io[t2_io_idx].x;
+				iob_type_idx = model->die->t2_io[t2_io_idx].type_idx;
 
-				fpga_find_iob(model, model->pkg->gclk_pin[j],
-					&iob_y, &iob_x, &iob_idx);
-				RC_CHECK(model);
 				if (iob_y != switch_to_yx_l2.l1.dest_y
 				    || iob_x != switch_to_yx_l2.l1.dest_x)
 					continue;
-				iob_dev = fdev_p(model, iob_y, iob_x, DEV_IOB, iob_idx);
+				iob_dev = fdev_p(model, iob_y, iob_x, DEV_IOB, iob_type_idx);
 				RC_ASSERT(model, iob_dev);
 
 				if (fpga_switch_lookup(model, iob_y, iob_x,
@@ -2527,12 +2524,12 @@ static int write_inner_term_sw(struct fpga_bits *bits,
 					break;
 			}
 			// set bit
-			if (j < model->pkg->num_gclk_pins) {
+			if (j < model->die->num_gclk_pins) {
 				uint16_t u16;
 				int bits_off;
 
 				bits_off = IOB_DATA_START
-					+ model->pkg->gclk_type2_o[j]*XC6_WORD_BYTES
+					+ model->die->gclk_t2_switches[j]*XC6_WORD_BYTES
 					+ XC6_TYPE2_GCLK_REG_SW/XC6_WORD_BITS;
 				u16 = frame_get_u16(&bits->d[bits_off]);
 				u16 |= 1<<(XC6_TYPE2_GCLK_REG_SW%XC6_WORD_BITS);

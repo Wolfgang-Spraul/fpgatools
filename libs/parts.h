@@ -44,16 +44,6 @@ struct xc_major_info
 	int minors;
 };
 
-#define XC_T2_IOB_PAD		0x00000001
-#define XC_T2_IOB_UNBONDED	0x00000002
-#define XC_T2_CENTER		0x00000004
-
-struct xc_type2_info
-{
-	int flags;
-	int val;
-};
-
 //
 // major_str
 //  'L' = X+L logic block
@@ -76,6 +66,18 @@ struct xc_type2_info
 //   'U' = unwired
 //
 
+#define XC6_NUM_GCLK_PINS 32
+
+struct xc_t2_io_info
+{
+	int pair; // 0 for entries used for switches
+	int pos_side; // 1 for positive, 0 for negative
+	int bank;
+	int y;
+	int x;
+	int type_idx;
+};
+
 struct xc_die
 {
 	int idcode;
@@ -85,8 +87,13 @@ struct xc_die
 	const char* major_str;
 	int num_majors;
 	struct xc_major_info majors[XC_MAX_MAJORS];
-	int num_type2;
-	struct xc_type2_info type2[XC_MAX_TYPE2_ENTRIES];
+
+	int num_t2_ios;
+	struct xc_t2_io_info t2_io[XC_MAX_TYPE2_ENTRIES];
+	int num_gclk_pins;
+	int gclk_t2_io_idx[XC6_NUM_GCLK_PINS];
+	int gclk_t2_switches[XC6_NUM_GCLK_PINS]; // in 16-bit words
+
 	int mcb_ypos;
 	int num_mui;
 	int mui_pos[XC_MAX_MUI_POS];
@@ -98,19 +105,30 @@ const struct xc_die* xc_die_info(int idcode);
 int xc_die_center_major(const struct xc_die *die);
 
 enum xc6_pkg { TQG144, FTG256, CSG324, FGG484 };
-#define XC6_NUM_GCLK_PINS 32
+#define XC6_MAX_NUM_PINS 900 // fgg900 package
+
+// see ug385
+struct xc6_pin_info
+{
+	const char *name;
+	int bank;
+	const char *bufio2;
+	const char *description;
+	int pair;
+	int pos_side;
+};
 
 struct xc6_pkg_info
 {
 	enum xc6_pkg pkg;
-	int num_gclk_pins;
-	// negative side of differential pairs: even numbers
-	// positive side of differential pairs: odd numbers
-	const char* gclk_pin[XC6_NUM_GCLK_PINS];
-	int gclk_type2_o[XC6_NUM_GCLK_PINS]; // in words
+	int num_pins;
+	struct xc6_pin_info pin[XC6_MAX_NUM_PINS];
 };
 
 const struct xc6_pkg_info *xc6_pkg_info(enum xc6_pkg pkg);
+
+// returns 0 if description not found
+const char *xc6_find_pkg_pin(const struct xc6_pkg_info *pkg_info, const char *description);
 
 #define FRAME_SIZE		130
 #define FRAMES_PER_ROW		505 // for slx4 and slx9
@@ -219,11 +237,13 @@ enum major_type get_major_type(int idcode, int major);
 #define XC6_LEFTSIDE_MAJOR 1
 #define XC6_SLX9_RIGHTMOST_MAJOR 17
 
+#define XC6_SLX9_TOTAL_TILE_ROWS 73
+#define XC6_SLX9_TOTAL_TILE_COLS 45
+
 int get_rightside_major(int idcode);
 int get_major_framestart(int idcode, int major);
 int get_frames_per_row(int idcode);
 
-int get_num_iobs(int idcode);
 const char* get_iob_sitename(int idcode, int idx);
 // returns -1 if sitename not found
 int find_iob_sitename(int idcode, const char* name);
