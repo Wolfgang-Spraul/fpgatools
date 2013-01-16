@@ -11,6 +11,9 @@ typedef int net_idx_t; // net indices are 1-based
 int fpga_find_iob(struct fpga_model* model, const char* sitename,
 	int* y, int* x, dev_type_idx_t* idx);
 
+const char *fpga_iob_sitename(struct fpga_model *model,
+	int y, int x, dev_type_idx_t type_idx);
+
 //
 // When dealing with devices, there are two indices:
 // 1. The index of the device in the device array for that tile.

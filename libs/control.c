@@ -46,6 +46,36 @@ int fpga_find_iob(struct fpga_model *model, const char *sitename,
 	return 0;
 }
 
+const char *fpga_iob_sitename(struct fpga_model *model,
+	int y, int x, dev_type_idx_t type_idx)
+{
+	int i, j;
+
+	for (i = 0; i < model->die->num_t2_ios; i++) {
+		if (!model->die->t2_io[i].pair)
+			continue;
+		if (model->die->t2_io[i].y == y
+		    && model->die->t2_io[i].x == x
+		    && model->die->t2_io[i].type_idx == type_idx)
+			break;
+	}
+	if (i >= model->die->num_t2_ios) {
+		HERE();
+		return 0;
+	}
+	for (j = 0; j < model->pkg->num_pins; j++) {
+		if (model->pkg->pin[j].bank == model->die->t2_io[i].bank
+		    && model->pkg->pin[j].pair == model->die->t2_io[i].pair
+		    && model->pkg->pin[j].pos_side == model->die->t2_io[i].pos_side)
+			break;
+	}
+	if (j >= model->pkg->num_pins) {
+		HERE();
+		return 0;
+	}
+	return model->pkg->pin[j].name;
+}
+
 static void enum_x(struct fpga_model *model, enum fpgadev_type type,
 	int enum_i, int *y, int x, int *type_idx)
 {
