@@ -12,15 +12,14 @@
 int main(int argc, char** argv)
 {
 	struct fpga_model model;
-	FILE *fbits, *fp = 0;
+	FILE *fbits = 0, *fp = 0;
 	int rc = -1;
 
-	fbits = 0;
-	if (argc != 3) {
+	if (argc != 2 && argc != 3) {
 		fprintf(stderr,
 			"\n"
 			"%s - floorplan to bitstream\n"
-			"Usage: %s <floorplan_file|- for stdin> <bits_file>\n"
+			"Usage: %s <floorplan_file|- for stdin> [<bits_file>]\n"
 			"\n", argv[0], argv[0]);
 		goto fail;
 	}
@@ -34,10 +33,26 @@ int main(int argc, char** argv)
 			goto fail;
 		}
 	}
-	fbits = fopen(argv[2], "w");
-	if (!fbits) {
-		fprintf(stderr, "Error opening %s.\n", argv[2]);
-		goto fail;
+	if (argc == 3) {
+		fbits = fopen(argv[2], "w");
+		if (!fbits) {
+			fprintf(stderr, "Error opening %s.\n", argv[2]);
+			goto fail;
+		}
+	} else {
+		if (fp == stdin)
+			fbits = stdout;
+		else {
+			char out_name[256];
+			int i = strlen(argv[1]);
+			while (i && argv[1][i-1] != '.') i--;
+			snprintf(out_name, sizeof(out_name), "%.*sbit", i, argv[1]);
+			fbits = fopen(out_name, "w");
+			if (!fbits) {
+				fprintf(stderr, "Error opening %s.\n", out_name);
+				goto fail;
+			}
+		}
 	}
 
 	if ((rc = fpga_build_model(&model, XC6SLX9, TQG144)))
