@@ -14,8 +14,8 @@
   
    module blinking(input clk, output led);
 
-   // synthesis attribute LOC clk "P55 | IOSTANDARD = LVCMOS33"
-   // synthesis attribute LOC led "P48 | SLEW = QUIETIO | DRIVE = 8"
+   // synthesis attribute LOC clk "T8 | IOSTANDARD = LVCMOS33"
+   // synthesis attribute LOC led "R5 | SLEW = QUIETIO | DRIVE = 8"
 
      // COUNTER_SIZE tested as 14 (32K crystal) and 23 (20M crystal)
      `define COUNTER_SIZE 23

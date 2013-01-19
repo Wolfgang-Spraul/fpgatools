@@ -13,7 +13,7 @@ LDFLAGS += -Wl,-rpath,$(CURDIR)/libs
 
 OBJS 	= autotest.o bit2fp.o printf_swbits.o draw_svg_tiles.o fp2bit.o \
 	hstrrep.o merge_seq.o new_fp.o pair2net.o sort_seq.o hello_world.o \
-	blinking_led.o
+	blinking_led.o jtag_counter.o j1_blinking.o
 
 DYNAMIC_LIBS = libs/libfpga-model.so libs/libfpga-bit.so \
 	libs/libfpga-floorplan.so libs/libfpga-control.so \
@@ -24,7 +24,8 @@ DYNAMIC_LIBS = libs/libfpga-model.so libs/libfpga-bit.so \
 .SECONDEXPANSION:
 
 all: new_fp fp2bit bit2fp printf_swbits draw_svg_tiles autotest hstrrep \
-	sort_seq merge_seq pair2net hello_world blinking_led
+	sort_seq merge_seq pair2net hello_world blinking_led jtag_counter \
+	j1_blinking.o
 
 include Makefile.common
 
@@ -81,7 +82,7 @@ libs/%.so: FAKE
 
 test_dirs := $(shell mkdir -p test.gold test.out)
 
-DESIGN_TESTS := hello_world blinking_led
+DESIGN_TESTS := hello_world blinking_led jtag_counter j1_blinking
 AUTO_TESTS := logic_cfg routing_sw io_sw iob_cfg lut_encoding
 COMPARE_TESTS := xc6slx9_tiles xc6slx9_devs xc6slx9_ports xc6slx9_conns xc6slx9_sw xc6slx9_swbits
 
@@ -194,6 +195,10 @@ hello_world: hello_world.o $(DYNAMIC_LIBS)
 
 blinking_led: blinking_led.o $(DYNAMIC_LIBS)
 
+jtag_counter: jtag_counter.o $(DYNAMIC_LIBS)
+
+j1_blinking: j1_blinking.o $(DYNAMIC_LIBS)
+
 fp2bit: fp2bit.o $(DYNAMIC_LIBS)
 
 bit2fp: bit2fp.o $(DYNAMIC_LIBS)
@@ -225,6 +230,7 @@ clean:
 	rm -f $(OBJS) *.d
 	rm -f 	draw_svg_tiles new_fp hstrrep sort_seq merge_seq autotest
 	rm -f	fp2bit bit2fp printf_swbits pair2net hello_world blinking_led
+	rm -f	jtag_counter j1_blinking
 	rm -f	xc6slx9.fp xc6slx9.svg
 	rm -f	$(DESIGN_GOLD) $(AUTOTEST_GOLD) $(COMPARE_GOLD)
 	rm -f	test.gold/compare_xc6slx9.fp

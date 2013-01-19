@@ -9,6 +9,8 @@
 #include "bit.h"
 #include "control.h"
 
+#undef DBG_EXTRACT_T2
+
 static uint8_t* get_first_minor(struct fpga_bits* bits, int row, int major)
 {
 	int i, num_frames;
@@ -580,6 +582,10 @@ static int extract_type2(struct extract_state* es)
 			struct switch_to_yx_l2 switch_to_yx_l2;
 			struct switch_to_rel switch_to_rel;
 
+#ifdef DBG_EXTRACT_T2
+			fprintf(stderr, "#D %s:%i t2 gclk %i u16 0x%X\n",
+				__FILE__, __LINE__, gclk_i, u16);
+#endif
 			//
 			// find and enable reg-switch for gclk_pin[i]
 			// the writing equivalent is in write_inner_term_sw()
@@ -599,6 +605,7 @@ static int extract_type2(struct extract_state* es)
 			switch_to_yx_l2.l1.x = iob_x;
 			switch_to_yx_l2.l1.start_switch = iob_dev->pinw[IOB_OUT_I];
 			switch_to_yx_l2.l1.from_to = SW_FROM;
+			switch_to_yx_l2.l1.exclusive_net = NO_NET;
 			fpga_switch_to_yx_l2(&switch_to_yx_l2);
 			RC_CHECK(es->model);
 			if (!switch_to_yx_l2.l1.set.len)
@@ -2493,6 +2500,7 @@ static int write_inner_term_sw(struct fpga_bits *bits,
 			switch_to_yx_l2.l1.x = x;
 			switch_to_yx_l2.l1.start_switch = fpga_switch_str_i(model, y, x, i, SW_TO);
 			switch_to_yx_l2.l1.from_to = SW_TO;
+			switch_to_yx_l2.l1.exclusive_net = NO_NET;
 			fpga_switch_to_yx_l2(&switch_to_yx_l2);
 			RC_ASSERT(model, switch_to_yx_l2.l1.set.len);
 

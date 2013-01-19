@@ -31,6 +31,8 @@ bit2fp
 printf_swbits
 hello_world
 blinking_led
+jtag_counter
+j1_blinking
 
 #
 # folders

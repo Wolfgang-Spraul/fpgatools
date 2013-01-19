@@ -2158,7 +2158,11 @@ int fpga_swset_in_other_net(struct fpga_model *model, int y, int x,
 	int i, j;
 
 	net_p = fnet_get(model, our_net);
-	if (!net_p) { HERE(); return 0; }
+	if (!net_p) {
+		fprintf(stderr ,"#E %s:%i cannot find our_net %i\n",
+			__FILE__, __LINE__, our_net);
+		return 0;
+	}
 	for (i = 0; i < len; i++) {
 		if (!fpga_switch_is_used(model, y, x, sw[i]))
 			continue;
