@@ -10,6 +10,8 @@
 #include "control.h"
 
 #undef DBG_EXTRACT_T2
+#undef DBG_EXTRACT_LOGIC_SW
+#undef DBG_EXTRACT_ROUTING_SW
 
 static uint8_t* get_first_minor(struct fpga_bits* bits, int row, int major)
 {
@@ -80,7 +82,9 @@ struct sw_yxpos
 	swidx_t idx;
 };
 
-#define MAX_YX_SWITCHES 1024
+// random value of about 10kk switches for now, meaning
+// about 100MB memory usage
+#define MAX_YX_SWITCHES 10*1024*1024
 
 struct extract_state
 {
@@ -89,7 +93,7 @@ struct extract_state
 	// yx switches are fully extracted ones pointing into the
 	// model, stored here for later processing into nets.
 	int num_yx_pos;
-	struct sw_yxpos yx_pos[MAX_YX_SWITCHES]; // needs to be dynamically alloced...
+	struct sw_yxpos *yx_pos;
 };
 
 static int find_es_switch(struct extract_state* es, int y, int x, swidx_t sw)
@@ -673,6 +677,26 @@ static int lut2str(uint64_t lut, int lut_pos, int lut5_used,
 	return 0;
 fail:
 	return rc;
+}
+
+static int back_to_cout(struct fpga_model *model, int cin_y, int cin_x,
+	str16_t cin_str, int *cout_y, int *cout_x, str16_t *cout_str)
+{
+	int connpt_dests_o, num_dests, i;
+
+	RC_CHECK(model);
+	if (fpga_connpt_find(model, cin_y, cin_x, cin_str,
+		&connpt_dests_o, &num_dests) == NO_CONN)
+		RC_FAIL(model, EINVAL);
+	RC_ASSERT(model, num_dests == 1 || num_dests == 2);
+	for (i = 0; i < num_dests; i++) {
+		fpga_conn_dest(model, cin_y, cin_x, connpt_dests_o+i, cout_y, cout_x, cout_str);
+		if (has_device(model, *cout_y, *cout_x, DEV_LOGIC))
+			break;
+	}
+	if (i >= num_dests)
+		RC_FAIL(model, EINVAL);
+	RC_RETURN(model);
 }
 
 static int extract_logic(struct extract_state* es)
@@ -1389,21 +1413,16 @@ static int extract_logic(struct extract_state* es)
 			    && (cfg_ml.a2d[LUT_A].out_mux == MUX_XOR
 				|| cfg_ml.a2d[LUT_A].ff_mux == MUX_XOR
 				|| cfg_ml.a2d[LUT_A].cy0)) {
-				int connpt_dests_o, num_dests, cout_y, cout_x;
+
+				int cout_y, cout_x;
 				str16_t cout_str;
 
-				if ((fpga_connpt_find(es->model, y, x,
-					dev_ml->pinw[LI_CIN], &connpt_dests_o,
-					&num_dests) == NO_CONN)
-				    || num_dests != 1) {
-					HERE();
-				} else {
-					fpga_conn_dest(es->model, y, x, connpt_dests_o,
-						&cout_y, &cout_x, &cout_str);
-					if (find_es_switch(es, cout_y, cout_x,fpga_switch_first(
-						es->model, cout_y, cout_x, cout_str, SW_TO)))
-						cfg_ml.precyinit = PRECYINIT_0;
-				}
+				rc = back_to_cout(es->model, y, x, dev_ml->pinw[LI_CIN],
+					&cout_y, &cout_x, &cout_str);
+				if (rc) FAIL(rc);
+				if (find_es_switch(es, cout_y, cout_x,fpga_switch_first(
+					es->model, cout_y, cout_x, cout_str, SW_TO)))
+					cfg_ml.precyinit = PRECYINIT_0;
 			}
 
 			//
@@ -1561,6 +1580,7 @@ static int extract_routing_switches(struct extract_state* es, int y, int x)
 {
 	struct fpga_tile* tile;
 	swidx_t sw_idx;
+	str16_t from_str, to_str;
 	int i, is_set, rc;
 
 	RC_CHECK(es->model);
@@ -1571,16 +1591,26 @@ static int extract_routing_switches(struct extract_state* es, int y, int x)
 		if (rc) RC_FAIL(es->model, rc);
 		if (!is_set) continue;
 
-		sw_idx = fpga_switch_lookup(es->model, y, x,
-			fpga_wire2str_i(es->model, es->model->sw_bitpos[i].from),
-			fpga_wire2str_i(es->model, es->model->sw_bitpos[i].to));
+		from_str = fpga_wire2str_yx(es->model, es->model->sw_bitpos[i].from, y, x);
+		to_str = fpga_wire2str_yx(es->model, es->model->sw_bitpos[i].to, y, x);
+#ifdef DBG_EXTRACT_ROUTING_SW
+		fprintf(stderr, "#D %s:%i y%i x%i from %i (%s) to %i (%s)\n",
+			__FILE__, __LINE__, y, x,
+			es->model->sw_bitpos[i].from,
+			strarray_lookup(&es->model->str, from_str),
+			es->model->sw_bitpos[i].to,
+			strarray_lookup(&es->model->str, to_str));
+#endif
+		sw_idx = fpga_switch_lookup(es->model, y, x, from_str, to_str);
 		if (sw_idx == NO_SWITCH) RC_FAIL(es->model, EINVAL);
 		// todo: es->model->sw_bitpos[i].bidir handling
 
 		if (tile->switches[sw_idx] & SWITCH_BIDIRECTIONAL)
-			HERE();
+			fprintf(stderr, "#E %s:%i BIDIR not supported yet\n",
+				__FILE__, __LINE__);
 		if (tile->switches[sw_idx] & SWITCH_USED)
-			HERE();
+			fprintf(stderr, "#E %s:%i switch already in use\n",
+				__FILE__, __LINE__);
 		if (es->num_yx_pos >= MAX_YX_SWITCHES)
 			{ RC_FAIL(es->model, ENOTSUP); }
 		es->yx_pos[es->num_yx_pos].y = y;
@@ -1616,36 +1646,37 @@ static int extract_logic_switches(struct extract_state* es, int y, int x)
 
 	if (frame_get_bit(u8_p + minor*FRAME_SIZE, byte_off*8 + XC6_ML_CIN_USED)) {
 		struct fpga_device* dev;
-		int connpt_dests_o, num_dests, cout_y, cout_x;
+		int cout_y, cout_x;
 		str16_t cout_str;
 		swidx_t cout_sw;
 
 		dev = fdev_p(es->model, y, x, DEV_LOGIC, DEV_LOG_M_OR_L);
 		if (!dev) FAIL(EINVAL);
 
-		if ((fpga_connpt_find(es->model, y, x,
-			dev->pinw[LI_CIN], &connpt_dests_o,
-			&num_dests) == NO_CONN)
-		    || num_dests != 1) {
-			HERE();
-		} else {
-			fpga_conn_dest(es->model, y, x, connpt_dests_o,
-				&cout_y, &cout_x, &cout_str);
-			cout_sw = fpga_switch_first(es->model, cout_y,
-				cout_x, cout_str, SW_TO);
-			if (cout_sw == NO_SWITCH) HERE();
-			else {
-				if (es->num_yx_pos >= MAX_YX_SWITCHES)
-					{ FAIL(ENOTSUP); }
-				es->yx_pos[es->num_yx_pos].y = cout_y;
-				es->yx_pos[es->num_yx_pos].x = cout_x;
-				es->yx_pos[es->num_yx_pos].idx = cout_sw;
-				es->num_yx_pos++;
+		rc = back_to_cout(es->model, y, x, dev->pinw[LI_CIN],
+			&cout_y, &cout_x, &cout_str);
+		if (rc) FAIL(rc);
+#ifdef DBG_EXTRACT_LOGIC_SW
+		fprintf(stderr, "#D %s:%i cin y%i x%i %s cout y%i x%i %s\n",
+			__FILE__, __LINE__,
+			y, x, strarray_lookup(&es->model->str, dev->pinw[LI_CIN]),
+			cout_y, cout_x, strarray_lookup(&es->model->str, cout_str));
+#endif
 
-				frame_clear_bit(u8_p + minor*FRAME_SIZE,
-					byte_off*8 + XC6_ML_CIN_USED);
-			}
-		}
+		cout_sw = fpga_switch_first(es->model, cout_y,
+			cout_x, cout_str, SW_TO);
+		if (cout_sw == NO_SWITCH)
+			FAIL(EINVAL);
+
+		if (es->num_yx_pos >= MAX_YX_SWITCHES)
+			{ FAIL(ENOTSUP); }
+		es->yx_pos[es->num_yx_pos].y = cout_y;
+		es->yx_pos[es->num_yx_pos].x = cout_x;
+		es->yx_pos[es->num_yx_pos].idx = cout_sw;
+		es->num_yx_pos++;
+
+		frame_clear_bit(u8_p + minor*FRAME_SIZE,
+			byte_off*8 + XC6_ML_CIN_USED);
 	}
 	return 0;
 fail:
@@ -2205,7 +2236,15 @@ static int construct_extract_state(struct extract_state* es,
 	RC_CHECK(model);
 	memset(es, 0, sizeof(*es));
 	es->model = model;
+	es->yx_pos = malloc(MAX_YX_SWITCHES * sizeof(*es->yx_pos));
+	if (!es->yx_pos) { HERE(); return ENOMEM; }
 	return 0;
+}
+
+static void destruct_extract_state(struct extract_state *es)
+{
+	free(es->yx_pos);
+	es->yx_pos = 0;
 }
 
 int extract_model(struct fpga_model* model, struct fpga_bits* bits)
@@ -2219,28 +2258,32 @@ int extract_model(struct fpga_model* model, struct fpga_bits* bits)
 	if (rc) RC_FAIL(model, rc);
 	es.bits = bits;
 	for (i = 0; i < sizeof(s_default_bits)/sizeof(s_default_bits[0]); i++) {
-		if (!get_bitp(bits, &s_default_bits[i]))
-			RC_FAIL(model, EINVAL);
+		if (!get_bitp(bits, &s_default_bits[i])) {
+			RC_SET(model, EINVAL);
+			goto out;
+		}
 		clear_bitp(bits, &s_default_bits[i]);
 	}
 
 	rc = extract_switches(&es);
-	if (rc) RC_FAIL(model, rc);
+	if (rc) { RC_SET(model, rc); goto out; }
 	rc = extract_type2(&es);
-	if (rc) RC_FAIL(model, rc);
+	if (rc) { RC_SET(model, rc); goto out; }
 	rc = extract_logic(&es);
-	if (rc) RC_FAIL(model, rc);
+	if (rc) { RC_SET(model, rc); goto out; }
 
 	// turn switches into nets
 	if (model->nets)
 		HERE(); // should be empty here
 	for (i = 0; i < es.num_yx_pos; i++) {
 		rc = fnet_new(model, &net_idx);
-		if (rc) RC_FAIL(model, rc);
+		if (rc) { RC_SET(model, rc); goto out; }
 		rc = fnet_add_sw(model, net_idx, es.yx_pos[i].y,
 			es.yx_pos[i].x, &es.yx_pos[i].idx, 1);
-		if (rc) RC_FAIL(model, rc);
+		if (rc) { RC_SET(model, rc); goto out; }
 	}
+out:
+	destruct_extract_state(&es);
 	RC_RETURN(model);
 }
 

@@ -133,6 +133,7 @@ enum fpga_tile_type
 #define HALF_ROW		8
 #define HCLK_POS		8  // hclk pos in row
 #define LAST_POS_IN_ROW		16 // including hclk at 8
+#define LAST_REGULAR_ROW_POS	15 // without hclk
 #define ROW_SIZE		(HALF_ROW+1+HALF_ROW)
 
 #define CENTER_X_PLUS_1		1 // routing col adjacent to center
@@ -1056,6 +1057,8 @@ enum extra_wires {
 
 const char *fpga_connpt_str(struct fpga_model *model, enum extra_wires wire,
 	int y, int x, int dest_y, int dest_x);
+str16_t fpga_wire2str_yx(struct fpga_model *model, enum extra_wires wire,
+	int y, int x);
 const char* fpga_wire2str(enum extra_wires wire);
 str16_t fpga_wire2str_i(struct fpga_model* model, enum extra_wires wire);
 enum extra_wires fpga_str2wire(const char* str);

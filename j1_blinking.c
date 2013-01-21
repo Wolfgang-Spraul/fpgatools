@@ -21,6 +21,7 @@
 
 /*
    This C design corresponds to the following Verilog:
+TODO
 */
 
 int main(int argc, char** argv)

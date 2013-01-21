@@ -30,6 +30,7 @@
 
 #define RC_CHECK(model)		do { if ((model)->rc) RC_RETURN(model); } while (0)
 #define RC_ASSERT(model, what)	do { RC_CHECK(model); if (!(what)) RC_FAIL(model, EINVAL); } while (0)
+#define RC_SET(model, code)	do { HERE(); if (!(model)->rc) (model)->rc = (code); } while (0)
 #define RC_FAIL(model, code)	do { HERE(); if (!(model)->rc) (model)->rc = (code); RC_RETURN(model); } while (0)
 #define RC_RETURN(model)	return (model)->rc
 

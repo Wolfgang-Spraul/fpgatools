@@ -1580,11 +1580,38 @@ const char *fpga_connpt_str(struct fpga_model *model, enum extra_wires wire,
 					"REGR_%s", fpga_wire2str(wire));
 			else HERE();
 		} else HERE();
-	} else HERE();
+	} else {
+		fprintf(stderr, "#E %s:%i fpga_connpt_str() wire %i unsupported\n", __FILE__, __LINE__, wire);
+		sprintf(buf[last_buf], "UNSUP_%i", wire);
+	}
 	return buf[last_buf];
 }
 
-const char* fpga_wire2str(enum extra_wires wire)
+str16_t fpga_wire2str_yx(struct fpga_model *model, enum extra_wires wire,
+	int y, int x)
+{
+	char buf[MAX_WIRENAME_LEN];
+	int str_i, row_num, row_pos;
+
+	if (wire >= GCLK0 && wire <= GCLK15) {
+		is_in_row(model, y, &row_num, &row_pos);
+		if (row_pos != LAST_POS_IN_ROW
+		    || (!row_num && !is_atx(X_FABRIC_BRAM_ROUTING_COL|X_FABRIC_MACC_ROUTING_COL, model, x))
+		    || (row_num == model->die->num_rows/2 && is_atx(X_LEFT_IO_ROUTING_COL|X_RIGHT_IO_ROUTING_COL, model, x)))
+			return fpga_wire2str_i(model, wire);
+
+		snprintf(buf, sizeof(buf), "%s_BRK", fpga_wire2str(wire));
+	} else
+		return fpga_wire2str_i(model, wire);
+	str_i = strarray_find(&model->str, buf);
+	if (OUT_OF_U16(str_i)) {
+		HERE();
+		str_i = STRIDX_NO_ENTRY;
+	}
+	return str_i;
+}
+
+const char *fpga_wire2str(enum extra_wires wire)
 {
  	enum { NUM_BUFS = 8, BUF_SIZE = MAX_WIRENAME_LEN };
 	static char buf[NUM_BUFS][BUF_SIZE];

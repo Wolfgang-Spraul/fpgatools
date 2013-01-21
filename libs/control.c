@@ -1000,8 +1000,12 @@ int fpga_connpt_find(struct fpga_model* model, int y, int x,
 		if (tile->conn_point_names[i*2+1] == name_i)
 			break;
 	}
-	if (i >= tile->num_conn_point_names)
-		{ HERE(); goto fail; }
+	if (i >= tile->num_conn_point_names) {
+		fprintf(stderr, "#E %s:%i cannot find y%i x%i connpt %s\n",
+			__FILE__, __LINE__, y, x,
+			strarray_lookup(&model->str, name_i));
+		goto fail;
+	}
 	if (num_dests) {
 		*num_dests = (i < tile->num_conn_point_names-1)
 			? tile->conn_point_names[(i+1)*2]
