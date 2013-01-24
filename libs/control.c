@@ -37,7 +37,8 @@ int fpga_find_iob(struct fpga_model *model, const char *sitename,
 			break;
 	}
 	if (j >= model->die->num_t2_ios) {
-		HERE();
+		fprintf(stderr, "#E %s:%i fpga_find_iob() cannot find %s\n",
+			__FILE__, __LINE__, sitename);
 		return -1;
 	}
 	*y = model->die->t2_io[j].y;
@@ -1459,7 +1460,7 @@ int construct_sw_chain(struct sw_chain* chain, struct fpga_model* model,
 {
 	RC_CHECK(model);
 #ifdef DBG_ENUM_SWITCH
-	printf("construct_sw_chain() %s (%s)\n",
+	printf("construct_sw_chain() y%i x%i %s (%s)\n", y, x,
 		strarray_lookup(&model->str, start_switch),
 		(from_to == SW_FROM) ? "SW_FROM" : "SW_TO");
 #endif

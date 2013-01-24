@@ -265,7 +265,7 @@ const struct xc_die *xc_die_info(int idcode)
 			/* 20 */  87,  86,  85,  84,
 			/* 24 */  77,  76,  75,  74,
 			/* 28 */  29,  28,  27,  26 },
-		// todo: gclk 2/3/28 and 29 positions not yet verified
+		// todo: gclk 2,3,28,29 positions not yet verified
 		.gclk_t2_switches = { // 16-bit words into type2 data
 			/*  0 */  20*4+ 6,  20*4+ 9,  20*4+ 0,  20*4+ 3,
 			/*  4 */ 190*4+18, 190*4+21, 190*4+12, 190*4+15,

@@ -1055,10 +1055,28 @@ enum extra_wires {
 	MW_LAST = 3499,
 };
 
+enum iologic_wire
+{
+	IOLOGIC_NO_WIRE = 0,
+	IBUF0, IBUF1,
+	D_ILOGIC_SITE, D_ILOGIC_SITE_S,
+	D_ILOGIC_IDATAIN_IODELAY, D_ILOGIC_IDATAIN_IODELAY_S,
+	DFB_ILOGIC_SITE, DFB_ILOGIC_SITE_S,
+	FABRICOUT_ILOGIC_SITE, FABRICOUT_ILOGIC_SITE_S,
+	O0, O1,
+	OQ_OLOGIC_SITE, OQ_OLOGIC_SITE_S,
+	D1_OLOGIC_SITE, D1_OLOGIC_SITE_S,
+	IOI_LOGICOUT0, IOI_INTER_LOGICOUT0,
+	IOI_LOGICOUT7, IOI_INTER_LOGICOUT7,
+	IOI_LOGICIN_B31
+};
+
 const char *fpga_connpt_str(struct fpga_model *model, enum extra_wires wire,
 	int y, int x, int dest_y, int dest_x);
 str16_t fpga_wire2str_yx(struct fpga_model *model, enum extra_wires wire,
 	int y, int x);
+str16_t fpga_iologic_wire2str_yx(struct fpga_model *model,
+	enum iologic_wire wire, int y, int x);
 const char* fpga_wire2str(enum extra_wires wire);
 str16_t fpga_wire2str_i(struct fpga_model* model, enum extra_wires wire);
 enum extra_wires fpga_str2wire(const char* str);

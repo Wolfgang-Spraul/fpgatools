@@ -1611,6 +1611,109 @@ str16_t fpga_wire2str_yx(struct fpga_model *model, enum extra_wires wire,
 	return str_i;
 }
 
+str16_t fpga_iologic_wire2str_yx(struct fpga_model *model,
+	enum iologic_wire wire, int y, int x)
+{
+	switch (wire) {
+		case D_ILOGIC_SITE:
+			return strarray_find(&model->str, "D_ILOGIC_SITE");
+		case D_ILOGIC_SITE_S:
+			return strarray_find(&model->str, "D_ILOGIC_SITE_S");
+		case D_ILOGIC_IDATAIN_IODELAY:
+			return strarray_find(&model->str, "D_ILOGIC_IDATAIN_IODELAY");
+		case D_ILOGIC_IDATAIN_IODELAY_S:
+			return strarray_find(&model->str, "D_ILOGIC_IDATAIN_IODELAY_S");
+		case DFB_ILOGIC_SITE:
+			return strarray_find(&model->str, "DFB_ILOGIC_SITE");
+		case DFB_ILOGIC_SITE_S:
+			return strarray_find(&model->str, "DFB_ILOGIC_SITE_S");
+		case FABRICOUT_ILOGIC_SITE:
+			return strarray_find(&model->str, "FABRICOUT_ILOGIC_SITE");
+		case FABRICOUT_ILOGIC_SITE_S:
+			return strarray_find(&model->str, "FABRICOUT_ILOGIC_SITE_S");
+		case OQ_OLOGIC_SITE:
+			return strarray_find(&model->str, "OQ_OLOGIC_SITE");
+		case OQ_OLOGIC_SITE_S:
+			return strarray_find(&model->str, "OQ_OLOGIC_SITE_S");
+		case D1_OLOGIC_SITE:
+			return strarray_find(&model->str, "D1_OLOGIC_SITE");
+		case D1_OLOGIC_SITE_S:
+			return strarray_find(&model->str, "D1_OLOGIC_SITE_S");
+		case IOI_LOGICOUT0:
+			return strarray_find(&model->str, "IOI_LOGICOUT0");
+		case IOI_INTER_LOGICOUT0:
+			return strarray_find(&model->str, "IOI_INTER_LOGICOUT0");
+		case IOI_LOGICOUT7:
+			return strarray_find(&model->str, "IOI_LOGICOUT7");
+		case IOI_INTER_LOGICOUT7:
+			return strarray_find(&model->str, "IOI_INTER_LOGICOUT7");
+		case IOI_LOGICIN_B31:
+			return strarray_find(&model->str, "IOI_LOGICIN_B31");
+		default: ;
+	}
+	if (x < LEFT_SIDE_WIDTH) {
+		if (x != LEFT_IO_DEVS)
+			{ HERE(); return STRIDX_NO_ENTRY; }
+		if (wire == IBUF0)
+			return strarray_find(&model->str, "LIOI_IOB_IBUF0");
+		if (wire == IBUF1)
+			return strarray_find(&model->str, "LIOI_IOB_IBUF1");
+		if (wire == O0)
+			return strarray_find(&model->str, "LIOI_IOB_O0");
+		if (wire == O1)
+			return strarray_find(&model->str, "LIOI_IOB_O1");
+	} else if (x >= model->x_width-RIGHT_SIDE_WIDTH) {
+		if (x != model->x_width - RIGHT_IO_DEVS_O)
+			{ HERE(); return STRIDX_NO_ENTRY; }
+		if (wire == IBUF0)
+			return strarray_find(&model->str, "RIOI_IOB_IBUF0");
+		if (wire == IBUF1)
+			return strarray_find(&model->str, "RIOI_IOB_IBUF1");
+		if (wire == O0)
+			return strarray_find(&model->str, "RIOI_IOB_O0");
+		if (wire == O1)
+			return strarray_find(&model->str, "RIOI_IOB_O1");
+	} else if (y == TOP_OUTER_IO) {
+		if (wire == IBUF0)
+			return strarray_find(&model->str, "TIOI_OUTER_IBUF0");
+		if (wire == IBUF1)
+			return strarray_find(&model->str, "TIOI_OUTER_IBUF1");
+		if (wire == O0)
+			return strarray_find(&model->str, "TIOI_OUTER_O0");
+		if (wire == O1)
+			return strarray_find(&model->str, "TIOI_OUTER_O1");
+	} else if (y == TOP_INNER_IO) {
+		if (wire == IBUF0)
+			return strarray_find(&model->str, "TIOI_INNER_IBUF0");
+		if (wire == IBUF1)
+			return strarray_find(&model->str, "TIOI_INNER_IBUF1");
+		if (wire == O0)
+			return strarray_find(&model->str, "TIOI_INNER_O0");
+		if (wire == O1)
+			return strarray_find(&model->str, "TIOI_INNER_O1");
+	} else if (y == model->y_height-BOT_INNER_IO) {
+		if (wire == IBUF0)
+			return strarray_find(&model->str, "BIOI_INNER_IBUF0");
+		if (wire == IBUF1)
+			return strarray_find(&model->str, "BIOI_INNER_IBUF1");
+		if (wire == O0)
+			return strarray_find(&model->str, "BIOI_INNER_O0");
+		if (wire == O1)
+			return strarray_find(&model->str, "BIOI_INNER_O1");
+	} else if (y == model->y_height-BOT_OUTER_IO) {
+		if (wire == IBUF0)
+			return strarray_find(&model->str, "BIOI_OUTER_IBUF0");
+		if (wire == IBUF1)
+			return strarray_find(&model->str, "BIOI_OUTER_IBUF1");
+		if (wire == O0)
+			return strarray_find(&model->str, "BIOI_OUTER_O0");
+		if (wire == O1)
+			return strarray_find(&model->str, "BIOI_OUTER_O1");
+	}
+	HERE();
+	return STRIDX_NO_ENTRY;
+}
+
 const char *fpga_wire2str(enum extra_wires wire)
 {
  	enum { NUM_BUFS = 8, BUF_SIZE = MAX_WIRENAME_LEN };

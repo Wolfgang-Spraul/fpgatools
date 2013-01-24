@@ -72,7 +72,7 @@ static int diff_printf(struct test_state* tstate)
 	int rc;
 
 	if (tstate->cmdline_count != -1
-	    && tstate->next_diff_counter >= tstate->cmdline_skip + tstate->cmdline_count + 1) {
+	    && tstate->next_diff_counter >= tstate->cmdline_skip + tstate->cmdline_count) {
 		printf("\nO Finished %i tests.\n", tstate->cmdline_count);
 		exit(0);
 	}
@@ -709,10 +709,10 @@ fail:
 static int test_iologic_switches2(struct test_state* tstate, int iob_y, int iob_x, int iob_type_idx)
 {
 	struct fpga_device* iob_dev;
-	struct switch_to_yx switch_to;
-	struct sw_chain chain;
+	struct sw_conns iob_conns;
+	struct sw_chain iologic_chain;
 	net_idx_t net_idx;
-	int i, from_to, rc;
+	int pin_i, from_to, rc;
 
 	rc = fdev_set_required_pins(tstate->model, iob_y, iob_x, DEV_IOB, iob_type_idx);
 	if (rc) FAIL(rc);
@@ -721,68 +721,71 @@ static int test_iologic_switches2(struct test_state* tstate, int iob_y, int iob_
 	iob_dev = fdev_p(tstate->model, iob_y, iob_x, DEV_IOB, iob_type_idx);
 	if (!iob_dev) FAIL(EINVAL);
 
-	for (i = 0; i < iob_dev->pinw_req_total; i++) {
-		from_to = i >= iob_dev->pinw_req_in ? SW_FROM : SW_TO;
+	for (pin_i = 0; pin_i < iob_dev->pinw_req_total; pin_i++) {
+		from_to = pin_i >= iob_dev->pinw_req_in ? SW_FROM : SW_TO;
 
-		// determine switch in iob to reach iologic tile
-		switch_to.yx_req = YX_DEV_ILOGIC;
-		switch_to.flags = SWTO_YX_DEF;
-		switch_to.model = tstate->model;
-		switch_to.y = iob_y;
-		switch_to.x = iob_x;
-		switch_to.start_switch = iob_dev->pinw[iob_dev->pinw_req_for_cfg[i]];
-		switch_to.from_to = from_to;
-		switch_to.exclusive_net = NO_NET;
-		rc = fpga_switch_to_yx(&switch_to);
-		if (rc) FAIL(rc);
-		if (tstate->dry_run)
-			printf_switch_to_yx_result(&switch_to);
-	
-		if (construct_sw_chain(&chain, tstate->model, switch_to.dest_y,
-			switch_to.dest_x, switch_to.dest_connpt, from_to,
-			/*max_depth*/ -1, NO_NET, /*block_list*/ 0, /*block_list_len*/ 0))
-			FAIL(EINVAL);
-		while (fpga_switch_chain(&chain) != NO_CONN) {
-	
-			if (tstate->dry_run)
-				printf("sw %s\n", fmt_swset(tstate->model,
-					switch_to.dest_y, switch_to.dest_x,
-					&chain.set, from_to));
-	
-			// new net
-			rc = fnet_new(tstate->model, &net_idx);
-			if (rc) FAIL(rc);
-	
-			// add iob port
-			rc = fnet_add_port(tstate->model, net_idx, iob_y, iob_x,
-				DEV_IOB, iob_type_idx, IOB_IN_O);
-			if (rc) FAIL(rc);
-	
-			// add switch in iob tile
-			rc = fnet_add_sw(tstate->model, net_idx, switch_to.y,
-				switch_to.x, switch_to.set.sw, switch_to.set.len);
-			if (rc) FAIL(rc);
-	
-			// add all but last switch in set
-			if (chain.set.len > 1) {
-				rc = fnet_add_sw(tstate->model, net_idx, switch_to.dest_y,
-					switch_to.dest_x, chain.set.sw, chain.set.len-1);
-				if (rc) FAIL(rc);
+		construct_sw_conns(&iob_conns, tstate->model, iob_y, iob_x,
+			iob_dev->pinw[iob_dev->pinw_req_for_cfg[pin_i]],
+			from_to, SW_SET_SIZE, NO_NET);
+		RC_CHECK(tstate->model);
+		while (fpga_switch_conns(&iob_conns) != NO_CONN) {
+			if (!is_atyx(YX_DEV_ILOGIC, tstate->model, iob_conns.dest_y, iob_conns.dest_x))
+				continue;
+			if (tstate->dry_run) {
+				printf(" sw %s conn y%i x%i %s\n",
+					fmt_swset(tstate->model, iob_y, iob_x,
+						&iob_conns.chain.set, from_to),
+					iob_conns.dest_y, iob_conns.dest_x,
+					strarray_lookup(&tstate->model->str, iob_conns.dest_str_i));
 			}
-			rc = diff_printf(tstate);
-			if (rc) FAIL(rc);
+
+			if (construct_sw_chain(&iologic_chain, tstate->model, iob_conns.dest_y,
+				iob_conns.dest_x, iob_conns.dest_str_i, from_to,
+				/*max_depth*/ -1, NO_NET, /*block_list*/ 0, /*block_list_len*/ 0))
+				FAIL(EINVAL);
+			while (fpga_switch_chain(&iologic_chain) != NO_CONN) {
 	
-			// add last switch
-			rc = fnet_add_sw(tstate->model, net_idx, switch_to.dest_y,
-				switch_to.dest_x, &chain.set.sw[chain.set.len-1], 1);
-			if (rc) FAIL(rc);
+				if (tstate->dry_run)
+					printf("sw %s\n", fmt_swset(tstate->model,
+						iologic_chain.y, iologic_chain.x,
+						&iologic_chain.set, iologic_chain.from_to));
 	
-			rc = diff_printf(tstate);
-			if (rc) FAIL(rc);
+				// new net
+				rc = fnet_new(tstate->model, &net_idx);
+				if (rc) FAIL(rc);
 	
-			fnet_delete(tstate->model, net_idx);
+				// add iob port
+				rc = fnet_add_port(tstate->model, net_idx, iob_y, iob_x,
+					DEV_IOB, iob_type_idx, IOB_IN_O);
+				if (rc) FAIL(rc);
+	
+				// add switch in iob tile
+				rc = fnet_add_sw(tstate->model, net_idx, iob_y,
+					iob_x, iob_conns.chain.set.sw, iob_conns.chain.set.len);
+				if (rc) FAIL(rc);
+	
+				// add all but last switch in set
+				if (iologic_chain.set.len > 1) {
+					rc = fnet_add_sw(tstate->model, net_idx, iologic_chain.y,
+						iologic_chain.x, iologic_chain.set.sw, iologic_chain.set.len-1);
+					if (rc) FAIL(rc);
+				}
+				rc = diff_printf(tstate);
+				if (rc) FAIL(rc);
+	
+				// add last switch
+				rc = fnet_add_sw(tstate->model, net_idx, iologic_chain.y,
+					iologic_chain.x, &iologic_chain.set.sw[iologic_chain.set.len-1], 1);
+				if (rc) FAIL(rc);
+	
+				rc = diff_printf(tstate);
+				if (rc) FAIL(rc);
+	
+				fnet_delete(tstate->model, net_idx);
+			}
+			destruct_sw_chain(&iologic_chain);
 		}
-		destruct_sw_chain(&chain);
+		destruct_sw_conns(&iob_conns);
 	}
 	return 0;
 fail:
@@ -791,29 +794,70 @@ fail:
 
 static int test_iologic_switches(struct test_state* tstate)
 {
-	char iob_name[32];
-	int iob_y, iob_x, iob_type_idx, i, rc;
+	enum { MAX_IOBS_UNDER_TEST = 16 };
+	int iob_y[MAX_IOBS_UNDER_TEST], iob_x[MAX_IOBS_UNDER_TEST];
+	int iob_type_idx[MAX_IOBS_UNDER_TEST], iob_pin_i[MAX_IOBS_UNDER_TEST];
+	int num_iobs_under_test, test_input;
+	int bank_i, pin_i, bank_max, cur_bank, i, rc;
 
-	for (i = 45; i <= 48; i++) {
-		snprintf(iob_name, sizeof(iob_name), "P%i", i);
+	//
+	// determine IOBs under test
+	//
 
-		// input IOB
-		rc = fpga_find_iob(tstate->model, iob_name, &iob_y, &iob_x, &iob_type_idx);
-		if (rc) FAIL(rc);
-		rc = fdev_iob_input(tstate->model, iob_y, iob_x, iob_type_idx, IO_LVCMOS33);
-		if (rc) FAIL(rc);
-		rc = test_iologic_switches2(tstate, iob_y, iob_x, iob_type_idx);
-		if (rc) FAIL(rc);
-		fdev_delete(tstate->model, iob_y, iob_x, DEV_IOB, iob_type_idx);
+	num_iobs_under_test = 0;
+	for (cur_bank = 0; cur_bank <= 3; cur_bank++) {
+		// bank0: top, take 4 (2 leading to outer, 2 to inner iologic tiles)
+		// bank1: right, take 2
+		// bank2: bottom, take 4 (2 leading to outer, 2 to inner iologic tiles)
+		// bank3: left, take 2
+		bank_max = (!cur_bank || cur_bank == 2) ? 4 : 2;
+		bank_i = 0;
+		for (pin_i = 0; pin_i < tstate->model->pkg->num_pins; pin_i++) {
+			if (tstate->model->pkg->pin[pin_i].bank != cur_bank
+			    || !tstate->model->pkg->pin[pin_i].pair)
+				continue;
 
-		// output IOB
-		rc = fpga_find_iob(tstate->model, iob_name, &iob_y, &iob_x, &iob_type_idx);
-		if (rc) FAIL(rc);
-		rc = fdev_iob_output(tstate->model, iob_y, iob_x, iob_type_idx, IO_LVCMOS33);
-		if (rc) FAIL(rc);
-		rc = test_iologic_switches2(tstate, iob_y, iob_x, iob_type_idx);
-		if (rc) FAIL(rc);
-		fdev_delete(tstate->model, iob_y, iob_x, DEV_IOB, iob_type_idx);
+			rc = fpga_find_iob(tstate->model,
+				tstate->model->pkg->pin[pin_i].name,
+				&iob_y[num_iobs_under_test],
+				&iob_x[num_iobs_under_test],
+				&iob_type_idx[num_iobs_under_test]);
+			if (rc) FAIL(rc);
+			iob_pin_i[num_iobs_under_test] = pin_i;
+			num_iobs_under_test++;
+			if (++bank_i >= bank_max)
+				break;
+		}
+	}
+
+	for (test_input = 1;;) {
+		for (i = 0; i < num_iobs_under_test; i++) {
+			if (!i || tstate->model->pkg->pin[iob_pin_i[i-1]].bank
+					!= tstate->model->pkg->pin[iob_pin_i[i]].bank)
+				bank_i = 0;
+			printf("\nO test %i: IOB %s input - bank %i (#%i) pair %i pos %i "
+				"bufio2 %s desc %s y%i x%i type_idx %i\n",
+				tstate->next_diff_counter,
+				tstate->model->pkg->pin[iob_pin_i[i]].name,
+				tstate->model->pkg->pin[iob_pin_i[i]].bank,
+				bank_i,
+				tstate->model->pkg->pin[iob_pin_i[i]].pair,
+				tstate->model->pkg->pin[iob_pin_i[i]].pos_side,
+				tstate->model->pkg->pin[iob_pin_i[i]].bufio2,
+				tstate->model->pkg->pin[iob_pin_i[i]].description,
+				iob_y[i], iob_x[i], iob_type_idx[i]);
+			bank_i++;
+	
+			rc = test_input ?
+				fdev_iob_input(tstate->model, iob_y[i], iob_x[i], iob_type_idx[i], IO_LVCMOS33)
+				: fdev_iob_output(tstate->model, iob_y[i], iob_x[i], iob_type_idx[i], IO_LVCMOS33);
+			if (rc) FAIL(rc);
+			rc = test_iologic_switches2(tstate, iob_y[i], iob_x[i], iob_type_idx[i]);
+			if (rc) FAIL(rc);
+			fdev_delete(tstate->model, iob_y[i], iob_x[i], DEV_IOB, iob_type_idx[i]);
+		}
+		if (!test_input) break;
+		test_input = 0;
 	}
 	return 0;
 fail:
@@ -828,6 +872,8 @@ static int test_iob_config(struct test_state* tstate)
 	int drive_strengths[] = {2, 4, 6, 8, 12, 16, 24};
 
 	tstate->diff_to_null = 1;
+
+	// todo: has to change to model->pkg names to work with ftg256...
 
 	// P45 is an IOBS
 	rc = fpga_find_iob(tstate->model, "P45", &iob_y, &iob_x, &iob_type_idx);
@@ -2005,7 +2051,7 @@ int main(int argc, char** argv)
 	MEMUSAGE();
 
 	printf("O Building memory model...\n");
-	if ((rc = fpga_build_model(&model, XC6SLX9, TQG144)))
+	if ((rc = fpga_build_model(&model, XC6SLX9, FTG256)))
 		goto fail;
 	printf("O Done\n");
 	TIME_AND_MEM();
