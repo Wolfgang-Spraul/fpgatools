@@ -941,10 +941,6 @@ struct sw_mip_src
 	int from_w[6];
 };
 
-// returns:
-// 1 for the active side of a bidir switch, where the bits reside
-// 0 for a unidirectional switch
-// -1 for the passive side of a bidir switch, where no bits reside
 static int bidir_check(int sw_to, int sw_from)
 {
 	// the first member of bidir switch pairs is where the bits reside
@@ -964,10 +960,8 @@ static int bidir_check(int sw_to, int sw_from)
 	// bidirectional switches are ignored on one side, and
 	// marked as bidir on the other side
 	for (i = 0; i < sizeof(bidir)/sizeof(*bidir)/2; i++) {
-		if (sw_from == bidir[i*2] && sw_to == bidir[i*2+1])
-			// nothing to do where no bits reside
-			return -1;
-		if (sw_from == bidir[i*2+1] && sw_to == bidir[i*2])
+		if ((sw_from == bidir[i*2] && sw_to == bidir[i*2+1])
+		    || (sw_from == bidir[i*2+1] && sw_to == bidir[i*2]))
 			return 1;
 	}
 	return 0;
@@ -1025,37 +1019,31 @@ static enum extra_wires clean_S0N3(enum extra_wires wire)
 static int src_to_bitpos(struct xc6_routing_bitpos* bitpos, int* cur_el, int max_el,
 	const struct sw_mip_src* src, int src_len)
 {
-	int i, j, bidir, rc;
+	int i, j, rc;
 
 	for (i = 0; i < src_len; i++) {
 		for (j = 0; j < sizeof(src->from_w)/sizeof(src->from_w[0]); j++) {
 			if (src[i].from_w[j] == NO_WIRE) continue;
 
-			bidir = bidir_check(src[i].m0_sw_to, src[i].from_w[j]);
-			if (bidir != -1) {
-				if (*cur_el >= max_el) FAIL(EINVAL);
-				bitpos[*cur_el].from = clean_S0N3(src[i].from_w[j]);
-				bitpos[*cur_el].to = clean_S0N3(src[i].m0_sw_to);
-				bitpos[*cur_el].bidir = bidir;
-				bitpos[*cur_el].minor = src[i].minor;
-				bitpos[*cur_el].two_bits_o = src[i].m0_two_bits_o;
-				bitpos[*cur_el].two_bits_val = src[i].m0_two_bits_val;
-				bitpos[*cur_el].one_bit_o = src[i].m0_one_bit_start + j*2;
-				(*cur_el)++;
-			}
+			if (*cur_el >= max_el) FAIL(EINVAL);
+			bitpos[*cur_el].from = clean_S0N3(src[i].from_w[j]);
+			bitpos[*cur_el].to = clean_S0N3(src[i].m0_sw_to);
+			bitpos[*cur_el].bidir = bidir_check(src[i].m0_sw_to, src[i].from_w[j]);
+			bitpos[*cur_el].minor = src[i].minor;
+			bitpos[*cur_el].two_bits_o = src[i].m0_two_bits_o;
+			bitpos[*cur_el].two_bits_val = src[i].m0_two_bits_val;
+			bitpos[*cur_el].one_bit_o = src[i].m0_one_bit_start + j*2;
+			(*cur_el)++;
 
-			bidir = bidir_check(src[i].m1_sw_to, src[i].from_w[j]);
-			if (bidir != -1) {
-				if (*cur_el >= max_el) FAIL(EINVAL);
-				bitpos[*cur_el].from = clean_S0N3(src[i].from_w[j]);
-				bitpos[*cur_el].to = clean_S0N3(src[i].m1_sw_to);
-				bitpos[*cur_el].bidir = bidir;
-				bitpos[*cur_el].minor = src[i].minor;
-				bitpos[*cur_el].two_bits_o = src[i].m1_two_bits_o;
-				bitpos[*cur_el].two_bits_val = src[i].m1_two_bits_val;
-				bitpos[*cur_el].one_bit_o = src[i].m1_one_bit_start + j*2;
-				(*cur_el)++;
-			}
+			if (*cur_el >= max_el) FAIL(EINVAL);
+			bitpos[*cur_el].from = clean_S0N3(src[i].from_w[j]);
+			bitpos[*cur_el].to = clean_S0N3(src[i].m1_sw_to);
+			bitpos[*cur_el].bidir = bidir_check(src[i].m1_sw_to, src[i].from_w[j]);
+			bitpos[*cur_el].minor = src[i].minor;
+			bitpos[*cur_el].two_bits_o = src[i].m1_two_bits_o;
+			bitpos[*cur_el].two_bits_val = src[i].m1_two_bits_val;
+			bitpos[*cur_el].one_bit_o = src[i].m1_one_bit_start + j*2;
+			(*cur_el)++;
 		}
 	}
 	return 0;
@@ -1497,7 +1485,7 @@ int get_xc6_routing_bitpos(struct xc6_routing_bitpos** bitpos, int* num_bitpos)
 		{20, SR0, 8, 2, 10, .from_w =
 			{GCLK14, GCLK15, LW+(LI_DI|LD1), LW+(LI_BX|LD1), LW+LI_BX, FAN_B}},
 		{20, SR0, 8, 1, 10, .from_w = {DW+W_SR1*4+2, DW+W_ER1*4+2, DW+W_NR1*4+2,
-			VCC_WIRE, NO_WIRE, DW+W_WR1*4+2}},
+			VCC_WIRE, NO_WIRE /*is this GND?*/, DW+W_WR1*4+2}},
 
 		{20, CLK0, 16, 3, 18, .from_w =
 			{GCLK0, GCLK1, GCLK2, GCLK5, GCLK4, GCLK3}},
@@ -1522,12 +1510,12 @@ int get_xc6_routing_bitpos(struct xc6_routing_bitpos** bitpos, int* num_bitpos)
 		{20, GFAN0, 54, 2, 48, .from_w =
 			{DW+W_WR1*4+1, GND_WIRE, VCC_WIRE, DW+W_NR1*4+1, DW+W_ER1*4+1, DW+W_SR1*4+1}},
 		{20, GFAN0, 54, 1, 48, .from_w =
-			{LW+(LI_CE|LD1), NO_WIRE, NO_WIRE, LW+(LI_CI|LD1), GCLK7, GCLK6}},
+			{LW+(LI_CE|LD1), LW+(LI_AX|LD1), LW+LI_AX, LW+(LI_CI|LD1), GCLK7, GCLK6}},
 
 		{20, GFAN1, 56, 3, 58, .from_w =
 			{GCLK0, GCLK1, GCLK4, GCLK5, GCLK2, GCLK3}},
 		{20, GFAN1, 56, 2, 58, .from_w =
-			{GCLK6, GCLK7, LW+(LI_AX|LD1), LW+LI_AX, NO_WIRE, NO_WIRE}},
+			{GCLK6, GCLK7, LW+(LI_AX|LD1), LW+LI_AX, LW+(LI_CI|LD1), LW+(LI_CE|LD1)}},
 		{20, GFAN1, 56, 1, 58, .from_w =
 			{DW+W_SR1*4+1, DW+W_ER1*4+1, GND_WIRE, VCC_WIRE, DW+W_NR1*4+1, DW+W_WR1*4+1}}};
 
@@ -1538,7 +1526,7 @@ int get_xc6_routing_bitpos(struct xc6_routing_bitpos** bitpos, int* num_bitpos)
 			if (*num_bitpos >= MAX_SWITCHBOX_SIZE) FAIL(EINVAL);
 			(*bitpos)[*num_bitpos].from = src[i].from_w[j];
 			(*bitpos)[*num_bitpos].to = src[i].m0_sw_to;
-			(*bitpos)[*num_bitpos].bidir = 0;
+			(*bitpos)[*num_bitpos].bidir = bidir_check(src[i].from_w[j], src[i].m0_sw_to);
 			(*bitpos)[*num_bitpos].minor = 20;
 			(*bitpos)[*num_bitpos].two_bits_o = src[i].m0_two_bits_o;
 			(*bitpos)[*num_bitpos].two_bits_val = src[i].m0_two_bits_val;

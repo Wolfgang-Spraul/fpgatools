@@ -72,7 +72,7 @@ static int diff_printf(struct test_state* tstate)
 	int rc;
 
 	if (tstate->cmdline_count != -1
-	    && tstate->next_diff_counter >= tstate->cmdline_skip + tstate->cmdline_count) {
+	    && tstate->next_diff_counter > tstate->cmdline_skip + tstate->cmdline_count) {
 		printf("\nO Finished %i tests.\n", tstate->cmdline_count);
 		exit(0);
 	}
@@ -80,8 +80,10 @@ static int diff_printf(struct test_state* tstate)
 		printf("O Dry run, skipping diff %i.\n", tstate->next_diff_counter++);
 		return 0;
 	}
-	if (tstate->cmdline_skip >= tstate->next_diff_counter) {
-		printf("O Skipping diff %i.\n", tstate->next_diff_counter++);
+	if (tstate->next_diff_counter <= tstate->cmdline_skip) {
+		tstate->next_diff_counter++;
+		if (tstate->next_diff_counter == tstate->cmdline_skip)
+			printf("O Skipping diffs 1-%i.\n", tstate->next_diff_counter);
 		return 0;
 	}
 

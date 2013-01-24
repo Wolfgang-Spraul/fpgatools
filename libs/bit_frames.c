@@ -1594,12 +1594,20 @@ static int extract_routing_switches(struct extract_state* es, int y, int x)
 		from_str = fpga_wire2str_yx(es->model, es->model->sw_bitpos[i].from, y, x);
 		to_str = fpga_wire2str_yx(es->model, es->model->sw_bitpos[i].to, y, x);
 #ifdef DBG_EXTRACT_ROUTING_SW
-		fprintf(stderr, "#D %s:%i y%i x%i from %i (%s) to %i (%s)\n",
+		fprintf(stderr, "#D %s:%i y%i x%i (r%i ma%i v64_%02i mi%i) "
+			"from %s to %s bidir %i "
+			"two_bits_o %i two_bits_val %i one_bit_o %i\n",
 			__FILE__, __LINE__, y, x,
-			es->model->sw_bitpos[i].from,
+			which_row(y, es->model),
+			es->model->x_major[x],
+			regular_row_pos(y, es->model),
+			es->model->sw_bitpos[i].minor,
 			strarray_lookup(&es->model->str, from_str),
-			es->model->sw_bitpos[i].to,
-			strarray_lookup(&es->model->str, to_str));
+			strarray_lookup(&es->model->str, to_str),
+			es->model->sw_bitpos[i].bidir,
+			es->model->sw_bitpos[i].two_bits_o,
+			es->model->sw_bitpos[i].two_bits_val,
+			es->model->sw_bitpos[i].one_bit_o);
 #endif
 		sw_idx = fpga_switch_lookup(es->model, y, x, from_str, to_str);
 		if (sw_idx == NO_SWITCH) RC_FAIL(es->model, EINVAL);
