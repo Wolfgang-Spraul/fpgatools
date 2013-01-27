@@ -103,6 +103,9 @@ int fdev_iob_drive(struct fpga_model* model, int y, int x,
 int fdev_bufgmux(struct fpga_model* model, int y, int x,
 	int type_idx, int clk, int disable_attr, int s_inv);
 
+int fdev_bscan(struct fpga_model *model, int y, int x, int type_idx,
+	int jtag_chain, int jtag_test);
+
 int fdev_set_required_pins(struct fpga_model* model, int y, int x, int type,
 	int type_idx);
 void fdev_print_required_pins(struct fpga_model* model, int y, int x,

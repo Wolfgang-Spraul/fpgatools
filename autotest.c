@@ -1795,8 +1795,27 @@ static int test_dcm_config(struct test_state* tstate)
 
 static int test_bscan_config(struct test_state* tstate)
 {
-// todo: not implemented
+	int bscan_y, bscan_x, bscan_type_idx, enum_i, rc;
+	int jtag_chain_i, jtag_test;
+
+	enum_i = 0;
+	while (!(rc = fdev_enum(tstate->model, DEV_BSCAN, enum_i++, &bscan_y,
+			&bscan_x, &bscan_type_idx)) && bscan_y != -1) {
+		for (jtag_chain_i = 1; jtag_chain_i <= 4; jtag_chain_i++) {
+			for (jtag_test = 0; jtag_test <= 1; jtag_test++) {
+				rc = fdev_bscan(tstate->model, bscan_y, bscan_x, bscan_type_idx,
+					jtag_chain_i, jtag_test ? BSCAN_JTAG_TEST_Y : BSCAN_JTAG_TEST_N);
+				if (rc) FAIL(rc);
+				if ((rc = diff_printf(tstate))) FAIL(rc);
+				fdev_delete(tstate->model, bscan_y, bscan_x, DEV_BSCAN, bscan_type_idx);
+				if ((rc = diff_printf(tstate))) FAIL(rc);
+			}
+		}
+	}
+	if (rc) FAIL(rc);
 	return 0;
+fail:
+	return rc;
 }
 
 static int test_clock_routing(struct test_state* tstate)

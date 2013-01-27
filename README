@@ -63,8 +63,8 @@ Design Principles
 TODO (as of January, 2013)
 
 short-term (1 month):
+* support distributed and block memory
 * example: counter (including clock, jtag)
-* support xc6slx9-ftg256
 
 mid-term (6 months):
 * example: j1 soc

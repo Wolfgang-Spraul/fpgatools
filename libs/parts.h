@@ -450,3 +450,11 @@ void xc6_lut_bitmap(int lut_pos, int (*map)[64], int num_bits);
 
 #define XC6_TYPE2_GCLK_REG_SW	 2 // bit 2 in 1st word
 #define XC6_CENTER_GCLK_MINOR	25
+
+//
+// bscan
+//
+
+#define XC6_BSCAN_MINOR 22
+#define XC6_BSCAN_WORD 1
+#define XC6_BSCAN_TEST_PIN 4

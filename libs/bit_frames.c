@@ -2217,6 +2217,80 @@ static void destruct_extract_state(struct extract_state *es)
 	es->yx_pos = 0;
 }
 
+static int extract_bscan(struct extract_state *es)
+{
+	int enum_i, bscan_y, bscan_x, bscan_type_idx;
+	int jtag_chain, jtag_test, pinword;
+	uint8_t *u8_p;
+	struct fpga_device *dev;
+
+	RC_CHECK(es->model);
+	enum_i = 0;
+	while (!fdev_enum(es->model, DEV_BSCAN, enum_i++, &bscan_y,
+			&bscan_x, &bscan_type_idx) && bscan_y != -1) {
+
+		u8_p = get_first_minor(es->bits, which_row(bscan_y, es->model), es->model->x_major[bscan_x]);
+		RC_ASSERT(es->model, u8_p);
+		pinword = frame_get_pinword(u8_p + XC6_BSCAN_MINOR*FRAME_SIZE + XC6_BSCAN_WORD*XC6_WORD_BYTES);
+
+		if (!(pinword & (1 << ((bscan_y - TOP_IO_TILES)*2 + bscan_type_idx))))
+			continue;
+		pinword &= ~(1 << ((bscan_y - TOP_IO_TILES)*2 + bscan_type_idx));
+
+		jtag_chain = 1;
+		jtag_test = BSCAN_JTAG_TEST_N;
+		if (bscan_y == TOP_IO_TILES && !bscan_type_idx
+		    && (pinword & (1 << XC6_BSCAN_TEST_PIN))) {
+			pinword &= ~(1 << XC6_BSCAN_TEST_PIN);
+			jtag_test = BSCAN_JTAG_TEST_Y;
+		}
+
+		if (pinword) {
+			HERE();
+			continue;
+		}
+		dev = fdev_p(es->model, bscan_y, bscan_x, DEV_BSCAN, bscan_type_idx);
+		RC_ASSERT(es->model, dev);
+		if (dev->instantiated) {
+			HERE();
+			continue;
+		}
+		fdev_bscan(es->model, bscan_y, bscan_x, bscan_type_idx,
+			jtag_chain, jtag_test);
+		RC_CHECK(es->model);
+		frame_set_pinword(u8_p + XC6_BSCAN_MINOR*FRAME_SIZE + XC6_BSCAN_WORD*XC6_WORD_BYTES, 0);
+	}
+	RC_RETURN(es->model);
+}
+
+static int write_bscan(struct fpga_bits *bits, struct fpga_model *model)
+{
+	int enum_i, bscan_y, bscan_x, bscan_type_idx, pinword;
+	struct fpga_device *dev;
+	uint8_t *u8_p;
+
+	RC_CHECK(model);
+	enum_i = 0;
+	while (!fdev_enum(model, DEV_BSCAN, enum_i++, &bscan_y,
+			&bscan_x, &bscan_type_idx) && bscan_y != -1) {
+		dev = fdev_p(model, bscan_y, bscan_x, DEV_BSCAN, bscan_type_idx);
+		RC_ASSERT(model, dev);
+		if (!dev->instantiated) continue;
+
+		u8_p = get_first_minor(bits, which_row(bscan_y, model), model->x_major[bscan_x]);
+		RC_ASSERT(model, u8_p);
+		pinword = frame_get_pinword(u8_p + XC6_BSCAN_MINOR*FRAME_SIZE + XC6_BSCAN_WORD*XC6_WORD_BYTES);
+
+		if (bscan_y == TOP_IO_TILES && !bscan_type_idx
+		    && dev->u.bscan.jtag_test == BSCAN_JTAG_TEST_Y)
+			pinword |= 1 << XC6_BSCAN_TEST_PIN;
+		pinword |= 1 << ((bscan_y - TOP_IO_TILES)*2 + bscan_type_idx);
+
+		frame_set_pinword(u8_p + XC6_BSCAN_MINOR*FRAME_SIZE + XC6_BSCAN_WORD*XC6_WORD_BYTES, pinword);
+	}
+	RC_RETURN(model);
+}
+
 int extract_model(struct fpga_model* model, struct fpga_bits* bits)
 {
 	struct extract_state es;
@@ -2240,6 +2314,8 @@ int extract_model(struct fpga_model* model, struct fpga_bits* bits)
 	rc = extract_type2(&es);
 	if (rc) { RC_SET(model, rc); goto out; }
 	rc = extract_logic(&es);
+	if (rc) { RC_SET(model, rc); goto out; }
+	rc = extract_bscan(&es);
 	if (rc) { RC_SET(model, rc); goto out; }
 
 	// turn switches into nets
@@ -3042,7 +3118,7 @@ static int write_logic(struct fpga_bits* bits, struct fpga_model* model)
 	RC_RETURN(model);
 }
 
-int write_model(struct fpga_bits* bits, struct fpga_model* model)
+int write_model(struct fpga_bits *bits, struct fpga_model *model)
 {
 	int i;
 
@@ -3053,6 +3129,7 @@ int write_model(struct fpga_bits* bits, struct fpga_model* model)
 	write_switches(bits, model);
 	write_type2(bits, model);
 	write_logic(bits, model);
+	write_bscan(bits, model);
 
 	RC_RETURN(model);
 }

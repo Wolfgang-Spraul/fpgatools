@@ -80,21 +80,24 @@ const char *fpga_iob_sitename(struct fpga_model *model,
 static void enum_x(struct fpga_model *model, enum fpgadev_type type,
 	int enum_i, int *y, int x, int *type_idx)
 {
-	int type_count, i, _y;
+	int tile_type_count, total_type_count, i, _y;
 	struct fpga_tile* tile;
 
-	type_count = 0;
+	total_type_count = 0;
+	tile_type_count = 0;
 	for (_y = 0; _y < model->y_height; _y++) {
 		tile = YX_TILE(model, _y, x);
+		total_type_count += tile_type_count;
+		tile_type_count = 0;
 		for (i = 0; i < tile->num_devs; i++) {
 			if (tile->devs[i].type != type)
 				continue;
-			if (type_count == enum_i) {
+			if (total_type_count + tile_type_count == enum_i) {
 				*y = _y;
-				*type_idx = type_count;
+				*type_idx = tile_type_count;
 				return;
 			}
-			type_count++;
+			tile_type_count++;
 		}
 	}
 	*y = -1;
@@ -106,6 +109,7 @@ int fdev_enum(struct fpga_model* model, enum fpgadev_type type, int enum_i,
 	struct fpga_tile* tile;
 	int i, j, type_count;
 
+	*y = -1;
 	RC_CHECK(model);
 	switch (type) {
 		case DEV_BUFGMUX:
@@ -123,7 +127,6 @@ int fdev_enum(struct fpga_model* model, enum fpgadev_type type, int enum_i,
 				}
 				type_count++;
 			}
-			*y = -1;
 			RC_RETURN(model);
 		case DEV_BUFIO: {
 			int yx_pairs[] = {
@@ -147,22 +150,20 @@ int fdev_enum(struct fpga_model* model, enum fpgadev_type type, int enum_i,
 					type_count++;
 				}
 			}
-			*y = -1;
 			RC_RETURN(model);
 		}
 		case DEV_PLL:
 		case DEV_DCM:
-			enum_x(model, type, enum_i, y, model->center_x
-				- CENTER_CMTPLL_O, type_idx);
+			*x = model->center_x - CENTER_CMTPLL_O;
+			enum_x(model, type, enum_i, y, *x, type_idx);
 			RC_RETURN(model);
 		case DEV_BSCAN:
-			enum_x(model, type, enum_i, y, model->x_width
-				- RIGHT_IO_DEVS_O, type_idx);
+			*x = model->x_width - RIGHT_IO_DEVS_O;
+			enum_x(model, type, enum_i, y, *x, type_idx);
 			RC_RETURN(model);
 		default: break;
 	}
 	HERE();
-	*y = -1;
 	RC_RETURN(model);
 }
 
@@ -840,25 +841,38 @@ fail:
 	return rc;
 }
 
-int fdev_bufgmux(struct fpga_model* model, int y, int x,
+int fdev_bufgmux(struct fpga_model *model, int y, int x,
 	int type_idx, int clk, int disable_attr, int s_inv)
 {
-	struct fpga_device* dev;
+	struct fpga_device *dev;
 	int rc;
 
 	RC_CHECK(model);
 	dev = fdev_p(model, y, x, DEV_BUFGMUX, type_idx);
-	if (!dev) FAIL(EINVAL);
+	RC_ASSERT(model, dev);
 	rc = reset_required_pins(dev);
-	if (rc) FAIL(rc);
+	if (rc) RC_FAIL(model, rc);
 
 	dev->u.bufgmux.clk = clk;
 	dev->u.bufgmux.disable_attr = disable_attr;
 	dev->u.bufgmux.s_inv = s_inv;
 	dev->instantiated = 1;
-	return 0;
-fail:
-	return rc;
+	RC_RETURN(model);
+}
+
+int fdev_bscan(struct fpga_model *model, int y, int x, int type_idx,
+	int jtag_chain, int jtag_test)
+{
+	struct fpga_device *dev;
+
+	RC_CHECK(model);
+	dev = fdev_p(model, y, x, DEV_BSCAN, type_idx);
+	RC_ASSERT(model, dev);
+
+	dev->u.bscan.jtag_chain = jtag_chain;
+	dev->u.bscan.jtag_test = jtag_test;
+	dev->instantiated = 1;
+	RC_RETURN(model);
 }
 
 static void scan_lut_digits(const char* s, int* digits)
