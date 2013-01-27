@@ -1220,8 +1220,8 @@ static int extract_logic(struct extract_state* es)
 				rc = lut2str(lut_ML[LUT_A], l_col
 					  ? XC6_LMAP_XL_L_A : XC6_LMAP_XM_M_A,
 					lut5_used,
-					lut6_ml[LUT_A], &cfg_ml.a2d[LUT_A].lut6,
-					lut5_ml[LUT_A], &cfg_ml.a2d[LUT_A].lut5);
+					lut6_ml[LUT_A], &cfg_ml.a2d[LUT_A].lut6_str,
+					lut5_ml[LUT_A], &cfg_ml.a2d[LUT_A].lut5_str);
 				if (rc) FAIL(rc);
 			}
 			// ML-B
@@ -1245,8 +1245,8 @@ static int extract_logic(struct extract_state* es)
 				rc = lut2str(lut_ML[LUT_B], l_col
 					  ? XC6_LMAP_XL_L_B : XC6_LMAP_XM_M_B,
 					lut5_used,
-					lut6_ml[LUT_B], &cfg_ml.a2d[LUT_B].lut6,
-					lut5_ml[LUT_B], &cfg_ml.a2d[LUT_B].lut5);
+					lut6_ml[LUT_B], &cfg_ml.a2d[LUT_B].lut6_str,
+					lut5_ml[LUT_B], &cfg_ml.a2d[LUT_B].lut5_str);
 				if (rc) FAIL(rc);
 			}
 			// ML-C
@@ -1270,8 +1270,8 @@ static int extract_logic(struct extract_state* es)
 				rc = lut2str(lut_ML[LUT_C], l_col
 					  ? XC6_LMAP_XL_L_C : XC6_LMAP_XM_M_C,
 					lut5_used,
-					lut6_ml[LUT_C], &cfg_ml.a2d[LUT_C].lut6,
-					lut5_ml[LUT_C], &cfg_ml.a2d[LUT_C].lut5);
+					lut6_ml[LUT_C], &cfg_ml.a2d[LUT_C].lut6_str,
+					lut5_ml[LUT_C], &cfg_ml.a2d[LUT_C].lut5_str);
 				if (rc) FAIL(rc);
 			}
 			// ML-D
@@ -1295,8 +1295,8 @@ static int extract_logic(struct extract_state* es)
 				rc = lut2str(lut_ML[LUT_D], l_col
 					  ? XC6_LMAP_XL_L_D : XC6_LMAP_XM_M_D,
 					lut5_used,
-					lut6_ml[LUT_D], &cfg_ml.a2d[LUT_D].lut6,
-					lut5_ml[LUT_D], &cfg_ml.a2d[LUT_D].lut5);
+					lut6_ml[LUT_D], &cfg_ml.a2d[LUT_D].lut6_str,
+					lut5_ml[LUT_D], &cfg_ml.a2d[LUT_D].lut5_str);
 				if (rc) FAIL(rc);
 			}
 			// X-A
@@ -1309,8 +1309,8 @@ static int extract_logic(struct extract_state* es)
 				rc = lut2str(lut_X[LUT_A], l_col
 					  ? XC6_LMAP_XL_X_A : XC6_LMAP_XM_X_A,
 					lut5_used,
-					lut6_x[LUT_A], &cfg_x.a2d[LUT_A].lut6,
-					lut5_x[LUT_A], &cfg_x.a2d[LUT_A].lut5);
+					lut6_x[LUT_A], &cfg_x.a2d[LUT_A].lut6_str,
+					lut5_x[LUT_A], &cfg_x.a2d[LUT_A].lut5_str);
 				if (rc) FAIL(rc);
 			
 			}
@@ -1324,8 +1324,8 @@ static int extract_logic(struct extract_state* es)
 				rc = lut2str(lut_X[LUT_B], l_col
 					  ? XC6_LMAP_XL_X_B : XC6_LMAP_XM_X_B,
 					lut5_used,
-					lut6_x[LUT_B], &cfg_x.a2d[LUT_B].lut6,
-					lut5_x[LUT_B], &cfg_x.a2d[LUT_B].lut5);
+					lut6_x[LUT_B], &cfg_x.a2d[LUT_B].lut6_str,
+					lut5_x[LUT_B], &cfg_x.a2d[LUT_B].lut5_str);
 				if (rc) FAIL(rc);
 			
 			}
@@ -1339,8 +1339,8 @@ static int extract_logic(struct extract_state* es)
 				rc = lut2str(lut_X[LUT_C], l_col
 					  ? XC6_LMAP_XL_X_C : XC6_LMAP_XM_X_C,
 					lut5_used,
-					lut6_x[LUT_C], &cfg_x.a2d[LUT_C].lut6,
-					lut5_x[LUT_C], &cfg_x.a2d[LUT_C].lut5);
+					lut6_x[LUT_C], &cfg_x.a2d[LUT_C].lut6_str,
+					lut5_x[LUT_C], &cfg_x.a2d[LUT_C].lut5_str);
 				if (rc) FAIL(rc);
 			
 			}
@@ -1354,8 +1354,8 @@ static int extract_logic(struct extract_state* es)
 				rc = lut2str(lut_X[LUT_D], l_col
 					  ? XC6_LMAP_XL_X_D : XC6_LMAP_XM_X_D,
 					lut5_used,
-					lut6_x[LUT_D], &cfg_x.a2d[LUT_D].lut6,
-					lut5_x[LUT_D], &cfg_x.a2d[LUT_D].lut5);
+					lut6_x[LUT_D], &cfg_x.a2d[LUT_D].lut6_str,
+					lut5_x[LUT_D], &cfg_x.a2d[LUT_D].lut5_str);
 				if (rc) FAIL(rc);
 			
 			}
@@ -2765,24 +2765,24 @@ static int str2lut(uint64_t *lut, int lut_pos, const struct fpgadev_logic_a2d *a
 	int lut6_used, lut5_used, lut_map[64], rc;
 	uint64_t u64;
 
-	lut6_used = a2d->lut6 && a2d->lut6[0];
-	lut5_used = a2d->lut5 && a2d->lut5[0];
+	lut6_used = a2d->lut6_str && a2d->lut6_str[0];
+	lut5_used = a2d->lut5_str && a2d->lut5_str[0];
 	if (!lut6_used && !lut5_used)
 		return 0;
 
 	if (lut5_used) {
 		if (!lut6_used) u64 = 0;
 		else {
-			rc = bool_str2bits(a2d->lut6, &u64, 32);
+			rc = bool_str2bits(a2d->lut6_str, &u64, 32);
 			if (rc) FAIL(rc);
 			u64 <<= 32;
 		}
-		rc = bool_str2bits(a2d->lut5, &u64, 32);
+		rc = bool_str2bits(a2d->lut5_str, &u64, 32);
 		if (rc) FAIL(rc);
 		xc6_lut_bitmap(lut_pos, &lut_map, 32);
 	} else {
 		// lut6_used only
-		rc = bool_str2bits(a2d->lut6, &u64, 64);
+		rc = bool_str2bits(a2d->lut6_str, &u64, 64);
 		if (rc) FAIL(rc);
 		xc6_lut_bitmap(lut_pos, &lut_map, 64);
 	}

@@ -431,8 +431,8 @@ enum { PRECYINIT_0 = 1, PRECYINIT_1, PRECYINIT_AX };
 struct fpgadev_logic_a2d
 {
 	int out_used;
-	char* lut6;
-	char* lut5;
+	char* lut6_str;
+	char* lut5_str;
 	int ff_mux;	// O6, O5, X, F7(a/c), F8(b), MC31(d), CY, XOR
 	int ff_srinit;	// SRINIT0, SRINIT1 
 	int ff5_srinit; // SRINIT0, SRINIT1

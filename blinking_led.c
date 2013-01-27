@@ -100,20 +100,20 @@ int main(int argc, char** argv)
 		}
 		if (!cur_bit) { // first bit
 			logic_cfg.precyinit = PRECYINIT_0;
-			logic_cfg.a2d[LUT_A].lut6 = "(A6+~A6)*(~A5)";
-			logic_cfg.a2d[LUT_A].lut5 = "1";
+			logic_cfg.a2d[LUT_A].lut6_str = "(A6+~A6)*(~A5)";
+			logic_cfg.a2d[LUT_A].lut5_str = "1";
 			logic_cfg.a2d[LUT_A].cy0 = CY0_O5;
 			logic_cfg.a2d[LUT_A].ff = FF_FF;
 			logic_cfg.a2d[LUT_A].ff_mux = MUX_XOR;
 			logic_cfg.a2d[LUT_A].ff_srinit = FF_SRINIT0;
 		} else if (cur_bit == param_highest_bit) {
-			logic_cfg.a2d[cur_bit%4].lut6 = "A5";
+			logic_cfg.a2d[cur_bit%4].lut6_str = "A5";
 			logic_cfg.a2d[cur_bit%4].ff = FF_FF;
 			logic_cfg.a2d[cur_bit%4].ff_mux = MUX_XOR;
 			logic_cfg.a2d[cur_bit%4].ff_srinit = FF_SRINIT0;
 		} else {
-			logic_cfg.a2d[cur_bit%4].lut6 = "(A6+~A6)*(A5)";
-			logic_cfg.a2d[cur_bit%4].lut5 = "0";
+			logic_cfg.a2d[cur_bit%4].lut6_str = "(A6+~A6)*(A5)";
+			logic_cfg.a2d[cur_bit%4].lut5_str = "0";
 			logic_cfg.a2d[cur_bit%4].cy0 = CY0_O5;
 			logic_cfg.a2d[cur_bit%4].ff = FF_FF;
 			logic_cfg.a2d[cur_bit%4].ff_mux = MUX_XOR;
@@ -139,18 +139,18 @@ int main(int argc, char** argv)
 			fnet_add_port(&model, clock_net, cur_y, logic_x, DEV_LOGIC, logic_type_idx, LI_CLK);
 
 			// lut5 net (drive vcc into A6 to enable lut5)
-			if (logic_cfg.a2d[LUT_A].lut5
-			    || logic_cfg.a2d[LUT_B].lut5
-			    || logic_cfg.a2d[LUT_C].lut5
-			    || logic_cfg.a2d[LUT_D].lut5) {
+			if (logic_cfg.a2d[LUT_A].lut5_str
+			    || logic_cfg.a2d[LUT_B].lut5_str
+			    || logic_cfg.a2d[LUT_C].lut5_str
+			    || logic_cfg.a2d[LUT_D].lut5_str) {
 				fnet_new(&model, &net);
-				if (logic_cfg.a2d[LUT_A].lut5)
+				if (logic_cfg.a2d[LUT_A].lut5_str)
 					fnet_add_port(&model, net, cur_y, logic_x, DEV_LOGIC, logic_type_idx, LI_A6);
-				if (logic_cfg.a2d[LUT_B].lut5)
+				if (logic_cfg.a2d[LUT_B].lut5_str)
 					fnet_add_port(&model, net, cur_y, logic_x, DEV_LOGIC, logic_type_idx, LI_B6);
-				if (logic_cfg.a2d[LUT_C].lut5)
+				if (logic_cfg.a2d[LUT_C].lut5_str)
 					fnet_add_port(&model, net, cur_y, logic_x, DEV_LOGIC, logic_type_idx, LI_C6);
-				if (logic_cfg.a2d[LUT_D].lut5)
+				if (logic_cfg.a2d[LUT_D].lut5_str)
 					fnet_add_port(&model, net, cur_y, logic_x, DEV_LOGIC, logic_type_idx, LI_D6);
 				fnet_vcc_gnd(&model, net, /*is_vcc*/ 1);
 			}

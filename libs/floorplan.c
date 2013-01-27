@@ -327,12 +327,12 @@ static int printf_LOGIC(FILE* f, struct fpga_model* model,
 		}
 		cfg = &tile->devs[i].u.logic;
 		for (j = LUT_D; j >= LUT_A; j--) {
-			if (cfg->a2d[j].lut6 && cfg->a2d[j].lut6[0])
+			if (cfg->a2d[j].lut6_str && cfg->a2d[j].lut6_str[0])
 				fprintf(f, "%s %c6_lut %s\n", pref, 'A'+j,
-					cfg->a2d[j].lut6);
-			if (cfg->a2d[j].lut5 && cfg->a2d[j].lut5[0])
+					cfg->a2d[j].lut6_str);
+			if (cfg->a2d[j].lut5_str && cfg->a2d[j].lut5_str[0])
 				fprintf(f, "%s %c5_lut %s\n", pref, 'A'+j,
-					cfg->a2d[j].lut5);
+					cfg->a2d[j].lut5_str);
 			if (cfg->a2d[j].out_used)
 				fprintf(f, "%s %c_used\n", pref, 'A'+j);
 			switch (cfg->a2d[j].ff) {

@@ -419,14 +419,14 @@ int fdev_logic_setconf(struct fpga_model* model, int y, int x,
 	for (lut = LUT_A; lut <= LUT_D; lut++) {
 		if (logic_cfg->a2d[lut].out_used)
 			dev->u.logic.a2d[lut].out_used = 1;
-		if (logic_cfg->a2d[lut].lut6) {
+		if (logic_cfg->a2d[lut].lut6_str) {
 			rc = fdev_logic_a2d_lut(model, y, x, type_idx,
-				lut, 6, logic_cfg->a2d[lut].lut6, ZTERM);
+				lut, 6, logic_cfg->a2d[lut].lut6_str, ZTERM);
 			if (rc) FAIL(rc);
 		}
-		if (logic_cfg->a2d[lut].lut5) {
+		if (logic_cfg->a2d[lut].lut5_str) {
 			rc = fdev_logic_a2d_lut(model, y, x, type_idx,
-				lut, 5, logic_cfg->a2d[lut].lut5, ZTERM);
+				lut, 5, logic_cfg->a2d[lut].lut5_str, ZTERM);
 			if (rc) FAIL(rc);
 		}
 		if (logic_cfg->a2d[lut].ff) {
@@ -500,8 +500,8 @@ int fdev_logic_a2d_lut(struct fpga_model* model, int y, int x, int type_idx,
 	if (rc) FAIL(rc);
 
 	lut_ptr = (lut_5or6 == 5)
-		? &dev->u.logic.a2d[lut_a2d].lut5
-		: &dev->u.logic.a2d[lut_a2d].lut6;
+		? &dev->u.logic.a2d[lut_a2d].lut5_str
+		: &dev->u.logic.a2d[lut_a2d].lut6_str;
 	if (*lut_ptr == 0) {
 		*lut_ptr = malloc(MAX_LUT_LEN);
 		if (!(*lut_ptr)) FAIL(ENOMEM);
@@ -945,17 +945,17 @@ int fdev_set_required_pins(struct fpga_model* model, int y, int x, int type,
 				// LI_AX..LI_DX are in sequence
 				add_req_inpin(dev, LI_AX+i);
 			}
-			if (dev->u.logic.a2d[i].lut6) {
-				scan_lut_digits(dev->u.logic.a2d[i].lut6, digits);
+			if (dev->u.logic.a2d[i].lut6_str) {
+				scan_lut_digits(dev->u.logic.a2d[i].lut6_str, digits);
 				for (j = 0; j < 6; j++) {
 					if (!digits[j]) continue;
 					add_req_inpin(dev, LI_A1+i*6+j);
 				}
 			}
-			if (dev->u.logic.a2d[i].lut5) {
+			if (dev->u.logic.a2d[i].lut5_str) {
 				// A6 must be high/vcc if lut5 is used
 				add_req_inpin(dev, LI_A6+i*6);
-				scan_lut_digits(dev->u.logic.a2d[i].lut5, digits);
+				scan_lut_digits(dev->u.logic.a2d[i].lut5_str, digits);
 				for (j = 0; j < 6; j++) {
 					if (!digits[j]) continue;
 					add_req_inpin(dev, LI_A1+i*6+j);
@@ -993,10 +993,10 @@ void fdev_delete(struct fpga_model* model, int y, int x, int type, int type_idx)
 	dev->pinw_req_in = 0;
 	if (dev->type == DEV_LOGIC) {
 		for (i = LUT_A; i <= LUT_D; i++) {
-			free(dev->u.logic.a2d[i].lut6);
-			dev->u.logic.a2d[i].lut6 = 0;
-			free(dev->u.logic.a2d[i].lut5);
-			dev->u.logic.a2d[i].lut5 = 0;
+			free(dev->u.logic.a2d[i].lut6_str);
+			dev->u.logic.a2d[i].lut6_str = 0;
+			free(dev->u.logic.a2d[i].lut5_str);
+			dev->u.logic.a2d[i].lut5_str = 0;
 		}
 	}
 	dev->instantiated = 0;
