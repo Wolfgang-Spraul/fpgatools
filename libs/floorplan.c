@@ -328,13 +328,14 @@ static int printf_LOGIC(FILE* f, struct fpga_model* model,
 		cfg = &tile->devs[i].u.logic;
 		for (j = LUT_D; j >= LUT_A; j--) {
 			if (cfg->a2d[j].lut6_str && cfg->a2d[j].lut6_str[0])
-				fprintf(f, "%s %c6_lut %s\n", pref, 'A'+j,
+				fprintf(f, "%s %c6_lut_str %s\n", pref, 'A'+j,
 					cfg->a2d[j].lut6_str);
 			if (cfg->a2d[j].lut5_str && cfg->a2d[j].lut5_str[0])
-				fprintf(f, "%s %c5_lut %s\n", pref, 'A'+j,
+				fprintf(f, "%s %c5_lut_str %s\n", pref, 'A'+j,
 					cfg->a2d[j].lut5_str);
-			if (cfg->a2d[j].out_used)
+			if (cfg->a2d[j].flags & OUT_USED)
 				fprintf(f, "%s %c_used\n", pref, 'A'+j);
+
 			switch (cfg->a2d[j].ff) {
 				case FF_OR2L:
 					fprintf(f, "%s %c_ff OR2L\n", pref, 'A'+j);
@@ -431,6 +432,49 @@ static int printf_LOGIC(FILE* f, struct fpga_model* model,
 					break;
 				case 0: break; default: FAIL(EINVAL);
 			}
+			// distributed memory related:
+			switch (cfg->a2d[j].ram_mode) {
+				case DPRAM64:
+					fprintf(f, "%s %c_ram_mode DPRAM64\n", pref, 'A'+j);
+					break;
+				case DPRAM32:
+					fprintf(f, "%s %c_ram_mode DPRAM32\n", pref, 'A'+j);
+					break;
+				case SPRAM64:
+					fprintf(f, "%s %c_ram_mode SPRAM64\n", pref, 'A'+j);
+					break;
+				case SPRAM32:
+					fprintf(f, "%s %c_ram_mode SPRAM32\n", pref, 'A'+j);
+					break;
+				case SRL32:
+					fprintf(f, "%s %c_ram_mode SRL32\n", pref, 'A'+j);
+					break;
+				case SRL16:
+					fprintf(f, "%s %c_ram_mode SRL16\n", pref, 'A'+j);
+					break;
+				case 0: break; default: FAIL(EINVAL);
+			}
+			if (cfg->a2d[j].flags & LUT6VAL_SET)
+				fprintf(f, "%s %c6_lut_val 0x%016lX\n", pref, 'A'+j, cfg->a2d[j].lut6_val);
+			if (cfg->a2d[j].flags & LUT5VAL_SET)
+				fprintf(f, "%s %c5_lut_val 0x%08X\n", pref, 'A'+j, cfg->a2d[j].lut5_val);
+			if (cfg->a2d[j].flags & LUTMODE_ROM)
+				fprintf(f, "%s %c_rom\n", pref, 'A'+j);
+			switch (cfg->a2d[j].di_mux) {
+				case DIMUX_MC31:
+					fprintf(f, "%s %c_di_mux MC31\n", pref, 'A'+j);
+					break;
+				case DIMUX_X:
+					fprintf(f, "%s %c_di_mux X\n", pref, 'A'+j);
+					break;
+				case DIMUX_DX:
+					fprintf(f, "%s %c_di_mux DX\n", pref, 'A'+j);
+					break;
+				case DIMUX_BDI1:
+					fprintf(f, "%s %c_di_mux BDI1\n", pref, 'A'+j);
+					break;
+				case 0: break; default: FAIL(EINVAL);
+			}
 		}
 		switch (cfg->clk_inv) {
 			case CLKINV_B:
@@ -487,8 +531,10 @@ static int read_LOGIC_attr(struct fpga_model* model, int y, int x, int type_idx,
 	const char* w1, int w1_len, const char* w2, int w2_len)
 {
 	struct fpga_device* dev;
-	char cmp_str[128];
-	int i, rc;
+	char cmp_str[128], buf[32];
+	char *endptr;
+	long int val;
+	int i, j, rc;
 
 	dev = fdev_p(model, y, x, DEV_LOGIC, type_idx);
 	if (!dev) { HERE(); return 0; }
@@ -497,7 +543,12 @@ static int read_LOGIC_attr(struct fpga_model* model, int y, int x, int type_idx,
 	for (i = LUT_A; i <= LUT_D; i++) {
 		snprintf(cmp_str, sizeof(cmp_str), "%c_used", 'A'+i);
 		if (!str_cmp(w1, w1_len, cmp_str, ZTERM)) {
-			dev->u.logic.a2d[i].out_used = 1;
+			dev->u.logic.a2d[i].flags |= OUT_USED;
+			goto inst_1;
+		}
+		snprintf(cmp_str, sizeof(cmp_str), "%c_rom", 'A'+i);
+		if (!str_cmp(w1, w1_len, cmp_str, ZTERM)) {
+			dev->u.logic.a2d[i].flags |= LUTMODE_ROM;
 			goto inst_1;
 		}
 	}
@@ -520,13 +571,13 @@ static int read_LOGIC_attr(struct fpga_model* model, int y, int x, int type_idx,
 		return 2; // no reason for instantiation
 
 	for (i = LUT_A; i <= LUT_D; i++) {
-		snprintf(cmp_str, sizeof(cmp_str), "%c6_lut", 'A'+i);
+		snprintf(cmp_str, sizeof(cmp_str), "%c6_lut_str", 'A'+i);
 		if (!str_cmp(w1, w1_len, cmp_str, ZTERM)) {
 			rc = fdev_logic_a2d_lut(model, y, x, type_idx, i, 6, w2, w2_len);
 			if (rc) return 0;
 			goto inst_2;
 		}
-		snprintf(cmp_str, sizeof(cmp_str), "%c5_lut", 'A'+i);
+		snprintf(cmp_str, sizeof(cmp_str), "%c5_lut_str", 'A'+i);
 		if (!str_cmp(w1, w1_len, cmp_str, ZTERM)) {
 			rc = fdev_logic_a2d_lut(model, y, x, type_idx, i, 5, w2, w2_len);
 			if (rc) return 0;
@@ -611,6 +662,70 @@ static int read_LOGIC_attr(struct fpga_model* model, int y, int x, int type_idx,
 				dev->u.logic.a2d[i].cy0 = CY0_X;
 			else if (!str_cmp(w2, w2_len, "O5", ZTERM))
 				dev->u.logic.a2d[i].cy0 = CY0_O5;
+			else return 0;
+			goto inst_2;
+		}
+		snprintf(cmp_str, sizeof(cmp_str), "%c_ram_mode", 'A'+i);
+		if (!str_cmp(w1, w1_len, cmp_str, ZTERM)) {
+			if (!str_cmp(w2, w2_len, "DPRAM64", ZTERM))
+				dev->u.logic.a2d[i].ram_mode = DPRAM64;
+			else if (!str_cmp(w2, w2_len, "DPRAM32", ZTERM))
+				dev->u.logic.a2d[i].ram_mode = DPRAM32;
+			else if (!str_cmp(w2, w2_len, "SPRAM64", ZTERM))
+				dev->u.logic.a2d[i].ram_mode = SPRAM64;
+			else if (!str_cmp(w2, w2_len, "SPRAM32", ZTERM))
+				dev->u.logic.a2d[i].ram_mode = SPRAM32;
+			else if (!str_cmp(w2, w2_len, "SRL32", ZTERM))
+				dev->u.logic.a2d[i].ram_mode = SRL32;
+			else if (!str_cmp(w2, w2_len, "SRL16", ZTERM))
+				dev->u.logic.a2d[i].ram_mode = SRL16;
+			else return 0;
+			goto inst_2;
+		}
+		snprintf(cmp_str, sizeof(cmp_str), "%c6_lut_val", 'A'+i);
+		if (!str_cmp(w1, w1_len, cmp_str, ZTERM)) {
+			if (w2_len < 3
+			    || w2[0] != '0'
+			    || (w2[1] != 'x' && w2[1] != 'X')
+			    || w2_len > 2+16) return 0;
+			errno = 0;
+			for (j = 2; j < w2_len; j++)
+				buf[j-2] = w2[j];
+			buf[j-2] = 0;
+			val = strtol(buf, &endptr, /*base*/ 16);
+			if (errno || *endptr) return 0;
+
+			dev->u.logic.a2d[i].lut6_val = val;
+			dev->u.logic.a2d[i].flags |= LUT6VAL_SET;
+			goto inst_2;
+		}
+		snprintf(cmp_str, sizeof(cmp_str), "%c5_lut_val", 'A'+i);
+		if (!str_cmp(w1, w1_len, cmp_str, ZTERM)) {
+			if (w2_len < 3
+			    || w2[0] != '0'
+			    || (w2[1] != 'x' && w2[1] != 'X')
+			    || w2_len > 2+8) return 0;
+			errno = 0;
+			for (j = 2; j < w2_len; j++)
+				buf[j-2] = w2[j];
+			buf[j-2] = 0;
+			val = strtol(buf, &endptr, /*base*/ 16);
+			if (errno || *endptr) return 0;
+
+			dev->u.logic.a2d[i].lut5_val = val;
+			dev->u.logic.a2d[i].flags |= LUT5VAL_SET;
+			goto inst_2;
+		}
+		snprintf(cmp_str, sizeof(cmp_str), "%c_di_mux", 'A'+i);
+		if (!str_cmp(w1, w1_len, cmp_str, ZTERM)) {
+			if (!str_cmp(w2, w2_len, "MC31", ZTERM))
+				dev->u.logic.a2d[i].di_mux = DIMUX_MC31;
+			else if (!str_cmp(w2, w2_len, "X", ZTERM))
+				dev->u.logic.a2d[i].di_mux = DIMUX_X;
+			else if (!str_cmp(w2, w2_len, "DX", ZTERM))
+				dev->u.logic.a2d[i].di_mux = DIMUX_DX;
+			else if (!str_cmp(w2, w2_len, "BDI1", ZTERM))
+				dev->u.logic.a2d[i].di_mux = DIMUX_BDI1;
 			else return 0;
 			goto inst_2;
 		}

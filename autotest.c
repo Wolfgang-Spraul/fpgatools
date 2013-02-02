@@ -1244,9 +1244,9 @@ static int test_lut_encoding(struct test_state* tstate)
 	for (x_i = 0; x_i < sizeof(x_enum)/sizeof(*x_enum); x_i++) {
 		for (type_i = 0; type_i < sizeof(idx_enum)/sizeof(*idx_enum); type_i++) {
 			for (lut = LUT_A; lut <= LUT_D; lut++) {
-				memset(&logic_cfg, 0, sizeof(logic_cfg));
+				CLEAR(logic_cfg);
 				logic_cfg.a2d[lut].lut6_str = lut6_str;
-				logic_cfg.a2d[lut].out_used = 1;
+				logic_cfg.a2d[lut].flags |= OUT_USED;
 
 				// lut6 only
 				sprintf(lut6_str, "0");
@@ -1345,9 +1345,9 @@ static int test_logic_config(struct test_state* tstate)
 			for (lut = LUT_A; lut <= LUT_D; lut++) {
 
 				// lut6, direct-out
-				memset(&logic_cfg, 0, sizeof(logic_cfg));
+				CLEAR(logic_cfg);
 				logic_cfg.a2d[lut].lut6_str = "A1";
-				logic_cfg.a2d[lut].out_used = 1;
+				logic_cfg.a2d[lut].flags |= OUT_USED;
 
 				rc = test_logic(tstate, y, x_enum[x_i],
 					idx_enum[type_i], &logic_cfg);
@@ -1357,7 +1357,7 @@ static int test_logic_config(struct test_state* tstate)
 					// lut6, mux-out
 					// O6 over mux-out seems not supported
 					// on an X device.
-					memset(&logic_cfg, 0, sizeof(logic_cfg));
+					CLEAR(logic_cfg);
 					logic_cfg.a2d[lut].lut6_str = "A1";
 					logic_cfg.a2d[lut].out_mux = MUX_O6;
 
@@ -1396,7 +1396,7 @@ static int test_logic_config(struct test_state* tstate)
 				}
 
 				// lut6, ff-out
-				memset(&logic_cfg, 0, sizeof(logic_cfg));
+				CLEAR(logic_cfg);
 				logic_cfg.a2d[lut].lut6_str = "A1";
 				logic_cfg.a2d[lut].ff = FF_FF;
 				logic_cfg.a2d[lut].ff_mux = MUX_O6;
@@ -1439,7 +1439,7 @@ static int test_logic_config(struct test_state* tstate)
 				}
 
 				// lut6, latch-out
-				memset(&logic_cfg, 0, sizeof(logic_cfg));
+				CLEAR(logic_cfg);
 				logic_cfg.a2d[lut].lut6_str = "A1";
 				logic_cfg.a2d[lut].ff = FF_LATCH;
 				logic_cfg.a2d[lut].ff_mux = MUX_O6;
@@ -1463,7 +1463,7 @@ static int test_logic_config(struct test_state* tstate)
 				//
 
 				// lut6, and-latch
-				memset(&logic_cfg, 0, sizeof(logic_cfg));
+				CLEAR(logic_cfg);
 				logic_cfg.a2d[lut].lut6_str = "A1";
 				logic_cfg.a2d[lut].ff = FF_AND2L;
 				logic_cfg.a2d[lut].ff_mux = MUX_O6;
@@ -1480,7 +1480,7 @@ static int test_logic_config(struct test_state* tstate)
 				if (rc) FAIL(rc);
 
 				// lut6, or-latch
-				memset(&logic_cfg, 0, sizeof(logic_cfg));
+				CLEAR(logic_cfg);
 				logic_cfg.a2d[lut].lut6_str = "A1";
 				logic_cfg.a2d[lut].ff = FF_OR2L;
 				logic_cfg.a2d[lut].ff_mux = MUX_O6;
@@ -1497,7 +1497,7 @@ static int test_logic_config(struct test_state* tstate)
 				if (rc) FAIL(rc);
 
 				// x, ff-out
-				memset(&logic_cfg, 0, sizeof(logic_cfg));
+				CLEAR(logic_cfg);
 				logic_cfg.a2d[lut].ff = FF_FF;
 				logic_cfg.a2d[lut].ff_mux = MUX_X;
 				logic_cfg.a2d[lut].ff_srinit = FF_SRINIT0;
@@ -1510,11 +1510,11 @@ static int test_logic_config(struct test_state* tstate)
 
 				// . o6-direct
 				logic_cfg.a2d[lut].lut6_str = "A1";
-				logic_cfg.a2d[lut].out_used = 1;
+				logic_cfg.a2d[lut].flags |= OUT_USED;
 				rc = test_logic(tstate, y, x_enum[x_i],
 					idx_enum[type_i], &logic_cfg);
 				if (rc) FAIL(rc);
-				logic_cfg.a2d[lut].out_used = 0;
+				logic_cfg.a2d[lut].flags |= OUT_USED;
 
 				if (idx_enum[type_i] == DEV_LOG_M_OR_L) {
 					// . o6-outmux
@@ -1530,9 +1530,9 @@ static int test_logic_config(struct test_state* tstate)
 				//
 
 				// lut6 direct-out, lut5 mux-out
-				memset(&logic_cfg, 0, sizeof(logic_cfg));
+				CLEAR(logic_cfg);
 				logic_cfg.a2d[lut].lut6_str = "(A6+~A6)*A1";
-				logic_cfg.a2d[lut].out_used = 1;
+				logic_cfg.a2d[lut].flags |= OUT_USED;
 				logic_cfg.a2d[lut].lut5_str = "A1*A2";
 				logic_cfg.a2d[lut].out_mux = MUX_O5;
 				rc = test_logic(tstate, y, x_enum[x_i],
@@ -1606,7 +1606,7 @@ static int test_logic_config(struct test_state* tstate)
 			}
 			if (idx_enum[type_i] == DEV_LOG_X) {
 				// minimum-config X device
-				memset(&logic_cfg, 0, sizeof(logic_cfg));
+				CLEAR(logic_cfg);
 				logic_cfg.a2d[LUT_A].lut6_str = "(A6+~A6)*A1";
 				logic_cfg.a2d[LUT_A].lut5_str = "A2";
 				logic_cfg.a2d[LUT_A].out_mux = MUX_5Q;
@@ -1645,7 +1645,7 @@ static int test_logic_config(struct test_state* tstate)
 				continue;
 			}
 			// cout
-			memset(&logic_cfg, 0, sizeof(logic_cfg));
+			CLEAR(logic_cfg);
 			logic_cfg.a2d[LUT_A].lut6_str = "(A6+~A6)*(~A5)";
 			logic_cfg.a2d[LUT_A].lut5_str = "1";
 			logic_cfg.a2d[LUT_A].cy0 = CY0_O5;
@@ -1681,7 +1681,7 @@ static int test_logic_config(struct test_state* tstate)
 			if (rc) FAIL(rc);
 
 			// f8 out-mux
-			memset(&logic_cfg, 0, sizeof(logic_cfg));
+			CLEAR(logic_cfg);
 			logic_cfg.a2d[LUT_A].lut6_str = "~A5";
 			logic_cfg.a2d[LUT_B].lut6_str = "(A5)";
 			logic_cfg.a2d[LUT_C].lut6_str = "A5";
@@ -1703,7 +1703,7 @@ static int test_logic_config(struct test_state* tstate)
 			if (rc) FAIL(rc);
 
 			// f7amux
-			memset(&logic_cfg, 0, sizeof(logic_cfg));
+			CLEAR(logic_cfg);
 			logic_cfg.a2d[LUT_A].lut6_str = "~A5";
 			logic_cfg.a2d[LUT_B].lut6_str = "(A5)";
 			logic_cfg.a2d[LUT_A].out_mux = MUX_F7;
@@ -1723,7 +1723,7 @@ static int test_logic_config(struct test_state* tstate)
 			if (rc) FAIL(rc);
 
 			// f7bmux
-			memset(&logic_cfg, 0, sizeof(logic_cfg));
+			CLEAR(logic_cfg);
 			logic_cfg.a2d[LUT_C].lut6_str = "~A5";
 			logic_cfg.a2d[LUT_D].lut6_str = "(A5)";
 			logic_cfg.a2d[LUT_C].out_mux = MUX_F7;

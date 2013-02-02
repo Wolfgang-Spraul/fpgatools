@@ -415,10 +415,11 @@ int fdev_logic_setconf(struct fpga_model* model, int y, int x,
 	if (!dev) FAIL(EINVAL);
 	rc = reset_required_pins(dev);
 	if (rc) FAIL(rc);
+	// todo: should we delete the current device configuration?
 
 	for (lut = LUT_A; lut <= LUT_D; lut++) {
-		if (logic_cfg->a2d[lut].out_used)
-			dev->u.logic.a2d[lut].out_used = 1;
+		if (logic_cfg->a2d[lut].flags & OUT_USED)
+			dev->u.logic.a2d[lut].flags |= OUT_USED;
 		if (logic_cfg->a2d[lut].lut6_str) {
 			rc = fdev_logic_a2d_lut(model, y, x, type_idx,
 				lut, 6, logic_cfg->a2d[lut].lut6_str, ZTERM);
@@ -443,6 +444,22 @@ int fdev_logic_setconf(struct fpga_model* model, int y, int x,
 			dev->u.logic.a2d[lut].ff5_srinit = logic_cfg->a2d[lut].ff5_srinit;
 		if (logic_cfg->a2d[lut].cy0)
 			dev->u.logic.a2d[lut].cy0 = logic_cfg->a2d[lut].cy0;
+
+		// distributed memory related:
+		if (logic_cfg->a2d[lut].flags & LUT6VAL_SET) {
+			dev->u.logic.a2d[lut].flags |= LUT6VAL_SET;
+			dev->u.logic.a2d[lut].lut6_val = logic_cfg->a2d[lut].lut6_val;
+		}
+		if (logic_cfg->a2d[lut].flags & LUT5VAL_SET) {
+			dev->u.logic.a2d[lut].flags |= LUT5VAL_SET;
+			dev->u.logic.a2d[lut].lut5_val = logic_cfg->a2d[lut].lut5_val;
+		}
+		if (logic_cfg->a2d[lut].flags & LUTMODE_ROM)
+			dev->u.logic.a2d[lut].flags |= LUTMODE_ROM;
+		if (logic_cfg->a2d[lut].ram_mode)
+			dev->u.logic.a2d[lut].ram_mode = logic_cfg->a2d[lut].ram_mode;
+		if (logic_cfg->a2d[lut].di_mux)
+			dev->u.logic.a2d[lut].di_mux = logic_cfg->a2d[lut].di_mux;
 	}
 	if (logic_cfg->clk_inv)
 		dev->u.logic.clk_inv = logic_cfg->clk_inv;
@@ -479,7 +496,10 @@ int fdev_logic_a2d_out_used(struct fpga_model* model, int y, int x,
 	rc = reset_required_pins(dev);
 	if (rc) FAIL(rc);
 
-	dev->u.logic.a2d[lut_a2d].out_used = (used != 0);
+	if (used)
+		dev->u.logic.a2d[lut_a2d].flags |= OUT_USED;
+	else
+		dev->u.logic.a2d[lut_a2d].flags &= ~OUT_USED;
 	dev->instantiated = 1;
 	return 0;
 fail:
@@ -928,7 +948,7 @@ int fdev_set_required_pins(struct fpga_model* model, int y, int x, int type,
 			add_req_inpin(dev, LI_CX);
 		}
 		for (i = LUT_A; i <= LUT_D; i++) {
-			if (dev->u.logic.a2d[i].out_used) {
+			if (dev->u.logic.a2d[i].flags & OUT_USED) {
 				// LO_A..LO_D are in sequence
 				add_req_outpin(dev, LO_A+i);
 			}

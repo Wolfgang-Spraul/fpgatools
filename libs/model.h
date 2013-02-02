@@ -416,6 +416,10 @@ enum {
 	  "COUT" }
 
 enum { LUT_A = 0, LUT_B, LUT_C, LUT_D }; // offset into a2d[]
+#define OUT_USED	0x0001
+#define LUT6VAL_SET	0x0002
+#define LUT5VAL_SET	0x0004
+#define LUTMODE_ROM	0x0008
 enum { FF_SRINIT0 = 1, FF_SRINIT1 };
 enum { MUX_O6 = 1, MUX_O5, MUX_5Q, MUX_X, MUX_CY, MUX_XOR, MUX_F7, MUX_F8, MUX_MC31 };
 enum { FF_OR2L = 1, FF_AND2L, FF_LATCH, FF_FF };
@@ -424,13 +428,23 @@ enum { CLKINV_B = 1, CLKINV_CLK };
 enum { SYNCATTR_SYNC = 1, SYNCATTR_ASYNC };
 enum { WEMUX_WE = 1, WEMUX_CE };
 enum { PRECYINIT_0 = 1, PRECYINIT_1, PRECYINIT_AX };
+enum { DPRAM64 = 1, DPRAM32, SPRAM64, SPRAM32, SRL32, SRL16 };
+enum { DIMUX_MC31 = 1, DIMUX_X, DIMUX_DX, DIMUX_BDI1 };
 
 #define MAX_LUT_LEN 2048
 #define NUM_LUTS 4
 
 struct fpgadev_logic_a2d
 {
-	int out_used;
+	// LUT/RAM/ROM mode:
+	// - Both the lut6 and lut5 must have the same mode of either
+	//   LUT, RAM or ROM.
+	// - If neither LUT6VAL_SET nor LUT5VAL_SET are on, the mode is LUT.
+	// - If either LUT6VAL_SET or LUT5VAL_SET are on, lut6_str and
+	//   lut5_str are ignored, and the mode is RAM, or ROM if
+	//   LUTMODE_ROM is on.
+
+	int flags;	// OUT_USED, LUT6VAL_SET, LUT5VAL_SET, LUTMODE_ROM
 	char* lut6_str;
 	char* lut5_str;
 	int ff_mux;	// O6, O5, X, F7(a/c), F8(b), MC31(d), CY, XOR
@@ -439,6 +453,14 @@ struct fpgadev_logic_a2d
 	int out_mux;	// O6, O5, 5Q, F7(a/c), F8(b), MC31(d), CY, XOR
 	int ff;		// OR2L, AND2L, LATCH, FF
 	int cy0;	// X, O5
+
+	// distributed memory related - if either LUT6VAL_SET or LUT5VAL_SET are on:
+	uint64_t lut6_val;
+	uint32_t lut5_val;
+	int ram_mode; // only if LUTMODE_ROM is not set
+		// DPRAM64, DPRAM32, SPRAM64, SPRAM32, SRL32, SRL16
+	int di_mux; // only for A-C
+		// DIMUX_MC31, DIMUX_X, DIMUX_DX (b/c), DIMUX_BDI1 (a)
 };
 
 struct fpgadev_logic

@@ -1211,7 +1211,7 @@ static int extract_logic(struct extract_state* es)
 				    && cfg_ml.a2d[LUT_A].ff_mux != MUX_XOR
 				    && cfg_ml.a2d[LUT_A].ff_mux != MUX_CY
 				    && cfg_ml.a2d[LUT_A].ff_mux != MUX_F7)
-					cfg_ml.a2d[LUT_A].out_used = 1;
+					cfg_ml.a2d[LUT_A].flags |= OUT_USED;
 
 				lut5_used = (cfg_ml.a2d[LUT_A].ff_mux == MUX_O5
 					|| cfg_ml.a2d[LUT_A].out_mux == MUX_5Q
@@ -1236,7 +1236,7 @@ static int extract_logic(struct extract_state* es)
 				    && cfg_ml.a2d[LUT_B].ff_mux != MUX_XOR
 				    && cfg_ml.a2d[LUT_B].ff_mux != MUX_CY
 				    && cfg_ml.a2d[LUT_B].ff_mux != MUX_F7)
-					cfg_ml.a2d[LUT_B].out_used = 1;
+					cfg_ml.a2d[LUT_B].flags |= OUT_USED;
 
 				lut5_used = (cfg_ml.a2d[LUT_B].ff_mux == MUX_O5
 					|| cfg_ml.a2d[LUT_B].out_mux == MUX_5Q
@@ -1261,7 +1261,7 @@ static int extract_logic(struct extract_state* es)
 				    && cfg_ml.a2d[LUT_C].ff_mux != MUX_XOR
 				    && cfg_ml.a2d[LUT_C].ff_mux != MUX_CY
 				    && cfg_ml.a2d[LUT_C].ff_mux != MUX_F7)
-					cfg_ml.a2d[LUT_C].out_used = 1;
+					cfg_ml.a2d[LUT_C].flags |= OUT_USED;
 
 				lut5_used = (cfg_ml.a2d[LUT_C].ff_mux == MUX_O5
 					|| cfg_ml.a2d[LUT_C].out_mux == MUX_5Q
@@ -1286,7 +1286,7 @@ static int extract_logic(struct extract_state* es)
 				    && cfg_ml.a2d[LUT_D].ff_mux != MUX_XOR
 				    && cfg_ml.a2d[LUT_D].ff_mux != MUX_CY
 				    && cfg_ml.a2d[LUT_D].ff_mux != MUX_F7)
-					cfg_ml.a2d[LUT_D].out_used = 1;
+					cfg_ml.a2d[LUT_D].flags |= OUT_USED;
 
 				lut5_used = (cfg_ml.a2d[LUT_D].ff_mux == MUX_O5
 					|| cfg_ml.a2d[LUT_D].out_mux == MUX_5Q
@@ -1304,7 +1304,7 @@ static int extract_logic(struct extract_state* es)
 			    || !all_zero(&cfg_x.a2d[LUT_A], sizeof(cfg_x.a2d[LUT_A]))) {
 				if (lut_X[LUT_A]
 				    && cfg_x.a2d[LUT_A].ff_mux != MUX_O6)
-					cfg_x.a2d[LUT_A].out_used = 1;
+					cfg_x.a2d[LUT_A].flags |= OUT_USED;
 				lut5_used = cfg_x.a2d[LUT_A].out_mux != 0;
 				rc = lut2str(lut_X[LUT_A], l_col
 					  ? XC6_LMAP_XL_X_A : XC6_LMAP_XM_X_A,
@@ -1319,7 +1319,7 @@ static int extract_logic(struct extract_state* es)
 			    || !all_zero(&cfg_x.a2d[LUT_B], sizeof(cfg_x.a2d[LUT_B]))) {
 				if (lut_X[LUT_B]
 				    && cfg_x.a2d[LUT_B].ff_mux != MUX_O6)
-					cfg_x.a2d[LUT_B].out_used = 1;
+					cfg_x.a2d[LUT_B].flags |= OUT_USED;
 				lut5_used = cfg_x.a2d[LUT_B].out_mux != 0;
 				rc = lut2str(lut_X[LUT_B], l_col
 					  ? XC6_LMAP_XL_X_B : XC6_LMAP_XM_X_B,
@@ -1334,7 +1334,7 @@ static int extract_logic(struct extract_state* es)
 			    || !all_zero(&cfg_x.a2d[LUT_C], sizeof(cfg_x.a2d[LUT_C]))) {
 				if (lut_X[LUT_C]
 				    && cfg_x.a2d[LUT_C].ff_mux != MUX_O6)
-					cfg_x.a2d[LUT_C].out_used = 1;
+					cfg_x.a2d[LUT_C].flags |= OUT_USED;
 				lut5_used = cfg_x.a2d[LUT_C].out_mux != 0;
 				rc = lut2str(lut_X[LUT_C], l_col
 					  ? XC6_LMAP_XL_X_C : XC6_LMAP_XM_X_C,
@@ -1349,7 +1349,7 @@ static int extract_logic(struct extract_state* es)
 			    || !all_zero(&cfg_x.a2d[LUT_D], sizeof(cfg_x.a2d[LUT_D]))) {
 				if (lut_X[LUT_D]
 				    && cfg_x.a2d[LUT_D].ff_mux != MUX_O6)
-					cfg_x.a2d[LUT_D].out_used = 1;
+					cfg_x.a2d[LUT_D].flags |= OUT_USED;
 				lut5_used = cfg_x.a2d[LUT_D].out_mux != 0;
 				rc = lut2str(lut_X[LUT_D], l_col
 					  ? XC6_LMAP_XL_X_D : XC6_LMAP_XM_X_D,
