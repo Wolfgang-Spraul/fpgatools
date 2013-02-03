@@ -1051,23 +1051,12 @@ static int test_logic(struct test_state* tstate, int y, int x, int type_idx,
 	net_idx_t pinw_nets[MAX_NUM_PINW];
 	int i, lut, latch_logic, rc;
 
-	if (tstate->dry_run) {
-		for (lut = LUT_A; lut <= LUT_D; lut++) {
-			if (!logic_cfg->a2d[lut].lut6_str
-			    && !logic_cfg->a2d[lut].lut5_str)
-				continue;
-			printf("O %c6_lut '%s' %c5_lut '%s'\n",
-				'A'+lut, logic_cfg->a2d[lut].lut6_str
-					? logic_cfg->a2d[lut].lut6_str : "-",
-				'A'+lut, logic_cfg->a2d[lut].lut5_str
-					? logic_cfg->a2d[lut].lut5_str : "-");
-		}
-	}
 	rc = fdev_logic_setconf(tstate->model, y, x, type_idx, logic_cfg);
 	if (rc) FAIL(rc);
 	if (tstate->dry_run) {
-		fdev_print_required_pins(tstate->model, y, x,
-			DEV_LOGIC, type_idx);
+		rc = printf_LOGIC(stdout, tstate->model, y, x, type_idx,
+			/*config_only*/ 1);
+		if (rc) FAIL(rc);
 	}
 	latch_logic = 0;
 	for (lut = LUT_A; lut <= LUT_D; lut++) {
@@ -1798,6 +1787,7 @@ static int test_bscan_config(struct test_state* tstate)
 	int bscan_y, bscan_x, bscan_type_idx, enum_i, rc;
 	int jtag_chain_i, jtag_test;
 
+	tstate->diff_to_null = 1;
 	enum_i = 0;
 	while (!(rc = fdev_enum(tstate->model, DEV_BSCAN, enum_i++, &bscan_y,
 			&bscan_x, &bscan_type_idx)) && bscan_y != -1) {
@@ -1808,7 +1798,6 @@ static int test_bscan_config(struct test_state* tstate)
 				if (rc) FAIL(rc);
 				if ((rc = diff_printf(tstate))) FAIL(rc);
 				fdev_delete(tstate->model, bscan_y, bscan_x, DEV_BSCAN, bscan_type_idx);
-				if ((rc = diff_printf(tstate))) FAIL(rc);
 			}
 		}
 	}
@@ -1818,7 +1807,7 @@ fail:
 	return rc;
 }
 
-static int test_clock_routing(struct test_state* tstate)
+static int test_clock_routing(struct test_state *tstate)
 {
 	int rc, i, t2_io_idx, iob_clk_y, iob_clk_x, iob_clk_type_idx;
 	int logic_y, logic_x, logic_type_idx;
@@ -1932,6 +1921,87 @@ fail:
 	return rc;
 }
 
+static int test_dist_mem(struct test_state *tstate)
+{
+	static const int ram_modes[] = { DPRAM64, DPRAM32, SPRAM64, SPRAM32, SRL32, SRL16 };
+	static const int dimux_modes[] = { DIMUX_MC31, DIMUX_X, DIMUX_DX, DIMUX_BDI1 };
+	int y, x, type_i, lut, ram_mode_i, dimux_i, rc;
+	struct fpgadev_logic logic_cfg;
+
+	tstate->diff_to_null = 1;
+
+	y = 67;
+	x = 13 /* XM */;
+	type_i = DEV_LOG_M_OR_L;
+
+	for (lut = LUT_A; lut <= LUT_D; lut++) {
+
+		// Requirements for functioning ram:
+		// - input on CLK and WE pins
+		// - SRL32 and SRL16 should have O6 or MC31 output
+		// - SRL32 and SRL16 require A1 tied to VCC
+		// - DRPAM64, SPRAM64 and SRL32 require DI1
+		// - DRPAM32, SPRAM32 and SRL16 require DI2
+		// - dual or single port RAM requires WA1-WA6 (or WA1-WA5)
+		// - when dual or single port RAM should be used in any
+		//   of the 4 luts, the lut-D must be one of them
+
+		for (ram_mode_i = 0; ram_mode_i < sizeof(ram_modes)/sizeof(*ram_modes);
+			ram_mode_i++) {
+
+			CLEAR(logic_cfg);
+			logic_cfg.a2d[lut].lut6_val = 0x00000000000000FF;
+			logic_cfg.a2d[lut].flags |= LUT6VAL_SET;
+			logic_cfg.a2d[lut].ram_mode = ram_modes[ram_mode_i];
+
+			if (lut != LUT_D
+			    && (ram_modes[ram_mode_i] == DPRAM64
+			        || ram_modes[ram_mode_i] == DPRAM32
+			        || ram_modes[ram_mode_i] == SPRAM64
+			        || ram_modes[ram_mode_i] == SPRAM32)) {
+				logic_cfg.a2d[LUT_D].lut6_val = 0x00000000000000FF;
+				logic_cfg.a2d[LUT_D].flags |= LUT6VAL_SET;
+				logic_cfg.a2d[LUT_D].ram_mode = DPRAM64;
+			}
+
+			rc = test_logic(tstate, y, x, type_i, &logic_cfg);
+			if (rc) FAIL(rc);
+		}
+
+		if (lut != LUT_D) { // LUT_D has no DIMUX
+
+			CLEAR(logic_cfg);
+			logic_cfg.a2d[lut].lut6_val = 0x00000000000000FF;
+			logic_cfg.a2d[lut].flags |= LUT6VAL_SET;
+			logic_cfg.a2d[lut].ram_mode = SRL32;
+
+			for (dimux_i = 0; dimux_i < sizeof(dimux_modes)/sizeof(*dimux_modes);
+				dimux_i++) {
+
+				if ((lut == LUT_A
+				     && dimux_modes[dimux_i] == DIMUX_DX)
+				    || (lut != LUT_A
+				        && dimux_modes[dimux_i] == DIMUX_BDI1))
+					continue;
+			
+				logic_cfg.a2d[lut].di_mux = dimux_modes[dimux_i];
+				rc = test_logic(tstate, y, x, type_i, &logic_cfg);
+				if (rc) FAIL(rc);
+			}
+		}
+
+		CLEAR(logic_cfg);
+		logic_cfg.a2d[lut].lut6_val = 0x00000000000000FF;
+		logic_cfg.a2d[lut].flags |= LUT6VAL_SET | LUTMODE_ROM;
+
+		rc = test_logic(tstate, y, x, type_i, &logic_cfg);
+		if (rc) FAIL(rc);
+	}
+	return 0;
+fail:
+	return rc;
+}
+
 #define DEFAULT_DIFF_EXEC "./autotest_diff.sh"
 
 static void printf_help(const char* argv_0, const char** available_tests)
@@ -1965,7 +2035,7 @@ int main(int argc, char** argv)
 	const char* available_tests[] =
 		{ "logic_cfg", "routing_sw", "io_sw", "iob_cfg",
 		  "lut_encoding", "bufg_cfg", "bufio_cfg", "pll_cfg",
-		  "dcm_cfg", "bscan_cfg", "clock_routing", 0 };
+		  "dcm_cfg", "bscan_cfg", "clock_routing", "dist_mem", 0 };
 
 	// flush after every line is better for the autotest
 	// output, tee, etc.
@@ -2125,6 +2195,10 @@ int main(int argc, char** argv)
 	}
 	if (!strcmp(cmdline_test, "clock_routing")) {
 		rc = test_clock_routing(&tstate);
+		if (rc) FAIL(rc);
+	}
+	if (!strcmp(cmdline_test, "dist_mem")) {
+		rc = test_dist_mem(&tstate);
 		if (rc) FAIL(rc);
 	}
 

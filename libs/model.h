@@ -457,8 +457,9 @@ struct fpgadev_logic_a2d
 	// distributed memory related - if either LUT6VAL_SET or LUT5VAL_SET are on:
 	uint64_t lut6_val;
 	uint32_t lut5_val;
-	int ram_mode; // only if LUTMODE_ROM is not set
-		// DPRAM64, DPRAM32, SPRAM64, SPRAM32, SRL32, SRL16
+	// ram_mode is only valid if LUTMODE_ROM is not set. If both
+	// lut6_val and lut5_val are used, they must use the same ram_mode.
+	int ram_mode; // DPRAM64, DPRAM32, SPRAM64, SPRAM32, SRL32, SRL16
 	int di_mux; // only for A-C
 		// DIMUX_MC31, DIMUX_X, DIMUX_DX (b/c), DIMUX_BDI1 (a)
 };

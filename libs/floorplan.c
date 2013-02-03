@@ -62,128 +62,119 @@ int printf_tiles(FILE* f, struct fpga_model* model)
 	return 0;
 }
 
-static int printf_IOB(FILE* f, struct fpga_model* model,
-	int y, int x, int config_only)
+int printf_IOB(FILE *f, struct fpga_model *model,
+	int y, int x, int type_idx, int config_only)
 {
-	struct fpga_tile* tile;
+	struct fpga_tile *tile;
 	char pref[256];
-	int type_count, i;
+	int dev_i;
 
-	RC_CHECK(model);
+	dev_i = fpga_dev_idx(model, y, x, DEV_IOB, type_idx);
+	RC_ASSERT(model, dev_i != NO_DEV);
 	tile = YX_TILE(model, y, x);
-	type_count = 0;
-	for (i = 0; i < tile->num_devs; i++) {
-		if (tile->devs[i].type != DEV_IOB)
-			continue;
-		if (config_only && !(tile->devs[i].instantiated)) {
-			type_count++;
-			continue;
-		}
-		snprintf(pref, sizeof(pref), "dev y%i x%i IOB %i",
-			y, x, type_count);
-		type_count++;
+	if (config_only && !(tile->devs[dev_i].instantiated))
+		RC_RETURN(model);
+	snprintf(pref, sizeof(pref), "dev y%i x%i IOB %i", y, x, type_idx);
 
-		if (!config_only) {
-			fprintf(f, "%s type %s\n", pref,
-				tile->devs[i].subtype == IOBM ? "M" : "S");
-		}
-		if (tile->devs[i].u.iob.istandard[0])
-			fprintf(f, "%s istd %s\n", pref, 
-				tile->devs[i].u.iob.istandard);
-		if (tile->devs[i].u.iob.ostandard[0])
-			fprintf(f, "%s ostd %s\n", pref, 
-				tile->devs[i].u.iob.ostandard);
-		switch (tile->devs[i].u.iob.bypass_mux) {
-			case BYPASS_MUX_I:
-				fprintf(f, "%s bypass_mux I\n", pref);
-				break;
-			case BYPASS_MUX_O:
-				fprintf(f, "%s bypass_mux O\n", pref);
-				break;
-			case BYPASS_MUX_T:
-				fprintf(f, "%s bypass_mux T\n", pref);
-				break;
-			case 0: break; default: EXIT(1);
-		}
-		switch (tile->devs[i].u.iob.I_mux) {
-			case IMUX_I_B:
-				fprintf(f, "%s imux I_B\n", pref);
-				break;
-			case IMUX_I: 
-				fprintf(f, "%s imux I\n", pref);
-				break;
-			case 0: break; default: EXIT(1);
-		}
-		if (tile->devs[i].u.iob.drive_strength)
-			fprintf(f, "%s strength %i\n", pref,
-				tile->devs[i].u.iob.drive_strength);
-		switch (tile->devs[i].u.iob.slew) {
-			case SLEW_SLOW:
-				fprintf(f, "%s slew SLOW\n", pref);
-				break;
-			case SLEW_FAST:
-				fprintf(f, "%s slew FAST\n", pref);
-				break;
-			case SLEW_QUIETIO:
-				fprintf(f, "%s slew QUIETIO\n", pref);
-				break;
-			case 0: break; default: EXIT(1);
-		}
-		if (tile->devs[i].u.iob.O_used)
-			fprintf(f, "%s O_used\n", pref);
-		switch (tile->devs[i].u.iob.suspend) {
-			case SUSP_LAST_VAL:
-				fprintf(f, "%s suspend DRIVE_LAST_VALUE\n", pref);
-				break;
-			case SUSP_3STATE:
-				fprintf(f, "%s suspend 3STATE\n", pref);
-				break;
-			case SUSP_3STATE_PULLUP:
-				fprintf(f, "%s suspend 3STATE_PULLUP\n", pref);
-				break;
-			case SUSP_3STATE_PULLDOWN:
-				fprintf(f, "%s suspend 3STATE_PULLDOWN\n", pref);
-				break;
-			case SUSP_3STATE_KEEPER:
-				fprintf(f, "%s suspend 3STATE_KEEPER\n", pref);
-				break;
-			case SUSP_3STATE_OCT_ON:
-				fprintf(f, "%s suspend 3STATE_OCT_ON\n", pref);
-				break;
-			case 0: break; default: EXIT(1);
-		}
-		switch (tile->devs[i].u.iob.in_term) {
-			case ITERM_NONE: 
-				fprintf(f, "%s in_term NONE\n", pref);
-				break;
-			case ITERM_UNTUNED_25:
-				fprintf(f, "%s in_term UNTUNED_SPLIT_25\n", pref);
-				break;
-			case ITERM_UNTUNED_50:
-				fprintf(f, "%s in_term UNTUNED_SPLIT_50\n", pref);
-				break;
-			case ITERM_UNTUNED_75:
-				fprintf(f, "%s in_term UNTUNED_SPLIT_75\n", pref);
-				break;
-			case 0: break; default: EXIT(1);
-		}
-		switch (tile->devs[i].u.iob.out_term) {
-			case OTERM_NONE: 
-				fprintf(f, "%s out_term NONE\n", pref);
-				break;
-			case OTERM_UNTUNED_25:
-				fprintf(f, "%s out_term UNTUNED_25\n", pref);
-				break;
-			case OTERM_UNTUNED_50:
-				fprintf(f, "%s out_term UNTUNED_50\n", pref);
-				break;
-			case OTERM_UNTUNED_75:
-				fprintf(f, "%s out_term UNTUNED_75\n", pref);
-				break;
-			case 0: break; default: EXIT(1);
-		}
+	if (!config_only)
+		fprintf(f, "%s type %s\n", pref,
+			tile->devs[dev_i].subtype == IOBM ? "M" : "S");
+	if (tile->devs[dev_i].u.iob.istandard[0])
+		fprintf(f, "%s istd %s\n", pref, 
+			tile->devs[dev_i].u.iob.istandard);
+	if (tile->devs[dev_i].u.iob.ostandard[0])
+		fprintf(f, "%s ostd %s\n", pref, 
+			tile->devs[dev_i].u.iob.ostandard);
+	switch (tile->devs[dev_i].u.iob.bypass_mux) {
+		case BYPASS_MUX_I:
+			fprintf(f, "%s bypass_mux I\n", pref);
+			break;
+		case BYPASS_MUX_O:
+			fprintf(f, "%s bypass_mux O\n", pref);
+			break;
+		case BYPASS_MUX_T:
+			fprintf(f, "%s bypass_mux T\n", pref);
+			break;
+		case 0: break; default: RC_FAIL(model, EINVAL);
 	}
-	return 0;
+	switch (tile->devs[dev_i].u.iob.I_mux) {
+		case IMUX_I_B:
+			fprintf(f, "%s imux I_B\n", pref);
+			break;
+		case IMUX_I: 
+			fprintf(f, "%s imux I\n", pref);
+			break;
+		case 0: break; default: RC_FAIL(model, EINVAL);
+	}
+	if (tile->devs[dev_i].u.iob.drive_strength)
+		fprintf(f, "%s strength %i\n", pref,
+			tile->devs[dev_i].u.iob.drive_strength);
+	switch (tile->devs[dev_i].u.iob.slew) {
+		case SLEW_SLOW:
+			fprintf(f, "%s slew SLOW\n", pref);
+			break;
+		case SLEW_FAST:
+			fprintf(f, "%s slew FAST\n", pref);
+			break;
+		case SLEW_QUIETIO:
+			fprintf(f, "%s slew QUIETIO\n", pref);
+			break;
+		case 0: break; default: RC_FAIL(model, EINVAL);
+	}
+	if (tile->devs[dev_i].u.iob.O_used)
+		fprintf(f, "%s O_used\n", pref);
+	switch (tile->devs[dev_i].u.iob.suspend) {
+		case SUSP_LAST_VAL:
+			fprintf(f, "%s suspend DRIVE_LAST_VALUE\n", pref);
+			break;
+		case SUSP_3STATE:
+			fprintf(f, "%s suspend 3STATE\n", pref);
+			break;
+		case SUSP_3STATE_PULLUP:
+			fprintf(f, "%s suspend 3STATE_PULLUP\n", pref);
+			break;
+		case SUSP_3STATE_PULLDOWN:
+			fprintf(f, "%s suspend 3STATE_PULLDOWN\n", pref);
+			break;
+		case SUSP_3STATE_KEEPER:
+			fprintf(f, "%s suspend 3STATE_KEEPER\n", pref);
+			break;
+		case SUSP_3STATE_OCT_ON:
+			fprintf(f, "%s suspend 3STATE_OCT_ON\n", pref);
+			break;
+		case 0: break; default: RC_FAIL(model, EINVAL);
+	}
+	switch (tile->devs[dev_i].u.iob.in_term) {
+		case ITERM_NONE: 
+			fprintf(f, "%s in_term NONE\n", pref);
+			break;
+		case ITERM_UNTUNED_25:
+			fprintf(f, "%s in_term UNTUNED_SPLIT_25\n", pref);
+			break;
+		case ITERM_UNTUNED_50:
+			fprintf(f, "%s in_term UNTUNED_SPLIT_50\n", pref);
+			break;
+		case ITERM_UNTUNED_75:
+			fprintf(f, "%s in_term UNTUNED_SPLIT_75\n", pref);
+			break;
+		case 0: break; default: RC_FAIL(model, EINVAL);
+	}
+	switch (tile->devs[dev_i].u.iob.out_term) {
+		case OTERM_NONE: 
+			fprintf(f, "%s out_term NONE\n", pref);
+			break;
+		case OTERM_UNTUNED_25:
+			fprintf(f, "%s out_term UNTUNED_25\n", pref);
+			break;
+		case OTERM_UNTUNED_50:
+			fprintf(f, "%s out_term UNTUNED_50\n", pref);
+			break;
+		case OTERM_UNTUNED_75:
+			fprintf(f, "%s out_term UNTUNED_75\n", pref);
+			break;
+		case 0: break; default: RC_FAIL(model, EINVAL);
+	}
+	RC_RETURN(model);
 }
 
 static int read_IOB_attr(struct fpga_model *model, struct fpga_device *dev,
@@ -289,242 +280,233 @@ inst_2:
 	return 2;
 }
 
-static int printf_LOGIC(FILE* f, struct fpga_model* model,
-	int y, int x, int config_only)
+int printf_LOGIC(FILE* f, struct fpga_model* model,
+	int y, int x, int type_idx, int config_only)
 {
-	struct fpga_tile* tile;
-	struct fpgadev_logic* cfg;
+	struct fpga_tile *tile;
+	struct fpgadev_logic *cfg;
 	char pref[256];
-	int type_count, i, j, rc;
+	int dev_i, j;
 
-	RC_CHECK(model);
+	dev_i = fpga_dev_idx(model, y, x, DEV_LOGIC, type_idx);
+	RC_ASSERT(model, dev_i != NO_DEV);
 	tile = YX_TILE(model, y, x);
-	type_count = 0;
-	for (i = 0; i < tile->num_devs; i++) {
-		if (tile->devs[i].type != DEV_LOGIC)
-			continue;
-		if (config_only && !(tile->devs[i].instantiated)) {
-			type_count++;
-			continue;
-		}
-		snprintf(pref, sizeof(pref), "dev y%i x%i LOGIC %i",
-			y, x, type_count);
-		type_count++;
+	if (config_only && !(tile->devs[dev_i].instantiated))
+		RC_RETURN(model);
+	snprintf(pref, sizeof(pref), "dev y%i x%i LOGIC %i", y, x, type_idx);
 
-		if (!config_only) {
-			switch (tile->devs[i].subtype) {
-				case LOGIC_X:
-					fprintf(f, "%s type X\n", pref);
-					break;
-				case LOGIC_L:
-					fprintf(f, "%s type L\n", pref);
-					break;
-				case LOGIC_M:
-					fprintf(f, "%s type M\n", pref);
-					break;
-				default: EXIT(1);
-			}
-		}
-		cfg = &tile->devs[i].u.logic;
-		for (j = LUT_D; j >= LUT_A; j--) {
-			if (cfg->a2d[j].lut6_str && cfg->a2d[j].lut6_str[0])
-				fprintf(f, "%s %c6_lut_str %s\n", pref, 'A'+j,
-					cfg->a2d[j].lut6_str);
-			if (cfg->a2d[j].lut5_str && cfg->a2d[j].lut5_str[0])
-				fprintf(f, "%s %c5_lut_str %s\n", pref, 'A'+j,
-					cfg->a2d[j].lut5_str);
-			if (cfg->a2d[j].flags & OUT_USED)
-				fprintf(f, "%s %c_used\n", pref, 'A'+j);
-
-			switch (cfg->a2d[j].ff) {
-				case FF_OR2L:
-					fprintf(f, "%s %c_ff OR2L\n", pref, 'A'+j);
-					break;
-				case FF_AND2L:
-					fprintf(f, "%s %c_ff AND2L\n", pref, 'A'+j);
-					break;
-				case FF_LATCH:
-					fprintf(f, "%s %c_ff LATCH\n", pref, 'A'+j);
-					break;
-				case FF_FF:
-					fprintf(f, "%s %c_ff FF\n", pref, 'A'+j);
-					break;
-				case 0: break; default: FAIL(EINVAL);
-			}
-			switch (cfg->a2d[j].ff_mux) {
-				case MUX_O6:
-					fprintf(f, "%s %c_ffmux O6\n", pref, 'A'+j);
-					break;
-				case MUX_O5:
-					fprintf(f, "%s %c_ffmux O5\n", pref, 'A'+j);
-					break;
-				case MUX_X:
-					fprintf(f, "%s %c_ffmux X\n", pref, 'A'+j);
-					break;
-				case MUX_CY:
-					fprintf(f, "%s %c_ffmux CY\n", pref, 'A'+j);
-					break;
-				case MUX_XOR:
-					fprintf(f, "%s %c_ffmux XOR\n", pref, 'A'+j);
-					break;
-				case MUX_F7:
-					fprintf(f, "%s %c_ffmux F7\n", pref, 'A'+j);
-					break;
-				case MUX_F8:
-					fprintf(f, "%s %c_ffmux F8\n", pref, 'A'+j);
-					break;
-				case MUX_MC31:
-					fprintf(f, "%s %c_ffmux MC31\n", pref, 'A'+j);
-					break;
-				case 0: break; default: FAIL(EINVAL);
-			}
-			switch (cfg->a2d[j].ff_srinit) {
-				case FF_SRINIT0:
-					fprintf(f, "%s %c_ffsrinit 0\n", pref, 'A'+j);
-					break;
-				case FF_SRINIT1:
-					fprintf(f, "%s %c_ffsrinit 1\n", pref, 'A'+j);
-					break;
-				case 0: break; default: FAIL(EINVAL);
-			}
-			switch (cfg->a2d[j].out_mux) {
-				case MUX_O6:
-					fprintf(f, "%s %c_outmux O6\n", pref, 'A'+j);
-					break;
-				case MUX_O5:
-					fprintf(f, "%s %c_outmux O5\n", pref, 'A'+j);
-					break;
-				case MUX_5Q:
-					fprintf(f, "%s %c_outmux 5Q\n", pref, 'A'+j);
-					break;
-				case MUX_CY:
-					fprintf(f, "%s %c_outmux CY\n", pref, 'A'+j);
-					break;
-				case MUX_XOR:
-					fprintf(f, "%s %c_outmux XOR\n", pref, 'A'+j);
-					break;
-				case MUX_F7:
-					fprintf(f, "%s %c_outmux F7\n", pref, 'A'+j);
-					break;
-				case MUX_F8:
-					fprintf(f, "%s %c_outmux F8\n", pref, 'A'+j);
-					break;
-				case MUX_MC31:
-					fprintf(f, "%s %c_outmux MC31\n", pref, 'A'+j);
-					break;
-				case 0: break; default: FAIL(EINVAL);
-			}
-			switch (cfg->a2d[j].ff5_srinit) {
-				case FF_SRINIT0:
-					fprintf(f, "%s %c5_ffsrinit 0\n", pref, 'A'+j);
-					break;
-				case FF_SRINIT1:
-					fprintf(f, "%s %c5_ffsrinit 1\n", pref, 'A'+j);
-					break;
-				case 0: break; default: FAIL(EINVAL);
-			}
-			switch (cfg->a2d[j].cy0) {
-				case CY0_X:
-					fprintf(f, "%s %c_cy0 X\n", pref, 'A'+j);
-					break;
-				case CY0_O5:
-					fprintf(f, "%s %c_cy0 O5\n", pref, 'A'+j);
-					break;
-				case 0: break; default: FAIL(EINVAL);
-			}
-			// distributed memory related:
-			switch (cfg->a2d[j].ram_mode) {
-				case DPRAM64:
-					fprintf(f, "%s %c_ram_mode DPRAM64\n", pref, 'A'+j);
-					break;
-				case DPRAM32:
-					fprintf(f, "%s %c_ram_mode DPRAM32\n", pref, 'A'+j);
-					break;
-				case SPRAM64:
-					fprintf(f, "%s %c_ram_mode SPRAM64\n", pref, 'A'+j);
-					break;
-				case SPRAM32:
-					fprintf(f, "%s %c_ram_mode SPRAM32\n", pref, 'A'+j);
-					break;
-				case SRL32:
-					fprintf(f, "%s %c_ram_mode SRL32\n", pref, 'A'+j);
-					break;
-				case SRL16:
-					fprintf(f, "%s %c_ram_mode SRL16\n", pref, 'A'+j);
-					break;
-				case 0: break; default: FAIL(EINVAL);
-			}
-			if (cfg->a2d[j].flags & LUT6VAL_SET)
-				fprintf(f, "%s %c6_lut_val 0x%016lX\n", pref, 'A'+j, cfg->a2d[j].lut6_val);
-			if (cfg->a2d[j].flags & LUT5VAL_SET)
-				fprintf(f, "%s %c5_lut_val 0x%08X\n", pref, 'A'+j, cfg->a2d[j].lut5_val);
-			if (cfg->a2d[j].flags & LUTMODE_ROM)
-				fprintf(f, "%s %c_rom\n", pref, 'A'+j);
-			switch (cfg->a2d[j].di_mux) {
-				case DIMUX_MC31:
-					fprintf(f, "%s %c_di_mux MC31\n", pref, 'A'+j);
-					break;
-				case DIMUX_X:
-					fprintf(f, "%s %c_di_mux X\n", pref, 'A'+j);
-					break;
-				case DIMUX_DX:
-					fprintf(f, "%s %c_di_mux DX\n", pref, 'A'+j);
-					break;
-				case DIMUX_BDI1:
-					fprintf(f, "%s %c_di_mux BDI1\n", pref, 'A'+j);
-					break;
-				case 0: break; default: FAIL(EINVAL);
-			}
-		}
-		switch (cfg->clk_inv) {
-			case CLKINV_B:
-				fprintf(f, "%s clk CLK_B\n", pref);
+	if (!config_only) {
+		switch (tile->devs[dev_i].subtype) {
+			case LOGIC_X:
+				fprintf(f, "%s type X\n", pref);
 				break;
-			case CLKINV_CLK:
-				fprintf(f, "%s clk CLK\n", pref);
+			case LOGIC_L:
+				fprintf(f, "%s type L\n", pref);
 				break;
-			case 0: break; default: FAIL(EINVAL);
-		}
-		switch (cfg->sync_attr) {
-			case SYNCATTR_SYNC:
-				fprintf(f, "%s sync SYNC\n", pref);
+			case LOGIC_M:
+				fprintf(f, "%s type M\n", pref);
 				break;
-			case SYNCATTR_ASYNC:
-				fprintf(f, "%s sync ASYNC\n", pref);
-				break;
-			case 0: break; default: FAIL(EINVAL);
-		}
-		if (cfg->ce_used)
-			fprintf(f, "%s ce_used\n", pref);
-		if (cfg->sr_used)
-			fprintf(f, "%s sr_used\n", pref);
-		switch (cfg->we_mux) {
-			case WEMUX_WE:
-				fprintf(f, "%s wemux WE\n", pref);
-				break;
-			case WEMUX_CE:
-				fprintf(f, "%s wemux CE\n", pref);
-				break;
-			case 0: break; default: FAIL(EINVAL);
-		}
-		if (cfg->cout_used)
-			fprintf(f, "%s cout_used\n", pref);
-		switch (cfg->precyinit) {
-			case PRECYINIT_0:
-				fprintf(f, "%s precyinit 0\n", pref);
-				break;
-			case PRECYINIT_1:
-				fprintf(f, "%s precyinit 1\n", pref);
-				break;
-			case PRECYINIT_AX:
-				fprintf(f, "%s precyinit AX\n", pref);
-				break;
-			case 0: break; default: FAIL(EINVAL);
+			default: RC_FAIL(model, EINVAL);
 		}
 	}
-	return 0;
-fail:
-	return rc;
+
+	cfg = &tile->devs[dev_i].u.logic;
+	for (j = LUT_D; j >= LUT_A; j--) {
+		if (cfg->a2d[j].lut6_str && cfg->a2d[j].lut6_str[0])
+			fprintf(f, "%s %c6_lut_str %s\n", pref, 'A'+j,
+				cfg->a2d[j].lut6_str);
+		if (cfg->a2d[j].lut5_str && cfg->a2d[j].lut5_str[0])
+			fprintf(f, "%s %c5_lut_str %s\n", pref, 'A'+j,
+				cfg->a2d[j].lut5_str);
+		if (cfg->a2d[j].flags & OUT_USED)
+			fprintf(f, "%s %c_used\n", pref, 'A'+j);
+
+		switch (cfg->a2d[j].ff) {
+			case FF_OR2L:
+				fprintf(f, "%s %c_ff OR2L\n", pref, 'A'+j);
+				break;
+			case FF_AND2L:
+				fprintf(f, "%s %c_ff AND2L\n", pref, 'A'+j);
+				break;
+			case FF_LATCH:
+				fprintf(f, "%s %c_ff LATCH\n", pref, 'A'+j);
+				break;
+			case FF_FF:
+				fprintf(f, "%s %c_ff FF\n", pref, 'A'+j);
+				break;
+			case 0: break; default: RC_FAIL(model, EINVAL);
+		}
+		switch (cfg->a2d[j].ff_mux) {
+			case MUX_O6:
+				fprintf(f, "%s %c_ffmux O6\n", pref, 'A'+j);
+				break;
+			case MUX_O5:
+				fprintf(f, "%s %c_ffmux O5\n", pref, 'A'+j);
+				break;
+			case MUX_X:
+				fprintf(f, "%s %c_ffmux X\n", pref, 'A'+j);
+				break;
+			case MUX_CY:
+				fprintf(f, "%s %c_ffmux CY\n", pref, 'A'+j);
+				break;
+			case MUX_XOR:
+				fprintf(f, "%s %c_ffmux XOR\n", pref, 'A'+j);
+				break;
+			case MUX_F7:
+				fprintf(f, "%s %c_ffmux F7\n", pref, 'A'+j);
+				break;
+			case MUX_F8:
+				fprintf(f, "%s %c_ffmux F8\n", pref, 'A'+j);
+				break;
+			case MUX_MC31:
+				fprintf(f, "%s %c_ffmux MC31\n", pref, 'A'+j);
+				break;
+			case 0: break; default: RC_FAIL(model, EINVAL);
+		}
+		switch (cfg->a2d[j].ff_srinit) {
+			case FF_SRINIT0:
+				fprintf(f, "%s %c_ffsrinit 0\n", pref, 'A'+j);
+				break;
+			case FF_SRINIT1:
+				fprintf(f, "%s %c_ffsrinit 1\n", pref, 'A'+j);
+				break;
+			case 0: break; default: RC_FAIL(model, EINVAL);
+		}
+		switch (cfg->a2d[j].out_mux) {
+			case MUX_O6:
+				fprintf(f, "%s %c_outmux O6\n", pref, 'A'+j);
+				break;
+			case MUX_O5:
+				fprintf(f, "%s %c_outmux O5\n", pref, 'A'+j);
+				break;
+			case MUX_5Q:
+				fprintf(f, "%s %c_outmux 5Q\n", pref, 'A'+j);
+				break;
+			case MUX_CY:
+				fprintf(f, "%s %c_outmux CY\n", pref, 'A'+j);
+				break;
+			case MUX_XOR:
+				fprintf(f, "%s %c_outmux XOR\n", pref, 'A'+j);
+				break;
+			case MUX_F7:
+				fprintf(f, "%s %c_outmux F7\n", pref, 'A'+j);
+				break;
+			case MUX_F8:
+				fprintf(f, "%s %c_outmux F8\n", pref, 'A'+j);
+				break;
+			case MUX_MC31:
+				fprintf(f, "%s %c_outmux MC31\n", pref, 'A'+j);
+				break;
+			case 0: break; default: RC_FAIL(model, EINVAL);
+		}
+		switch (cfg->a2d[j].ff5_srinit) {
+			case FF_SRINIT0:
+				fprintf(f, "%s %c5_ffsrinit 0\n", pref, 'A'+j);
+				break;
+			case FF_SRINIT1:
+				fprintf(f, "%s %c5_ffsrinit 1\n", pref, 'A'+j);
+				break;
+			case 0: break; default: RC_FAIL(model, EINVAL);
+		}
+		switch (cfg->a2d[j].cy0) {
+			case CY0_X:
+				fprintf(f, "%s %c_cy0 X\n", pref, 'A'+j);
+				break;
+			case CY0_O5:
+				fprintf(f, "%s %c_cy0 O5\n", pref, 'A'+j);
+				break;
+			case 0: break; default: RC_FAIL(model, EINVAL);
+		}
+		// distributed memory related:
+		switch (cfg->a2d[j].ram_mode) {
+			case DPRAM64:
+				fprintf(f, "%s %c_ram_mode DPRAM64\n", pref, 'A'+j);
+				break;
+			case DPRAM32:
+				fprintf(f, "%s %c_ram_mode DPRAM32\n", pref, 'A'+j);
+				break;
+			case SPRAM64:
+				fprintf(f, "%s %c_ram_mode SPRAM64\n", pref, 'A'+j);
+				break;
+			case SPRAM32:
+				fprintf(f, "%s %c_ram_mode SPRAM32\n", pref, 'A'+j);
+				break;
+			case SRL32:
+				fprintf(f, "%s %c_ram_mode SRL32\n", pref, 'A'+j);
+				break;
+			case SRL16:
+				fprintf(f, "%s %c_ram_mode SRL16\n", pref, 'A'+j);
+				break;
+			case 0: break; default: RC_FAIL(model, EINVAL);
+		}
+		if (cfg->a2d[j].flags & LUT6VAL_SET)
+			fprintf(f, "%s %c6_lut_val 0x%016lX\n", pref, 'A'+j, cfg->a2d[j].lut6_val);
+		if (cfg->a2d[j].flags & LUT5VAL_SET)
+			fprintf(f, "%s %c5_lut_val 0x%08X\n", pref, 'A'+j, cfg->a2d[j].lut5_val);
+		if (cfg->a2d[j].flags & LUTMODE_ROM)
+			fprintf(f, "%s %c_rom\n", pref, 'A'+j);
+		switch (cfg->a2d[j].di_mux) {
+			case DIMUX_MC31:
+				fprintf(f, "%s %c_di_mux MC31\n", pref, 'A'+j);
+				break;
+			case DIMUX_X:
+				fprintf(f, "%s %c_di_mux X\n", pref, 'A'+j);
+				break;
+			case DIMUX_DX:
+				fprintf(f, "%s %c_di_mux DX\n", pref, 'A'+j);
+				break;
+			case DIMUX_BDI1:
+				fprintf(f, "%s %c_di_mux BDI1\n", pref, 'A'+j);
+				break;
+			case 0: break; default: RC_FAIL(model, EINVAL);
+		}
+	}
+	switch (cfg->clk_inv) {
+		case CLKINV_B:
+			fprintf(f, "%s clk CLK_B\n", pref);
+			break;
+		case CLKINV_CLK:
+			fprintf(f, "%s clk CLK\n", pref);
+			break;
+		case 0: break; default: RC_FAIL(model, EINVAL);
+	}
+	switch (cfg->sync_attr) {
+		case SYNCATTR_SYNC:
+			fprintf(f, "%s sync SYNC\n", pref);
+			break;
+		case SYNCATTR_ASYNC:
+			fprintf(f, "%s sync ASYNC\n", pref);
+			break;
+		case 0: break; default: RC_FAIL(model, EINVAL);
+	}
+	if (cfg->ce_used)
+		fprintf(f, "%s ce_used\n", pref);
+	if (cfg->sr_used)
+		fprintf(f, "%s sr_used\n", pref);
+	switch (cfg->we_mux) {
+		case WEMUX_WE:
+			fprintf(f, "%s wemux WE\n", pref);
+			break;
+		case WEMUX_CE:
+			fprintf(f, "%s wemux CE\n", pref);
+			break;
+		case 0: break; default: RC_FAIL(model, EINVAL);
+	}
+	if (cfg->cout_used)
+		fprintf(f, "%s cout_used\n", pref);
+	switch (cfg->precyinit) {
+		case PRECYINIT_0:
+			fprintf(f, "%s precyinit 0\n", pref);
+			break;
+		case PRECYINIT_1:
+			fprintf(f, "%s precyinit 1\n", pref);
+			break;
+		case PRECYINIT_AX:
+			fprintf(f, "%s precyinit AX\n", pref);
+			break;
+		case 0: break; default: RC_FAIL(model, EINVAL);
+	}
+	RC_RETURN(model);
 }
 
 static int read_LOGIC_attr(struct fpga_model* model, int y, int x, int type_idx,
@@ -773,60 +755,52 @@ inst_2:
 	return 2;
 }
 
-static int printf_BUFGMUX(FILE* f, struct fpga_model* model,
-	int y, int x, int config_only)
+int printf_BUFGMUX(FILE *f, struct fpga_model *model,
+	int y, int x, int type_idx, int config_only)
 {
 	struct fpga_tile *tile;
 	struct fpgadev_bufgmux *cfg;
 	char pref[256];
-	int type_count, i, rc;
+	int dev_i;
 
-	RC_CHECK(model);
+	dev_i = fpga_dev_idx(model, y, x, DEV_BUFGMUX, type_idx);
+	RC_ASSERT(model, dev_i != NO_DEV);
 	tile = YX_TILE(model, y, x);
-	type_count = 0;
-	for (i = 0; i < tile->num_devs; i++) {
-		if (tile->devs[i].type != DEV_BUFGMUX)
-			continue;
-		if (config_only && !(tile->devs[i].instantiated)) {
-			type_count++;
-			continue;
-		}
-		snprintf(pref, sizeof(pref), "dev y%i x%i BUFGMUX %i",
-			y, x, type_count++);
-		if (!config_only)
-			fprintf(f, "%s\n", pref);
-		cfg = &tile->devs[i].u.bufgmux;
-		switch (cfg->clk) {
-			case BUFG_CLK_ASYNC:
-				fprintf(f, "%s clk ASYNC\n", pref);
-				break;
-			case BUFG_CLK_SYNC:
-				fprintf(f, "%s clk SYNC\n", pref);
-				break;
-			case 0: break; default: FAIL(EINVAL);
-		}
-		switch (cfg->disable_attr) {
-			case BUFG_DISATTR_LOW:
-				fprintf(f, "%s disable_attr LOW\n", pref);
-				break;
-			case BUFG_DISATTR_HIGH:
-				fprintf(f, "%s disable_attr HIGH\n", pref);
-				break;
-			case 0: break; default: FAIL(EINVAL);
-		}
-		switch (cfg->s_inv) {
-			case BUFG_SINV_N:
-				fprintf(f, "%s s_inv NO\n", pref);
-				break;
-			case BUFG_SINV_Y:
-				fprintf(f, "%s s_inv YES\n", pref);
-				break;
-			case 0: break; default: FAIL(EINVAL);
-		}
+	if (config_only && !(tile->devs[dev_i].instantiated))
+		RC_RETURN(model);
+	snprintf(pref, sizeof(pref), "dev y%i x%i BUFGMUX %i", y, x, type_idx);
+
+	if (!config_only)
+		fprintf(f, "%s\n", pref);
+	cfg = &tile->devs[dev_i].u.bufgmux;
+	switch (cfg->clk) {
+		case BUFG_CLK_ASYNC:
+			fprintf(f, "%s clk ASYNC\n", pref);
+			break;
+		case BUFG_CLK_SYNC:
+			fprintf(f, "%s clk SYNC\n", pref);
+			break;
+		case 0: break; default: RC_FAIL(model, EINVAL);
 	}
-	return 0;
-fail:
-	return rc;
+	switch (cfg->disable_attr) {
+		case BUFG_DISATTR_LOW:
+			fprintf(f, "%s disable_attr LOW\n", pref);
+			break;
+		case BUFG_DISATTR_HIGH:
+			fprintf(f, "%s disable_attr HIGH\n", pref);
+			break;
+		case 0: break; default: RC_FAIL(model, EINVAL);
+	}
+	switch (cfg->s_inv) {
+		case BUFG_SINV_N:
+			fprintf(f, "%s s_inv NO\n", pref);
+			break;
+		case BUFG_SINV_Y:
+			fprintf(f, "%s s_inv YES\n", pref);
+			break;
+		case 0: break; default: RC_FAIL(model, EINVAL);
+	}
+	RC_RETURN(model);
 }
 
 static int read_BUFGMUX_attr(struct fpga_model *model, struct fpga_device *dev,
@@ -864,53 +838,45 @@ inst:
 	return 2;
 }
 
-static int printf_BUFIO(FILE* f, struct fpga_model* model,
-	int y, int x, int config_only)
+int printf_BUFIO(FILE *f, struct fpga_model *model,
+	int y, int x, int type_idx, int config_only)
 {
 	struct fpga_tile *tile;
 	struct fpgadev_bufio *cfg;
 	char pref[256];
-	int type_count, i, rc;
+	int dev_i;
 
-	RC_CHECK(model);
+	dev_i = fpga_dev_idx(model, y, x, DEV_BUFIO, type_idx);
+	RC_ASSERT(model, dev_i != NO_DEV);
 	tile = YX_TILE(model, y, x);
-	type_count = 0;
-	for (i = 0; i < tile->num_devs; i++) {
-		if (tile->devs[i].type != DEV_BUFIO)
-			continue;
-		if (config_only && !(tile->devs[i].instantiated)) {
-			type_count++;
-			continue;
-		}
-		snprintf(pref, sizeof(pref), "dev y%i x%i BUFIO %i",
-			y, x, type_count++);
-		if (!config_only)
-			fprintf(f, "%s\n", pref);
-		cfg = &tile->devs[i].u.bufio;
-		if (cfg->divide)
-			fprintf(f, "%s divide %i\n", pref, cfg->divide);
-		switch (cfg->divide_bypass) {
-			case BUFIO_DIVIDEBP_N:
-				fprintf(f, "%s divide_bypass NO\n", pref);
-				break;
-			case BUFIO_DIVIDEBP_Y:
-				fprintf(f, "%s divide_bypass YES\n", pref);
-				break;
-			case 0: break; default: FAIL(EINVAL);
-		}
-		switch (cfg->i_inv) {
-			case BUFIO_IINV_N:
-				fprintf(f, "%s i_inv NO\n", pref);
-				break;
-			case BUFIO_IINV_Y:
-				fprintf(f, "%s i_inv YES\n", pref);
-				break;
-			case 0: break; default: FAIL(EINVAL);
-		}
+	if (config_only && !(tile->devs[dev_i].instantiated))
+		RC_RETURN(model);
+	snprintf(pref, sizeof(pref), "dev y%i x%i BUFIO %i", y, x, type_idx);
+
+	if (!config_only)
+		fprintf(f, "%s\n", pref);
+	cfg = &tile->devs[dev_i].u.bufio;
+	if (cfg->divide)
+		fprintf(f, "%s divide %i\n", pref, cfg->divide);
+	switch (cfg->divide_bypass) {
+		case BUFIO_DIVIDEBP_N:
+			fprintf(f, "%s divide_bypass NO\n", pref);
+			break;
+		case BUFIO_DIVIDEBP_Y:
+			fprintf(f, "%s divide_bypass YES\n", pref);
+			break;
+		case 0: break; default: RC_FAIL(model, EINVAL);
 	}
-	return 0;
-fail:
-	return rc;
+	switch (cfg->i_inv) {
+		case BUFIO_IINV_N:
+			fprintf(f, "%s i_inv NO\n", pref);
+			break;
+		case BUFIO_IINV_Y:
+			fprintf(f, "%s i_inv YES\n", pref);
+			break;
+		case 0: break; default: RC_FAIL(model, EINVAL);
+	}
+	RC_RETURN(model);
 }
 
 static int read_BUFIO_attr(struct fpga_model *model, struct fpga_device *dev,
@@ -944,44 +910,36 @@ inst:
 	return 2;
 }
 
-static int printf_BSCAN(FILE* f, struct fpga_model* model,
-	int y, int x, int config_only)
+int printf_BSCAN(FILE *f, struct fpga_model *model,
+	int y, int x, int type_idx, int config_only)
 {
 	struct fpga_tile *tile;
 	struct fpgadev_bscan *cfg;
 	char pref[256];
-	int type_count, i, rc;
+	int dev_i;
 
-	RC_CHECK(model);
+	dev_i = fpga_dev_idx(model, y, x, DEV_BSCAN, type_idx);
+	RC_ASSERT(model, dev_i != NO_DEV);
 	tile = YX_TILE(model, y, x);
-	type_count = 0;
-	for (i = 0; i < tile->num_devs; i++) {
-		if (tile->devs[i].type != DEV_BSCAN)
-			continue;
-		if (config_only && !(tile->devs[i].instantiated)) {
-			type_count++;
-			continue;
-		}
-		snprintf(pref, sizeof(pref), "dev y%i x%i BSCAN %i",
-			y, x, type_count++);
-		if (!config_only)
-			fprintf(f, "%s\n", pref);
-		cfg = &tile->devs[i].u.bscan;
-		if (cfg->jtag_chain)
-			fprintf(f, "%s jtag_chain %i\n", pref, cfg->jtag_chain);
-		switch (cfg->jtag_test) {
-			case BSCAN_JTAG_TEST_N:
-				fprintf(f, "%s jtag_test NO\n", pref);
-				break;
-			case BSCAN_JTAG_TEST_Y:
-				fprintf(f, "%s jtag_test YES\n", pref);
-				break;
-			case 0: break; default: FAIL(EINVAL);
-		}
+	if (config_only && !(tile->devs[dev_i].instantiated))
+		RC_RETURN(model);
+	snprintf(pref, sizeof(pref), "dev y%i x%i BSCAN %i", y, x, type_idx);
+
+	if (!config_only)
+		fprintf(f, "%s\n", pref);
+	cfg = &tile->devs[dev_i].u.bscan;
+	if (cfg->jtag_chain)
+		fprintf(f, "%s jtag_chain %i\n", pref, cfg->jtag_chain);
+	switch (cfg->jtag_test) {
+		case BSCAN_JTAG_TEST_N:
+			fprintf(f, "%s jtag_test NO\n", pref);
+			break;
+		case BSCAN_JTAG_TEST_Y:
+			fprintf(f, "%s jtag_test YES\n", pref);
+			break;
+		case 0: break; default: RC_FAIL(model, EINVAL);
 	}
-	return 0;
-fail:
-	return rc;
+	RC_RETURN(model);
 }
 
 static int read_BSCAN_attr(struct fpga_model *model, struct fpga_device *dev,
@@ -1009,60 +967,51 @@ inst:
 
 int printf_devices(FILE* f, struct fpga_model* model, int config_only)
 {
-	int x, y, i, rc;
+	int x, y, i;
 	struct fpga_tile* tile;
 
 	RC_CHECK(model);
-	for (x = 0; x < model->x_width; x++) {
-		for (y = 0; y < model->y_height; y++) {
-			rc = printf_IOB(f, model, y, x, config_only);
-			if (rc) goto fail;
-		}
-	}
-	for (x = 0; x < model->x_width; x++) {
-		for (y = 0; y < model->y_height; y++) {
-			rc = printf_LOGIC(f, model, y, x, config_only);
-			if (rc) goto fail;
-		}
-	}
-	for (x = 0; x < model->x_width; x++) {
-		for (y = 0; y < model->y_height; y++) {
-			rc = printf_BUFGMUX(f, model, y, x, config_only);
-			if (rc) goto fail;
-		}
-	}
-	for (x = 0; x < model->x_width; x++) {
-		for (y = 0; y < model->y_height; y++) {
-			rc = printf_BUFIO(f, model, y, x, config_only);
-			if (rc) goto fail;
-		}
-	}
-	for (x = 0; x < model->x_width; x++) {
-		for (y = 0; y < model->y_height; y++) {
-			rc = printf_BSCAN(f, model, y, x, config_only);
-			if (rc) goto fail;
-		}
-	}
 	for (x = 0; x < model->x_width; x++) {
 		for (y = 0; y < model->y_height; y++) {
 			tile = YX_TILE(model, y, x);
 			for (i = 0; i < tile->num_devs; i++) {
 				if (config_only && !(tile->devs[i].instantiated))
 					continue;
-				if (tile->devs[i].type == DEV_LOGIC
-				    || tile->devs[i].type == DEV_IOB
-				    || tile->devs[i].type == DEV_BUFGMUX
-				    || tile->devs[i].type == DEV_BUFIO
-				    || tile->devs[i].type == DEV_BSCAN)
-					continue; // handled earlier
-				fprintf(f, "dev y%i x%i %s\n", y, x,
-					fdev_type2str(tile->devs[i].type));
+				switch (tile->devs[i].type) {
+					case DEV_IOB:
+						printf_IOB(f, model, y, x,
+							fdev_typeidx(model, y, x, i),
+							config_only);
+						break;
+					case DEV_LOGIC:
+						printf_LOGIC(f, model, y, x,
+							fdev_typeidx(model, y, x, i),
+							config_only);
+						break;
+					case DEV_BUFGMUX:
+						printf_BUFGMUX(f, model, y, x,
+							fdev_typeidx(model, y, x, i),
+							config_only);
+						break;
+					case DEV_BUFIO:
+						printf_BUFIO(f, model, y, x,
+							fdev_typeidx(model, y, x, i),
+							config_only);
+						break;
+					case DEV_BSCAN:
+						printf_BSCAN(f, model, y, x,
+							fdev_typeidx(model, y, x, i),
+							config_only);
+						break;
+					default:
+						fprintf(f, "dev y%i x%i %s\n", y, x,
+							fdev_type2str(tile->devs[i].type));
+						break;
+				}
 			}
 		}
 	}
-	return 0;
-fail:
-	return rc;
+	RC_RETURN(model);
 }
 
 int printf_ports(FILE* f, struct fpga_model* model)
