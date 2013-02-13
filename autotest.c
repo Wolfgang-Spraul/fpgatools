@@ -1057,6 +1057,8 @@ static int test_logic(struct test_state* tstate, int y, int x, int type_idx,
 		rc = printf_LOGIC(stdout, tstate->model, y, x, type_idx,
 			/*config_only*/ 1);
 		if (rc) FAIL(rc);
+		fdev_print_required_pins(tstate->model, y, x,
+			DEV_LOGIC, type_idx);
 	}
 	latch_logic = 0;
 	for (lut = LUT_A; lut <= LUT_D; lut++) {
@@ -1228,8 +1230,9 @@ static int test_lut_encoding(struct test_state* tstate)
 	char lut6_str[128], lut5_str[128];
 
 	tstate->diff_to_null = 1;
-
 	y = 68;
+
+	// aggregate expressions
 	for (x_i = 0; x_i < sizeof(x_enum)/sizeof(*x_enum); x_i++) {
 		for (type_i = 0; type_i < sizeof(idx_enum)/sizeof(*idx_enum); type_i++) {
 			for (lut = LUT_A; lut <= LUT_D; lut++) {
@@ -1248,21 +1251,6 @@ static int test_lut_encoding(struct test_state* tstate)
 				if (rc) FAIL(rc);
 				for (i = '1'; i <= '6'; i++) {
 					sprintf(lut6_str, "A%c", i);
-					rc = test_logic(tstate, y, x_enum[x_i], idx_enum[type_i],
-						&logic_cfg);
-					if (rc) FAIL(rc);
-				}
-				for (i = 0; i < 64; i++) {
-					lut_str_len = 0;
-					for (j = 0; j < 6; j++) {
-						if (lut_str_len)
-							lut6_str[lut_str_len++] = '*';
-						if (!(i & (1<<j)))
-							lut6_str[lut_str_len++] = '~';
-						lut6_str[lut_str_len++] = 'A';
-						lut6_str[lut_str_len++] = '1' + j;
-					}
-					lut6_str[lut_str_len] = 0;
 					rc = test_logic(tstate, y, x_enum[x_i], idx_enum[type_i],
 						&logic_cfg);
 					if (rc) FAIL(rc);
@@ -1289,24 +1277,98 @@ static int test_lut_encoding(struct test_state* tstate)
 						&logic_cfg);
 					if (rc) FAIL(rc);
 				}
-				for (i = 0; i < 32; i++) {
+			}
+		}
+	}
+
+	// --skip=240 - separate bits for lut6 0:63
+	for (x_i = 0; x_i < sizeof(x_enum)/sizeof(*x_enum); x_i++) {
+		for (type_i = 0; type_i < sizeof(idx_enum)/sizeof(*idx_enum); type_i++) {
+			for (lut = LUT_A; lut <= LUT_D; lut++) {
+				CLEAR(logic_cfg);
+				logic_cfg.a2d[lut].lut6_str = lut6_str;
+				logic_cfg.a2d[lut].flags |= OUT_USED;
+
+				for (i = 0; i < 64; i++) {
 					lut_str_len = 0;
-					for (j = 0; j < 5; j++) {
+					for (j = 0; j < 6; j++) {
 						if (lut_str_len)
-							lut5_str[lut_str_len++] = '*';
+							lut6_str[lut_str_len++] = '*';
 						if (!(i & (1<<j)))
-							lut5_str[lut_str_len++] = '~';
-						lut5_str[lut_str_len++] = 'A';
-						lut5_str[lut_str_len++] = '1' + j;
+							lut6_str[lut_str_len++] = '~';
+						lut6_str[lut_str_len++] = 'A';
+						lut6_str[lut_str_len++] = '1' + j;
 					}
-					lut5_str[lut_str_len] = 0;
-					sprintf(lut6_str, "(A6+~A6)*%s", lut5_str);
+					lut6_str[lut_str_len] = 0;
 					rc = test_logic(tstate, y, x_enum[x_i], idx_enum[type_i],
 						&logic_cfg);
 					if (rc) FAIL(rc);
 				}
 			}
 		}
+	}
+
+	// --skip=1264 --count=64 - separate bits for lut5 (32) and lut6 (32) (xm-m-a only)
+	CLEAR(logic_cfg);
+	logic_cfg.a2d[LUT_A].lut6_str = lut6_str;
+	logic_cfg.a2d[LUT_A].lut5_str = lut5_str;
+	logic_cfg.a2d[LUT_A].flags |= OUT_USED;
+	logic_cfg.a2d[LUT_A].out_mux = MUX_O5;
+	// 32 bits in lut5 with lut6=0
+	for (i = 0; i < 32; i++) {
+		lut_str_len = 0;
+		for (j = 0; j < 5; j++) {
+			if (lut_str_len)
+				lut5_str[lut_str_len++] = '*';
+			if (!(i & (1<<j)))
+				lut5_str[lut_str_len++] = '~';
+			lut5_str[lut_str_len++] = 'A';
+			lut5_str[lut_str_len++] = '1' + j;
+		}
+		lut5_str[lut_str_len] = 0;
+		strcpy(lut6_str, "(A6+~A6)*0");
+		rc = test_logic(tstate, y, /*XM*/ 13, DEV_LOG_M_OR_L, &logic_cfg);
+		if (rc) FAIL(rc);
+	}
+	// 32 bits in lut6 with lut5=0
+	for (i = 0; i < 32; i++) {
+		strcpy(lut6_str, "(A6+~A6)");
+		lut_str_len = strlen(lut6_str);
+		for (j = 0; j < 5; j++) {
+			lut6_str[lut_str_len++] = '*';
+			if (!(i & (1<<j)))
+				lut6_str[lut_str_len++] = '~';
+			lut6_str[lut_str_len++] = 'A';
+			lut6_str[lut_str_len++] = '1' + j;
+		}
+		lut6_str[lut_str_len] = 0;
+		strcpy(lut5_str, "0");
+		rc = test_logic(tstate, y, /*XM*/ 13, DEV_LOG_M_OR_L, &logic_cfg);
+		if (rc) FAIL(rc);
+	}
+
+	// --skip=1328 --count=128 - test ROM and RAM bits
+	for (i = 0; i < 64; i++) {
+		// ROM test in LUT_A
+		CLEAR(logic_cfg);
+		logic_cfg.clk_inv = CLKINV_CLK;
+		logic_cfg.a2d[LUT_A].lut6_val = 1ULL << i;
+		logic_cfg.a2d[LUT_A].flags |= LUT6VAL_SET | LUTMODE_ROM2;
+		rc = test_logic(tstate, y, /*XM*/ 13, DEV_LOG_M_OR_L,
+			&logic_cfg);
+		if (rc) FAIL(rc);
+	}
+	for (i = 0; i < 64; i++) {
+		// RAM test in LUT_D
+		CLEAR(logic_cfg);
+		logic_cfg.we_mux = WEMUX_WE;
+		logic_cfg.clk_inv = CLKINV_CLK;
+		logic_cfg.a2d[LUT_D].lut6_val = 1ULL << i;
+		logic_cfg.a2d[LUT_D].flags |= LUT6VAL_SET;
+		logic_cfg.a2d[LUT_D].ram_mode = DPRAM64;
+		rc = test_logic(tstate, y, /*XM*/ 13, DEV_LOG_M_OR_L,
+			&logic_cfg);
+		if (rc) FAIL(rc);
 	}
 	return 0;
 fail:
@@ -1934,22 +1996,36 @@ static int test_dist_mem(struct test_state *tstate)
 	x = 13 /* XM */;
 	type_i = DEV_LOG_M_OR_L;
 
+	CLEAR(logic_cfg);
+	logic_cfg.we_mux = WEMUX_WE;
+	logic_cfg.clk_inv = CLKINV_CLK;
+	logic_cfg.a2d[LUT_D].lut6_val = 0x00000000000000FF;
+	logic_cfg.a2d[LUT_D].flags |= LUT6VAL_SET;
+	logic_cfg.a2d[LUT_D].ram_mode = DPRAM64;
+	rc = test_logic(tstate, y, x, type_i, &logic_cfg);
+	if (rc) FAIL(rc);
+
+	logic_cfg.we_mux = WEMUX_CE;
+	rc = test_logic(tstate, y, x, type_i, &logic_cfg);
+	if (rc) FAIL(rc);
+	logic_cfg.we_mux = WEMUX_WE;
+
+	logic_cfg.wa7_used = 1;
+	rc = test_logic(tstate, y, x, type_i, &logic_cfg);
+	if (rc) FAIL(rc);
+
+	logic_cfg.wa8_used = 1;
+	rc = test_logic(tstate, y, x, type_i, &logic_cfg);
+	if (rc) FAIL(rc);
+
 	for (lut = LUT_A; lut <= LUT_D; lut++) {
-
-		// Requirements for functioning ram:
-		// - input on CLK and WE pins
-		// - SRL32 and SRL16 should have O6 or MC31 output
-		// - SRL32 and SRL16 require A1 tied to VCC
-		// - DRPAM64, SPRAM64 and SRL32 require DI1
-		// - DRPAM32, SPRAM32 and SRL16 require DI2
-		// - dual or single port RAM requires WA1-WA6 (or WA1-WA5)
-		// - when dual or single port RAM should be used in any
-		//   of the 4 luts, the lut-D must be one of them
-
 		for (ram_mode_i = 0; ram_mode_i < sizeof(ram_modes)/sizeof(*ram_modes);
 			ram_mode_i++) {
 
 			CLEAR(logic_cfg);
+			logic_cfg.we_mux = WEMUX_WE;
+			logic_cfg.clk_inv = CLKINV_CLK;
+
 			logic_cfg.a2d[lut].lut6_val = 0x00000000000000FF;
 			logic_cfg.a2d[lut].flags |= LUT6VAL_SET;
 			logic_cfg.a2d[lut].ram_mode = ram_modes[ram_mode_i];
@@ -1971,6 +2047,9 @@ static int test_dist_mem(struct test_state *tstate)
 		if (lut != LUT_D) { // LUT_D has no DIMUX
 
 			CLEAR(logic_cfg);
+			logic_cfg.we_mux = WEMUX_WE;
+			logic_cfg.clk_inv = CLKINV_CLK;
+
 			logic_cfg.a2d[lut].lut6_val = 0x00000000000000FF;
 			logic_cfg.a2d[lut].flags |= LUT6VAL_SET;
 			logic_cfg.a2d[lut].ram_mode = SRL32;
@@ -1991,8 +2070,9 @@ static int test_dist_mem(struct test_state *tstate)
 		}
 
 		CLEAR(logic_cfg);
+		logic_cfg.clk_inv = CLKINV_CLK;
 		logic_cfg.a2d[lut].lut6_val = 0x00000000000000FF;
-		logic_cfg.a2d[lut].flags |= LUT6VAL_SET | LUTMODE_ROM;
+		logic_cfg.a2d[lut].flags |= LUT6VAL_SET | LUTMODE_ROM2;
 
 		rc = test_logic(tstate, y, x, type_i, &logic_cfg);
 		if (rc) FAIL(rc);

@@ -416,10 +416,11 @@ enum {
 	  "COUT" }
 
 enum { LUT_A = 0, LUT_B, LUT_C, LUT_D }; // offset into a2d[]
-#define OUT_USED	0x0001
-#define LUT6VAL_SET	0x0002
-#define LUT5VAL_SET	0x0004
-#define LUTMODE_ROM	0x0008
+#define OUT_USED       0x0001
+#define LUT6VAL_SET    0x0002
+#define LUT5VAL_SET    0x0004
+#define LUTMODE_ROM2   0x0008
+enum { LUTMODE_LUT = 1, LUTMODE_ROM, LUTMODE_RAM };
 enum { FF_SRINIT0 = 1, FF_SRINIT1 };
 enum { MUX_O6 = 1, MUX_O5, MUX_5Q, MUX_X, MUX_CY, MUX_XOR, MUX_F7, MUX_F8, MUX_MC31 };
 enum { FF_OR2L = 1, FF_AND2L, FF_LATCH, FF_FF };
@@ -436,17 +437,20 @@ enum { DIMUX_MC31 = 1, DIMUX_X, DIMUX_DX, DIMUX_BDI1 };
 
 struct fpgadev_logic_a2d
 {
-	// LUT/RAM/ROM mode:
-	// - Both the lut6 and lut5 must have the same mode of either
-	//   LUT, RAM or ROM.
-	// - If neither LUT6VAL_SET nor LUT5VAL_SET are on, the mode is LUT.
-	// - If either LUT6VAL_SET or LUT5VAL_SET are on, lut6_str and
-	//   lut5_str are ignored, and the mode is RAM, or ROM if
-	//   LUTMODE_ROM is on.
+    int flags;      // OUT_USED, LUT6VAL_SET, LUT5VAL_SET, LUTMODE_ROM2
+    char* lut6_str;
+    char* lut5_str;
 
-	int flags;	// OUT_USED, LUT6VAL_SET, LUT5VAL_SET, LUTMODE_ROM
-	char* lut6_str;
-	char* lut5_str;
+	// ROM and LUT are almost identical, RAM is a completely
+	// different mode for the entire slice (M only).
+	// In LUT or ROM mode, DI1/DI2, MC31 and WA1..WA8
+	// should not be connected.
+
+	// lut_mode should always be set for a used lut.
+	int lut_mode;	// LUTMODE_LUT, LUTMODE_ROM, LUTMODE_RAM
+
+	uint64_t lut_val;
+	int out_used;
 	int ff_mux;	// O6, O5, X, F7(a/c), F8(b), MC31(d), CY, XOR
 	int ff_srinit;	// SRINIT0, SRINIT1 
 	int ff5_srinit; // SRINIT0, SRINIT1
@@ -454,12 +458,24 @@ struct fpgadev_logic_a2d
 	int ff;		// OR2L, AND2L, LATCH, FF
 	int cy0;	// X, O5
 
-	// distributed memory related - if either LUT6VAL_SET or LUT5VAL_SET are on:
-	uint64_t lut6_val;
-	uint32_t lut5_val;
-	// ram_mode is only valid if LUTMODE_ROM is not set. If both
-	// lut6_val and lut5_val are used, they must use the same ram_mode.
-	int ram_mode; // DPRAM64, DPRAM32, SPRAM64, SPRAM32, SRL32, SRL16
+    // distributed memory related - if either LUT6VAL_SET or LUT5VAL_SET are on:
+    uint64_t lut6_val;
+    uint32_t lut5_val;
+
+	// Requirements for LUTMODE_RAM:
+	// - input on CLK and WE pins
+	// - SRL32 and SRL16 should have O6 or MC31 output
+	// - MC31 is only driven in SRL32 or SRL16 mode.
+	// - SRL32 and SRL16 require A1 tied to VCC
+	// - DRPAM64, SPRAM64 and SRL32 require DI1 (DI1MUX)
+	// - DPRAM32, SPRAM32 and SRL16 require DI2 (AI..DI)
+	// - dual or single port RAM requires WA1..WA5/6 (D1..D5/6)
+	// - When dual or single port RAM should be used in any
+	//   of the 4 luts, the lut-D must be one of them.
+	// - With WA7 or WA8 used, all other luts should be either
+	//   unused or in DPRAM64 or SPRAM64 mode.
+	int ram_mode;	// only with LUTMODE_RAM
+		// DPRAM64, DPRAM32, SPRAM64, SPRAM32, SRL32, SRL16
 	int di_mux; // only for A-C
 		// DIMUX_MC31, DIMUX_X, DIMUX_DX (b/c), DIMUX_BDI1 (a)
 };
@@ -474,6 +490,8 @@ struct fpgadev_logic
 	int we_mux;	// WEMUX_WE, WEMUX_CE
 	int cout_used;
 	int precyinit;	// PRECYINIT_0, PRECYINIT_1, PRECYINIT_AX
+	int wa7_used;
+	int wa8_used;
 };
 
 //

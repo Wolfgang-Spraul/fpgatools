@@ -92,7 +92,7 @@ void frame_set_u16(uint8_t* frame_d, uint16_t v);
 void frame_set_u32(uint8_t* frame_d, uint32_t v);
 void frame_set_u64(uint8_t* frame_d, uint64_t v);
 
-uint64_t frame_get_lut64(const uint8_t* two_minors, int v32);
+uint64_t frame_get_lut64(int lut_pos, const uint8_t *two_minors, int v16);
 // In a lut pair, lut5 is always mapped to LOW32, lut6 to HIGH32.
 #define ULL_LOW32(v)	((uint32_t) (((uint64_t)v) & 0xFFFFFFFFULL))
 #define ULL_HIGH32(v)	((uint32_t) (((uint64_t)v) >> 32))

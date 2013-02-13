@@ -408,32 +408,32 @@ int fdev_logic_setconf(struct fpga_model* model, int y, int x,
 	int type_idx, const struct fpgadev_logic* logic_cfg)
 {
 	struct fpga_device* dev;
-	int lut, rc;
+	int lut;
 
 	RC_CHECK(model);
+	// todo: if we delete the entire old config, why do we do the
+	//       config OR'ing below?
+	fdev_delete(model, y, x, DEV_LOGIC, type_idx);
 	dev = fdev_p(model, y, x, DEV_LOGIC, type_idx);
-	if (!dev) FAIL(EINVAL);
-	rc = reset_required_pins(dev);
-	if (rc) FAIL(rc);
-	// todo: should we delete the current device configuration?
+	RC_ASSERT(model, dev);
+	reset_required_pins(dev);
 
 	for (lut = LUT_A; lut <= LUT_D; lut++) {
+		if (logic_cfg->a2d[lut].lut_mode)
+			dev->u.logic.a2d[lut].lut_mode = logic_cfg->a2d[lut].lut_mode;
 		if (logic_cfg->a2d[lut].flags & OUT_USED)
 			dev->u.logic.a2d[lut].flags |= OUT_USED;
 		if (logic_cfg->a2d[lut].lut6_str) {
-			rc = fdev_logic_a2d_lut(model, y, x, type_idx,
+			fdev_logic_a2d_lut(model, y, x, type_idx,
 				lut, 6, logic_cfg->a2d[lut].lut6_str, ZTERM);
-			if (rc) FAIL(rc);
 		}
 		if (logic_cfg->a2d[lut].lut5_str) {
-			rc = fdev_logic_a2d_lut(model, y, x, type_idx,
+			fdev_logic_a2d_lut(model, y, x, type_idx,
 				lut, 5, logic_cfg->a2d[lut].lut5_str, ZTERM);
-			if (rc) FAIL(rc);
 		}
 		if (logic_cfg->a2d[lut].ff) {
-			if (!logic_cfg->a2d[lut].ff_mux
-			    || !logic_cfg->a2d[lut].ff_srinit)
-				FAIL(EINVAL);
+			RC_ASSERT(model, logic_cfg->a2d[lut].ff_mux
+			    && logic_cfg->a2d[lut].ff_srinit);
 			dev->u.logic.a2d[lut].ff = logic_cfg->a2d[lut].ff;
 			dev->u.logic.a2d[lut].ff_mux = logic_cfg->a2d[lut].ff_mux;
 			dev->u.logic.a2d[lut].ff_srinit = logic_cfg->a2d[lut].ff_srinit;
@@ -454,8 +454,8 @@ int fdev_logic_setconf(struct fpga_model* model, int y, int x,
 			dev->u.logic.a2d[lut].flags |= LUT5VAL_SET;
 			dev->u.logic.a2d[lut].lut5_val = logic_cfg->a2d[lut].lut5_val;
 		}
-		if (logic_cfg->a2d[lut].flags & LUTMODE_ROM)
-			dev->u.logic.a2d[lut].flags |= LUTMODE_ROM;
+		if (logic_cfg->a2d[lut].flags & LUTMODE_ROM2)
+			dev->u.logic.a2d[lut].flags |= LUTMODE_ROM2;
 		if (logic_cfg->a2d[lut].ram_mode)
 			dev->u.logic.a2d[lut].ram_mode = logic_cfg->a2d[lut].ram_mode;
 		if (logic_cfg->a2d[lut].di_mux)
@@ -475,13 +475,14 @@ int fdev_logic_setconf(struct fpga_model* model, int y, int x,
 		dev->u.logic.cout_used = logic_cfg->cout_used;
 	if (logic_cfg->precyinit)
 		dev->u.logic.precyinit = logic_cfg->precyinit;
+	if (logic_cfg->wa7_used)
+		dev->u.logic.wa7_used = logic_cfg->wa7_used;
+	if (logic_cfg->wa8_used)
+		dev->u.logic.wa8_used = logic_cfg->wa8_used;
 
 	dev->instantiated = 1;
-	rc = fdev_set_required_pins(model, y, x, DEV_LOGIC, type_idx);
-	if (rc) FAIL(rc);
-	return 0;
-fail:
-	return rc;
+	fdev_set_required_pins(model, y, x, DEV_LOGIC, type_idx);
+	RC_RETURN(model);
 }
 
 int fdev_logic_a2d_out_used(struct fpga_model* model, int y, int x,
@@ -947,6 +948,14 @@ int fdev_set_required_pins(struct fpga_model* model, int y, int x, int type,
 			add_req_inpin(dev, LI_BX);
 			add_req_inpin(dev, LI_CX);
 		}
+		if (dev->u.logic.we_mux == WEMUX_WE)
+			add_req_inpin(dev, LI_WE);
+		else if (dev->u.logic.we_mux == WEMUX_CE)
+			add_req_inpin(dev, LI_CE);
+		if (dev->u.logic.wa7_used)
+			add_req_inpin(dev, LI_CX);
+		if (dev->u.logic.wa8_used)
+			add_req_inpin(dev, LI_BX);
 		for (i = LUT_A; i <= LUT_D; i++) {
 			if (dev->u.logic.a2d[i].flags & OUT_USED) {
 				// LO_A..LO_D are in sequence
@@ -961,7 +970,8 @@ int fdev_set_required_pins(struct fpga_model* model, int y, int x, int type,
 				add_req_outpin(dev, LO_AQ+i);
 			}
 			if (dev->u.logic.a2d[i].ff_mux == MUX_X
-			    || dev->u.logic.a2d[i].cy0 == CY0_X) {
+			    || dev->u.logic.a2d[i].cy0 == CY0_X
+			    || dev->u.logic.a2d[i].di_mux == DIMUX_X) {
 				// LI_AX..LI_DX are in sequence
 				add_req_inpin(dev, LI_AX+i);
 			}
@@ -985,6 +995,8 @@ int fdev_set_required_pins(struct fpga_model* model, int y, int x, int type,
 			     || dev->u.logic.a2d[i].out_mux == MUX_XOR)
 			    && !dev->u.logic.precyinit)
 				add_req_inpin(dev, LI_CIN);
+			if (dev->u.logic.a2d[i].flags & (LUT6VAL_SET|LUT5VAL_SET))
+				add_req_inpin(dev, LI_CLK);
 		}
 		return 0;
 	}

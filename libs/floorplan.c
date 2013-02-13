@@ -312,12 +312,35 @@ int printf_LOGIC(FILE* f, struct fpga_model* model,
 
 	cfg = &tile->devs[dev_i].u.logic;
 	for (j = LUT_D; j >= LUT_A; j--) {
+		switch (cfg->a2d[j].lut_mode) {
+			case LUTMODE_LUT:
+				fprintf(f, "%s %c_mode LUT\n", pref, 'A'+j);
+// todo: A6_str, A5_str
+				break;
+			case LUTMODE_ROM:
+				fprintf(f, "%s %c_mode ROM\n", pref, 'A'+j);
+				fprintf(f, "%s %c_val 0x%016lX\n", pref, 'A'+j, cfg->a2d[j].lut_val);
+				break;
+			case LUTMODE_RAM:
+				fprintf(f, "%s %c_mode RAM\n", pref, 'A'+j);
+				fprintf(f, "%s %c_val 0x%016lX\n", pref, 'A'+j, cfg->a2d[j].lut_val);
+				break;
+//			default: RC_FAIL(model, EINVAL);
+		}
+
 		if (cfg->a2d[j].lut6_str && cfg->a2d[j].lut6_str[0])
 			fprintf(f, "%s %c6_lut_str %s\n", pref, 'A'+j,
 				cfg->a2d[j].lut6_str);
 		if (cfg->a2d[j].lut5_str && cfg->a2d[j].lut5_str[0])
 			fprintf(f, "%s %c5_lut_str %s\n", pref, 'A'+j,
 				cfg->a2d[j].lut5_str);
+		if (cfg->a2d[j].flags & LUT6VAL_SET)
+			fprintf(f, "%s %c6_lut_val 0x%016lX\n", pref, 'A'+j, cfg->a2d[j].lut6_val);
+		if (cfg->a2d[j].flags & LUT5VAL_SET)
+			fprintf(f, "%s %c5_lut_val 0x%08X\n", pref, 'A'+j, cfg->a2d[j].lut5_val);
+		if (cfg->a2d[j].flags & LUTMODE_ROM2)
+			fprintf(f, "%s %c_rom\n", pref, 'A'+j);
+
 		if (cfg->a2d[j].flags & OUT_USED)
 			fprintf(f, "%s %c_used\n", pref, 'A'+j);
 
@@ -439,12 +462,6 @@ int printf_LOGIC(FILE* f, struct fpga_model* model,
 				break;
 			case 0: break; default: RC_FAIL(model, EINVAL);
 		}
-		if (cfg->a2d[j].flags & LUT6VAL_SET)
-			fprintf(f, "%s %c6_lut_val 0x%016lX\n", pref, 'A'+j, cfg->a2d[j].lut6_val);
-		if (cfg->a2d[j].flags & LUT5VAL_SET)
-			fprintf(f, "%s %c5_lut_val 0x%08X\n", pref, 'A'+j, cfg->a2d[j].lut5_val);
-		if (cfg->a2d[j].flags & LUTMODE_ROM)
-			fprintf(f, "%s %c_rom\n", pref, 'A'+j);
 		switch (cfg->a2d[j].di_mux) {
 			case DIMUX_MC31:
 				fprintf(f, "%s %c_di_mux MC31\n", pref, 'A'+j);
@@ -506,6 +523,10 @@ int printf_LOGIC(FILE* f, struct fpga_model* model,
 			break;
 		case 0: break; default: RC_FAIL(model, EINVAL);
 	}
+	if (cfg->wa7_used)
+		fprintf(f, "%s wa7_used\n", pref);
+	if (cfg->wa8_used)
+		fprintf(f, "%s wa8_used\n", pref);
 	RC_RETURN(model);
 }
 
@@ -515,7 +536,7 @@ static int read_LOGIC_attr(struct fpga_model* model, int y, int x, int type_idx,
 	struct fpga_device* dev;
 	char cmp_str[128], buf[32];
 	char *endptr;
-	long int val;
+	uint64_t val;
 	int i, j, rc;
 
 	dev = fdev_p(model, y, x, DEV_LOGIC, type_idx);
@@ -530,7 +551,7 @@ static int read_LOGIC_attr(struct fpga_model* model, int y, int x, int type_idx,
 		}
 		snprintf(cmp_str, sizeof(cmp_str), "%c_rom", 'A'+i);
 		if (!str_cmp(w1, w1_len, cmp_str, ZTERM)) {
-			dev->u.logic.a2d[i].flags |= LUTMODE_ROM;
+			dev->u.logic.a2d[i].flags |= LUTMODE_ROM2;
 			goto inst_1;
 		}
 	}
@@ -544,6 +565,14 @@ static int read_LOGIC_attr(struct fpga_model* model, int y, int x, int type_idx,
 	}
 	if (!str_cmp(w1, w1_len, "cout_used", ZTERM)) {
 		dev->u.logic.cout_used = 1;
+		goto inst_1;
+	}
+	if (!str_cmp(w1, w1_len, "wa7_used", ZTERM)) {
+		dev->u.logic.wa7_used = 1;
+		goto inst_1;
+	}
+	if (!str_cmp(w1, w1_len, "wa8_used", ZTERM)) {
+		dev->u.logic.wa8_used = 1;
 		goto inst_1;
 	}
 
@@ -669,14 +698,17 @@ static int read_LOGIC_attr(struct fpga_model* model, int y, int x, int type_idx,
 			if (w2_len < 3
 			    || w2[0] != '0'
 			    || (w2[1] != 'x' && w2[1] != 'X')
-			    || w2_len > 2+16) return 0;
+			    || w2_len > 2+16) { HERE(); return 0; }
 			errno = 0;
 			for (j = 2; j < w2_len; j++)
 				buf[j-2] = w2[j];
 			buf[j-2] = 0;
-			val = strtol(buf, &endptr, /*base*/ 16);
-			if (errno || *endptr) return 0;
-
+			val = strtoull(buf, &endptr, /*base*/ 16);
+			if (errno || *endptr) {
+				fprintf(stderr, "#E %s:%i errno %i endptr '%s'\n",
+					__FILE__, __LINE__, errno, endptr);
+				return 0;
+			}
 			dev->u.logic.a2d[i].lut6_val = val;
 			dev->u.logic.a2d[i].flags |= LUT6VAL_SET;
 			goto inst_2;
@@ -691,7 +723,7 @@ static int read_LOGIC_attr(struct fpga_model* model, int y, int x, int type_idx,
 			for (j = 2; j < w2_len; j++)
 				buf[j-2] = w2[j];
 			buf[j-2] = 0;
-			val = strtol(buf, &endptr, /*base*/ 16);
+			val = strtoul(buf, &endptr, /*base*/ 16);
 			if (errno || *endptr) return 0;
 
 			dev->u.logic.a2d[i].lut5_val = val;

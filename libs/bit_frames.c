@@ -644,32 +644,26 @@ static int extract_type2(struct extract_state* es)
 	RC_RETURN(es->model);
 }
 
-static int lut2str(uint64_t lut, int lut_pos, int lut5_used,
+static int lut2str(uint64_t lut_val, int lut5_used,
 	char *lut6_buf, char** lut6_p, char *lut5_buf, char** lut5_p)
 {
-	int lut_map[64], rc;
-	uint64_t lut_mapped;
 	const char* str;
+	int rc;
 
 	if (lut5_used) {
-		xc6_lut_bitmap(lut_pos, &lut_map, 32);
-		lut_mapped = map_bits(lut, 64, lut_map);
-
 		// lut6
-		str = bool_bits2str(ULL_HIGH32(lut_mapped), 32);
+		str = bool_bits2str(ULL_HIGH32(lut_val), 32);
 		if (!str) FAIL(EINVAL);
 		snprintf(lut6_buf, MAX_LUT_LEN, "(A6+~A6)*(%s)", str);
 		*lut6_p = lut6_buf;
 
 		// lut5
-		str = bool_bits2str(ULL_LOW32(lut_mapped), 32);
+		str = bool_bits2str(ULL_LOW32(lut_val), 32);
 		if (!str) FAIL(EINVAL);
 		strcpy(lut5_buf, str);
 		*lut5_p = lut5_buf;
 	} else {
-		xc6_lut_bitmap(lut_pos, &lut_map, 64);
-		lut_mapped = map_bits(lut, 64, lut_map);
-		str = bool_bits2str(lut_mapped, 64);
+		str = bool_bits2str(lut_val, 64);
 		if (!str) FAIL(EINVAL);
 		strcpy(lut6_buf, str);
 		*lut6_p = lut6_buf;
@@ -742,26 +736,43 @@ static int extract_logic(struct extract_state* es)
 			if (has_device_type(es->model, y, x, DEV_LOGIC, LOGIC_M)) {
 				mi23_M = frame_get_u64(u8_p + 23*FRAME_SIZE + byte_off);
 				mi2526 = frame_get_u64(u8_p + 26*FRAME_SIZE + byte_off);
-				lut_ML[LUT_A] = frame_get_lut64(u8_p + 24*FRAME_SIZE, row_pos*2+1);
-				lut_ML[LUT_B] = frame_get_lut64(u8_p + 21*FRAME_SIZE, row_pos*2+1);
-				lut_ML[LUT_C] = frame_get_lut64(u8_p + 24*FRAME_SIZE, row_pos*2);
-				lut_ML[LUT_D] = frame_get_lut64(u8_p + 21*FRAME_SIZE, row_pos*2);
-				lut_X[LUT_A] = frame_get_lut64(u8_p + 27*FRAME_SIZE, row_pos*2+1);
-				lut_X[LUT_B] = frame_get_lut64(u8_p + 29*FRAME_SIZE, row_pos*2+1);
-				lut_X[LUT_C] = frame_get_lut64(u8_p + 27*FRAME_SIZE, row_pos*2);
-				lut_X[LUT_D] = frame_get_lut64(u8_p + 29*FRAME_SIZE, row_pos*2);
+
+				lut_ML[LUT_A] = frame_get_lut64(XC6_LMAP_XM_M_A,
+					u8_p + 24*FRAME_SIZE, row_pos*4+2);
+				lut_ML[LUT_B] = frame_get_lut64(XC6_LMAP_XM_M_B,
+					u8_p + 21*FRAME_SIZE, row_pos*4+2);
+				lut_ML[LUT_C] = frame_get_lut64(XC6_LMAP_XM_M_C,
+					u8_p + 24*FRAME_SIZE, row_pos*4);
+				lut_ML[LUT_D] = frame_get_lut64(XC6_LMAP_XM_M_D,
+					u8_p + 21*FRAME_SIZE, row_pos*4);
+				lut_X[LUT_A] = frame_get_lut64(XC6_LMAP_XM_X_A,
+					u8_p + 27*FRAME_SIZE, row_pos*4+2);
+				lut_X[LUT_B] = frame_get_lut64(XC6_LMAP_XM_X_B,
+					u8_p + 29*FRAME_SIZE, row_pos*4+2);
+				lut_X[LUT_C] = frame_get_lut64(XC6_LMAP_XM_X_C,
+					u8_p + 27*FRAME_SIZE, row_pos*4);
+				lut_X[LUT_D] = frame_get_lut64(XC6_LMAP_XM_X_D,
+					u8_p + 29*FRAME_SIZE, row_pos*4);
 				l_col = 0;
 			} else if (has_device_type(es->model, y, x, DEV_LOGIC, LOGIC_L)) {
 				mi23_M = 0;
 				mi2526 = frame_get_u64(u8_p + 25*FRAME_SIZE + byte_off);
-				lut_ML[LUT_A] = frame_get_lut64(u8_p + 23*FRAME_SIZE, row_pos*2+1);
-				lut_ML[LUT_B] = frame_get_lut64(u8_p + 21*FRAME_SIZE, row_pos*2+1);
-				lut_ML[LUT_C] = frame_get_lut64(u8_p + 23*FRAME_SIZE, row_pos*2);
-				lut_ML[LUT_D] = frame_get_lut64(u8_p + 21*FRAME_SIZE, row_pos*2);
-				lut_X[LUT_A] = frame_get_lut64(u8_p + 26*FRAME_SIZE, row_pos*2+1);
-				lut_X[LUT_B] = frame_get_lut64(u8_p + 28*FRAME_SIZE, row_pos*2+1);
-				lut_X[LUT_C] = frame_get_lut64(u8_p + 26*FRAME_SIZE, row_pos*2);
-				lut_X[LUT_D] = frame_get_lut64(u8_p + 28*FRAME_SIZE, row_pos*2);
+				lut_ML[LUT_A] = frame_get_lut64(XC6_LMAP_XL_L_A,
+					u8_p + 23*FRAME_SIZE, row_pos*4+2);
+				lut_ML[LUT_B] = frame_get_lut64(XC6_LMAP_XL_L_B,
+					u8_p + 21*FRAME_SIZE, row_pos*4+2);
+				lut_ML[LUT_C] = frame_get_lut64(XC6_LMAP_XL_L_C,
+					u8_p + 23*FRAME_SIZE, row_pos*4);
+				lut_ML[LUT_D] = frame_get_lut64(XC6_LMAP_XL_L_D,
+					u8_p + 21*FRAME_SIZE, row_pos*4);
+				lut_X[LUT_A] = frame_get_lut64(XC6_LMAP_XL_X_A,
+					u8_p + 26*FRAME_SIZE, row_pos*4+2);
+				lut_X[LUT_B] = frame_get_lut64(XC6_LMAP_XL_X_B,
+					u8_p + 28*FRAME_SIZE, row_pos*4+2);
+				lut_X[LUT_C] = frame_get_lut64(XC6_LMAP_XL_X_C,
+					u8_p + 26*FRAME_SIZE, row_pos*4);
+				lut_X[LUT_D] = frame_get_lut64(XC6_LMAP_XL_X_D,
+					u8_p + 28*FRAME_SIZE, row_pos*4);
 				l_col = 1;
 			} else {
 				HERE();
@@ -777,8 +788,8 @@ static int extract_logic(struct extract_state* es)
 			//
 
 		   	if (!mi20 && !mi23_M && !mi2526
-			    && !lut_X[0] && !lut_X[1] && !lut_X[2] && !lut_X[3]
-			    && !lut_ML[0] && !lut_ML[1] && !lut_ML[2] && !lut_ML[3])
+			    && !lut_X[LUT_A] && !lut_X[LUT_B] && !lut_X[LUT_C] && !lut_X[LUT_D]
+			    && !lut_ML[LUT_A] && !lut_ML[LUT_B] && !lut_ML[LUT_C] && !lut_ML[LUT_D])
 				continue;
 
 			//
@@ -1217,8 +1228,7 @@ static int extract_logic(struct extract_state* es)
 					|| cfg_ml.a2d[LUT_A].out_mux == MUX_5Q
 					|| cfg_ml.a2d[LUT_A].out_mux == MUX_O5
 					|| cfg_ml.a2d[LUT_A].cy0 == CY0_O5);
-				rc = lut2str(lut_ML[LUT_A], l_col
-					  ? XC6_LMAP_XL_L_A : XC6_LMAP_XM_M_A,
+				rc = lut2str(lut_ML[LUT_A],
 					lut5_used,
 					lut6_ml[LUT_A], &cfg_ml.a2d[LUT_A].lut6_str,
 					lut5_ml[LUT_A], &cfg_ml.a2d[LUT_A].lut5_str);
@@ -1242,8 +1252,7 @@ static int extract_logic(struct extract_state* es)
 					|| cfg_ml.a2d[LUT_B].out_mux == MUX_5Q
 					|| cfg_ml.a2d[LUT_B].out_mux == MUX_O5
 					|| cfg_ml.a2d[LUT_B].cy0 == CY0_O5);
-				rc = lut2str(lut_ML[LUT_B], l_col
-					  ? XC6_LMAP_XL_L_B : XC6_LMAP_XM_M_B,
+				rc = lut2str(lut_ML[LUT_B],
 					lut5_used,
 					lut6_ml[LUT_B], &cfg_ml.a2d[LUT_B].lut6_str,
 					lut5_ml[LUT_B], &cfg_ml.a2d[LUT_B].lut5_str);
@@ -1267,8 +1276,7 @@ static int extract_logic(struct extract_state* es)
 					|| cfg_ml.a2d[LUT_C].out_mux == MUX_5Q
 					|| cfg_ml.a2d[LUT_C].out_mux == MUX_O5
 					|| cfg_ml.a2d[LUT_C].cy0 == CY0_O5);
-				rc = lut2str(lut_ML[LUT_C], l_col
-					  ? XC6_LMAP_XL_L_C : XC6_LMAP_XM_M_C,
+				rc = lut2str(lut_ML[LUT_C],
 					lut5_used,
 					lut6_ml[LUT_C], &cfg_ml.a2d[LUT_C].lut6_str,
 					lut5_ml[LUT_C], &cfg_ml.a2d[LUT_C].lut5_str);
@@ -1292,8 +1300,7 @@ static int extract_logic(struct extract_state* es)
 					|| cfg_ml.a2d[LUT_D].out_mux == MUX_5Q
 					|| cfg_ml.a2d[LUT_D].out_mux == MUX_O5
 					|| cfg_ml.a2d[LUT_D].cy0 == CY0_O5);
-				rc = lut2str(lut_ML[LUT_D], l_col
-					  ? XC6_LMAP_XL_L_D : XC6_LMAP_XM_M_D,
+				rc = lut2str(lut_ML[LUT_D],
 					lut5_used,
 					lut6_ml[LUT_D], &cfg_ml.a2d[LUT_D].lut6_str,
 					lut5_ml[LUT_D], &cfg_ml.a2d[LUT_D].lut5_str);
@@ -1306,8 +1313,7 @@ static int extract_logic(struct extract_state* es)
 				    && cfg_x.a2d[LUT_A].ff_mux != MUX_O6)
 					cfg_x.a2d[LUT_A].flags |= OUT_USED;
 				lut5_used = cfg_x.a2d[LUT_A].out_mux != 0;
-				rc = lut2str(lut_X[LUT_A], l_col
-					  ? XC6_LMAP_XL_X_A : XC6_LMAP_XM_X_A,
+				rc = lut2str(lut_X[LUT_A],
 					lut5_used,
 					lut6_x[LUT_A], &cfg_x.a2d[LUT_A].lut6_str,
 					lut5_x[LUT_A], &cfg_x.a2d[LUT_A].lut5_str);
@@ -1321,8 +1327,7 @@ static int extract_logic(struct extract_state* es)
 				    && cfg_x.a2d[LUT_B].ff_mux != MUX_O6)
 					cfg_x.a2d[LUT_B].flags |= OUT_USED;
 				lut5_used = cfg_x.a2d[LUT_B].out_mux != 0;
-				rc = lut2str(lut_X[LUT_B], l_col
-					  ? XC6_LMAP_XL_X_B : XC6_LMAP_XM_X_B,
+				rc = lut2str(lut_X[LUT_B],
 					lut5_used,
 					lut6_x[LUT_B], &cfg_x.a2d[LUT_B].lut6_str,
 					lut5_x[LUT_B], &cfg_x.a2d[LUT_B].lut5_str);
@@ -1336,8 +1341,7 @@ static int extract_logic(struct extract_state* es)
 				    && cfg_x.a2d[LUT_C].ff_mux != MUX_O6)
 					cfg_x.a2d[LUT_C].flags |= OUT_USED;
 				lut5_used = cfg_x.a2d[LUT_C].out_mux != 0;
-				rc = lut2str(lut_X[LUT_C], l_col
-					  ? XC6_LMAP_XL_X_C : XC6_LMAP_XM_X_C,
+				rc = lut2str(lut_X[LUT_C],
 					lut5_used,
 					lut6_x[LUT_C], &cfg_x.a2d[LUT_C].lut6_str,
 					lut5_x[LUT_C], &cfg_x.a2d[LUT_C].lut5_str);
@@ -1351,8 +1355,7 @@ static int extract_logic(struct extract_state* es)
 				    && cfg_x.a2d[LUT_D].ff_mux != MUX_O6)
 					cfg_x.a2d[LUT_D].flags |= OUT_USED;
 				lut5_used = cfg_x.a2d[LUT_D].out_mux != 0;
-				rc = lut2str(lut_X[LUT_D], l_col
-					  ? XC6_LMAP_XL_X_D : XC6_LMAP_XM_X_D,
+				rc = lut2str(lut_X[LUT_D],
 					lut5_used,
 					lut6_x[LUT_D], &cfg_x.a2d[LUT_D].lut6_str,
 					lut5_x[LUT_D], &cfg_x.a2d[LUT_D].lut5_str);
@@ -2762,8 +2765,7 @@ static int is_latch(struct fpga_device *dev)
 
 static int str2lut(uint64_t *lut, int lut_pos, const struct fpgadev_logic_a2d *a2d)
 {
-	int lut6_used, lut5_used, lut_map[64], rc;
-	uint64_t u64;
+	int lut6_used, lut5_used, rc;
 
 	lut6_used = a2d->lut6_str && a2d->lut6_str[0];
 	lut5_used = a2d->lut5_str && a2d->lut5_str[0];
@@ -2771,22 +2773,19 @@ static int str2lut(uint64_t *lut, int lut_pos, const struct fpgadev_logic_a2d *a
 		return 0;
 
 	if (lut5_used) {
-		if (!lut6_used) u64 = 0;
+		if (!lut6_used) *lut = 0;
 		else {
-			rc = bool_str2bits(a2d->lut6_str, &u64, 32);
+			rc = bool_str2bits(a2d->lut6_str, lut, 32);
 			if (rc) FAIL(rc);
-			u64 <<= 32;
+			(*lut) <<= 32;
 		}
-		rc = bool_str2bits(a2d->lut5_str, &u64, 32);
+		rc = bool_str2bits(a2d->lut5_str, lut, 32);
 		if (rc) FAIL(rc);
-		xc6_lut_bitmap(lut_pos, &lut_map, 32);
 	} else {
 		// lut6_used only
-		rc = bool_str2bits(a2d->lut6_str, &u64, 64);
+		rc = bool_str2bits(a2d->lut6_str, lut, 64);
 		if (rc) FAIL(rc);
-		xc6_lut_bitmap(lut_pos, &lut_map, 64);
 	}
-	*lut = map_bits(u64, 64, lut_map);
 	return 0;
 fail:
 	return rc;
@@ -2826,25 +2825,41 @@ static int write_logic(struct fpga_bits* bits, struct fpga_model* model)
 			if (xm_col) {
 				mi23_M = frame_get_u64(u8_p + 23*FRAME_SIZE + byte_off);
 				mi2526 = frame_get_u64(u8_p + 26*FRAME_SIZE + byte_off);
-				lut_ML[LUT_A] = frame_get_lut64(u8_p + 24*FRAME_SIZE, row_pos*2+1);
-				lut_ML[LUT_B] = frame_get_lut64(u8_p + 21*FRAME_SIZE, row_pos*2+1);
-				lut_ML[LUT_C] = frame_get_lut64(u8_p + 24*FRAME_SIZE, row_pos*2);
-				lut_ML[LUT_D] = frame_get_lut64(u8_p + 21*FRAME_SIZE, row_pos*2);
-				lut_X[LUT_A] = frame_get_lut64(u8_p + 27*FRAME_SIZE, row_pos*2+1);
-				lut_X[LUT_B] = frame_get_lut64(u8_p + 29*FRAME_SIZE, row_pos*2+1);
-				lut_X[LUT_C] = frame_get_lut64(u8_p + 27*FRAME_SIZE, row_pos*2);
-				lut_X[LUT_D] = frame_get_lut64(u8_p + 29*FRAME_SIZE, row_pos*2);
+				lut_ML[LUT_A] = frame_get_lut64(XC6_LMAP_XM_M_A,
+					u8_p + 24*FRAME_SIZE, row_pos*4+2);
+				lut_ML[LUT_B] = frame_get_lut64(XC6_LMAP_XM_M_B,
+					u8_p + 21*FRAME_SIZE, row_pos*4+2);
+				lut_ML[LUT_C] = frame_get_lut64(XC6_LMAP_XM_M_C,
+					u8_p + 24*FRAME_SIZE, row_pos*4);
+				lut_ML[LUT_D] = frame_get_lut64(XC6_LMAP_XM_M_D,
+					u8_p + 21*FRAME_SIZE, row_pos*4);
+				lut_X[LUT_A] = frame_get_lut64(XC6_LMAP_XM_X_A,
+					u8_p + 27*FRAME_SIZE, row_pos*4+2);
+				lut_X[LUT_B] = frame_get_lut64(XC6_LMAP_XM_X_B,
+					u8_p + 29*FRAME_SIZE, row_pos*4+2);
+				lut_X[LUT_C] = frame_get_lut64(XC6_LMAP_XM_X_C,
+					u8_p + 27*FRAME_SIZE, row_pos*4);
+				lut_X[LUT_D] = frame_get_lut64(XC6_LMAP_XM_X_D,
+					u8_p + 29*FRAME_SIZE, row_pos*4);
 			} else { // xl
 				mi23_M = 0;
 				mi2526 = frame_get_u64(u8_p + 25*FRAME_SIZE + byte_off);
-				lut_ML[LUT_A] = frame_get_lut64(u8_p + 23*FRAME_SIZE, row_pos*2+1);
-				lut_ML[LUT_B] = frame_get_lut64(u8_p + 21*FRAME_SIZE, row_pos*2+1);
-				lut_ML[LUT_C] = frame_get_lut64(u8_p + 23*FRAME_SIZE, row_pos*2);
-				lut_ML[LUT_D] = frame_get_lut64(u8_p + 21*FRAME_SIZE, row_pos*2);
-				lut_X[LUT_A] = frame_get_lut64(u8_p + 26*FRAME_SIZE, row_pos*2+1);
-				lut_X[LUT_B] = frame_get_lut64(u8_p + 28*FRAME_SIZE, row_pos*2+1);
-				lut_X[LUT_C] = frame_get_lut64(u8_p + 26*FRAME_SIZE, row_pos*2);
-				lut_X[LUT_D] = frame_get_lut64(u8_p + 28*FRAME_SIZE, row_pos*2);
+				lut_ML[LUT_A] = frame_get_lut64(XC6_LMAP_XL_L_A,
+					u8_p + 23*FRAME_SIZE, row_pos*4+2);
+				lut_ML[LUT_B] = frame_get_lut64(XC6_LMAP_XL_L_B,
+					u8_p + 21*FRAME_SIZE, row_pos*4+2);
+				lut_ML[LUT_C] = frame_get_lut64(XC6_LMAP_XL_L_C,
+					u8_p + 23*FRAME_SIZE, row_pos*4);
+				lut_ML[LUT_D] = frame_get_lut64(XC6_LMAP_XL_L_D,
+					u8_p + 21*FRAME_SIZE, row_pos*4);
+				lut_X[LUT_A] = frame_get_lut64(XC6_LMAP_XL_X_A,
+					u8_p + 26*FRAME_SIZE, row_pos*4+2);
+				lut_X[LUT_B] = frame_get_lut64(XC6_LMAP_XL_X_B,
+					u8_p + 28*FRAME_SIZE, row_pos*4+2);
+				lut_X[LUT_C] = frame_get_lut64(XC6_LMAP_XL_X_C,
+					u8_p + 26*FRAME_SIZE, row_pos*4);
+				lut_X[LUT_D] = frame_get_lut64(XC6_LMAP_XL_X_D,
+					u8_p + 28*FRAME_SIZE, row_pos*4);
 			}
 			// Except for XC6_ML_CIN_USED (which is set by a switch elsewhere),
 			// everything else should be 0.

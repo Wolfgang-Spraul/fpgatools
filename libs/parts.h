@@ -286,11 +286,7 @@ void free_xc6_routing_bitpos(struct xc6_routing_bitpos* bitpos);
 #define XC6_LMAP_XL_X_C 3
 #define XC6_LMAP_XL_X_D 3
 
-// num_bits must be 32 or 64. If it is 32, the lower
-// 32 entries of map contain the bit positions for lut5,
-// the upper 32 entries of map the ones for lut6.
-// In either case 64 entries are written to map.
-void xc6_lut_bitmap(int lut_pos, int (*map)[64], int num_bits);
+uint64_t xc6_lut_value(int lut_pos, int lutw_tl, int lutw_tr, int lutw_bl, int lutw_br);
 
 //
 // logic configuration

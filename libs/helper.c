@@ -570,24 +570,18 @@ void frame_set_u64(uint8_t* frame_d, uint64_t v)
 	frame_set_u32(frame_d+4, high_w);
 }
 
-uint64_t frame_get_lut64(const uint8_t* two_minors, int v32)
+uint64_t frame_get_lut64(int lut_pos, const uint8_t *two_minors, int v16)
 {
-	int off_in_frame, i;
-	uint32_t m0, m1;
-	uint64_t lut64;
+	int off_in_frame, lutw_tl, lutw_tr, lutw_bl, lutw_br;
 
-	off_in_frame = v32*4;
-	if (off_in_frame >= 64)
+	off_in_frame = v16*XC6_WORD_BYTES;
+	if (off_in_frame >= XC6_HCLK_POS)
 		off_in_frame += XC6_HCLK_BYTES;
-
-	m0 = frame_get_u32(&two_minors[off_in_frame]);
-	m1 = frame_get_u32(&two_minors[FRAME_SIZE + off_in_frame]);
-	lut64 = 0;
-	for (i = 0; i < 32; i++) {
-		if (m0 & (1<<i)) lut64 |= 1ULL << (2*i);
-		if (m1 & (1<<i)) lut64 |= 1ULL << (2*i+1);
-	}
-	return lut64;
+	lutw_tl = frame_get_pinword(two_minors + off_in_frame);
+	lutw_tr = frame_get_pinword(two_minors + FRAME_SIZE + off_in_frame);
+	lutw_bl = frame_get_pinword(two_minors + off_in_frame + XC6_WORD_BYTES);
+	lutw_br = frame_get_pinword(two_minors + FRAME_SIZE + off_in_frame + XC6_WORD_BYTES);
+	return xc6_lut_value(lut_pos, lutw_tl, lutw_tr, lutw_bl, lutw_br);
 }
 
 void frame_set_lut64(uint8_t* two_minors, int v32, uint64_t v)

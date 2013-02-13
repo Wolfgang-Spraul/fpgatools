@@ -736,7 +736,7 @@ static void printf_routing_2minors(const uint8_t* bits, int row, int major,
 					bit_str[i*2+1] = '1';
 			}
 			// todo: might be nice to add the tile y and x here
-			printf("r%i ma%i v64_%02i mip%02i %s\n",
+			printf("r%i ma%i v64_%i mip%i %s\n",
 				row, major, y, even_minor, bit_str);
 		}
 	}
@@ -755,7 +755,7 @@ static void printf_v64_mi20(const uint8_t* bits, int row, int major)
 		if (u64) {
 			for (i = 0; i < 64; i++)
 				bit_str[i] = (u64 & (1ULL << i)) ? '1' : '0';
-			printf("r%i ma%i v64_%02i mi20 %s\n",
+			printf("r%i ma%i v64_%i mi20 %s\n",
 				row, major, y, bit_str);
 			num_bits_on = 0;
 			for (i = 0; i < 64; i++) {
@@ -768,7 +768,7 @@ static void printf_v64_mi20(const uint8_t* bits, int row, int major)
 				for (i = 0; i < 64; i++) {
 					if (!(u64 & (1ULL << i)))
 						continue;
-					printf("r%i ma%i v64_%02i mi20 b%i\n",
+					printf("r%i ma%i v64_%i mi20 b%i\n",
 						row, major, y, i);
 				}
 			}
@@ -776,37 +776,53 @@ static void printf_v64_mi20(const uint8_t* bits, int row, int major)
 	}
 }
 
-static void printf_lut(const uint8_t* bits, int row, int major,
-	int minor, int v32_i)
+static void printf_word(int word, int row, int major, int minor, int v16_i)
 {
-	char bit_str[64];
-	uint64_t u64;
+	char bit_str[XC6_WORD_BITS];
 	int i, num_bits_on;
 
-	u64 = frame_get_lut64(&bits[minor*FRAME_SIZE], v32_i);
-	if (u64) {
-		num_bits_on = 0;
-		for (i = 0; i < 64; i++) {
-			if (u64 & (1ULL << i))
-				num_bits_on++;
+	num_bits_on = 0;
+	for (i = 0; i < XC6_WORD_BITS; i++) {
+		if (word & (1ULL << i))
+			num_bits_on++;
+	}
+	if (num_bits_on >= 1 && num_bits_on <= 4) {
+		printf("r%i ma%i v%i_%i mi%i", row,
+			major, XC6_WORD_BITS, v16_i, minor);
+		for (i = 0; i < XC6_WORD_BITS; i++) {
+			if (word & (1ULL << i))
+				printf(" b%i", i);
 		}
-		if (num_bits_on < 5) {
-			printf("r%i ma%02i v32_%02i mip%02i_lut", row,
-				major, v32_i, minor);
-			for (i = 0; i < 64; i++) {
-				if (u64 & (1ULL << i))
-					printf(" b%i", i);
-			}
-			printf("\n");
-		} else {
-			for (i = 0; i < 64; i++)
-				bit_str[i] = (u64 & (1ULL << i)) ? '1' : '0';
-			printf("r%i ma%02i v32_%02i mip%02i_lut %.64s\n", row,
-				major, v32_i, minor, bit_str);
-		}
+		printf("\n");
+	} else {
+		for (i = 0; i < XC6_WORD_BITS; i++)
+			bit_str[i] = (word & (1ULL << i)) ? '1' : '0';
+		printf("r%i ma%i v%i_%i mi%i %.*s\n", row,
+			major, XC6_WORD_BITS, v16_i, minor, XC6_WORD_BITS, bit_str);
 	}
 }
 
+static void printf_lut_words(const uint8_t *major_bits, int row, int major, int minor, int v16_i)
+{
+	int off_in_frame, w;
+
+	off_in_frame = v16_i*XC6_WORD_BYTES;
+	if (off_in_frame >= XC6_HCLK_POS)
+		off_in_frame += XC6_HCLK_BYTES;
+
+	w = frame_get_pinword(&major_bits[minor*FRAME_SIZE + off_in_frame]);
+	if (w) printf_word(w, row, major, minor, v16_i);
+
+	w = frame_get_pinword(&major_bits[minor*FRAME_SIZE + off_in_frame + XC6_WORD_BYTES]);
+	if (w) printf_word(w, row, major, minor, v16_i+1);
+
+	w = frame_get_pinword(&major_bits[(minor+1)*FRAME_SIZE + off_in_frame]);
+	if (w) printf_word(w, row, major, minor+1, v16_i);
+
+	w = frame_get_pinword(&major_bits[(minor+1)*FRAME_SIZE + off_in_frame + XC6_WORD_BYTES]);
+	if (w) printf_word(w, row, major, minor+1, v16_i+1);
+}
+	
 static int dump_maj_zero(const uint8_t* bits, int row, int major)
 {
 	int minor;
@@ -874,8 +890,8 @@ static int dump_maj_logic(const uint8_t* bits, int row, int major)
 		if (logdev_start)
 			printf_extrabits(bits, 21, 2, 0, logdev_start*64, row, major);
 		for (i = logdev_start; i <= logdev_end; i++) {
-			printf_lut(bits, row, major, 21, i*2);
-			printf_lut(bits, row, major, 21, i*2+1);
+			printf_lut_words(bits, row, major, 21, i*4);
+			printf_lut_words(bits, row, major, 21, i*4+2);
 		}
 		if (logdev_end < 15)
 			printf_extrabits(bits, 21, 2, i*64 + XC6_HCLK_BITS, (15-logdev_end)*64, row, major);
@@ -884,8 +900,8 @@ static int dump_maj_logic(const uint8_t* bits, int row, int major)
 		if (logdev_start)
 			printf_extrabits(bits, 24, 2, 0, logdev_start*64, row, major);
 		for (i = logdev_start; i <= logdev_end; i++) {
-			printf_lut(bits, row, major, 24, i*2);
-			printf_lut(bits, row, major, 24, i*2+1);
+			printf_lut_words(bits, row, major, 24, i*4);
+			printf_lut_words(bits, row, major, 24, i*4+2);
 		}
 		if (logdev_end < 15)
 			printf_extrabits(bits, 24, 2, i*64 + XC6_HCLK_BITS, (15-logdev_end)*64, row, major);
@@ -896,10 +912,10 @@ static int dump_maj_logic(const uint8_t* bits, int row, int major)
 		if (logdev_start)
 			printf_extrabits(bits, 27, 4, 0, logdev_start*64, row, major);
 		for (i = logdev_start; i <= logdev_end; i++) {
-			printf_lut(bits, row, major, 27, i*2);
-			printf_lut(bits, row, major, 29, i*2);
-			printf_lut(bits, row, major, 27, i*2+1);
-			printf_lut(bits, row, major, 29, i*2+1);
+			printf_lut_words(bits, row, major, 27, i*4);
+			printf_lut_words(bits, row, major, 29, i*4);
+			printf_lut_words(bits, row, major, 27, i*4+2);
+			printf_lut_words(bits, row, major, 29, i*4+2);
 		}
 		if (logdev_end < 15)
 			printf_extrabits(bits, 27, 4, i*64 + XC6_HCLK_BITS, (15-logdev_end)*64, row, major);
@@ -909,10 +925,10 @@ static int dump_maj_logic(const uint8_t* bits, int row, int major)
 		if (logdev_start)
 			printf_extrabits(bits, 21, 4, 0, logdev_start*64, row, major);
 		for (i = logdev_start; i <= logdev_end; i++) {
-			printf_lut(bits, row, major, 21, i*2);
-			printf_lut(bits, row, major, 23, i*2);
-			printf_lut(bits, row, major, 21, i*2+1);
-			printf_lut(bits, row, major, 23, i*2+1);
+			printf_lut_words(bits, row, major, 21, i*4);
+			printf_lut_words(bits, row, major, 23, i*4);
+			printf_lut_words(bits, row, major, 21, i*4+2);
+			printf_lut_words(bits, row, major, 23, i*4+2);
 		}
 		if (logdev_end < 15)
 			printf_extrabits(bits, 21, 4, i*64 + XC6_HCLK_BITS, (15-logdev_end)*64, row, major);
@@ -922,10 +938,10 @@ static int dump_maj_logic(const uint8_t* bits, int row, int major)
 		if (logdev_start)
 			printf_extrabits(bits, 26, 4, 0, logdev_start*64, row, major);
 		for (i = logdev_start; i <= logdev_end; i++) {
-			printf_lut(bits, row, major, 26, i*2);
-			printf_lut(bits, row, major, 28, i*2);
-			printf_lut(bits, row, major, 26, i*2+1);
-			printf_lut(bits, row, major, 28, i*2+1);
+			printf_lut_words(bits, row, major, 26, i*4);
+			printf_lut_words(bits, row, major, 28, i*4);
+			printf_lut_words(bits, row, major, 26, i*4+2);
+			printf_lut_words(bits, row, major, 28, i*4+2);
 		}
 		if (logdev_end < 15)
 			printf_extrabits(bits, 26, 4, i*64 + XC6_HCLK_BITS, (15-logdev_end)*64, row, major);

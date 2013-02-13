@@ -1544,53 +1544,64 @@ void free_xc6_routing_bitpos(struct xc6_routing_bitpos* bitpos)
 	free(bitpos);
 }
 
-void xc6_lut_bitmap(int lut_pos, int (*map)[64], int num_bits)
+uint64_t xc6_lut_value(int lut_pos, int lutw_tl, int lutw_tr, int lutw_bl, int lutw_br)
 {
-	static const int xc6_lut_wiring[4][16] = {
+	// XC6_LMAP_ macros are offsets into this array:
+	static const int xc6_lut_wiring[4][8] = {
 	// xm-m a; xm-m c;
-	  { 17, 19, 16, 18, 23, 21, 22, 20, 31, 29, 30, 28, 25, 27, 24, 26 },
+	 { 15, 14, 12, 13,  8,  9, 11, 10 },
 	// xm-m b; xm-m d;
-	  { 47, 45, 46, 44, 41, 43, 40, 42, 33, 35, 32, 34, 39, 37, 38, 36 },
+	 {  0,  1,  3,  2,  7,  6,  4,  5 },
 	// xm-x a; xm-x b; xl-l b; xl-l d; xl-x a; xl-x b;
-	  { 31, 29, 30, 28, 27, 25, 26, 24, 19, 17, 18, 16, 23, 21, 22, 20 },
+	 {  8,  9, 10, 11, 14, 15, 12, 13 },
 	// xm-x c; xm-x d; xl-l a; xl-l c; xl-x c; xl-x d;
-	  { 33, 35, 32, 34, 37, 39, 36, 38, 45, 47, 44, 46, 41, 43, 40, 42 }};
+	 {  7,  6,  5,  4,  1,  0,  3,  2 }};
 
-	int map32[32];
-	int i;
+	uint64_t v;
+	int full_word_positions[16], i;
 
-	// expand from 16 to 32 bit positions
+	// expand 8 bits to 16 bits
+	for (i = 0; i < 8; i++) {
+		full_word_positions[i] = xc6_lut_wiring[lut_pos][i];
+		full_word_positions[i+8] = (xc6_lut_wiring[lut_pos][i]+8)%16;
+	}
+
+	// swap top and bottom words if needed
+	if (lut_pos == XC6_LMAP_XM_M_B
+	    || lut_pos == XC6_LMAP_XM_M_D
+	    || lut_pos == XC6_LMAP_XM_X_C
+	    || lut_pos == XC6_LMAP_XM_X_D
+	    || lut_pos == XC6_LMAP_XL_L_A
+	    || lut_pos == XC6_LMAP_XL_L_C
+	    || lut_pos == XC6_LMAP_XL_X_C
+	    || lut_pos == XC6_LMAP_XL_X_D) {
+		int temp_w;
+		temp_w = lutw_tl; lutw_tl = lutw_bl; lutw_bl = temp_w;
+		temp_w = lutw_tr; lutw_tr = lutw_br; lutw_br = temp_w;
+	}
+
+	// assemble bits
+	v = 0;
 	for (i = 0; i < 16; i++) {
-		map32[i] = xc6_lut_wiring[lut_pos][i];
-		if (map32[i] < 32) {
-			if (map32[i] < 16) HERE();
-			map32[16+i] = map32[i]-16;
-		} else {
-			if (map32[i] > 47) HERE();
-			map32[16+i] = map32[i]+16;
-		}
+		// top side
+		if (lutw_tr & 1<<full_word_positions[i])
+			v |= 1ULL << (i*2);
+		if (lutw_tr & 1<<full_word_positions[i+1])
+			v |= 1ULL << (i*2+1);
+		if (lutw_tl & 1<<full_word_positions[i])
+			v |= 1ULL << (i*2+2);
+		if (lutw_tl & 1<<full_word_positions[i+1])
+			v |= 1ULL << (i*2+3);
+
+		// bottom side
+		if (lutw_br & 1<<full_word_positions[i])
+			v |= 1ULL << (32+i*2);
+		if (lutw_br & 1<<full_word_positions[i+1])
+			v |= 1ULL << (32+i*2+1);
+		if (lutw_bl & 1<<full_word_positions[i])
+			v |= 1ULL << (32+i*2+2);
+		if (lutw_bl & 1<<full_word_positions[i+1])
+			v |= 1ULL << (32+i*2+3);
 	}
-	// expand from 32 to 64 for either lut6 only or lut5/lut6 pair.
-	for (i = 0; i < 32; i++) {
-		if (num_bits == 32) {
-			if (lut_pos == XC6_LMAP_XM_M_A
-			    || lut_pos == XC6_LMAP_XM_M_C
-			    || lut_pos == XC6_LMAP_XM_X_A
-			    || lut_pos == XC6_LMAP_XM_X_B
-			    || lut_pos == XC6_LMAP_XL_L_B
-			    || lut_pos == XC6_LMAP_XL_L_D
-			    || lut_pos == XC6_LMAP_XL_X_A
-			    || lut_pos == XC6_LMAP_XL_X_B) {
-				(*map)[i] = map32[i]%32;
-				(*map)[32+i] = 32+(map32[i]%32);
-			} else {
-				(*map)[i] = 32+(map32[i]%32);
-				(*map)[32+i] = map32[i]%32;
-			}
-		} else {
-			if (num_bits != 64) HERE();
-			(*map)[i] = map32[i];
-			(*map)[32+i] = ((*map)[i]+32)%64;
-		}
-	}
+	return v;
 }
