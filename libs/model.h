@@ -416,10 +416,6 @@ enum {
 	  "COUT" }
 
 enum { LUT_A = 0, LUT_B, LUT_C, LUT_D }; // offset into a2d[]
-#define OUT_USED       0x0001
-#define LUT6VAL_SET    0x0002
-#define LUT5VAL_SET    0x0004
-#define LUTMODE_ROM2   0x0008
 enum { LUTMODE_LUT = 1, LUTMODE_ROM, LUTMODE_RAM };
 enum { FF_SRINIT0 = 1, FF_SRINIT1 };
 enum { MUX_O6 = 1, MUX_O5, MUX_5Q, MUX_X, MUX_CY, MUX_XOR, MUX_F7, MUX_F8, MUX_MC31 };
@@ -437,16 +433,11 @@ enum { DIMUX_MC31 = 1, DIMUX_X, DIMUX_DX, DIMUX_BDI1 };
 
 struct fpgadev_logic_a2d
 {
-    int flags;      // OUT_USED, LUT6VAL_SET, LUT5VAL_SET, LUTMODE_ROM2
-    char* lut6_str;
-    char* lut5_str;
-
+	// lut_mode should always be set for a used lut.
 	// ROM and LUT are almost identical, RAM is a completely
 	// different mode for the entire slice (M only).
 	// In LUT or ROM mode, DI1/DI2, MC31 and WA1..WA8
 	// should not be connected.
-
-	// lut_mode should always be set for a used lut.
 	int lut_mode;	// LUTMODE_LUT, LUTMODE_ROM, LUTMODE_RAM
 
 	uint64_t lut_val;
@@ -457,10 +448,6 @@ struct fpgadev_logic_a2d
 	int out_mux;	// O6, O5, 5Q, F7(a/c), F8(b), MC31(d), CY, XOR
 	int ff;		// OR2L, AND2L, LATCH, FF
 	int cy0;	// X, O5
-
-    // distributed memory related - if either LUT6VAL_SET or LUT5VAL_SET are on:
-    uint64_t lut6_val;
-    uint32_t lut5_val;
 
 	// Requirements for LUTMODE_RAM:
 	// - input on CLK and WE pins

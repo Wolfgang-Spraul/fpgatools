@@ -315,33 +315,21 @@ int printf_LOGIC(FILE* f, struct fpga_model* model,
 		switch (cfg->a2d[j].lut_mode) {
 			case LUTMODE_LUT:
 				fprintf(f, "%s %c_mode LUT\n", pref, 'A'+j);
-// todo: A6_str, A5_str
+// todo: A6_lut_str, A5_lut_str
 				break;
 			case LUTMODE_ROM:
 				fprintf(f, "%s %c_mode ROM\n", pref, 'A'+j);
 				fprintf(f, "%s %c_val 0x%016lX\n", pref, 'A'+j, cfg->a2d[j].lut_val);
+// todo: A6_lut_val, A5_lut_val ?
 				break;
 			case LUTMODE_RAM:
 				fprintf(f, "%s %c_mode RAM\n", pref, 'A'+j);
 				fprintf(f, "%s %c_val 0x%016lX\n", pref, 'A'+j, cfg->a2d[j].lut_val);
 				break;
-//			default: RC_FAIL(model, EINVAL);
+			default: RC_FAIL(model, EINVAL);
 		}
 
-		if (cfg->a2d[j].lut6_str && cfg->a2d[j].lut6_str[0])
-			fprintf(f, "%s %c6_lut_str %s\n", pref, 'A'+j,
-				cfg->a2d[j].lut6_str);
-		if (cfg->a2d[j].lut5_str && cfg->a2d[j].lut5_str[0])
-			fprintf(f, "%s %c5_lut_str %s\n", pref, 'A'+j,
-				cfg->a2d[j].lut5_str);
-		if (cfg->a2d[j].flags & LUT6VAL_SET)
-			fprintf(f, "%s %c6_lut_val 0x%016lX\n", pref, 'A'+j, cfg->a2d[j].lut6_val);
-		if (cfg->a2d[j].flags & LUT5VAL_SET)
-			fprintf(f, "%s %c5_lut_val 0x%08X\n", pref, 'A'+j, cfg->a2d[j].lut5_val);
-		if (cfg->a2d[j].flags & LUTMODE_ROM2)
-			fprintf(f, "%s %c_rom\n", pref, 'A'+j);
-
-		if (cfg->a2d[j].flags & OUT_USED)
+		if (cfg->a2d[j].out_used)
 			fprintf(f, "%s %c_used\n", pref, 'A'+j);
 
 		switch (cfg->a2d[j].ff) {
@@ -537,7 +525,7 @@ static int read_LOGIC_attr(struct fpga_model* model, int y, int x, int type_idx,
 	char cmp_str[128], buf[32];
 	char *endptr;
 	uint64_t val;
-	int i, j, rc;
+	int i, j;
 
 	dev = fdev_p(model, y, x, DEV_LOGIC, type_idx);
 	if (!dev) { HERE(); return 0; }
@@ -546,12 +534,7 @@ static int read_LOGIC_attr(struct fpga_model* model, int y, int x, int type_idx,
 	for (i = LUT_A; i <= LUT_D; i++) {
 		snprintf(cmp_str, sizeof(cmp_str), "%c_used", 'A'+i);
 		if (!str_cmp(w1, w1_len, cmp_str, ZTERM)) {
-			dev->u.logic.a2d[i].flags |= OUT_USED;
-			goto inst_1;
-		}
-		snprintf(cmp_str, sizeof(cmp_str), "%c_rom", 'A'+i);
-		if (!str_cmp(w1, w1_len, cmp_str, ZTERM)) {
-			dev->u.logic.a2d[i].flags |= LUTMODE_ROM2;
+			dev->u.logic.a2d[i].out_used = 1;
 			goto inst_1;
 		}
 	}
@@ -582,6 +565,7 @@ static int read_LOGIC_attr(struct fpga_model* model, int y, int x, int type_idx,
 		return 2; // no reason for instantiation
 
 	for (i = LUT_A; i <= LUT_D; i++) {
+#if 0
 		snprintf(cmp_str, sizeof(cmp_str), "%c6_lut_str", 'A'+i);
 		if (!str_cmp(w1, w1_len, cmp_str, ZTERM)) {
 			rc = fdev_logic_a2d_lut(model, y, x, type_idx, i, 6, w2, w2_len);
@@ -594,6 +578,7 @@ static int read_LOGIC_attr(struct fpga_model* model, int y, int x, int type_idx,
 			if (rc) return 0;
 			goto inst_2;
 		}
+#endif
 		snprintf(cmp_str, sizeof(cmp_str), "%c_ffmux", 'A'+i);
 		if (!str_cmp(w1, w1_len, cmp_str, ZTERM)) {
 			if (!str_cmp(w2, w2_len, "O6", ZTERM))
@@ -709,10 +694,10 @@ static int read_LOGIC_attr(struct fpga_model* model, int y, int x, int type_idx,
 					__FILE__, __LINE__, errno, endptr);
 				return 0;
 			}
-			dev->u.logic.a2d[i].lut6_val = val;
-			dev->u.logic.a2d[i].flags |= LUT6VAL_SET;
+			dev->u.logic.a2d[i].lut_val = val;
 			goto inst_2;
 		}
+#if 0
 		snprintf(cmp_str, sizeof(cmp_str), "%c5_lut_val", 'A'+i);
 		if (!str_cmp(w1, w1_len, cmp_str, ZTERM)) {
 			if (w2_len < 3
@@ -730,6 +715,7 @@ static int read_LOGIC_attr(struct fpga_model* model, int y, int x, int type_idx,
 			dev->u.logic.a2d[i].flags |= LUT5VAL_SET;
 			goto inst_2;
 		}
+#endif
 		snprintf(cmp_str, sizeof(cmp_str), "%c_di_mux", 'A'+i);
 		if (!str_cmp(w1, w1_len, cmp_str, ZTERM)) {
 			if (!str_cmp(w2, w2_len, "MC31", ZTERM))

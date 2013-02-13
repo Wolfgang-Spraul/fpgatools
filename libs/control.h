@@ -54,13 +54,12 @@ str16_t fdev_logic_pinstr_i(struct fpga_model* model, pinw_idx_t idx, int ld1_ty
 
 int fdev_logic_setconf(struct fpga_model* model, int y, int x,
 	int type_idx, const struct fpgadev_logic* logic_cfg);
+int fdev_logic_set_lutstr(struct fpga_model *model, int y, int x,
+	int type_idx, int lut_pos, const char *lut6_str, const char *lut5_str);
 
 // lut_a2d is LUT_A to LUT_D
 int fdev_logic_a2d_out_used(struct fpga_model* model, int y, int x,
 	int type_idx, int lut_a2d, int used);
-// lut_5or6 is int 5 or int 6
-int fdev_logic_a2d_lut(struct fpga_model* model, int y, int x, int type_idx,
-	int lut_a2d, int lut_5or6, const char* lut_str, int lut_len);
 // srinit is FF_SRINIT0 or FF_SRINIT1
 int fdev_logic_a2d_ff(struct fpga_model* model, int y, int x, int type_idx,
 	int lut_a2d, int ff_mux, int srinit);
@@ -69,7 +68,7 @@ int fdev_logic_a2d_ff5_srinit(struct fpga_model* model, int y, int x,
 int fdev_logic_a2d_out_mux(struct fpga_model* model, int y, int x,
 	int type_idx, int lut_a2d, int out_mux);
 // cy0 is CY0_X or CY0_O5
-int fdev_logic_a2d_cy0(struct fpga_model* model, int y, int x,
+int fdev_logic_a2d_cy0(struct fpga_model *model, int y, int x,
 	int type_idx, int lut_a2d, int cy0);
 
 // clk is CLKINV_B or CLKINV_CLK
@@ -88,6 +87,12 @@ int fdev_logic_cout_used(struct fpga_model* model, int y, int x,
 // precyinit can be PRECYINIT_O, PRECYINIT_1 or PRECYINIT_AX
 int fdev_logic_precyinit(struct fpga_model* model, int y, int x,
 	int type_idx, int precyinit);
+
+// fdev_logic_o5_used() returns no error code, only 0 or 1
+int fdev_logic_o5_used(struct fpga_model *model, int y, int x, int type_idx,
+	int lut_a2d);
+int fdev_logic_get_lutstr(struct fpga_model *model, int y, int x, int type_idx,
+	int lut_a2d, const char **lut6_str, const char **lut5_str);
 
 int fdev_iob_input(struct fpga_model* model, int y, int x,
 	int type_idx, const char* io_std);

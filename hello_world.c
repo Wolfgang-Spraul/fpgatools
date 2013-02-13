@@ -52,8 +52,8 @@ int main(int argc, char** argv)
 	logic_y = 68;
 	logic_x = 13;
 	logic_type_idx = DEV_LOG_X;
-	fdev_logic_a2d_lut(&model, logic_y, logic_x, logic_type_idx,
-		LUT_D, 6, "A3*A5", ZTERM);
+	fdev_logic_set_lutstr(&model, logic_y, logic_x, logic_type_idx,
+		LUT_D, /*lut6_str*/ "A3*A5", /*lut5_str*/ 0);
 
 	fnet_new(&model, &inA_net);
 	fnet_add_port(&model, inA_net, iob_inA_y, iob_inA_x,

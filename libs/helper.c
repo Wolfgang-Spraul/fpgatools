@@ -343,6 +343,29 @@ const char* bool_bits2str(uint64_t u64, int num_bits)
 	return str;
 }
 
+int lutstr_to_val(const char *lut6_str, const char *lut5_str, uint64_t *val)
+{
+	int rc;
+
+	*val = 0;
+	if (lut5_str && *lut5_str) {
+		if (lut6_str && lut6_str[0]) {
+			rc = bool_str2bits(lut6_str, val, 32);
+			if (rc) FAIL(rc);
+			*val <<= 32;
+		}
+		rc = bool_str2bits(lut5_str, val, 32);
+		if (rc) FAIL(rc);
+	} else {
+		// lut6 only
+		rc = bool_str2bits(lut6_str, val, 64);
+		if (rc) FAIL(rc);
+	}
+	return 0;
+fail:
+	return rc;
+}
+
 void printf_type2(uint8_t *d, int len, int inpos, int num_entries)
 {
 	uint64_t u64;

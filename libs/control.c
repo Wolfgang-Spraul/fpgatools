@@ -404,84 +404,33 @@ static void add_req_outpin(struct fpga_device* dev, pinw_idx_t pinw_i)
 // logic device
 //
 
-int fdev_logic_setconf(struct fpga_model* model, int y, int x,
-	int type_idx, const struct fpgadev_logic* logic_cfg)
+int fdev_logic_setconf(struct fpga_model *model, int y, int x,
+	int type_idx, const struct fpgadev_logic *logic_cfg)
 {
-	struct fpga_device* dev;
-	int lut;
+	struct fpga_device *dev;
 
 	RC_CHECK(model);
-	// todo: if we delete the entire old config, why do we do the
-	//       config OR'ing below?
 	fdev_delete(model, y, x, DEV_LOGIC, type_idx);
 	dev = fdev_p(model, y, x, DEV_LOGIC, type_idx);
 	RC_ASSERT(model, dev);
-	reset_required_pins(dev);
 
-	for (lut = LUT_A; lut <= LUT_D; lut++) {
-		if (logic_cfg->a2d[lut].lut_mode)
-			dev->u.logic.a2d[lut].lut_mode = logic_cfg->a2d[lut].lut_mode;
-		if (logic_cfg->a2d[lut].flags & OUT_USED)
-			dev->u.logic.a2d[lut].flags |= OUT_USED;
-		if (logic_cfg->a2d[lut].lut6_str) {
-			fdev_logic_a2d_lut(model, y, x, type_idx,
-				lut, 6, logic_cfg->a2d[lut].lut6_str, ZTERM);
-		}
-		if (logic_cfg->a2d[lut].lut5_str) {
-			fdev_logic_a2d_lut(model, y, x, type_idx,
-				lut, 5, logic_cfg->a2d[lut].lut5_str, ZTERM);
-		}
-		if (logic_cfg->a2d[lut].ff) {
-			RC_ASSERT(model, logic_cfg->a2d[lut].ff_mux
-			    && logic_cfg->a2d[lut].ff_srinit);
-			dev->u.logic.a2d[lut].ff = logic_cfg->a2d[lut].ff;
-			dev->u.logic.a2d[lut].ff_mux = logic_cfg->a2d[lut].ff_mux;
-			dev->u.logic.a2d[lut].ff_srinit = logic_cfg->a2d[lut].ff_srinit;
-		}
-		if (logic_cfg->a2d[lut].out_mux)
-			dev->u.logic.a2d[lut].out_mux = logic_cfg->a2d[lut].out_mux;
-		if (logic_cfg->a2d[lut].ff5_srinit)
-			dev->u.logic.a2d[lut].ff5_srinit = logic_cfg->a2d[lut].ff5_srinit;
-		if (logic_cfg->a2d[lut].cy0)
-			dev->u.logic.a2d[lut].cy0 = logic_cfg->a2d[lut].cy0;
-
-		// distributed memory related:
-		if (logic_cfg->a2d[lut].flags & LUT6VAL_SET) {
-			dev->u.logic.a2d[lut].flags |= LUT6VAL_SET;
-			dev->u.logic.a2d[lut].lut6_val = logic_cfg->a2d[lut].lut6_val;
-		}
-		if (logic_cfg->a2d[lut].flags & LUT5VAL_SET) {
-			dev->u.logic.a2d[lut].flags |= LUT5VAL_SET;
-			dev->u.logic.a2d[lut].lut5_val = logic_cfg->a2d[lut].lut5_val;
-		}
-		if (logic_cfg->a2d[lut].flags & LUTMODE_ROM2)
-			dev->u.logic.a2d[lut].flags |= LUTMODE_ROM2;
-		if (logic_cfg->a2d[lut].ram_mode)
-			dev->u.logic.a2d[lut].ram_mode = logic_cfg->a2d[lut].ram_mode;
-		if (logic_cfg->a2d[lut].di_mux)
-			dev->u.logic.a2d[lut].di_mux = logic_cfg->a2d[lut].di_mux;
-	}
-	if (logic_cfg->clk_inv)
-		dev->u.logic.clk_inv = logic_cfg->clk_inv;
-	if (logic_cfg->sync_attr)
-		dev->u.logic.sync_attr = logic_cfg->sync_attr;
-	if (logic_cfg->ce_used)
-		dev->u.logic.ce_used = logic_cfg->ce_used;
-	if (logic_cfg->sr_used)
-		dev->u.logic.sr_used = logic_cfg->sr_used;
-	if (logic_cfg->we_mux)
-		dev->u.logic.we_mux = logic_cfg->we_mux;
-	if (logic_cfg->cout_used)
-		dev->u.logic.cout_used = logic_cfg->cout_used;
-	if (logic_cfg->precyinit)
-		dev->u.logic.precyinit = logic_cfg->precyinit;
-	if (logic_cfg->wa7_used)
-		dev->u.logic.wa7_used = logic_cfg->wa7_used;
-	if (logic_cfg->wa8_used)
-		dev->u.logic.wa8_used = logic_cfg->wa8_used;
-
+	dev->u.logic = *logic_cfg;
 	dev->instantiated = 1;
+
 	fdev_set_required_pins(model, y, x, DEV_LOGIC, type_idx);
+	RC_RETURN(model);
+}
+
+int fdev_logic_set_lutstr(struct fpga_model *model, int y, int x,
+	int type_idx, int lut_pos, const char *lut6_str, const char *lut5_str)
+{
+	struct fpga_device *dev;
+	int rc;
+
+	dev = fdev_p(model, y, x, DEV_LOGIC, type_idx);
+	RC_ASSERT(model, dev);
+	rc = lutstr_to_val(lut6_str, lut5_str, &dev->u.logic.a2d[lut_pos].lut_val);
+	if (rc) RC_FAIL(model, rc);
 	RC_RETURN(model);
 }
 
@@ -497,40 +446,7 @@ int fdev_logic_a2d_out_used(struct fpga_model* model, int y, int x,
 	rc = reset_required_pins(dev);
 	if (rc) FAIL(rc);
 
-	if (used)
-		dev->u.logic.a2d[lut_a2d].flags |= OUT_USED;
-	else
-		dev->u.logic.a2d[lut_a2d].flags &= ~OUT_USED;
-	dev->instantiated = 1;
-	return 0;
-fail:
-	return rc;
-}
-
-int fdev_logic_a2d_lut(struct fpga_model* model, int y, int x, int type_idx,
-	int lut_a2d, int lut_5or6, const char* lut_str, int lut_len)
-{
-	struct fpga_device* dev;
-	char** lut_ptr;
-	int rc;
-
-	RC_CHECK(model);
-	dev = fdev_p(model, y, x, DEV_LOGIC, type_idx);
-	if (!dev) FAIL(EINVAL);
-	rc = reset_required_pins(dev);
-	if (rc) FAIL(rc);
-
-	lut_ptr = (lut_5or6 == 5)
-		? &dev->u.logic.a2d[lut_a2d].lut5_str
-		: &dev->u.logic.a2d[lut_a2d].lut6_str;
-	if (*lut_ptr == 0) {
-		*lut_ptr = malloc(MAX_LUT_LEN);
-		if (!(*lut_ptr)) FAIL(ENOMEM);
-	}
-	if (lut_len == ZTERM) lut_len = strlen(lut_str);
-	memcpy(*lut_ptr, lut_str, lut_len);
-	(*lut_ptr)[lut_len] = 0;
-
+	dev->u.logic.a2d[lut_a2d].out_used = used;
 	dev->instantiated = 1;
 	return 0;
 fail:
@@ -731,7 +647,7 @@ fail:
 int fdev_logic_precyinit(struct fpga_model* model, int y, int x,
 	int type_idx, int precyinit)
 {
-	struct fpga_device* dev;
+	struct fpga_device *dev;
 	int rc;
 
 	RC_CHECK(model);
@@ -745,6 +661,56 @@ int fdev_logic_precyinit(struct fpga_model* model, int y, int x,
 	return 0;
 fail:
 	return rc;
+}
+
+int fdev_logic_o5_used(struct fpga_model *model, int y, int x, int type_idx,
+	int lut_a2d)
+{
+	struct fpga_device *dev = fdev_p(model, y, x, DEV_LOGIC, type_idx);
+	if (!dev) { HERE(); return 0; }
+
+	return (type_idx == DEV_LOG_X
+		&& dev->u.logic.a2d[lut_a2d].out_mux)
+	       || (type_idx == DEV_LOG_M_OR_L
+		   && (dev->u.logic.a2d[lut_a2d].ff_mux == MUX_O5
+		       || dev->u.logic.a2d[lut_a2d].out_mux == MUX_5Q
+		       || dev->u.logic.a2d[lut_a2d].out_mux == MUX_O5
+		       || dev->u.logic.a2d[lut_a2d].cy0 == CY0_O5));
+}
+
+int fdev_logic_get_lutstr(struct fpga_model *model, int y, int x, int type_idx,
+	int lut_a2d, const char **lut6_str, const char **lut5_str)
+{
+	static char lut6_buf[MAX_LUT_LEN], lut5_buf[MAX_LUT_LEN];
+	struct fpga_device *dev;
+	int lut5_used;
+	const char *str;
+
+	lut6_buf[0] = 0;
+	lut5_buf[0] = 0;
+	*lut6_str = lut6_buf;
+	*lut5_str = lut5_buf;
+
+	dev = fdev_p(model, y, x, DEV_LOGIC, type_idx);
+	RC_ASSERT(model, dev);
+
+	lut5_used = fdev_logic_o5_used(model, y, x, type_idx, lut_a2d);
+	if (lut5_used) {
+		// lut6
+		str = bool_bits2str(ULL_HIGH32(dev->u.logic.a2d[lut_a2d].lut_val), 32);
+		RC_ASSERT(model, str);
+		snprintf(lut6_buf, sizeof(lut6_buf), "(A6+~A6)*(%s)", str);
+
+		// lut5
+		str = bool_bits2str(ULL_LOW32(dev->u.logic.a2d[lut_a2d].lut_val), 32);
+		RC_ASSERT(model, str);
+		strcpy(lut5_buf, str);
+	} else {
+		str = bool_bits2str(dev->u.logic.a2d[lut_a2d].lut_val, 64);
+		RC_ASSERT(model, str);
+		strcpy(lut6_buf, str);
+	}
+	RC_RETURN(model);
 }
 
 //
@@ -896,29 +862,12 @@ int fdev_bscan(struct fpga_model *model, int y, int x, int type_idx,
 	RC_RETURN(model);
 }
 
-static void scan_lut_digits(const char* s, int* digits)
-{
-	int i;
-	
-	for (i = 0; i < 6; i++)
-		digits[i] = 0;
-	if (!s) return;
-	// Note special cases "0" and "1" for a lut that
-	// always results in 0 or 1.
-	for (i = 0; s[i]; i++) {
-		if (s[i] != 'A' && s[i] != 'a')
-			continue;
-		if (s[i+1] >= '1' && s[i+1] <= '6')
-			digits[s[++i]-'1']++;
-	}
-}
-
 int fdev_set_required_pins(struct fpga_model* model, int y, int x, int type,
 	int type_idx)
 {
 	struct fpga_device* dev;
-	int digits[6];
-	int i, j, rc;
+	int req_inpins[6];
+	int i, j, k, rc;
 
 	RC_CHECK(model);
 	dev = fdev_p(model, y, x, type, type_idx);
@@ -957,7 +906,7 @@ int fdev_set_required_pins(struct fpga_model* model, int y, int x, int type,
 		if (dev->u.logic.wa8_used)
 			add_req_inpin(dev, LI_BX);
 		for (i = LUT_A; i <= LUT_D; i++) {
-			if (dev->u.logic.a2d[i].flags & OUT_USED) {
+			if (dev->u.logic.a2d[i].out_used) {
 				// LO_A..LO_D are in sequence
 				add_req_outpin(dev, LO_A+i);
 			}
@@ -975,27 +924,40 @@ int fdev_set_required_pins(struct fpga_model* model, int y, int x, int type,
 				// LI_AX..LI_DX are in sequence
 				add_req_inpin(dev, LI_AX+i);
 			}
-			if (dev->u.logic.a2d[i].lut6_str) {
-				scan_lut_digits(dev->u.logic.a2d[i].lut6_str, digits);
-				for (j = 0; j < 6; j++) {
-					if (!digits[j]) continue;
-					add_req_inpin(dev, LI_A1+i*6+j);
+
+			for (j = 0; j < 6; j++)
+				req_inpins[j] = 0;
+			if (fdev_logic_o5_used(model, y, x, type_idx, i)) {
+				// A6 must be high/vcc if lut5 is used
+				req_inpins[5] = 1;
+				for (j = 0; j < 32; j++) {
+					if (!(dev->u.logic.a2d[i].lut_val & (1ULL << j))
+					    && !(dev->u.logic.a2d[i].lut_val & (1ULL << (32+j))))
+						continue;
+					for (k = 0; k < 5; k++) {
+						if (j & (1<<k))
+							req_inpins[k] = 1;
+					}
+				}
+			} else {
+				for (j = 0; j < 64; j++) {
+					if (!(dev->u.logic.a2d[i].lut_val & (1ULL << j)))
+						continue;
+					for (k = 0; k < 6; k++) {
+						if (j & (1<<k))
+							req_inpins[k] = 1;
+					}
 				}
 			}
-			if (dev->u.logic.a2d[i].lut5_str) {
-				// A6 must be high/vcc if lut5 is used
-				add_req_inpin(dev, LI_A6+i*6);
-				scan_lut_digits(dev->u.logic.a2d[i].lut5_str, digits);
-				for (j = 0; j < 6; j++) {
-					if (!digits[j]) continue;
+			for (j = 0; j < 6; j++) {
+				if (req_inpins[j])
 					add_req_inpin(dev, LI_A1+i*6+j);
-				}
 			}
 			if ((dev->u.logic.a2d[i].ff_mux == MUX_XOR
 			     || dev->u.logic.a2d[i].out_mux == MUX_XOR)
 			    && !dev->u.logic.precyinit)
 				add_req_inpin(dev, LI_CIN);
-			if (dev->u.logic.a2d[i].flags & (LUT6VAL_SET|LUT5VAL_SET))
+			if (dev->u.logic.a2d[i].ram_mode)
 				add_req_inpin(dev, LI_CLK);
 		}
 		return 0;
@@ -1014,7 +976,6 @@ fail:
 void fdev_delete(struct fpga_model* model, int y, int x, int type, int type_idx)
 {
 	struct fpga_device* dev;
-	int i;
 
 	dev = fdev_p(model, y, x, type, type_idx);
 	if (!dev) { HERE(); return; }
@@ -1023,14 +984,6 @@ void fdev_delete(struct fpga_model* model, int y, int x, int type, int type_idx)
 	dev->pinw_req_for_cfg = 0;
 	dev->pinw_req_total = 0;
 	dev->pinw_req_in = 0;
-	if (dev->type == DEV_LOGIC) {
-		for (i = LUT_A; i <= LUT_D; i++) {
-			free(dev->u.logic.a2d[i].lut6_str);
-			dev->u.logic.a2d[i].lut6_str = 0;
-			free(dev->u.logic.a2d[i].lut5_str);
-			dev->u.logic.a2d[i].lut5_str = 0;
-		}
-	}
 	dev->instantiated = 0;
 	memset(&dev->u, 0, sizeof(dev->u));
 }

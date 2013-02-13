@@ -644,35 +644,6 @@ static int extract_type2(struct extract_state* es)
 	RC_RETURN(es->model);
 }
 
-static int lut2str(uint64_t lut_val, int lut5_used,
-	char *lut6_buf, char** lut6_p, char *lut5_buf, char** lut5_p)
-{
-	const char* str;
-	int rc;
-
-	if (lut5_used) {
-		// lut6
-		str = bool_bits2str(ULL_HIGH32(lut_val), 32);
-		if (!str) FAIL(EINVAL);
-		snprintf(lut6_buf, MAX_LUT_LEN, "(A6+~A6)*(%s)", str);
-		*lut6_p = lut6_buf;
-
-		// lut5
-		str = bool_bits2str(ULL_LOW32(lut_val), 32);
-		if (!str) FAIL(EINVAL);
-		strcpy(lut5_buf, str);
-		*lut5_p = lut5_buf;
-	} else {
-		str = bool_bits2str(lut_val, 64);
-		if (!str) FAIL(EINVAL);
-		strcpy(lut6_buf, str);
-		*lut6_p = lut6_buf;
-	}
-	return 0;
-fail:
-	return rc;
-}
-
 static int back_to_cout(struct fpga_model *model, int cin_y, int cin_x,
 	str16_t cin_str, int *cout_y, int *cout_x, str16_t *cout_str)
 {
@@ -695,16 +666,12 @@ static int back_to_cout(struct fpga_model *model, int cin_y, int cin_x,
 
 static int extract_logic(struct extract_state* es)
 {
-	int row, row_pos, x, y, i, byte_off, last_minor, lut5_used, rc;
+	int row, row_pos, x, y, i, byte_off, last_minor, rc;
 	int latch_ml, latch_x, l_col, lut;
 	struct fpgadev_logic cfg_ml, cfg_x;
 	uint64_t lut_X[4], lut_ML[4]; // LUT_A-LUT_D
 	uint64_t mi20, mi23_M, mi2526;
 	uint8_t* u8_p;
-	char lut6_ml[NUM_LUTS][MAX_LUT_LEN];
-	char lut5_ml[NUM_LUTS][MAX_LUT_LEN];
-	char lut6_x[NUM_LUTS][MAX_LUT_LEN];
-	char lut5_x[NUM_LUTS][MAX_LUT_LEN];
 	struct fpga_device* dev_ml;
 
 	RC_CHECK(es->model);
@@ -1222,17 +1189,8 @@ static int extract_logic(struct extract_state* es)
 				    && cfg_ml.a2d[LUT_A].ff_mux != MUX_XOR
 				    && cfg_ml.a2d[LUT_A].ff_mux != MUX_CY
 				    && cfg_ml.a2d[LUT_A].ff_mux != MUX_F7)
-					cfg_ml.a2d[LUT_A].flags |= OUT_USED;
-
-				lut5_used = (cfg_ml.a2d[LUT_A].ff_mux == MUX_O5
-					|| cfg_ml.a2d[LUT_A].out_mux == MUX_5Q
-					|| cfg_ml.a2d[LUT_A].out_mux == MUX_O5
-					|| cfg_ml.a2d[LUT_A].cy0 == CY0_O5);
-				rc = lut2str(lut_ML[LUT_A],
-					lut5_used,
-					lut6_ml[LUT_A], &cfg_ml.a2d[LUT_A].lut6_str,
-					lut5_ml[LUT_A], &cfg_ml.a2d[LUT_A].lut5_str);
-				if (rc) FAIL(rc);
+					cfg_ml.a2d[LUT_A].out_used = 1;
+				cfg_ml.a2d[LUT_A].lut_val = lut_ML[LUT_A];
 			}
 			// ML-B
 			if (lut_ML[LUT_B]
@@ -1246,17 +1204,8 @@ static int extract_logic(struct extract_state* es)
 				    && cfg_ml.a2d[LUT_B].ff_mux != MUX_XOR
 				    && cfg_ml.a2d[LUT_B].ff_mux != MUX_CY
 				    && cfg_ml.a2d[LUT_B].ff_mux != MUX_F7)
-					cfg_ml.a2d[LUT_B].flags |= OUT_USED;
-
-				lut5_used = (cfg_ml.a2d[LUT_B].ff_mux == MUX_O5
-					|| cfg_ml.a2d[LUT_B].out_mux == MUX_5Q
-					|| cfg_ml.a2d[LUT_B].out_mux == MUX_O5
-					|| cfg_ml.a2d[LUT_B].cy0 == CY0_O5);
-				rc = lut2str(lut_ML[LUT_B],
-					lut5_used,
-					lut6_ml[LUT_B], &cfg_ml.a2d[LUT_B].lut6_str,
-					lut5_ml[LUT_B], &cfg_ml.a2d[LUT_B].lut5_str);
-				if (rc) FAIL(rc);
+					cfg_ml.a2d[LUT_B].out_used = 1;
+				cfg_ml.a2d[LUT_B].lut_val = lut_ML[LUT_B];
 			}
 			// ML-C
 			if (lut_ML[LUT_C]
@@ -1270,17 +1219,8 @@ static int extract_logic(struct extract_state* es)
 				    && cfg_ml.a2d[LUT_C].ff_mux != MUX_XOR
 				    && cfg_ml.a2d[LUT_C].ff_mux != MUX_CY
 				    && cfg_ml.a2d[LUT_C].ff_mux != MUX_F7)
-					cfg_ml.a2d[LUT_C].flags |= OUT_USED;
-
-				lut5_used = (cfg_ml.a2d[LUT_C].ff_mux == MUX_O5
-					|| cfg_ml.a2d[LUT_C].out_mux == MUX_5Q
-					|| cfg_ml.a2d[LUT_C].out_mux == MUX_O5
-					|| cfg_ml.a2d[LUT_C].cy0 == CY0_O5);
-				rc = lut2str(lut_ML[LUT_C],
-					lut5_used,
-					lut6_ml[LUT_C], &cfg_ml.a2d[LUT_C].lut6_str,
-					lut5_ml[LUT_C], &cfg_ml.a2d[LUT_C].lut5_str);
-				if (rc) FAIL(rc);
+					cfg_ml.a2d[LUT_C].out_used = 1;
+				cfg_ml.a2d[LUT_C].lut_val = lut_ML[LUT_C];
 			}
 			// ML-D
 			if (lut_ML[LUT_D]
@@ -1294,73 +1234,40 @@ static int extract_logic(struct extract_state* es)
 				    && cfg_ml.a2d[LUT_D].ff_mux != MUX_XOR
 				    && cfg_ml.a2d[LUT_D].ff_mux != MUX_CY
 				    && cfg_ml.a2d[LUT_D].ff_mux != MUX_F7)
-					cfg_ml.a2d[LUT_D].flags |= OUT_USED;
-
-				lut5_used = (cfg_ml.a2d[LUT_D].ff_mux == MUX_O5
-					|| cfg_ml.a2d[LUT_D].out_mux == MUX_5Q
-					|| cfg_ml.a2d[LUT_D].out_mux == MUX_O5
-					|| cfg_ml.a2d[LUT_D].cy0 == CY0_O5);
-				rc = lut2str(lut_ML[LUT_D],
-					lut5_used,
-					lut6_ml[LUT_D], &cfg_ml.a2d[LUT_D].lut6_str,
-					lut5_ml[LUT_D], &cfg_ml.a2d[LUT_D].lut5_str);
-				if (rc) FAIL(rc);
+					cfg_ml.a2d[LUT_D].out_used = 1;
+				cfg_ml.a2d[LUT_D].lut_val = lut_ML[LUT_D];
 			}
 			// X-A
 			if (lut_X[LUT_A]
 			    || !all_zero(&cfg_x.a2d[LUT_A], sizeof(cfg_x.a2d[LUT_A]))) {
 				if (lut_X[LUT_A]
 				    && cfg_x.a2d[LUT_A].ff_mux != MUX_O6)
-					cfg_x.a2d[LUT_A].flags |= OUT_USED;
-				lut5_used = cfg_x.a2d[LUT_A].out_mux != 0;
-				rc = lut2str(lut_X[LUT_A],
-					lut5_used,
-					lut6_x[LUT_A], &cfg_x.a2d[LUT_A].lut6_str,
-					lut5_x[LUT_A], &cfg_x.a2d[LUT_A].lut5_str);
-				if (rc) FAIL(rc);
-			
+					cfg_x.a2d[LUT_A].out_used = 1;
+				cfg_x.a2d[LUT_A].lut_val = lut_X[LUT_A];
 			}
 			// X-B
 			if (lut_X[LUT_B]
 			    || !all_zero(&cfg_x.a2d[LUT_B], sizeof(cfg_x.a2d[LUT_B]))) {
 				if (lut_X[LUT_B]
 				    && cfg_x.a2d[LUT_B].ff_mux != MUX_O6)
-					cfg_x.a2d[LUT_B].flags |= OUT_USED;
-				lut5_used = cfg_x.a2d[LUT_B].out_mux != 0;
-				rc = lut2str(lut_X[LUT_B],
-					lut5_used,
-					lut6_x[LUT_B], &cfg_x.a2d[LUT_B].lut6_str,
-					lut5_x[LUT_B], &cfg_x.a2d[LUT_B].lut5_str);
-				if (rc) FAIL(rc);
-			
+					cfg_x.a2d[LUT_B].out_used = 1;
+				cfg_x.a2d[LUT_B].lut_val = lut_X[LUT_B];
 			}
 			// X-C
 			if (lut_X[LUT_C]
 			    || !all_zero(&cfg_x.a2d[LUT_C], sizeof(cfg_x.a2d[LUT_C]))) {
 				if (lut_X[LUT_C]
 				    && cfg_x.a2d[LUT_C].ff_mux != MUX_O6)
-					cfg_x.a2d[LUT_C].flags |= OUT_USED;
-				lut5_used = cfg_x.a2d[LUT_C].out_mux != 0;
-				rc = lut2str(lut_X[LUT_C],
-					lut5_used,
-					lut6_x[LUT_C], &cfg_x.a2d[LUT_C].lut6_str,
-					lut5_x[LUT_C], &cfg_x.a2d[LUT_C].lut5_str);
-				if (rc) FAIL(rc);
-			
+					cfg_x.a2d[LUT_C].out_used = 1;
+				cfg_x.a2d[LUT_C].lut_val = lut_X[LUT_C];
 			}
 			// X-D
 			if (lut_X[LUT_D]
 			    || !all_zero(&cfg_x.a2d[LUT_D], sizeof(cfg_x.a2d[LUT_D]))) {
 				if (lut_X[LUT_D]
 				    && cfg_x.a2d[LUT_D].ff_mux != MUX_O6)
-					cfg_x.a2d[LUT_D].flags |= OUT_USED;
-				lut5_used = cfg_x.a2d[LUT_D].out_mux != 0;
-				rc = lut2str(lut_X[LUT_D],
-					lut5_used,
-					lut6_x[LUT_D], &cfg_x.a2d[LUT_D].lut6_str,
-					lut5_x[LUT_D], &cfg_x.a2d[LUT_D].lut5_str);
-				if (rc) FAIL(rc);
-			
+					cfg_x.a2d[LUT_D].out_used = 1;
+				cfg_x.a2d[LUT_D].lut_val = lut_X[LUT_D];
 			}
 
 			//
@@ -2763,38 +2670,10 @@ static int is_latch(struct fpga_device *dev)
 	return 0;
 }
 
-static int str2lut(uint64_t *lut, int lut_pos, const struct fpgadev_logic_a2d *a2d)
-{
-	int lut6_used, lut5_used, rc;
-
-	lut6_used = a2d->lut6_str && a2d->lut6_str[0];
-	lut5_used = a2d->lut5_str && a2d->lut5_str[0];
-	if (!lut6_used && !lut5_used)
-		return 0;
-
-	if (lut5_used) {
-		if (!lut6_used) *lut = 0;
-		else {
-			rc = bool_str2bits(a2d->lut6_str, lut, 32);
-			if (rc) FAIL(rc);
-			(*lut) <<= 32;
-		}
-		rc = bool_str2bits(a2d->lut5_str, lut, 32);
-		if (rc) FAIL(rc);
-	} else {
-		// lut6_used only
-		rc = bool_str2bits(a2d->lut6_str, lut, 64);
-		if (rc) FAIL(rc);
-	}
-	return 0;
-fail:
-	return rc;
-}
-	
 static int write_logic(struct fpga_bits* bits, struct fpga_model* model)
 {
 	int dev_idx, row, row_pos, xm_col;
-	int x, y, byte_off, rc;
+	int x, y, byte_off;
 	uint64_t lut_X[4], lut_ML[4]; // LUT_A-LUT_D
 	uint64_t mi20, mi23_M, mi2526;
 	uint8_t* u8_p;
@@ -3058,41 +2937,17 @@ static int write_logic(struct fpga_bits* bits, struct fpga_model* model)
 
 			// X device
 			if (dev_x->instantiated) {
-				rc = str2lut(&lut_X[LUT_A], xm_col
-					? XC6_LMAP_XM_X_A : XC6_LMAP_XL_X_A,
-					&dev_x->u.logic.a2d[LUT_A]);
-				RC_ASSERT(model, !rc);
-				rc = str2lut(&lut_X[LUT_B], xm_col
-					? XC6_LMAP_XM_X_B : XC6_LMAP_XL_X_B,
-					&dev_x->u.logic.a2d[LUT_B]);
-				RC_ASSERT(model, !rc);
-				rc = str2lut(&lut_X[LUT_C], xm_col
-					? XC6_LMAP_XM_X_C : XC6_LMAP_XL_X_C,
-					&dev_x->u.logic.a2d[LUT_C]);
-				RC_ASSERT(model, !rc);
-				rc = str2lut(&lut_X[LUT_D], xm_col
-					? XC6_LMAP_XM_X_D : XC6_LMAP_XL_X_D,
-					&dev_x->u.logic.a2d[LUT_D]);
-				RC_ASSERT(model, !rc);
+				lut_X[LUT_A] = dev_x->u.logic.a2d[LUT_A].lut_val;
+				lut_X[LUT_B] = dev_x->u.logic.a2d[LUT_B].lut_val;
+				lut_X[LUT_C] = dev_x->u.logic.a2d[LUT_C].lut_val;
+				lut_X[LUT_D] = dev_x->u.logic.a2d[LUT_D].lut_val;
 			}
 			// M or L device
 			if (dev_ml->instantiated) {
-				rc = str2lut(&lut_ML[LUT_A], xm_col
-					? XC6_LMAP_XM_M_A : XC6_LMAP_XL_L_A,
-					&dev_ml->u.logic.a2d[LUT_A]);
-				RC_ASSERT(model, !rc);
-				rc = str2lut(&lut_ML[LUT_B], xm_col
-					? XC6_LMAP_XM_M_B : XC6_LMAP_XL_L_B,
-					&dev_ml->u.logic.a2d[LUT_B]);
-				RC_ASSERT(model, !rc);
-				rc = str2lut(&lut_ML[LUT_C], xm_col
-					? XC6_LMAP_XM_M_C : XC6_LMAP_XL_L_C,
-					&dev_ml->u.logic.a2d[LUT_C]);
-				RC_ASSERT(model, !rc);
-				rc = str2lut(&lut_ML[LUT_D], xm_col
-					? XC6_LMAP_XM_M_D : XC6_LMAP_XL_L_D,
-					&dev_ml->u.logic.a2d[LUT_D]);
-				RC_ASSERT(model, !rc);
+				lut_ML[LUT_A] = dev_ml->u.logic.a2d[LUT_A].lut_val;
+				lut_ML[LUT_B] = dev_ml->u.logic.a2d[LUT_B].lut_val;
+				lut_ML[LUT_C] = dev_ml->u.logic.a2d[LUT_C].lut_val;
+				lut_ML[LUT_D] = dev_ml->u.logic.a2d[LUT_D].lut_val;
 			}
 
 			//

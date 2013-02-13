@@ -548,8 +548,8 @@ static int test_routing_sw_from_logic(struct test_state* tstate,
 	// from below, or sr1/sl1 wires from above.
 	for (rel_y = -1; rel_y <= 1; rel_y += 2) {
 		for (i = '1'; i <= '6'; i++) {
-			rc = fdev_logic_a2d_lut(tstate->model, y, x,
-				DEV_LOG_M_OR_L, LUT_A, 6, pf("A%c", i), ZTERM);
+			rc = fdev_logic_set_lutstr(tstate->model, y, x,
+				DEV_LOG_M_OR_L, LUT_A, /*lut6_str*/ pf("A%c", i), /*lut5_str*/ 0);
 			if (rc) FAIL(rc);
 			rc = fdev_set_required_pins(tstate->model, y, x,
 				DEV_LOGIC, DEV_LOG_M_OR_L);
@@ -649,8 +649,8 @@ static int test_routing_switches(struct test_state* tstate)
 	
 				// A1-A6 to A (same for lut B-D)
 				for (k = '1'; k <= '6'; k++) {
-					rc = fdev_logic_a2d_lut(tstate->model, y, x,
-						idx_enum[i], j, 6, pf("A%c", k), ZTERM);
+					rc = fdev_logic_set_lutstr(tstate->model, y, x,
+						idx_enum[i], j, /*lut6_str*/ pf("A%c", k), /*lut5_str*/ 0);
 					if (rc) FAIL(rc);
 	
 					if (!r)
@@ -666,8 +666,8 @@ static int test_routing_switches(struct test_state* tstate)
 				}
 	
 				// A1->O6->FF->AQ (same for lut B-D)
-				rc = fdev_logic_a2d_lut(tstate->model, y, x,
-					idx_enum[i], j, 6, "A1", ZTERM);
+				rc = fdev_logic_set_lutstr(tstate->model, y, x,
+					idx_enum[i], j, /*lut6_str*/ "A1", /*lut5_str*/ 0);
 				if (rc) FAIL(rc);
 				rc = fdev_logic_a2d_ff(tstate->model, y, x, idx_enum[i],
 					j, MUX_O6, FF_SRINIT0);
@@ -1104,17 +1104,13 @@ static int test_logic(struct test_state* tstate, int y, int x, int type_idx,
 			}
 		}
 		if ((dev->pinw_req_for_cfg[i] == LI_A6
-		     && dev->u.logic.a2d[LUT_A].lut5_str
-		     && *dev->u.logic.a2d[LUT_A].lut5_str)
+		     && fdev_logic_o5_used(tstate->model, y, x, type_idx, LUT_A))
 		    || (dev->pinw_req_for_cfg[i] == LI_B6
-		        && dev->u.logic.a2d[LUT_B].lut5_str
-		        && *dev->u.logic.a2d[LUT_B].lut5_str)
+		        && fdev_logic_o5_used(tstate->model, y, x, type_idx, LUT_B))
 		    || (dev->pinw_req_for_cfg[i] == LI_C6
-			&& dev->u.logic.a2d[LUT_C].lut5_str
-			&& *dev->u.logic.a2d[LUT_C].lut5_str)
+		        && fdev_logic_o5_used(tstate->model, y, x, type_idx, LUT_C))
 		    || (dev->pinw_req_for_cfg[i] == LI_D6
-			&& dev->u.logic.a2d[LUT_D].lut5_str
-			&& *dev->u.logic.a2d[LUT_D].lut5_str)
+		        && fdev_logic_o5_used(tstate->model, y, x, type_idx, LUT_D))
 		    || (latch_logic
 			&& (dev->pinw_req_for_cfg[i] == LI_CLK
 			    || dev->pinw_req_for_cfg[i] == LI_CE))) {
@@ -1227,7 +1223,7 @@ static int test_lut_encoding(struct test_state* tstate)
 	int y, x_i, i, j, lut_str_len, rc;
 	struct fpgadev_logic logic_cfg;
 	int type_i, lut;
-	char lut6_str[128], lut5_str[128];
+	char lut_str[MAX_LUT_LEN];
 
 	tstate->diff_to_null = 1;
 	y = 68;
@@ -1237,42 +1233,51 @@ static int test_lut_encoding(struct test_state* tstate)
 		for (type_i = 0; type_i < sizeof(idx_enum)/sizeof(*idx_enum); type_i++) {
 			for (lut = LUT_A; lut <= LUT_D; lut++) {
 				CLEAR(logic_cfg);
-				logic_cfg.a2d[lut].lut6_str = lut6_str;
-				logic_cfg.a2d[lut].flags |= OUT_USED;
+				logic_cfg.a2d[lut].lut_mode = LUTMODE_LUT;
+				logic_cfg.a2d[lut].out_used = 1;
 
 				// lut6 only
-				sprintf(lut6_str, "0");
+				rc = lutstr_to_val(/*lut6_str*/ "0", /*lut5_str*/ 0, &logic_cfg.a2d[lut].lut_val);
+				if (rc) FAIL(rc);
 				rc = test_logic(tstate, y, x_enum[x_i], idx_enum[type_i],
 					&logic_cfg);
 				if (rc) FAIL(rc);
-				sprintf(lut6_str, "1");
+
+				rc = lutstr_to_val(/*lut6_str*/ "1", /*lut5_str*/ 0, &logic_cfg.a2d[lut].lut_val);
+				if (rc) FAIL(rc);
 				rc = test_logic(tstate, y, x_enum[x_i], idx_enum[type_i],
 					&logic_cfg);
 				if (rc) FAIL(rc);
 				for (i = '1'; i <= '6'; i++) {
-					sprintf(lut6_str, "A%c", i);
+					rc = lutstr_to_val(/*lut6_str*/ pf("A%c", i),
+						/*lut5_str*/ 0, &logic_cfg.a2d[lut].lut_val);
+					if (rc) FAIL(rc);
 					rc = test_logic(tstate, y, x_enum[x_i], idx_enum[type_i],
 						&logic_cfg);
 					if (rc) FAIL(rc);
 				}
 
 				// lut6 and lut5 pairs
-				logic_cfg.a2d[lut].lut5_str = lut5_str;
 				logic_cfg.a2d[lut].out_mux = MUX_O5;
-
-				sprintf(lut6_str, "(A6+~A6)*1");
-				sprintf(lut5_str, "0");
+				rc = lutstr_to_val(/*lut6_str*/ "(A6+~A6)*1",
+					/*lut5_str*/ "0", &logic_cfg.a2d[lut].lut_val);
+				if (rc) FAIL(rc);
 				rc = test_logic(tstate, y, x_enum[x_i], idx_enum[type_i],
 					&logic_cfg);
 				if (rc) FAIL(rc);
-				sprintf(lut6_str, "(A6+~A6)*0");
-				sprintf(lut5_str, "1");
+
+				rc = lutstr_to_val(/*lut6_str*/ "(A6+~A6)*0",
+					/*lut5_str*/ "1", &logic_cfg.a2d[lut].lut_val);
+				if (rc) FAIL(rc);
 				rc = test_logic(tstate, y, x_enum[x_i], idx_enum[type_i],
 					&logic_cfg);
 				if (rc) FAIL(rc);
 				for (i = '1'; i <= '5'; i++) {
-					sprintf(lut5_str, "A%c", i);
-					sprintf(lut6_str, "(A6+~A6)*A%c", (i == '5') ? '1' : i+1);
+					rc = lutstr_to_val(
+						/*lut6_str*/ pf("(A6+~A6)*A%c", (i == '5') ? '1' : i+1),
+						/*lut5_str*/ pf("A%c", i),
+						&logic_cfg.a2d[lut].lut_val);
+					if (rc) FAIL(rc);
 					rc = test_logic(tstate, y, x_enum[x_i], idx_enum[type_i],
 						&logic_cfg);
 					if (rc) FAIL(rc);
@@ -1286,20 +1291,25 @@ static int test_lut_encoding(struct test_state* tstate)
 		for (type_i = 0; type_i < sizeof(idx_enum)/sizeof(*idx_enum); type_i++) {
 			for (lut = LUT_A; lut <= LUT_D; lut++) {
 				CLEAR(logic_cfg);
-				logic_cfg.a2d[lut].lut6_str = lut6_str;
-				logic_cfg.a2d[lut].flags |= OUT_USED;
+				logic_cfg.a2d[lut].lut_mode = LUTMODE_LUT;
+				logic_cfg.a2d[lut].out_used = 1;
 
 				for (i = 0; i < 64; i++) {
 					lut_str_len = 0;
 					for (j = 0; j < 6; j++) {
 						if (lut_str_len)
-							lut6_str[lut_str_len++] = '*';
+							lut_str[lut_str_len++] = '*';
 						if (!(i & (1<<j)))
-							lut6_str[lut_str_len++] = '~';
-						lut6_str[lut_str_len++] = 'A';
-						lut6_str[lut_str_len++] = '1' + j;
+							lut_str[lut_str_len++] = '~';
+						lut_str[lut_str_len++] = 'A';
+						lut_str[lut_str_len++] = '1' + j;
 					}
-					lut6_str[lut_str_len] = 0;
+					lut_str[lut_str_len] = 0;
+					rc = lutstr_to_val(
+						/*lut6_str*/ lut_str,
+						/*lut5_str*/ 0,
+						&logic_cfg.a2d[lut].lut_val);
+					if (rc) FAIL(rc);
 					rc = test_logic(tstate, y, x_enum[x_i], idx_enum[type_i],
 						&logic_cfg);
 					if (rc) FAIL(rc);
@@ -1310,39 +1320,46 @@ static int test_lut_encoding(struct test_state* tstate)
 
 	// --skip=1264 --count=64 - separate bits for lut5 (32) and lut6 (32) (xm-m-a only)
 	CLEAR(logic_cfg);
-	logic_cfg.a2d[LUT_A].lut6_str = lut6_str;
-	logic_cfg.a2d[LUT_A].lut5_str = lut5_str;
-	logic_cfg.a2d[LUT_A].flags |= OUT_USED;
+	logic_cfg.a2d[LUT_A].lut_mode = LUTMODE_LUT;
+	logic_cfg.a2d[LUT_A].out_used = 1;
 	logic_cfg.a2d[LUT_A].out_mux = MUX_O5;
 	// 32 bits in lut5 with lut6=0
 	for (i = 0; i < 32; i++) {
 		lut_str_len = 0;
 		for (j = 0; j < 5; j++) {
 			if (lut_str_len)
-				lut5_str[lut_str_len++] = '*';
+				lut_str[lut_str_len++] = '*';
 			if (!(i & (1<<j)))
-				lut5_str[lut_str_len++] = '~';
-			lut5_str[lut_str_len++] = 'A';
-			lut5_str[lut_str_len++] = '1' + j;
+				lut_str[lut_str_len++] = '~';
+			lut_str[lut_str_len++] = 'A';
+			lut_str[lut_str_len++] = '1' + j;
 		}
-		lut5_str[lut_str_len] = 0;
-		strcpy(lut6_str, "(A6+~A6)*0");
+		lut_str[lut_str_len] = 0;
+		rc = lutstr_to_val(
+			/*lut6_str*/ "(A6+~A6)*0",
+			/*lut5_str*/ lut_str,
+			&logic_cfg.a2d[LUT_A].lut_val);
+		if (rc) FAIL(rc);
 		rc = test_logic(tstate, y, /*XM*/ 13, DEV_LOG_M_OR_L, &logic_cfg);
 		if (rc) FAIL(rc);
 	}
 	// 32 bits in lut6 with lut5=0
 	for (i = 0; i < 32; i++) {
-		strcpy(lut6_str, "(A6+~A6)");
-		lut_str_len = strlen(lut6_str);
+		strcpy(lut_str, "(A6+~A6)");
+		lut_str_len = strlen(lut_str);
 		for (j = 0; j < 5; j++) {
-			lut6_str[lut_str_len++] = '*';
+			lut_str[lut_str_len++] = '*';
 			if (!(i & (1<<j)))
-				lut6_str[lut_str_len++] = '~';
-			lut6_str[lut_str_len++] = 'A';
-			lut6_str[lut_str_len++] = '1' + j;
+				lut_str[lut_str_len++] = '~';
+			lut_str[lut_str_len++] = 'A';
+			lut_str[lut_str_len++] = '1' + j;
 		}
-		lut6_str[lut_str_len] = 0;
-		strcpy(lut5_str, "0");
+		lut_str[lut_str_len] = 0;
+		rc = lutstr_to_val(
+			/*lut6_str*/ lut_str,
+			/*lut5_str*/ "0",
+			&logic_cfg.a2d[LUT_A].lut_val);
+		if (rc) FAIL(rc);
 		rc = test_logic(tstate, y, /*XM*/ 13, DEV_LOG_M_OR_L, &logic_cfg);
 		if (rc) FAIL(rc);
 	}
@@ -1352,8 +1369,8 @@ static int test_lut_encoding(struct test_state* tstate)
 		// ROM test in LUT_A
 		CLEAR(logic_cfg);
 		logic_cfg.clk_inv = CLKINV_CLK;
-		logic_cfg.a2d[LUT_A].lut6_val = 1ULL << i;
-		logic_cfg.a2d[LUT_A].flags |= LUT6VAL_SET | LUTMODE_ROM2;
+		logic_cfg.a2d[LUT_A].lut_mode = LUTMODE_ROM;
+		logic_cfg.a2d[LUT_A].lut_val = 1ULL << i;
 		rc = test_logic(tstate, y, /*XM*/ 13, DEV_LOG_M_OR_L,
 			&logic_cfg);
 		if (rc) FAIL(rc);
@@ -1363,8 +1380,8 @@ static int test_lut_encoding(struct test_state* tstate)
 		CLEAR(logic_cfg);
 		logic_cfg.we_mux = WEMUX_WE;
 		logic_cfg.clk_inv = CLKINV_CLK;
-		logic_cfg.a2d[LUT_D].lut6_val = 1ULL << i;
-		logic_cfg.a2d[LUT_D].flags |= LUT6VAL_SET;
+		logic_cfg.a2d[LUT_D].lut_mode = LUTMODE_RAM;
+		logic_cfg.a2d[LUT_D].lut_val = 1ULL << i;
 		logic_cfg.a2d[LUT_D].ram_mode = DPRAM64;
 		rc = test_logic(tstate, y, /*XM*/ 13, DEV_LOG_M_OR_L,
 			&logic_cfg);
@@ -1397,8 +1414,12 @@ static int test_logic_config(struct test_state* tstate)
 
 				// lut6, direct-out
 				CLEAR(logic_cfg);
-				logic_cfg.a2d[lut].lut6_str = "A1";
-				logic_cfg.a2d[lut].flags |= OUT_USED;
+				logic_cfg.a2d[lut].lut_mode = LUTMODE_LUT;
+				if ((rc = lutstr_to_val(
+					/*lut6_str*/ "A1",
+					/*lut5_str*/ 0,
+					&logic_cfg.a2d[lut].lut_val))) FAIL(rc);
+				logic_cfg.a2d[lut].out_used = 1;
 
 				rc = test_logic(tstate, y, x_enum[x_i],
 					idx_enum[type_i], &logic_cfg);
@@ -1409,7 +1430,11 @@ static int test_logic_config(struct test_state* tstate)
 					// O6 over mux-out seems not supported
 					// on an X device.
 					CLEAR(logic_cfg);
-					logic_cfg.a2d[lut].lut6_str = "A1";
+					logic_cfg.a2d[lut].lut_mode = LUTMODE_LUT;
+					if ((rc = lutstr_to_val(
+						/*lut6_str*/ "A1",
+						/*lut5_str*/ 0,
+						&logic_cfg.a2d[lut].lut_val))) FAIL(rc);
 					logic_cfg.a2d[lut].out_mux = MUX_O6;
 
 					rc = test_logic(tstate, y, x_enum[x_i],
@@ -1448,7 +1473,11 @@ static int test_logic_config(struct test_state* tstate)
 
 				// lut6, ff-out
 				CLEAR(logic_cfg);
-				logic_cfg.a2d[lut].lut6_str = "A1";
+				logic_cfg.a2d[lut].lut_mode = LUTMODE_LUT;
+				if ((rc = lutstr_to_val(
+					/*lut6_str*/ "A1",
+					/*lut5_str*/ 0,
+					&logic_cfg.a2d[lut].lut_val))) FAIL(rc);
 				logic_cfg.a2d[lut].ff = FF_FF;
 				logic_cfg.a2d[lut].ff_mux = MUX_O6;
 				logic_cfg.a2d[lut].ff_srinit = FF_SRINIT0;
@@ -1491,7 +1520,11 @@ static int test_logic_config(struct test_state* tstate)
 
 				// lut6, latch-out
 				CLEAR(logic_cfg);
-				logic_cfg.a2d[lut].lut6_str = "A1";
+				logic_cfg.a2d[lut].lut_mode = LUTMODE_LUT;
+				if ((rc = lutstr_to_val(
+					/*lut6_str*/ "A1",
+					/*lut5_str*/ 0,
+					&logic_cfg.a2d[lut].lut_val))) FAIL(rc);
 				logic_cfg.a2d[lut].ff = FF_LATCH;
 				logic_cfg.a2d[lut].ff_mux = MUX_O6;
 				logic_cfg.a2d[lut].ff_srinit = FF_SRINIT0;
@@ -1515,7 +1548,11 @@ static int test_logic_config(struct test_state* tstate)
 
 				// lut6, and-latch
 				CLEAR(logic_cfg);
-				logic_cfg.a2d[lut].lut6_str = "A1";
+				logic_cfg.a2d[lut].lut_mode = LUTMODE_LUT;
+				if ((rc = lutstr_to_val(
+					/*lut6_str*/ "A1",
+					/*lut5_str*/ 0,
+					&logic_cfg.a2d[lut].lut_val))) FAIL(rc);
 				logic_cfg.a2d[lut].ff = FF_AND2L;
 				logic_cfg.a2d[lut].ff_mux = MUX_O6;
 				// AND2L requires SRINIT=0
@@ -1532,7 +1569,11 @@ static int test_logic_config(struct test_state* tstate)
 
 				// lut6, or-latch
 				CLEAR(logic_cfg);
-				logic_cfg.a2d[lut].lut6_str = "A1";
+				logic_cfg.a2d[lut].lut_mode = LUTMODE_LUT;
+				if ((rc = lutstr_to_val(
+					/*lut6_str*/ "A1",
+					/*lut5_str*/ 0,
+					&logic_cfg.a2d[lut].lut_val))) FAIL(rc);
 				logic_cfg.a2d[lut].ff = FF_OR2L;
 				logic_cfg.a2d[lut].ff_mux = MUX_O6;
 				// OR2L requires SRINIT=1
@@ -1560,12 +1601,16 @@ static int test_logic_config(struct test_state* tstate)
 				if (rc) FAIL(rc);
 
 				// . o6-direct
-				logic_cfg.a2d[lut].lut6_str = "A1";
-				logic_cfg.a2d[lut].flags |= OUT_USED;
+				logic_cfg.a2d[lut].lut_mode = LUTMODE_LUT;
+				if ((rc = lutstr_to_val(
+					/*lut6_str*/ "A1",
+					/*lut5_str*/ 0,
+					&logic_cfg.a2d[lut].lut_val))) FAIL(rc);
+				logic_cfg.a2d[lut].out_used = 1;
 				rc = test_logic(tstate, y, x_enum[x_i],
 					idx_enum[type_i], &logic_cfg);
 				if (rc) FAIL(rc);
-				logic_cfg.a2d[lut].flags |= OUT_USED;
+				logic_cfg.a2d[lut].out_used = 1;
 
 				if (idx_enum[type_i] == DEV_LOG_M_OR_L) {
 					// . o6-outmux
@@ -1582,9 +1627,12 @@ static int test_logic_config(struct test_state* tstate)
 
 				// lut6 direct-out, lut5 mux-out
 				CLEAR(logic_cfg);
-				logic_cfg.a2d[lut].lut6_str = "(A6+~A6)*A1";
-				logic_cfg.a2d[lut].flags |= OUT_USED;
-				logic_cfg.a2d[lut].lut5_str = "A1*A2";
+				logic_cfg.a2d[lut].lut_mode = LUTMODE_LUT;
+				if ((rc = lutstr_to_val(
+					/*lut6_str*/ "(A6+~A6)*A1",
+					/*lut5_str*/ "A1*A2",
+					&logic_cfg.a2d[lut].lut_val))) FAIL(rc);
+				logic_cfg.a2d[lut].out_used = 1;
 				logic_cfg.a2d[lut].out_mux = MUX_O5;
 				rc = test_logic(tstate, y, x_enum[x_i],
 					idx_enum[type_i], &logic_cfg);
@@ -1658,29 +1706,41 @@ static int test_logic_config(struct test_state* tstate)
 			if (idx_enum[type_i] == DEV_LOG_X) {
 				// minimum-config X device
 				CLEAR(logic_cfg);
-				logic_cfg.a2d[LUT_A].lut6_str = "(A6+~A6)*A1";
-				logic_cfg.a2d[LUT_A].lut5_str = "A2";
+				logic_cfg.a2d[LUT_A].lut_mode = LUTMODE_LUT;
+				if ((rc = lutstr_to_val(
+					/*lut6_str*/ "(A6+~A6)*A1",
+					/*lut5_str*/ "A2",
+					&logic_cfg.a2d[LUT_A].lut_val))) FAIL(rc);
 				logic_cfg.a2d[LUT_A].out_mux = MUX_5Q;
 				logic_cfg.a2d[LUT_A].ff5_srinit = FF_SRINIT0;
 				logic_cfg.a2d[LUT_A].ff = FF_FF;
 				logic_cfg.a2d[LUT_A].ff_mux = MUX_O6;
 				logic_cfg.a2d[LUT_A].ff_srinit = FF_SRINIT0;
-				logic_cfg.a2d[LUT_B].lut6_str = "(A6+~A6)*A4";
-				logic_cfg.a2d[LUT_B].lut5_str = "A3";
+				logic_cfg.a2d[LUT_B].lut_mode = LUTMODE_LUT;
+				if ((rc = lutstr_to_val(
+					/*lut6_str*/ "(A6+~A6)*A4",
+					/*lut5_str*/ "A3",
+					&logic_cfg.a2d[LUT_B].lut_val))) FAIL(rc);
 				logic_cfg.a2d[LUT_B].out_mux = MUX_5Q;
 				logic_cfg.a2d[LUT_B].ff5_srinit = FF_SRINIT0;
 				logic_cfg.a2d[LUT_B].ff = FF_FF;
 				logic_cfg.a2d[LUT_B].ff_mux = MUX_O6;
 				logic_cfg.a2d[LUT_B].ff_srinit = FF_SRINIT0;
-				logic_cfg.a2d[LUT_C].lut6_str = "(A6+~A6)*(A2+A5)";
-				logic_cfg.a2d[LUT_C].lut5_str = "A3+A4";
+				logic_cfg.a2d[LUT_C].lut_mode = LUTMODE_LUT;
+				if ((rc = lutstr_to_val(
+					/*lut6_str*/ "(A6+~A6)*(A2+A5)",
+					/*lut5_str*/ "A3+A4",
+					&logic_cfg.a2d[LUT_C].lut_val))) FAIL(rc);
 				logic_cfg.a2d[LUT_C].out_mux = MUX_5Q;
 				logic_cfg.a2d[LUT_C].ff5_srinit = FF_SRINIT0;
 				logic_cfg.a2d[LUT_C].ff = FF_FF;
 				logic_cfg.a2d[LUT_C].ff_mux = MUX_O6;
 				logic_cfg.a2d[LUT_C].ff_srinit = FF_SRINIT0;
-				logic_cfg.a2d[LUT_D].lut6_str = "(A6+~A6)*A3";
-				logic_cfg.a2d[LUT_D].lut5_str = "A3+A5";
+				logic_cfg.a2d[LUT_D].lut_mode = LUTMODE_LUT;
+				if ((rc = lutstr_to_val(
+					/*lut6_str*/ "(A6+~A6)*A3",
+					/*lut5_str*/ "A3+A5",
+					&logic_cfg.a2d[LUT_D].lut_val))) FAIL(rc);
 				logic_cfg.a2d[LUT_D].out_mux = MUX_5Q;
 				logic_cfg.a2d[LUT_D].ff5_srinit = FF_SRINIT0;
 				logic_cfg.a2d[LUT_D].ff = FF_FF;
@@ -1697,26 +1757,38 @@ static int test_logic_config(struct test_state* tstate)
 			}
 			// cout
 			CLEAR(logic_cfg);
-			logic_cfg.a2d[LUT_A].lut6_str = "(A6+~A6)*(~A5)";
-			logic_cfg.a2d[LUT_A].lut5_str = "1";
+			logic_cfg.a2d[LUT_A].lut_mode = LUTMODE_LUT;
+			if ((rc = lutstr_to_val(
+				/*lut6_str*/ "(A6+~A6)*(~A5)",
+				/*lut5_str*/ "1",
+				&logic_cfg.a2d[LUT_A].lut_val))) FAIL(rc);
 			logic_cfg.a2d[LUT_A].cy0 = CY0_O5;
 			logic_cfg.a2d[LUT_A].ff = FF_FF;
 			logic_cfg.a2d[LUT_A].ff_mux = MUX_XOR;
 			logic_cfg.a2d[LUT_A].ff_srinit = FF_SRINIT0;
-			logic_cfg.a2d[LUT_B].lut6_str = "(A6+~A6)*(A5)";
-			logic_cfg.a2d[LUT_B].lut5_str = "1";
+			logic_cfg.a2d[LUT_B].lut_mode = LUTMODE_LUT;
+			if ((rc = lutstr_to_val(
+				/*lut6_str*/ "(A6+~A6)*(A5)",
+				/*lut5_str*/ "1",
+				&logic_cfg.a2d[LUT_B].lut_val))) FAIL(rc);
 			logic_cfg.a2d[LUT_B].cy0 = CY0_O5;
 			logic_cfg.a2d[LUT_B].ff = FF_FF;
 			logic_cfg.a2d[LUT_B].ff_mux = MUX_XOR;
 			logic_cfg.a2d[LUT_B].ff_srinit = FF_SRINIT0;
-			logic_cfg.a2d[LUT_C].lut6_str = "(A6+~A6)*(A5)";
-			logic_cfg.a2d[LUT_C].lut5_str = "1";
+			logic_cfg.a2d[LUT_C].lut_mode = LUTMODE_LUT;
+			if ((rc = lutstr_to_val(
+				/*lut6_str*/ "(A6+~A6)*(A5)",
+				/*lut5_str*/ "1",
+				&logic_cfg.a2d[LUT_C].lut_val))) FAIL(rc);
 			logic_cfg.a2d[LUT_C].cy0 = CY0_O5;
 			logic_cfg.a2d[LUT_C].ff = FF_FF;
 			logic_cfg.a2d[LUT_C].ff_mux = MUX_XOR;
 			logic_cfg.a2d[LUT_C].ff_srinit = FF_SRINIT0;
-			logic_cfg.a2d[LUT_D].lut6_str = "(A6+~A6)*(A5)";
-			logic_cfg.a2d[LUT_D].lut5_str = "1";
+			logic_cfg.a2d[LUT_D].lut_mode = LUTMODE_LUT;
+			if ((rc = lutstr_to_val(
+				/*lut6_str*/ "(A6+~A6)*(A5)",
+				/*lut5_str*/ "1",
+				&logic_cfg.a2d[LUT_D].lut_val))) FAIL(rc);
 			logic_cfg.a2d[LUT_D].cy0 = CY0_O5;
 			logic_cfg.a2d[LUT_D].ff = FF_FF;
 			logic_cfg.a2d[LUT_D].ff_mux = MUX_XOR;
@@ -1733,10 +1805,26 @@ static int test_logic_config(struct test_state* tstate)
 
 			// f8 out-mux
 			CLEAR(logic_cfg);
-			logic_cfg.a2d[LUT_A].lut6_str = "~A5";
-			logic_cfg.a2d[LUT_B].lut6_str = "(A5)";
-			logic_cfg.a2d[LUT_C].lut6_str = "A5";
-			logic_cfg.a2d[LUT_D].lut6_str = "((A5))";
+			logic_cfg.a2d[LUT_A].lut_mode = LUTMODE_LUT;
+			if ((rc = lutstr_to_val(
+				/*lut6_str*/ "~A5",
+				/*lut5_str*/ 0,
+				&logic_cfg.a2d[LUT_A].lut_val))) FAIL(rc);
+			logic_cfg.a2d[LUT_B].lut_mode = LUTMODE_LUT;
+			if ((rc = lutstr_to_val(
+				/*lut6_str*/ "(A5)",
+				/*lut5_str*/ 0,
+				&logic_cfg.a2d[LUT_B].lut_val))) FAIL(rc);
+			logic_cfg.a2d[LUT_C].lut_mode = LUTMODE_LUT;
+			if ((rc = lutstr_to_val(
+				/*lut6_str*/ "A5",
+				/*lut5_str*/ 0,
+				&logic_cfg.a2d[LUT_C].lut_val))) FAIL(rc);
+			logic_cfg.a2d[LUT_D].lut_mode = LUTMODE_LUT;
+			if ((rc = lutstr_to_val(
+				/*lut6_str*/ "((A5))",
+				/*lut5_str*/ 0,
+				&logic_cfg.a2d[LUT_D].lut_val))) FAIL(rc);
 			logic_cfg.a2d[LUT_B].out_mux = MUX_F8;
 			rc = test_logic(tstate, y, x_enum[x_i],
 				idx_enum[type_i], &logic_cfg);
@@ -1755,8 +1843,16 @@ static int test_logic_config(struct test_state* tstate)
 
 			// f7amux
 			CLEAR(logic_cfg);
-			logic_cfg.a2d[LUT_A].lut6_str = "~A5";
-			logic_cfg.a2d[LUT_B].lut6_str = "(A5)";
+			logic_cfg.a2d[LUT_A].lut_mode = LUTMODE_LUT;
+			if ((rc = lutstr_to_val(
+				/*lut6_str*/ "~A5",
+				/*lut5_str*/ 0,
+				&logic_cfg.a2d[LUT_A].lut_val))) FAIL(rc);
+			logic_cfg.a2d[LUT_B].lut_mode = LUTMODE_LUT;
+			if ((rc = lutstr_to_val(
+				/*lut6_str*/ "(A5)",
+				/*lut5_str*/ 0,
+				&logic_cfg.a2d[LUT_B].lut_val))) FAIL(rc);
 			logic_cfg.a2d[LUT_A].out_mux = MUX_F7;
 			rc = test_logic(tstate, y, x_enum[x_i],
 				idx_enum[type_i], &logic_cfg);
@@ -1775,8 +1871,16 @@ static int test_logic_config(struct test_state* tstate)
 
 			// f7bmux
 			CLEAR(logic_cfg);
-			logic_cfg.a2d[LUT_C].lut6_str = "~A5";
-			logic_cfg.a2d[LUT_D].lut6_str = "(A5)";
+			logic_cfg.a2d[LUT_C].lut_mode = LUTMODE_LUT;
+			if ((rc = lutstr_to_val(
+				/*lut6_str*/ "~A5",
+				/*lut5_str*/ 0,
+				&logic_cfg.a2d[LUT_C].lut_val))) FAIL(rc);
+			logic_cfg.a2d[LUT_D].lut_mode = LUTMODE_LUT;
+			if ((rc = lutstr_to_val(
+				/*lut6_str*/ "(A5)",
+				/*lut5_str*/ 0,
+				&logic_cfg.a2d[LUT_D].lut_val))) FAIL(rc);
 			logic_cfg.a2d[LUT_C].out_mux = MUX_F7;
 			rc = test_logic(tstate, y, x_enum[x_i],
 				idx_enum[type_i], &logic_cfg);
@@ -1899,8 +2003,8 @@ static int test_clock_routing(struct test_state *tstate)
 		logic_x = 13;
 		logic_type_idx = DEV_LOG_M_OR_L;
 
-		fdev_logic_a2d_lut(tstate->model, logic_y, logic_x,
-			logic_type_idx, LUT_A, 6, "A1", ZTERM);
+		fdev_logic_set_lutstr(tstate->model, logic_y, logic_x,
+			logic_type_idx, LUT_A, /*lut6_str*/ "A1", /*lut5_str*/ 0);
 
 		fdev_set_required_pins(tstate->model, logic_y, logic_x,
 			DEV_LOGIC, logic_type_idx);
@@ -1951,8 +2055,8 @@ static int test_clock_routing(struct test_state *tstate)
 			logic_type_idx = DEV_LOG_M_OR_L;
 			logic_y = y-3; // up from hclk
 			for (logic_x = 13; logic_x <= 26; logic_x += 13) {
-				fdev_logic_a2d_lut(tstate->model, logic_y, logic_x,
-					logic_type_idx, LUT_A, 6, "A1", ZTERM);
+				fdev_logic_set_lutstr(tstate->model, logic_y, logic_x,
+					logic_type_idx, LUT_A, /*lut6_str*/ "A1", /*lut5_str*/ 0);
 
 				fdev_set_required_pins(tstate->model, logic_y, logic_x,
 					DEV_LOGIC, logic_type_idx);
@@ -1999,8 +2103,8 @@ static int test_dist_mem(struct test_state *tstate)
 	CLEAR(logic_cfg);
 	logic_cfg.we_mux = WEMUX_WE;
 	logic_cfg.clk_inv = CLKINV_CLK;
-	logic_cfg.a2d[LUT_D].lut6_val = 0x00000000000000FF;
-	logic_cfg.a2d[LUT_D].flags |= LUT6VAL_SET;
+	logic_cfg.a2d[LUT_D].lut_mode = LUTMODE_RAM;
+	logic_cfg.a2d[LUT_D].lut_val = 0x00000000000000FF;
 	logic_cfg.a2d[LUT_D].ram_mode = DPRAM64;
 	rc = test_logic(tstate, y, x, type_i, &logic_cfg);
 	if (rc) FAIL(rc);
@@ -2026,8 +2130,8 @@ static int test_dist_mem(struct test_state *tstate)
 			logic_cfg.we_mux = WEMUX_WE;
 			logic_cfg.clk_inv = CLKINV_CLK;
 
-			logic_cfg.a2d[lut].lut6_val = 0x00000000000000FF;
-			logic_cfg.a2d[lut].flags |= LUT6VAL_SET;
+			logic_cfg.a2d[lut].lut_mode = LUTMODE_RAM;
+			logic_cfg.a2d[lut].lut_val = 0x00000000000000FF;
 			logic_cfg.a2d[lut].ram_mode = ram_modes[ram_mode_i];
 
 			if (lut != LUT_D
@@ -2035,8 +2139,8 @@ static int test_dist_mem(struct test_state *tstate)
 			        || ram_modes[ram_mode_i] == DPRAM32
 			        || ram_modes[ram_mode_i] == SPRAM64
 			        || ram_modes[ram_mode_i] == SPRAM32)) {
-				logic_cfg.a2d[LUT_D].lut6_val = 0x00000000000000FF;
-				logic_cfg.a2d[LUT_D].flags |= LUT6VAL_SET;
+				logic_cfg.a2d[LUT_D].lut_mode = LUTMODE_RAM;
+				logic_cfg.a2d[LUT_D].lut_val = 0x00000000000000FF;
 				logic_cfg.a2d[LUT_D].ram_mode = DPRAM64;
 			}
 
@@ -2050,8 +2154,8 @@ static int test_dist_mem(struct test_state *tstate)
 			logic_cfg.we_mux = WEMUX_WE;
 			logic_cfg.clk_inv = CLKINV_CLK;
 
-			logic_cfg.a2d[lut].lut6_val = 0x00000000000000FF;
-			logic_cfg.a2d[lut].flags |= LUT6VAL_SET;
+			logic_cfg.a2d[lut].lut_mode = LUTMODE_RAM;
+			logic_cfg.a2d[lut].lut_val = 0x00000000000000FF;
 			logic_cfg.a2d[lut].ram_mode = SRL32;
 
 			for (dimux_i = 0; dimux_i < sizeof(dimux_modes)/sizeof(*dimux_modes);
@@ -2071,8 +2175,8 @@ static int test_dist_mem(struct test_state *tstate)
 
 		CLEAR(logic_cfg);
 		logic_cfg.clk_inv = CLKINV_CLK;
-		logic_cfg.a2d[lut].lut6_val = 0x00000000000000FF;
-		logic_cfg.a2d[lut].flags |= LUT6VAL_SET | LUTMODE_ROM2;
+		logic_cfg.a2d[lut].lut_mode = LUTMODE_ROM;
+		logic_cfg.a2d[lut].lut_val = 0x00000000000000FF;
 
 		rc = test_logic(tstate, y, x, type_i, &logic_cfg);
 		if (rc) FAIL(rc);
