@@ -60,10 +60,12 @@ Design Principles
 - automatic test suite
 - public domain software
 
-TODO (as of January, 2013)
+TODO (as of February, 2013)
 
 short-term (1 month):
-* support distributed and block memory
+* finish lut_encoding test
+* finish dist_mem test
+* support block memory
 * example: counter (including clock, jtag)
 
 mid-term (6 months):
@@ -71,7 +73,7 @@ mid-term (6 months):
 * llvm backend
 * maybe fp2bit should natively write ieee1532 and separate tools convert
   from ieee1532 to .bit and other formats
-* configuration of bram and macc blocks, bram initialization data
+* macc
 * more cases in logic block configuration
 * autotest: fix bugs in lut_encoding, logic_cfg, routing_sw, io_sw tests
 * autotest: protect stderr of diff executable in autotest log

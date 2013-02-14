@@ -101,30 +101,30 @@ int main(int argc, char** argv)
 		}
 		if (!cur_bit) { // first bit
 			logic_cfg.precyinit = PRECYINIT_0;
-			logic_cfg.a2d[LUT_A].lut_mode = LUTMODE_LUT;
-			if ((rc = lutstr_to_val(
-				/*lut6_str*/ "(A6+~A6)*(~A5)",
-				/*lut5_str*/ "1",
-				&logic_cfg.a2d[LUT_A].lut_val))) RC_FAIL(&model, rc);
+			logic_cfg.a2d[LUT_A].flags |= LUT5VAL_SET | LUT6VAL_SET;
+			if ((rc = bool_str2lut_pair(
+				/*lut6*/ "(A6+~A6)*(~A5)",
+				/*lut5*/ "1",
+				&logic_cfg.a2d[LUT_A].lut6_val,
+				&logic_cfg.a2d[LUT_A].lut5_val))) RC_FAIL(&model, rc);
 			logic_cfg.a2d[LUT_A].cy0 = CY0_O5;
 			logic_cfg.a2d[LUT_A].ff = FF_FF;
 			logic_cfg.a2d[LUT_A].ff_mux = MUX_XOR;
 			logic_cfg.a2d[LUT_A].ff_srinit = FF_SRINIT0;
 		} else if (cur_bit == param_highest_bit) {
-			logic_cfg.a2d[cur_bit%4].lut_mode = LUTMODE_LUT;
-			if ((rc = lutstr_to_val(
-				/*lut6_str*/ "A5",
-				/*lut5_str*/ 0,
-				&logic_cfg.a2d[cur_bit%4].lut_val))) RC_FAIL(&model, rc);
+			logic_cfg.a2d[cur_bit%4].flags |= LUT6VAL_SET;
+			if ((rc = bool_str2u64("A5", &logic_cfg.a2d[cur_bit%4].lut6_val)))
+				RC_FAIL(&model, rc);
 			logic_cfg.a2d[cur_bit%4].ff = FF_FF;
 			logic_cfg.a2d[cur_bit%4].ff_mux = MUX_XOR;
 			logic_cfg.a2d[cur_bit%4].ff_srinit = FF_SRINIT0;
 		} else {
-			logic_cfg.a2d[cur_bit%4].lut_mode = LUTMODE_LUT;
-			if ((rc = lutstr_to_val(
-				/*lut6_str*/ "(A6+~A6)*(A5)",
-				/*lut5_str*/ "0",
-				&logic_cfg.a2d[cur_bit%4].lut_val))) RC_FAIL(&model, rc);
+			logic_cfg.a2d[cur_bit%4].flags |= LUT5VAL_SET | LUT6VAL_SET;
+			if ((rc = bool_str2lut_pair(
+				/*lut6*/ "(A6+~A6)*(A5)",
+				/*lut5*/ "0",
+				&logic_cfg.a2d[cur_bit%4].lut6_val,
+				&logic_cfg.a2d[cur_bit%4].lut5_val))) RC_FAIL(&model, rc);
 			logic_cfg.a2d[cur_bit%4].cy0 = CY0_O5;
 			logic_cfg.a2d[cur_bit%4].ff = FF_FF;
 			logic_cfg.a2d[cur_bit%4].ff_mux = MUX_XOR;

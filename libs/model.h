@@ -417,6 +417,10 @@ enum {
 
 enum { LUT_A = 0, LUT_B, LUT_C, LUT_D }; // offset into a2d[]
 enum { LUTMODE_LUT = 1, LUTMODE_ROM, LUTMODE_RAM };
+#define OUT_USED	0x0001
+#define LUT5VAL_SET	0x0002
+#define LUT6VAL_SET	0x0004
+#define LUTMODE_ROM	0x0008
 enum { FF_SRINIT0 = 1, FF_SRINIT1 };
 enum { MUX_O6 = 1, MUX_O5, MUX_5Q, MUX_X, MUX_CY, MUX_XOR, MUX_F7, MUX_F8, MUX_MC31 };
 enum { FF_OR2L = 1, FF_AND2L, FF_LATCH, FF_FF };
@@ -433,15 +437,24 @@ enum { DIMUX_MC31 = 1, DIMUX_X, DIMUX_DX, DIMUX_BDI1 };
 
 struct fpgadev_logic_a2d
 {
-	// lut_mode should always be set for a used lut.
+	// The lut can be in one of 3 modes: LUT, ROM, RAM.
 	// ROM and LUT are almost identical, RAM is a completely
 	// different mode for the entire slice (M only).
+	// By default, the lut is in LUT mode. If LUTMODE_ROM is
+	// set, it's ROM (and the lut values are stored as hexadecimals
+	// in the floorplan). If ram_mode != 0, the lut is in RAM mode
+	// (and the lut values are stored in hex as well).
 	// In LUT or ROM mode, DI1/DI2, MC31 and WA1..WA8
 	// should not be connected.
-	int lut_mode;	// LUTMODE_LUT, LUTMODE_ROM, LUTMODE_RAM
+	int flags;	// OUT_USED, LUT6VAL_SET, LUT5VAL_SET, LUTMODE_ROM
 
-	uint64_t lut_val;
-	int out_used;
+	// If A6 is high/vcc, only the lower 32-bits of lut6_val are
+	// used (and they are stored in the upper 32-bits on the die).
+	// In that case, lut5_val (if set) contains an independent
+	// value that defines O5.
+	uint64_t lut6_val; // only valid if LUT6VAL_SET
+	uint32_t lut5_val; // only valid if LUT5VAL_SET and A6 is high/vcc
+
 	int ff_mux;	// O6, O5, X, F7(a/c), F8(b), MC31(d), CY, XOR
 	int ff_srinit;	// SRINIT0, SRINIT1 
 	int ff5_srinit; // SRINIT0, SRINIT1
@@ -449,7 +462,7 @@ struct fpgadev_logic_a2d
 	int ff;		// OR2L, AND2L, LATCH, FF
 	int cy0;	// X, O5
 
-	// Requirements for LUTMODE_RAM:
+	// Requirements for functioning ram:
 	// - input on CLK and WE pins
 	// - SRL32 and SRL16 should have O6 or MC31 output
 	// - MC31 is only driven in SRL32 or SRL16 mode.
@@ -461,7 +474,7 @@ struct fpgadev_logic_a2d
 	//   of the 4 luts, the lut-D must be one of them.
 	// - With WA7 or WA8 used, all other luts should be either
 	//   unused or in DPRAM64 or SPRAM64 mode.
-	int ram_mode;	// only with LUTMODE_RAM
+	int ram_mode;	// if set, the lut is in RAM mode
 		// DPRAM64, DPRAM32, SPRAM64, SPRAM32, SRL32, SRL16
 	int di_mux; // only for A-C
 		// DIMUX_MC31, DIMUX_X, DIMUX_DX (b/c), DIMUX_BDI1 (a)

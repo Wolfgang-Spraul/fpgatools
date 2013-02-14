@@ -29,7 +29,8 @@ int main(int argc, char** argv)
 	int iob_inA_y, iob_inA_x, iob_inA_type_idx;
 	int iob_inB_y, iob_inB_x, iob_inB_type_idx;
 	int iob_out_y, iob_out_x, iob_out_type_idx;
-	int logic_y, logic_x, logic_type_idx;
+	int logic_y, logic_x, logic_type_idx, rc;
+	struct fpgadev_logic logic_cfg;
 	net_idx_t inA_net, inB_net, out_net;
 
 	fpga_build_model(&model, XC6SLX9, TQG144);
@@ -52,8 +53,12 @@ int main(int argc, char** argv)
 	logic_y = 68;
 	logic_x = 13;
 	logic_type_idx = DEV_LOG_X;
-	fdev_logic_set_lutstr(&model, logic_y, logic_x, logic_type_idx,
-		LUT_D, /*lut6_str*/ "A3*A5", /*lut5_str*/ 0);
+
+	CLEAR(logic_cfg);
+	logic_cfg.a2d[LUT_D].flags |= OUT_USED | LUT6VAL_SET;
+	if ((rc = bool_str2u64("A3*A5", &logic_cfg.a2d[LUT_D].lut6_val)))
+		RC_FAIL(&model, rc);
+	fdev_logic_setconf(&model, logic_y, logic_x, logic_type_idx, &logic_cfg);
 
 	fnet_new(&model, &inA_net);
 	fnet_add_port(&model, inA_net, iob_inA_y, iob_inA_x,

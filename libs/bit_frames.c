@@ -1189,8 +1189,21 @@ static int extract_logic(struct extract_state* es)
 				    && cfg_ml.a2d[LUT_A].ff_mux != MUX_XOR
 				    && cfg_ml.a2d[LUT_A].ff_mux != MUX_CY
 				    && cfg_ml.a2d[LUT_A].ff_mux != MUX_F7)
-					cfg_ml.a2d[LUT_A].out_used = 1;
-				cfg_ml.a2d[LUT_A].lut_val = lut_ML[LUT_A];
+					cfg_ml.a2d[LUT_A].flags |= OUT_USED;
+
+				if (cfg_ml.a2d[LUT_A].ff_mux == MUX_O5
+				    || cfg_ml.a2d[LUT_A].out_mux == MUX_5Q
+				    || cfg_ml.a2d[LUT_A].out_mux == MUX_O5
+				    || cfg_ml.a2d[LUT_A].cy0 == CY0_O5) {
+					// lut5/6 pair
+					cfg_ml.a2d[LUT_A].flags |= LUT6VAL_SET;
+					cfg_ml.a2d[LUT_A].lut6_val = ULL_HIGH32(lut_ML[LUT_A]);
+					cfg_ml.a2d[LUT_A].flags |= LUT5VAL_SET;
+					cfg_ml.a2d[LUT_A].lut5_val = ULL_LOW32(lut_ML[LUT_A]);
+				} else { // lut6 only
+					cfg_ml.a2d[LUT_A].flags |= LUT6VAL_SET;
+					cfg_ml.a2d[LUT_A].lut6_val = lut_ML[LUT_A];
+				}
 			}
 			// ML-B
 			if (lut_ML[LUT_B]
@@ -1204,8 +1217,21 @@ static int extract_logic(struct extract_state* es)
 				    && cfg_ml.a2d[LUT_B].ff_mux != MUX_XOR
 				    && cfg_ml.a2d[LUT_B].ff_mux != MUX_CY
 				    && cfg_ml.a2d[LUT_B].ff_mux != MUX_F7)
-					cfg_ml.a2d[LUT_B].out_used = 1;
-				cfg_ml.a2d[LUT_B].lut_val = lut_ML[LUT_B];
+					cfg_ml.a2d[LUT_B].flags |= OUT_USED;
+
+				if (cfg_ml.a2d[LUT_B].ff_mux == MUX_O5
+				    || cfg_ml.a2d[LUT_B].out_mux == MUX_5Q
+				    || cfg_ml.a2d[LUT_B].out_mux == MUX_O5
+				    || cfg_ml.a2d[LUT_B].cy0 == CY0_O5) {
+					// lut5/6 pair
+					cfg_ml.a2d[LUT_B].flags |= LUT6VAL_SET;
+					cfg_ml.a2d[LUT_B].lut6_val = ULL_HIGH32(lut_ML[LUT_B]);
+					cfg_ml.a2d[LUT_B].flags |= LUT5VAL_SET;
+					cfg_ml.a2d[LUT_B].lut5_val = ULL_LOW32(lut_ML[LUT_B]);
+				} else { // lut6 only
+					cfg_ml.a2d[LUT_B].flags |= LUT6VAL_SET;
+					cfg_ml.a2d[LUT_B].lut6_val = lut_ML[LUT_B];
+				}
 			}
 			// ML-C
 			if (lut_ML[LUT_C]
@@ -1219,8 +1245,21 @@ static int extract_logic(struct extract_state* es)
 				    && cfg_ml.a2d[LUT_C].ff_mux != MUX_XOR
 				    && cfg_ml.a2d[LUT_C].ff_mux != MUX_CY
 				    && cfg_ml.a2d[LUT_C].ff_mux != MUX_F7)
-					cfg_ml.a2d[LUT_C].out_used = 1;
-				cfg_ml.a2d[LUT_C].lut_val = lut_ML[LUT_C];
+					cfg_ml.a2d[LUT_C].flags |= OUT_USED;
+
+				if (cfg_ml.a2d[LUT_C].ff_mux == MUX_O5
+				    || cfg_ml.a2d[LUT_C].out_mux == MUX_5Q
+				    || cfg_ml.a2d[LUT_C].out_mux == MUX_O5
+				    || cfg_ml.a2d[LUT_C].cy0 == CY0_O5) {
+					// lut5/6 pair
+					cfg_ml.a2d[LUT_C].flags |= LUT6VAL_SET;
+					cfg_ml.a2d[LUT_C].lut6_val = ULL_HIGH32(lut_ML[LUT_C]);
+					cfg_ml.a2d[LUT_C].flags |= LUT5VAL_SET;
+					cfg_ml.a2d[LUT_C].lut5_val = ULL_LOW32(lut_ML[LUT_C]);
+				} else { // lut6 only
+					cfg_ml.a2d[LUT_C].flags |= LUT6VAL_SET;
+					cfg_ml.a2d[LUT_C].lut6_val = lut_ML[LUT_C];
+				}
 			}
 			// ML-D
 			if (lut_ML[LUT_D]
@@ -1234,40 +1273,93 @@ static int extract_logic(struct extract_state* es)
 				    && cfg_ml.a2d[LUT_D].ff_mux != MUX_XOR
 				    && cfg_ml.a2d[LUT_D].ff_mux != MUX_CY
 				    && cfg_ml.a2d[LUT_D].ff_mux != MUX_F7)
-					cfg_ml.a2d[LUT_D].out_used = 1;
-				cfg_ml.a2d[LUT_D].lut_val = lut_ML[LUT_D];
+					cfg_ml.a2d[LUT_D].flags |= OUT_USED;
+
+				if (cfg_ml.a2d[LUT_D].ff_mux == MUX_O5
+				    || cfg_ml.a2d[LUT_D].out_mux == MUX_5Q
+				    || cfg_ml.a2d[LUT_D].out_mux == MUX_O5
+				    || cfg_ml.a2d[LUT_D].cy0 == CY0_O5) {
+					// lut5/6 pair
+					cfg_ml.a2d[LUT_D].flags |= LUT6VAL_SET;
+					cfg_ml.a2d[LUT_D].lut6_val = ULL_HIGH32(lut_ML[LUT_D]);
+					cfg_ml.a2d[LUT_D].flags |= LUT5VAL_SET;
+					cfg_ml.a2d[LUT_D].lut5_val = ULL_LOW32(lut_ML[LUT_D]);
+				} else { // lut6 only
+					cfg_ml.a2d[LUT_D].flags |= LUT6VAL_SET;
+					cfg_ml.a2d[LUT_D].lut6_val = lut_ML[LUT_D];
+				}
 			}
 			// X-A
 			if (lut_X[LUT_A]
 			    || !all_zero(&cfg_x.a2d[LUT_A], sizeof(cfg_x.a2d[LUT_A]))) {
 				if (lut_X[LUT_A]
 				    && cfg_x.a2d[LUT_A].ff_mux != MUX_O6)
-					cfg_x.a2d[LUT_A].out_used = 1;
-				cfg_x.a2d[LUT_A].lut_val = lut_X[LUT_A];
+					cfg_x.a2d[LUT_A].flags |= OUT_USED;
+
+				if (cfg_x.a2d[LUT_A].out_mux) {
+					// lut5/6 pair
+					cfg_x.a2d[LUT_A].flags |= LUT6VAL_SET;
+					cfg_x.a2d[LUT_A].lut6_val = ULL_HIGH32(lut_X[LUT_A]);
+					cfg_x.a2d[LUT_A].flags |= LUT5VAL_SET;
+					cfg_x.a2d[LUT_A].lut5_val = ULL_LOW32(lut_X[LUT_A]);
+				} else { // lut6 only
+					cfg_x.a2d[LUT_A].flags |= LUT6VAL_SET;
+					cfg_x.a2d[LUT_A].lut6_val = lut_X[LUT_A];
+				}
 			}
 			// X-B
 			if (lut_X[LUT_B]
 			    || !all_zero(&cfg_x.a2d[LUT_B], sizeof(cfg_x.a2d[LUT_B]))) {
 				if (lut_X[LUT_B]
 				    && cfg_x.a2d[LUT_B].ff_mux != MUX_O6)
-					cfg_x.a2d[LUT_B].out_used = 1;
-				cfg_x.a2d[LUT_B].lut_val = lut_X[LUT_B];
+					cfg_x.a2d[LUT_B].flags |= OUT_USED;
+
+				if (cfg_x.a2d[LUT_B].out_mux) {
+					// lut5/6 pair
+					cfg_x.a2d[LUT_B].flags |= LUT6VAL_SET;
+					cfg_x.a2d[LUT_B].lut6_val = ULL_HIGH32(lut_X[LUT_B]);
+					cfg_x.a2d[LUT_B].flags |= LUT5VAL_SET;
+					cfg_x.a2d[LUT_B].lut5_val = ULL_LOW32(lut_X[LUT_B]);
+				} else { // lut6 only
+					cfg_x.a2d[LUT_B].flags |= LUT6VAL_SET;
+					cfg_x.a2d[LUT_B].lut6_val = lut_X[LUT_B];
+				}
 			}
 			// X-C
 			if (lut_X[LUT_C]
 			    || !all_zero(&cfg_x.a2d[LUT_C], sizeof(cfg_x.a2d[LUT_C]))) {
 				if (lut_X[LUT_C]
 				    && cfg_x.a2d[LUT_C].ff_mux != MUX_O6)
-					cfg_x.a2d[LUT_C].out_used = 1;
-				cfg_x.a2d[LUT_C].lut_val = lut_X[LUT_C];
+					cfg_x.a2d[LUT_C].flags |= OUT_USED;
+
+				if (cfg_x.a2d[LUT_C].out_mux) {
+					// lut5/6 pair
+					cfg_x.a2d[LUT_C].flags |= LUT6VAL_SET;
+					cfg_x.a2d[LUT_C].lut6_val = ULL_HIGH32(lut_X[LUT_C]);
+					cfg_x.a2d[LUT_C].flags |= LUT5VAL_SET;
+					cfg_x.a2d[LUT_C].lut5_val = ULL_LOW32(lut_X[LUT_C]);
+				} else { // lut6 only
+					cfg_x.a2d[LUT_C].flags |= LUT6VAL_SET;
+					cfg_x.a2d[LUT_C].lut6_val = lut_X[LUT_C];
+				}
 			}
 			// X-D
 			if (lut_X[LUT_D]
 			    || !all_zero(&cfg_x.a2d[LUT_D], sizeof(cfg_x.a2d[LUT_D]))) {
 				if (lut_X[LUT_D]
 				    && cfg_x.a2d[LUT_D].ff_mux != MUX_O6)
-					cfg_x.a2d[LUT_D].out_used = 1;
-				cfg_x.a2d[LUT_D].lut_val = lut_X[LUT_D];
+					cfg_x.a2d[LUT_D].flags |= OUT_USED;
+
+				if (cfg_x.a2d[LUT_D].out_mux) {
+					// lut5/6 pair
+					cfg_x.a2d[LUT_D].flags |= LUT6VAL_SET;
+					cfg_x.a2d[LUT_D].lut6_val = ULL_HIGH32(lut_X[LUT_D]);
+					cfg_x.a2d[LUT_D].flags |= LUT5VAL_SET;
+					cfg_x.a2d[LUT_D].lut5_val = ULL_LOW32(lut_X[LUT_D]);
+				} else { // lut6 only
+					cfg_x.a2d[LUT_D].flags |= LUT6VAL_SET;
+					cfg_x.a2d[LUT_D].lut6_val = lut_X[LUT_D];
+				}
 			}
 
 			//
@@ -2937,17 +3029,17 @@ static int write_logic(struct fpga_bits* bits, struct fpga_model* model)
 
 			// X device
 			if (dev_x->instantiated) {
-				lut_X[LUT_A] = dev_x->u.logic.a2d[LUT_A].lut_val;
-				lut_X[LUT_B] = dev_x->u.logic.a2d[LUT_B].lut_val;
-				lut_X[LUT_C] = dev_x->u.logic.a2d[LUT_C].lut_val;
-				lut_X[LUT_D] = dev_x->u.logic.a2d[LUT_D].lut_val;
+				fdev_logic_lut_dieval(model, y, x, DEV_LOG_X, LUT_A, &lut_X[LUT_A]);
+				fdev_logic_lut_dieval(model, y, x, DEV_LOG_X, LUT_B, &lut_X[LUT_B]);
+				fdev_logic_lut_dieval(model, y, x, DEV_LOG_X, LUT_C, &lut_X[LUT_C]);
+				fdev_logic_lut_dieval(model, y, x, DEV_LOG_X, LUT_D, &lut_X[LUT_D]);
 			}
 			// M or L device
 			if (dev_ml->instantiated) {
-				lut_ML[LUT_A] = dev_ml->u.logic.a2d[LUT_A].lut_val;
-				lut_ML[LUT_B] = dev_ml->u.logic.a2d[LUT_B].lut_val;
-				lut_ML[LUT_C] = dev_ml->u.logic.a2d[LUT_C].lut_val;
-				lut_ML[LUT_D] = dev_ml->u.logic.a2d[LUT_D].lut_val;
+				fdev_logic_lut_dieval(model, y, x, DEV_LOG_M_OR_L, LUT_A, &lut_ML[LUT_A]);
+				fdev_logic_lut_dieval(model, y, x, DEV_LOG_M_OR_L, LUT_B, &lut_ML[LUT_B]);
+				fdev_logic_lut_dieval(model, y, x, DEV_LOG_M_OR_L, LUT_C, &lut_ML[LUT_C]);
+				fdev_logic_lut_dieval(model, y, x, DEV_LOG_M_OR_L, LUT_D, &lut_ML[LUT_D]);
 			}
 
 			//

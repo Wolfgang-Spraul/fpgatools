@@ -194,9 +194,35 @@ uint64_t map_bits(uint64_t u64, int num_bits, int *src_pos)
 	return result;
 }
 
-int bool_str2bits(const char *str, uint64_t *u64, int num_bits)
+int bool_str2u64(const char *str, uint64_t *u64)
 {
-	int i, j, bool_res, rc, str_len, vars[6];
+	return bool_str2bits(str, ZTERM, u64, 64);
+}
+
+int bool_str2u32(const char *str, uint32_t *u32)
+{
+	uint64_t v;
+	int rc;
+	rc = bool_str2bits(str, ZTERM, &v, 32);
+	*u32 = ULL_LOW32(v);
+	return rc;
+}
+
+int bool_str2lut_pair(const char *str6, const char *str5, uint64_t *lut6_val, uint32_t *lut5_val)
+{
+	int rc;
+
+	*lut6_val = 0; // needed to zero upper 32 bits
+	rc = bool_str2bits(str6, ZTERM, lut6_val, 32);
+	if (rc) return rc;
+	rc = bool_str2u32(str5, lut5_val);
+	if (rc) return rc;
+	return 0;
+}
+
+int bool_str2bits(const char *str, int str_len, uint64_t *u64, int num_bits)
+{
+	int i, j, bool_res, rc, vars[6];
 
 	if (num_bits == 64)
 		*u64 = 0;
@@ -204,7 +230,8 @@ int bool_str2bits(const char *str, uint64_t *u64, int num_bits)
 		*u64 &= 0xFFFFFFFF00000000;
 	else FAIL(EINVAL);
 
-	str_len = strlen(str);
+	if (str_len == ZTERM)
+		str_len = strlen(str);
 	for (i = 0; i < num_bits; i++) {
 		for (j = 0; j < sizeof(vars)/sizeof(*vars); j++)
 			vars[j] = (i & (1<<j)) != 0;
@@ -341,29 +368,6 @@ const char* bool_bits2str(uint64_t u64, int num_bits)
 	// TODO: This could be further simplified, see Petrick's method.
 	// XOR don't simplify well, try A2@A3
 	return str;
-}
-
-int lutstr_to_val(const char *lut6_str, const char *lut5_str, uint64_t *val)
-{
-	int rc;
-
-	*val = 0;
-	if (lut5_str && *lut5_str) {
-		if (lut6_str && lut6_str[0]) {
-			rc = bool_str2bits(lut6_str, val, 32);
-			if (rc) FAIL(rc);
-			*val <<= 32;
-		}
-		rc = bool_str2bits(lut5_str, val, 32);
-		if (rc) FAIL(rc);
-	} else {
-		// lut6 only
-		rc = bool_str2bits(lut6_str, val, 64);
-		if (rc) FAIL(rc);
-	}
-	return 0;
-fail:
-	return rc;
 }
 
 void printf_type2(uint8_t *d, int len, int inpos, int num_entries)

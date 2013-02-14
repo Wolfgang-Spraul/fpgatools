@@ -421,36 +421,23 @@ int fdev_logic_setconf(struct fpga_model *model, int y, int x,
 	RC_RETURN(model);
 }
 
-int fdev_logic_set_lutstr(struct fpga_model *model, int y, int x,
-	int type_idx, int lut_pos, const char *lut6_str, const char *lut5_str)
-{
-	struct fpga_device *dev;
-	int rc;
-
-	dev = fdev_p(model, y, x, DEV_LOGIC, type_idx);
-	RC_ASSERT(model, dev);
-	rc = lutstr_to_val(lut6_str, lut5_str, &dev->u.logic.a2d[lut_pos].lut_val);
-	if (rc) RC_FAIL(model, rc);
-	RC_RETURN(model);
-}
-
 int fdev_logic_a2d_out_used(struct fpga_model* model, int y, int x,
 	int type_idx, int lut_a2d, int used)
 {
 	struct fpga_device* dev;
 	int rc;
 
-	RC_CHECK(model);
 	dev = fdev_p(model, y, x, DEV_LOGIC, type_idx);
-	if (!dev) FAIL(EINVAL);
+	RC_ASSERT(model, dev);
 	rc = reset_required_pins(dev);
-	if (rc) FAIL(rc);
+	if (rc) RC_FAIL(model, rc);
 
-	dev->u.logic.a2d[lut_a2d].out_used = used;
+	if (used)
+		dev->u.logic.a2d[lut_a2d].flags |= OUT_USED;
+	else
+		dev->u.logic.a2d[lut_a2d].flags &= ~OUT_USED;
 	dev->instantiated = 1;
-	return 0;
-fail:
-	return rc;
+	RC_RETURN(model);
 }
 
 int fdev_logic_a2d_ff(struct fpga_model* model, int y, int x, int type_idx,
@@ -678,38 +665,23 @@ int fdev_logic_o5_used(struct fpga_model *model, int y, int x, int type_idx,
 		       || dev->u.logic.a2d[lut_a2d].cy0 == CY0_O5));
 }
 
-int fdev_logic_get_lutstr(struct fpga_model *model, int y, int x, int type_idx,
-	int lut_a2d, const char **lut6_str, const char **lut5_str)
+int fdev_logic_lut_dieval(struct fpga_model *model, int y, int x, int type_idx,
+	int lut_a2d, uint64_t *die_val)
 {
-	static char lut6_buf[MAX_LUT_LEN], lut5_buf[MAX_LUT_LEN];
 	struct fpga_device *dev;
-	int lut5_used;
-	const char *str;
 
-	lut6_buf[0] = 0;
-	lut5_buf[0] = 0;
-	*lut6_str = lut6_buf;
-	*lut5_str = lut5_buf;
-
+	*die_val = 0;
 	dev = fdev_p(model, y, x, DEV_LOGIC, type_idx);
 	RC_ASSERT(model, dev);
-
-	lut5_used = fdev_logic_o5_used(model, y, x, type_idx, lut_a2d);
-	if (lut5_used) {
-		// lut6
-		str = bool_bits2str(ULL_HIGH32(dev->u.logic.a2d[lut_a2d].lut_val), 32);
-		RC_ASSERT(model, str);
-		snprintf(lut6_buf, sizeof(lut6_buf), "(A6+~A6)*(%s)", str);
-
-		// lut5
-		str = bool_bits2str(ULL_LOW32(dev->u.logic.a2d[lut_a2d].lut_val), 32);
-		RC_ASSERT(model, str);
-		strcpy(lut5_buf, str);
-	} else {
-		str = bool_bits2str(dev->u.logic.a2d[lut_a2d].lut_val, 64);
-		RC_ASSERT(model, str);
-		strcpy(lut6_buf, str);
-	}
+	if (dev->u.logic.a2d[lut_a2d].flags & LUT5VAL_SET) {
+		*die_val = dev->u.logic.a2d[lut_a2d].lut5_val;
+		if (dev->u.logic.a2d[lut_a2d].flags & LUT6VAL_SET) {
+			if (ULL_HIGH32(dev->u.logic.a2d[lut_a2d].lut6_val))
+				HERE();
+			*die_val |= ULL_LOW32(dev->u.logic.a2d[lut_a2d].lut6_val << 32);
+		}
+	} else if (dev->u.logic.a2d[lut_a2d].flags & LUT6VAL_SET)
+		*die_val = dev->u.logic.a2d[lut_a2d].lut6_val;
 	RC_RETURN(model);
 }
 
@@ -906,7 +878,7 @@ int fdev_set_required_pins(struct fpga_model* model, int y, int x, int type,
 		if (dev->u.logic.wa8_used)
 			add_req_inpin(dev, LI_BX);
 		for (i = LUT_A; i <= LUT_D; i++) {
-			if (dev->u.logic.a2d[i].out_used) {
+			if (dev->u.logic.a2d[i].flags & OUT_USED) {
 				// LO_A..LO_D are in sequence
 				add_req_outpin(dev, LO_A+i);
 			}
@@ -927,21 +899,21 @@ int fdev_set_required_pins(struct fpga_model* model, int y, int x, int type,
 
 			for (j = 0; j < 6; j++)
 				req_inpins[j] = 0;
-			if (fdev_logic_o5_used(model, y, x, type_idx, i)) {
+			if (dev->u.logic.a2d[i].flags & LUT5VAL_SET) {
 				// A6 must be high/vcc if lut5 is used
 				req_inpins[5] = 1;
 				for (j = 0; j < 32; j++) {
-					if (!(dev->u.logic.a2d[i].lut_val & (1ULL << j))
-					    && !(dev->u.logic.a2d[i].lut_val & (1ULL << (32+j))))
+					if (!(dev->u.logic.a2d[i].lut5_val & (1ULL << j)))
 						continue;
 					for (k = 0; k < 5; k++) {
 						if (j & (1<<k))
 							req_inpins[k] = 1;
 					}
 				}
-			} else {
+			}
+			if (dev->u.logic.a2d[i].flags & LUT6VAL_SET) {
 				for (j = 0; j < 64; j++) {
-					if (!(dev->u.logic.a2d[i].lut_val & (1ULL << j)))
+					if (!(dev->u.logic.a2d[i].lut6_val & (1ULL << j)))
 						continue;
 					for (k = 0; k < 6; k++) {
 						if (j & (1<<k))
