@@ -416,7 +416,6 @@ enum {
 	  "COUT" }
 
 enum { LUT_A = 0, LUT_B, LUT_C, LUT_D }; // offset into a2d[]
-enum { LUTMODE_LUT = 1, LUTMODE_ROM, LUTMODE_RAM };
 #define OUT_USED	0x0001
 #define LUT5VAL_SET	0x0002
 #define LUT6VAL_SET	0x0004

@@ -122,6 +122,8 @@ static int bool_nextlen(const char *expr, int len)
 		if (expr[i] < '1' || expr[i] > '6') return -1;
 		return i+1;
 	}
+	if (expr[i] == '0' || expr[i] == '1')
+		return i+1;
 	return -1;
 }
 
@@ -236,7 +238,11 @@ int bool_str2bits(const char *str, int str_len, uint64_t *u64, int num_bits)
 		for (j = 0; j < sizeof(vars)/sizeof(*vars); j++)
 			vars[j] = (i & (1<<j)) != 0;
 		bool_res = bool_eval(str, str_len, vars);
-		if (bool_res == -1) FAIL(EINVAL);
+		if (bool_res == -1) {
+			fprintf(stderr, "#E %s:%i cannot evaluate '%.*s'\n",
+				__FILE__, __LINE__, str_len, str);
+			FAIL(EINVAL);
+		}
 		if (bool_res) *u64 |= 1ULL<<i;
 	}
 	return 0;
@@ -265,17 +271,13 @@ const char* bool_bits2str(uint64_t u64, int num_bits)
 	int str_end, first_op, bit_width;
 	static char str[2048];
 
-	if (!u64) return "0";
 	if (num_bits == 64) {
+		if (!u64) return "0";
 		if (u64 == 0xFFFFFFFFFFFFFFFFULL) return "1";
 		bit_width = 6;
 	} else if (num_bits == 32) {
-		if (u64 & 0xFFFFFFFF00000000ULL) {
-			// upper 32 bits should be 0
-			HERE();
-			return "0";
-		}
-		if (u64 == 0x00000000FFFFFFFFULL) return "1";
+		if (!ULL_LOW32(u64)) return "0";
+		if (ULL_LOW32(u64) == 0xFFFFFFFF) return "1";
 		bit_width = 5;
 	} else {
 		HERE();
@@ -368,6 +370,37 @@ const char* bool_bits2str(uint64_t u64, int num_bits)
 	// TODO: This could be further simplified, see Petrick's method.
 	// XOR don't simplify well, try A2@A3
 	return str;
+}
+
+int bool_req_pins(uint64_t u64, int num_bits)
+{
+	static const uint64_t pin_mask[6] = {
+		0xAAAAAAAAAAAAAAAA, /*A1*/
+		0xCCCCCCCCCCCCCCCC, /*A2*/
+		0xF0F0F0F0F0F0F0F0, /*A3*/
+		0xFF00FF00FF00FF00, /*A4*/
+		0xFFFF0000FFFF0000, /*A5*/
+		0xFFFFFFFF00000000  /*A6*/ };
+	uint64_t bit_mask;
+	int req_pins, num_pins, i;
+
+	if (num_bits == 32) {
+		num_pins = 5;
+		bit_mask = 0x00000000FFFFFFFF;
+	} else {
+		if (num_bits != 64) HERE();
+		num_pins = 6;
+		bit_mask = 0xFFFFFFFFFFFFFFFF;
+	}
+	// Special cases of all bits 0 and all bits 1 will
+	// correctly lead to req_pins == 0 because all bits
+	// are the same.
+	req_pins = 0;
+	for (i = 0; i < num_pins; i++) {
+		if ((u64 & pin_mask[i] & bit_mask) >> (1<<i) != (u64 & ~pin_mask[i] & bit_mask))
+			req_pins |= 1<<i;
+	}
+	return req_pins;
 }
 
 void printf_type2(uint8_t *d, int len, int inpos, int num_entries)

@@ -72,6 +72,7 @@ int bool_str2u32(const char *str, uint32_t *u32);
 int bool_str2lut_pair(const char *str6, const char *str5, uint64_t *lut6_val, uint32_t *lut5_val);
 int bool_str2bits(const char* str, int str_len, uint64_t* u64, int num_bits);
 const char* bool_bits2str(uint64_t u64, int num_bits);
+int bool_req_pins(uint64_t u64, int num_bits);
 
 void printf_type2(uint8_t* d, int len, int inpos, int num_entries);
 void printf_ramb16_data(uint8_t* bits, int inpos);

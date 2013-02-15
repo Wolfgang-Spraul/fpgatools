@@ -838,8 +838,7 @@ int fdev_set_required_pins(struct fpga_model* model, int y, int x, int type,
 	int type_idx)
 {
 	struct fpga_device* dev;
-	int req_inpins[6];
-	int i, j, k, rc;
+	int req_inpins, i, j, rc;
 
 	RC_CHECK(model);
 	dev = fdev_p(model, y, x, type, type_idx);
@@ -897,32 +896,18 @@ int fdev_set_required_pins(struct fpga_model* model, int y, int x, int type,
 				add_req_inpin(dev, LI_AX+i);
 			}
 
-			for (j = 0; j < 6; j++)
-				req_inpins[j] = 0;
+			req_inpins = 0;
 			if (dev->u.logic.a2d[i].flags & LUT5VAL_SET) {
 				// A6 must be high/vcc if lut5 is used
-				req_inpins[5] = 1;
-				for (j = 0; j < 32; j++) {
-					if (!(dev->u.logic.a2d[i].lut5_val & (1ULL << j)))
-						continue;
-					for (k = 0; k < 5; k++) {
-						if (j & (1<<k))
-							req_inpins[k] = 1;
-					}
-				}
+				req_inpins |= 1<<5;
+				req_inpins |= bool_req_pins(dev->u.logic.a2d[i].lut5_val, 32);
 			}
 			if (dev->u.logic.a2d[i].flags & LUT6VAL_SET) {
-				for (j = 0; j < 64; j++) {
-					if (!(dev->u.logic.a2d[i].lut6_val & (1ULL << j)))
-						continue;
-					for (k = 0; k < 6; k++) {
-						if (j & (1<<k))
-							req_inpins[k] = 1;
-					}
-				}
+				req_inpins |= bool_req_pins(dev->u.logic.a2d[i].lut6_val,
+					(dev->u.logic.a2d[i].flags & LUT5VAL_SET) ? 32 : 64);
 			}
 			for (j = 0; j < 6; j++) {
-				if (req_inpins[j])
+				if (req_inpins & (1<<j))
 					add_req_inpin(dev, LI_A1+i*6+j);
 			}
 			if ((dev->u.logic.a2d[i].ff_mux == MUX_XOR
