@@ -90,10 +90,6 @@ void atom_remove(char *bits, const cfg_atom_t *atom)
 	}
 }
 
-// for an equivalent schematic, see lut.svg
-const int lut_base_vars[6] = {0 /* A1 */, 1, 0 /* A3 - not used */,
-				0, 0, 1 /* A6 */};
-
 static int bool_nextlen(const char *expr, int len)
 {
 	int i, depth;
@@ -558,25 +554,30 @@ void frame_set_pinword(void* bits, int v)
 	((uint8_t*)bits)[1] = v & 0xFF;
 }
 
-uint8_t frame_get_u8(const uint8_t *frame_d)
+uint8_t mirror_bits(uint8_t v)
 {
-	uint8_t v = 0;
+	uint8_t mv = 0;
 	int i;
 	for (i = 0; i < 8; i++)
-		if (*frame_d & (1<<i)) v |= 1 << (7-i);
-	return v;
+		if (v & (1<<i)) mv |= 1 << (7-i);
+	return mv;
+}
+
+int pinword_to_cpu(int pinword)
+{
+	return mirror_bits(((pinword & 0xFF00) >> 8)) << 8 | mirror_bits(pinword & 0xFF);
 }
 
 // see ug380, table 2-5, bit ordering
 uint16_t frame_get_u16(const uint8_t *frame_d)
 {
 	uint16_t high_b, low_b;
-	high_b = frame_get_u8(frame_d);
-	low_b = frame_get_u8(frame_d+1);
+	high_b = mirror_bits(frame_d[0]);
+	low_b = mirror_bits(frame_d[1]);
 	return (high_b << 8) | low_b;
 }
 
-uint32_t frame_get_u32(const uint8_t *frame_d)
+static uint32_t frame_get_u32(const uint8_t *frame_d)
 {
 	uint32_t high_w, low_w;
 	low_w = frame_get_u16(frame_d);
@@ -592,27 +593,16 @@ uint64_t frame_get_u64(const uint8_t *frame_d)
 	return (high_w << 32) | low_w;
 }
 
-void frame_set_u8(uint8_t *frame_d, uint8_t v)
-{
-	int i;
-	for (i = 0; i < 8; i++) {
-		if (v & (1<<(7-i)))
-			(*frame_d) |= 1<<i;
-		else
-			(*frame_d) &= ~(1<<i);
-	}
-}
-
 void frame_set_u16(uint8_t *frame_d, uint16_t v)
 {
 	uint16_t high_b, low_b;
 	high_b = v >> 8;
 	low_b = v & 0xFF;
-	frame_set_u8(frame_d, high_b);
-	frame_set_u8(frame_d+1, low_b);
+	frame_d[0] = mirror_bits(high_b);
+	frame_d[1] = mirror_bits(low_b);
 }
 
-void frame_set_u32(uint8_t* frame_d, uint32_t v)
+static void frame_set_u32(uint8_t* frame_d, uint32_t v)
 {
 	uint32_t high_w, low_w;
 	high_w = v >> 16;
@@ -788,6 +778,115 @@ void write_lut64(uint8_t* two_minors, int off_in_frame, uint64_t u64)
 	}
 }
 
+void printf_routing_2minors(const uint8_t* bits, int row, int major,
+	int even_minor)
+{
+	int y, i, hclk;
+	uint64_t u64_0, u64_1;
+	char bit_str[129];
+
+	bit_str[128] = 0;
+	for (y = 0; y < 16; y++) {
+		hclk = (y < 8) ? 0 : 2;
+		u64_0 = frame_get_u64(bits + y*8 + hclk);
+		u64_1 = frame_get_u64(bits + y*8 + hclk + FRAME_SIZE);
+		if (u64_0 || u64_1) {
+			for (i = 0; i < 128; i++)
+				bit_str[i] = '0';
+			for (i = 0; i < 64; i++) {
+				if (u64_0 & (1ULL << i))
+					bit_str[i*2] = '1';
+				if (u64_1 & (1ULL << i))
+					bit_str[i*2+1] = '1';
+			}
+			// todo: might be nice to add the tile y and x here
+			printf("r%i ma%i v64_%i mip%i %s\n",
+				row, major, y, even_minor, bit_str);
+		}
+	}
+}
+
+void printf_v64_mi20(const uint8_t* bits, int row, int major)
+{
+	int y, i, num_bits_on, hclk;
+	uint64_t u64;
+	char bit_str[65];
+
+	bit_str[64] = 0;
+	for (y = 0; y < 16; y++) {
+		hclk = (y < 8) ? 0 : 2;
+		u64 = frame_get_u64(bits + y*8 + hclk);
+		if (u64) {
+			for (i = 0; i < 64; i++)
+				bit_str[i] = (u64 & (1ULL << i)) ? '1' : '0';
+			printf("r%i ma%i v64_%i mi20 %s\n",
+				row, major, y, bit_str);
+			num_bits_on = 0;
+			for (i = 0; i < 64; i++) {
+				if (u64 & (1ULL << i))
+					num_bits_on++;
+			}
+			// this is most helpful for bits 24:39 which are
+			// part of logic device configuration
+			if (num_bits_on < 5) {
+				for (i = 0; i < 64; i++) {
+					if (!(u64 & (1ULL << i)))
+						continue;
+					printf("r%i ma%i v64_%i mi20 b%i\n",
+						row, major, y, i);
+				}
+			}
+		}
+	}
+}
+
+void printf_word(int word, int row, int major, int minor, int v16_i)
+{
+	char bit_str[XC6_WORD_BITS];
+	int i, num_bits_on;
+
+	num_bits_on = 0;
+	for (i = 0; i < XC6_WORD_BITS; i++) {
+		if (word & (1ULL << i))
+			num_bits_on++;
+	}
+	if (num_bits_on >= 1 && num_bits_on <= 4) {
+		printf("r%i ma%i v%i_%i mi%i", row,
+			major, XC6_WORD_BITS, v16_i, minor);
+		for (i = 0; i < XC6_WORD_BITS; i++) {
+			if (word & (1ULL << i))
+				printf(" b%i", i);
+		}
+		printf("\n");
+	} else {
+		for (i = 0; i < XC6_WORD_BITS; i++)
+			bit_str[i] = (word & (1ULL << i)) ? '1' : '0';
+		printf("r%i ma%i v%i_%i mi%i %.*s\n", row,
+			major, XC6_WORD_BITS, v16_i, minor, XC6_WORD_BITS, bit_str);
+	}
+}
+
+void printf_lut_words(const uint8_t *major_bits, int row, int major, int minor, int v16_i)
+{
+	int off_in_frame, w;
+
+	off_in_frame = v16_i*XC6_WORD_BYTES;
+	if (off_in_frame >= XC6_HCLK_POS)
+		off_in_frame += XC6_HCLK_BYTES;
+
+	w = frame_get_pinword(&major_bits[minor*FRAME_SIZE + off_in_frame]);
+	if (w) printf_word(w, row, major, minor, v16_i);
+
+	w = frame_get_pinword(&major_bits[minor*FRAME_SIZE + off_in_frame + XC6_WORD_BYTES]);
+	if (w) printf_word(w, row, major, minor, v16_i+1);
+
+	w = frame_get_pinword(&major_bits[(minor+1)*FRAME_SIZE + off_in_frame]);
+	if (w) printf_word(w, row, major, minor+1, v16_i);
+
+	w = frame_get_pinword(&major_bits[(minor+1)*FRAME_SIZE + off_in_frame + XC6_WORD_BYTES]);
+	if (w) printf_word(w, row, major, minor+1, v16_i+1);
+}
+	
 int get_vm_mb(void)
 {
 	FILE* statusf = fopen("/proc/self/status", "r");

@@ -542,6 +542,143 @@ fail:
 	return rc;
 }
 
+static int dump_maj_zero(const uint8_t* bits, int row, int major)
+{
+	int minor;
+
+	for (minor = 0; minor < get_major_minors(XC6SLX9, major); minor++)
+		printf_clock(&bits[minor*FRAME_SIZE], row, major, minor);
+	for (minor = 0; minor < get_major_minors(XC6SLX9, major); minor++)
+		printf_frames(&bits[minor*FRAME_SIZE], /*max_frames*/ 1,
+			row, major, minor, /*print_empty*/ 0, /*no_clock*/ 1);
+	return 0;
+}
+
+static int dump_maj_left(const uint8_t* bits, int row, int major)
+{
+	int minor;
+
+	for (minor = 0; minor < get_major_minors(XC6SLX9, major); minor++)
+		printf_clock(&bits[minor*FRAME_SIZE], row, major, minor);
+	for (minor = 0; minor < get_major_minors(XC6SLX9, major); minor++)
+		printf_frames(&bits[minor*FRAME_SIZE], /*max_frames*/ 1,
+			row, major, minor, /*print_empty*/ 0, /*no_clock*/ 1);
+	return 0;
+}
+
+static int dump_maj_right(const uint8_t* bits, int row, int major)
+{
+	int minor;
+
+	for (minor = 0; minor < get_major_minors(XC6SLX9, major); minor++)
+		printf_clock(&bits[minor*FRAME_SIZE], row, major, minor);
+	for (minor = 0; minor < get_major_minors(XC6SLX9, major); minor++)
+		printf_frames(&bits[minor*FRAME_SIZE], /*max_frames*/ 1,
+			row, major, minor, /*print_empty*/ 0, /*no_clock*/ 1);
+	return 0;
+}
+
+static int dump_maj_logic(const uint8_t* bits, int row, int major)
+{
+	const struct xc_die* xci = xc_die_info(XC6SLX9);
+	int minor, i, logdev_start, logdev_end;
+
+	for (minor = 0; minor < xci->majors[major].minors; minor++)
+		printf_clock(&bits[minor*FRAME_SIZE], row, major, minor);
+
+	// 0:19 routing minor pairs
+	for (i = 0; i < 10; i++)
+		printf_routing_2minors(&bits[i*2*FRAME_SIZE], row, major, i*2);
+
+	// mi20 as 64-char 0/1 string
+	printf_v64_mi20(&bits[20*FRAME_SIZE], row, major);
+
+	logdev_start = 0;
+	logdev_end = 15;
+	if (xci->majors[major].flags & XC_MAJ_TOP_BOT_IO) {
+		if (row == xc_die_info(XC6SLX9)->num_rows-1)
+			logdev_start += TOPBOT_IO_ROWS;
+		else if (!row)
+			logdev_end -= TOPBOT_IO_ROWS;
+	}
+
+	if (xci->majors[major].flags & XC_MAJ_XM) {
+		if (xci->majors[major].minors != 31) HERE();
+
+		// M devices
+		if (logdev_start)
+			printf_extrabits(bits, 21, 2, 0, logdev_start*64, row, major);
+		for (i = logdev_start; i <= logdev_end; i++) {
+			printf_lut_words(bits, row, major, 21, i*4);
+			printf_lut_words(bits, row, major, 21, i*4+2);
+		}
+		if (logdev_end < 15)
+			printf_extrabits(bits, 21, 2, i*64 + XC6_HCLK_BITS, (15-logdev_end)*64, row, major);
+		printf_frames(&bits[23*FRAME_SIZE], /*max_frames*/ 1,
+			row, major, 23, /*print_empty*/ 0, /*no_clock*/ 1);
+		if (logdev_start)
+			printf_extrabits(bits, 24, 2, 0, logdev_start*64, row, major);
+		for (i = logdev_start; i <= logdev_end; i++) {
+			printf_lut_words(bits, row, major, 24, i*4);
+			printf_lut_words(bits, row, major, 24, i*4+2);
+		}
+		if (logdev_end < 15)
+			printf_extrabits(bits, 24, 2, i*64 + XC6_HCLK_BITS, (15-logdev_end)*64, row, major);
+
+		// X devices
+		printf_frames(&bits[26*FRAME_SIZE], /*max_frames*/ 1,
+			row, major, 26, /*print_empty*/ 0, /*no_clock*/ 1);
+		if (logdev_start)
+			printf_extrabits(bits, 27, 4, 0, logdev_start*64, row, major);
+		for (i = logdev_start; i <= logdev_end; i++) {
+			printf_lut_words(bits, row, major, 27, i*4);
+			printf_lut_words(bits, row, major, 29, i*4);
+			printf_lut_words(bits, row, major, 27, i*4+2);
+			printf_lut_words(bits, row, major, 29, i*4+2);
+		}
+		if (logdev_end < 15)
+			printf_extrabits(bits, 27, 4, i*64 + XC6_HCLK_BITS, (15-logdev_end)*64, row, major);
+	} else if (xci->majors[major].flags & (XC_MAJ_XL|XC_MAJ_CENTER)) {
+
+		// L devices
+		if (logdev_start)
+			printf_extrabits(bits, 21, 4, 0, logdev_start*64, row, major);
+		for (i = logdev_start; i <= logdev_end; i++) {
+			printf_lut_words(bits, row, major, 21, i*4);
+			printf_lut_words(bits, row, major, 23, i*4);
+			printf_lut_words(bits, row, major, 21, i*4+2);
+			printf_lut_words(bits, row, major, 23, i*4+2);
+		}
+		if (logdev_end < 15)
+			printf_extrabits(bits, 21, 4, i*64 + XC6_HCLK_BITS, (15-logdev_end)*64, row, major);
+		printf_frames(&bits[25*FRAME_SIZE], /*max_frames*/ 1,
+			row, major, 25, /*print_empty*/ 0, /*no_clock*/ 1);
+		// X devices
+		if (logdev_start)
+			printf_extrabits(bits, 26, 4, 0, logdev_start*64, row, major);
+		for (i = logdev_start; i <= logdev_end; i++) {
+			printf_lut_words(bits, row, major, 26, i*4);
+			printf_lut_words(bits, row, major, 28, i*4);
+			printf_lut_words(bits, row, major, 26, i*4+2);
+			printf_lut_words(bits, row, major, 28, i*4+2);
+		}
+		if (logdev_end < 15)
+			printf_extrabits(bits, 26, 4, i*64 + XC6_HCLK_BITS, (15-logdev_end)*64, row, major);
+
+		// one extra minor in the center major
+		if (xci->majors[major].flags & XC_MAJ_CENTER) {
+			if (xci->majors[major].minors != 31) HERE();
+			printf_frames(&bits[30*FRAME_SIZE], /*max_frames*/ 1,
+				row, major, 30, /*print_empty*/ 0, /*no_clock*/ 1);
+		} else { // XL
+			if (xci->majors[major].minors != 30) HERE();
+		}
+	} else
+		HERE();
+
+	return 0;
+}
+
 typedef struct ramb16_cfg
 {
 	uint8_t byte[64];
@@ -714,252 +851,6 @@ static void print_ramb16_cfg(ramb16_cfg_t* cfg)
 	printf("}\n");
 }
 
-static void printf_routing_2minors(const uint8_t* bits, int row, int major,
-	int even_minor)
-{
-	int y, i, hclk;
-	uint64_t u64_0, u64_1;
-	char bit_str[129];
-
-	bit_str[128] = 0;
-	for (y = 0; y < 16; y++) {
-		hclk = (y < 8) ? 0 : 2;
-		u64_0 = frame_get_u64(bits + y*8 + hclk);
-		u64_1 = frame_get_u64(bits + y*8 + hclk + FRAME_SIZE);
-		if (u64_0 || u64_1) {
-			for (i = 0; i < 128; i++)
-				bit_str[i] = '0';
-			for (i = 0; i < 64; i++) {
-				if (u64_0 & (1ULL << i))
-					bit_str[i*2] = '1';
-				if (u64_1 & (1ULL << i))
-					bit_str[i*2+1] = '1';
-			}
-			// todo: might be nice to add the tile y and x here
-			printf("r%i ma%i v64_%i mip%i %s\n",
-				row, major, y, even_minor, bit_str);
-		}
-	}
-}
-
-static void printf_v64_mi20(const uint8_t* bits, int row, int major)
-{
-	int y, i, num_bits_on, hclk;
-	uint64_t u64;
-	char bit_str[65];
-
-	bit_str[64] = 0;
-	for (y = 0; y < 16; y++) {
-		hclk = (y < 8) ? 0 : 2;
-		u64 = frame_get_u64(bits + y*8 + hclk);
-		if (u64) {
-			for (i = 0; i < 64; i++)
-				bit_str[i] = (u64 & (1ULL << i)) ? '1' : '0';
-			printf("r%i ma%i v64_%i mi20 %s\n",
-				row, major, y, bit_str);
-			num_bits_on = 0;
-			for (i = 0; i < 64; i++) {
-				if (u64 & (1ULL << i))
-					num_bits_on++;
-			}
-			// this is most helpful for bits 24:39 which are
-			// part of logic device configuration
-			if (num_bits_on < 5) {
-				for (i = 0; i < 64; i++) {
-					if (!(u64 & (1ULL << i)))
-						continue;
-					printf("r%i ma%i v64_%i mi20 b%i\n",
-						row, major, y, i);
-				}
-			}
-		}
-	}
-}
-
-static void printf_word(int word, int row, int major, int minor, int v16_i)
-{
-	char bit_str[XC6_WORD_BITS];
-	int i, num_bits_on;
-
-	num_bits_on = 0;
-	for (i = 0; i < XC6_WORD_BITS; i++) {
-		if (word & (1ULL << i))
-			num_bits_on++;
-	}
-	if (num_bits_on >= 1 && num_bits_on <= 4) {
-		printf("r%i ma%i v%i_%i mi%i", row,
-			major, XC6_WORD_BITS, v16_i, minor);
-		for (i = 0; i < XC6_WORD_BITS; i++) {
-			if (word & (1ULL << i))
-				printf(" b%i", i);
-		}
-		printf("\n");
-	} else {
-		for (i = 0; i < XC6_WORD_BITS; i++)
-			bit_str[i] = (word & (1ULL << i)) ? '1' : '0';
-		printf("r%i ma%i v%i_%i mi%i %.*s\n", row,
-			major, XC6_WORD_BITS, v16_i, minor, XC6_WORD_BITS, bit_str);
-	}
-}
-
-static void printf_lut_words(const uint8_t *major_bits, int row, int major, int minor, int v16_i)
-{
-	int off_in_frame, w;
-
-	off_in_frame = v16_i*XC6_WORD_BYTES;
-	if (off_in_frame >= XC6_HCLK_POS)
-		off_in_frame += XC6_HCLK_BYTES;
-
-	w = frame_get_pinword(&major_bits[minor*FRAME_SIZE + off_in_frame]);
-	if (w) printf_word(w, row, major, minor, v16_i);
-
-	w = frame_get_pinword(&major_bits[minor*FRAME_SIZE + off_in_frame + XC6_WORD_BYTES]);
-	if (w) printf_word(w, row, major, minor, v16_i+1);
-
-	w = frame_get_pinword(&major_bits[(minor+1)*FRAME_SIZE + off_in_frame]);
-	if (w) printf_word(w, row, major, minor+1, v16_i);
-
-	w = frame_get_pinword(&major_bits[(minor+1)*FRAME_SIZE + off_in_frame + XC6_WORD_BYTES]);
-	if (w) printf_word(w, row, major, minor+1, v16_i+1);
-}
-	
-static int dump_maj_zero(const uint8_t* bits, int row, int major)
-{
-	int minor;
-
-	for (minor = 0; minor < get_major_minors(XC6SLX9, major); minor++)
-		printf_clock(&bits[minor*FRAME_SIZE], row, major, minor);
-	for (minor = 0; minor < get_major_minors(XC6SLX9, major); minor++)
-		printf_frames(&bits[minor*FRAME_SIZE], /*max_frames*/ 1,
-			row, major, minor, /*print_empty*/ 0, /*no_clock*/ 1);
-	return 0;
-}
-
-static int dump_maj_left(const uint8_t* bits, int row, int major)
-{
-	int minor;
-
-	for (minor = 0; minor < get_major_minors(XC6SLX9, major); minor++)
-		printf_clock(&bits[minor*FRAME_SIZE], row, major, minor);
-	for (minor = 0; minor < get_major_minors(XC6SLX9, major); minor++)
-		printf_frames(&bits[minor*FRAME_SIZE], /*max_frames*/ 1,
-			row, major, minor, /*print_empty*/ 0, /*no_clock*/ 1);
-	return 0;
-}
-
-static int dump_maj_right(const uint8_t* bits, int row, int major)
-{
-	int minor;
-
-	for (minor = 0; minor < get_major_minors(XC6SLX9, major); minor++)
-		printf_clock(&bits[minor*FRAME_SIZE], row, major, minor);
-	for (minor = 0; minor < get_major_minors(XC6SLX9, major); minor++)
-		printf_frames(&bits[minor*FRAME_SIZE], /*max_frames*/ 1,
-			row, major, minor, /*print_empty*/ 0, /*no_clock*/ 1);
-	return 0;
-}
-
-static int dump_maj_logic(const uint8_t* bits, int row, int major)
-{
-	const struct xc_die* xci = xc_die_info(XC6SLX9);
-	int minor, i, logdev_start, logdev_end;
-
-	for (minor = 0; minor < xci->majors[major].minors; minor++)
-		printf_clock(&bits[minor*FRAME_SIZE], row, major, minor);
-
-	// 0:19 routing minor pairs
-	for (i = 0; i < 10; i++)
-		printf_routing_2minors(&bits[i*2*FRAME_SIZE], row, major, i*2);
-
-	// mi20 as 64-char 0/1 string
-	printf_v64_mi20(&bits[20*FRAME_SIZE], row, major);
-
-	logdev_start = 0;
-	logdev_end = 15;
-	if (xci->majors[major].flags & XC_MAJ_TOP_BOT_IO) {
-		if (row == xc_die_info(XC6SLX9)->num_rows-1)
-			logdev_start += TOPBOT_IO_ROWS;
-		else if (!row)
-			logdev_end -= TOPBOT_IO_ROWS;
-	}
-
-	if (xci->majors[major].flags & XC_MAJ_XM) {
-		if (xci->majors[major].minors != 31) HERE();
-
-		// M devices
-		if (logdev_start)
-			printf_extrabits(bits, 21, 2, 0, logdev_start*64, row, major);
-		for (i = logdev_start; i <= logdev_end; i++) {
-			printf_lut_words(bits, row, major, 21, i*4);
-			printf_lut_words(bits, row, major, 21, i*4+2);
-		}
-		if (logdev_end < 15)
-			printf_extrabits(bits, 21, 2, i*64 + XC6_HCLK_BITS, (15-logdev_end)*64, row, major);
-		printf_frames(&bits[23*FRAME_SIZE], /*max_frames*/ 1,
-			row, major, 23, /*print_empty*/ 0, /*no_clock*/ 1);
-		if (logdev_start)
-			printf_extrabits(bits, 24, 2, 0, logdev_start*64, row, major);
-		for (i = logdev_start; i <= logdev_end; i++) {
-			printf_lut_words(bits, row, major, 24, i*4);
-			printf_lut_words(bits, row, major, 24, i*4+2);
-		}
-		if (logdev_end < 15)
-			printf_extrabits(bits, 24, 2, i*64 + XC6_HCLK_BITS, (15-logdev_end)*64, row, major);
-
-		// X devices
-		printf_frames(&bits[26*FRAME_SIZE], /*max_frames*/ 1,
-			row, major, 26, /*print_empty*/ 0, /*no_clock*/ 1);
-		if (logdev_start)
-			printf_extrabits(bits, 27, 4, 0, logdev_start*64, row, major);
-		for (i = logdev_start; i <= logdev_end; i++) {
-			printf_lut_words(bits, row, major, 27, i*4);
-			printf_lut_words(bits, row, major, 29, i*4);
-			printf_lut_words(bits, row, major, 27, i*4+2);
-			printf_lut_words(bits, row, major, 29, i*4+2);
-		}
-		if (logdev_end < 15)
-			printf_extrabits(bits, 27, 4, i*64 + XC6_HCLK_BITS, (15-logdev_end)*64, row, major);
-	} else if (xci->majors[major].flags & (XC_MAJ_XL|XC_MAJ_CENTER)) {
-
-		// L devices
-		if (logdev_start)
-			printf_extrabits(bits, 21, 4, 0, logdev_start*64, row, major);
-		for (i = logdev_start; i <= logdev_end; i++) {
-			printf_lut_words(bits, row, major, 21, i*4);
-			printf_lut_words(bits, row, major, 23, i*4);
-			printf_lut_words(bits, row, major, 21, i*4+2);
-			printf_lut_words(bits, row, major, 23, i*4+2);
-		}
-		if (logdev_end < 15)
-			printf_extrabits(bits, 21, 4, i*64 + XC6_HCLK_BITS, (15-logdev_end)*64, row, major);
-		printf_frames(&bits[25*FRAME_SIZE], /*max_frames*/ 1,
-			row, major, 25, /*print_empty*/ 0, /*no_clock*/ 1);
-		// X devices
-		if (logdev_start)
-			printf_extrabits(bits, 26, 4, 0, logdev_start*64, row, major);
-		for (i = logdev_start; i <= logdev_end; i++) {
-			printf_lut_words(bits, row, major, 26, i*4);
-			printf_lut_words(bits, row, major, 28, i*4);
-			printf_lut_words(bits, row, major, 26, i*4+2);
-			printf_lut_words(bits, row, major, 28, i*4+2);
-		}
-		if (logdev_end < 15)
-			printf_extrabits(bits, 26, 4, i*64 + XC6_HCLK_BITS, (15-logdev_end)*64, row, major);
-
-		// one extra minor in the center major
-		if (xci->majors[major].flags & XC_MAJ_CENTER) {
-			if (xci->majors[major].minors != 31) HERE();
-			printf_frames(&bits[30*FRAME_SIZE], /*max_frames*/ 1,
-				row, major, 30, /*print_empty*/ 0, /*no_clock*/ 1);
-		} else { // XL
-			if (xci->majors[major].minors != 30) HERE();
-		}
-	} else
-		HERE();
-
-	return 0;
-}
-
 static int dump_maj_bram(const uint8_t* bits, int row, int major)
 {
 	ramb16_cfg_t ramb16_cfg[4];
@@ -975,6 +866,14 @@ static int dump_maj_bram(const uint8_t* bits, int row, int major)
 	// mi20 as 64-char 0/1 string
 	printf_v64_mi20(&bits[20*FRAME_SIZE], row, major);
 
+// todo: minors 21-24
+// r%i ma%i v16_%i mi%i pins 0000000000000000 0xFFFF
+// r%i ma%i v16_%i mi%i pin 12
+// r%i ma%i v16_%i mi%i bits 0000000000000000 0xFFFF
+// r%i ma%i v16_%i mi%i bit 12
+// v16_clk
+
+#if 0
 	printf_frames(&bits[21*FRAME_SIZE], /*max_frames*/ 1,
 		row, major, 21, /*print_empty*/ 0, /*no_clock*/ 1);
 	printf_frames(&bits[22*FRAME_SIZE], /*max_frames*/ 1,
@@ -1001,6 +900,7 @@ static int dump_maj_bram(const uint8_t* bits, int row, int major)
 			row, major, i);
 		print_ramb16_cfg(&ramb16_cfg[i]);
 	}
+#endif
 	return 0;
 }
 

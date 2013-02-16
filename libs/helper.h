@@ -87,14 +87,12 @@ void frame_set_bit(uint8_t* frame_d, int bit);
 int frame_get_pinword(const void *bits);
 void frame_set_pinword(void* bits, int v);
 
-uint8_t frame_get_u8(const uint8_t* frame_d);
-uint16_t frame_get_u16(const uint8_t* frame_d);
-uint32_t frame_get_u32(const uint8_t* frame_d);
-uint64_t frame_get_u64(const uint8_t* frame_d);
+uint8_t mirror_bits(uint8_t v);
+int pinword_to_cpu(int pinword);
 
-void frame_set_u8(uint8_t* frame_d, uint8_t v);
+uint16_t frame_get_u16(const uint8_t* frame_d);
+uint64_t frame_get_u64(const uint8_t* frame_d);
 void frame_set_u16(uint8_t* frame_d, uint16_t v);
-void frame_set_u32(uint8_t* frame_d, uint32_t v);
 void frame_set_u64(uint8_t* frame_d, uint64_t v);
 
 uint64_t frame_get_lut64(int lut_pos, const uint8_t *two_minors, int v16);
@@ -112,6 +110,12 @@ int clb_empty(uint8_t* maj_bits, int idx);
 void printf_extrabits(const uint8_t* maj_bits, int start_minor, int num_minors,
 	int start_bit, int num_bits, int row, int major);
 void write_lut64(uint8_t* two_minors, int off_in_frame, uint64_t u64);
+void printf_routing_2minors(const uint8_t* bits, int row, int major,
+	int even_minor);
+void printf_v64_mi20(const uint8_t* bits, int row, int major);
+void printf_word(int word, int row, int major, int minor, int v16_i);
+void printf_lut_words(const uint8_t *major_bits, int row, int major,
+	int minor, int v16_i);
 
 int get_vm_mb(void);
 int get_random(void);
