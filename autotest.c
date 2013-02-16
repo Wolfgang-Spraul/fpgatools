@@ -2175,6 +2175,9 @@ static int test_dist_mem(struct test_state *tstate)
 		rc = test_logic(tstate, y, x, type_i, &logic_cfg);
 		if (rc) FAIL(rc);
 	}
+	// todo: we could test a configuration with a memory lut in the
+	//       first and last position of a row (doesn't work easily
+	//       with test_logic() subfunction right now).
 	return 0;
 fail:
 	return rc;

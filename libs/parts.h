@@ -316,6 +316,34 @@ uint64_t xc6_lut_value(int lut_pos, int lutw_tl, int lutw_tr, int lutw_bl, int l
 #define XC6_X_A5_FFSRINIT_1	38
 #define XC6_ML_A5_FFSRINIT_1	39
 
+// minor 23 (M only)
+
+// When any ram or shift-reg lut is configured in a row, the entire
+// row is enabled by setting clock-pin-0 in minors 16, 17, 18 and 19.
+// This is not for ROM luts, who are treated just like regular luts.
+#define XC6_ROW_RAM_ENABLE_CLOCK_PIN	0
+#define XC6_ROW_RAM_MI16	16
+#define XC6_ROW_RAM_MI19	19
+
+#define XC6_M_C_RAM		3
+#define XC6_M_C_SHIFT_REG	4
+#define XC6_M_D_X2		9
+#define XC6_M_CDI1MUX_CX	14
+#define XC6_M_C_X2		15
+#define XC6_M_D_SHIFT_REG	25
+#define XC6_M_D_RAM		26
+#define XC6_M_WEMUX_CE		32
+#define XC6_M_B_RAM		36
+#define XC6_M_B_SHIFT_REG	37
+#define XC6_M_WA8_USED		45
+#define XC6_M_WA7_USED		46
+#define XC6_M_BDI1MUX_BX	48
+#define XC6_M_ADI1MUX_AX	53
+#define XC6_M_A_X2		54
+#define XC6_M_A_SHIFT_REG	58
+#define XC6_M_A_RAM		59
+#define XC6_M_B_X2		63
+
 // minor 26 in XM, 25 in XL columns:
 
 // ML_D_CY0=DX			 -

@@ -762,8 +762,8 @@ static int extract_logic(struct extract_state* es)
 			//
 			// Step 3:
 			//
-			// Parse all bits from minors 20 and 25/26 into more
-			// easily usable cfg_ml and cfg_x structures.
+			// Parse all bits from minors 20, 23 and 25/26 into
+			// more easily usable cfg_ml and cfg_x structures.
 			//
 
 			memset(&cfg_ml, 0, sizeof(cfg_ml));
@@ -815,6 +815,80 @@ static int extract_logic(struct extract_state* es)
 			if (mi20 & (1ULL<<XC6_ML_A5_FFSRINIT_1)) {
 				cfg_ml.a2d[LUT_A].ff5_srinit = FF_SRINIT1;
 				mi20 &= ~(1ULL<<XC6_ML_A5_FFSRINIT_1);
+			}
+
+			// minor 23
+			if (mi23_M & (1ULL<<XC6_M_A_RAM)) {
+				// todo: determine SPRAM from connectivity?
+				cfg_ml.a2d[LUT_A].ram_mode =
+					(mi23_M & (1ULL<<XC6_M_A_X2))
+						? DPRAM32 : DPRAM64;
+				mi23_M &= ~((1ULL<<XC6_M_A_RAM)|(1ULL<<XC6_M_A_X2));
+			} else if (mi23_M & (1ULL<<XC6_M_A_SHIFT_REG)) {
+				cfg_ml.a2d[LUT_A].ram_mode =
+					(mi23_M & (1ULL<<XC6_M_A_X2))
+						? SRL16 : SRL32;
+				mi23_M &= ~((1ULL<<XC6_M_A_SHIFT_REG)|(1ULL<<XC6_M_A_X2));
+			}
+			if (mi23_M & (1ULL<<XC6_M_B_RAM)) {
+				// todo: determine SPRAM from connectivity?
+				cfg_ml.a2d[LUT_B].ram_mode =
+					(mi23_M & (1ULL<<XC6_M_B_X2))
+						? DPRAM32 : DPRAM64;
+				mi23_M &= ~((1ULL<<XC6_M_B_RAM)|(1ULL<<XC6_M_B_X2));
+			} else if (mi23_M & (1ULL<<XC6_M_B_SHIFT_REG)) {
+				cfg_ml.a2d[LUT_B].ram_mode =
+					(mi23_M & (1ULL<<XC6_M_B_X2))
+						? SRL16 : SRL32;
+				mi23_M &= ~((1ULL<<XC6_M_B_SHIFT_REG)|(1ULL<<XC6_M_B_X2));
+			}
+			if (mi23_M & (1ULL<<XC6_M_C_RAM)) {
+				// todo: determine SPRAM from connectivity?
+				cfg_ml.a2d[LUT_C].ram_mode =
+					(mi23_M & (1ULL<<XC6_M_C_X2))
+						? DPRAM32 : DPRAM64;
+				mi23_M &= ~((1ULL<<XC6_M_C_RAM)|(1ULL<<XC6_M_C_X2));
+			} else if (mi23_M & (1ULL<<XC6_M_C_SHIFT_REG)) {
+				cfg_ml.a2d[LUT_C].ram_mode =
+					(mi23_M & (1ULL<<XC6_M_C_X2))
+						? SRL16 : SRL32;
+				mi23_M &= ~((1ULL<<XC6_M_C_SHIFT_REG)|(1ULL<<XC6_M_C_X2));
+			}
+			if (mi23_M & (1ULL<<XC6_M_D_RAM)) {
+				// todo: determine SPRAM from connectivity?
+				cfg_ml.a2d[LUT_D].ram_mode =
+					(mi23_M & (1ULL<<XC6_M_D_X2))
+						? DPRAM32 : DPRAM64;
+				mi23_M &= ~((1ULL<<XC6_M_D_RAM)|(1ULL<<XC6_M_D_X2));
+			} else if (mi23_M & (1ULL<<XC6_M_D_SHIFT_REG)) {
+				cfg_ml.a2d[LUT_D].ram_mode =
+					(mi23_M & (1ULL<<XC6_M_D_X2))
+						? SRL16 : SRL32;
+				mi23_M &= ~((1ULL<<XC6_M_D_SHIFT_REG)|(1ULL<<XC6_M_D_X2));
+			}
+			if (mi23_M & (1ULL<<XC6_M_ADI1MUX_AX)) {
+				cfg_ml.a2d[LUT_A].di_mux = DIMUX_X;
+				mi23_M &= ~(1ULL<<XC6_M_ADI1MUX_AX);
+			}
+			if (mi23_M & (1ULL<<XC6_M_BDI1MUX_BX)) {
+				cfg_ml.a2d[LUT_B].di_mux = DIMUX_X;
+				mi23_M &= ~(1ULL<<XC6_M_BDI1MUX_BX);
+			}
+			if (mi23_M & (1ULL<<XC6_M_CDI1MUX_CX)) {
+				cfg_ml.a2d[LUT_C].di_mux = DIMUX_X;
+				mi23_M &= ~(1ULL<<XC6_M_CDI1MUX_CX);
+			}
+			if (mi23_M & (1ULL<<XC6_M_WEMUX_CE)) {
+				cfg_ml.we_mux = WEMUX_CE;
+				mi23_M &= ~(1ULL<<XC6_M_WEMUX_CE);
+			}
+			if (mi23_M & (1ULL<<XC6_M_WA8_USED)) {
+				cfg_ml.wa8_used = 1;
+				mi23_M &= ~(1ULL<<XC6_M_WA8_USED);
+			}
+			if (mi23_M & (1ULL<<XC6_M_WA7_USED)) {
+				cfg_ml.wa7_used = 1;
+				mi23_M &= ~(1ULL<<XC6_M_WA7_USED);
 			}
 
 			// minor 25/26
@@ -1432,12 +1506,34 @@ static int extract_logic(struct extract_state* es)
 			//
 			// Remove all bits.
 			//
+
 			frame_set_u64(u8_p + 20*FRAME_SIZE + byte_off,
 				frame_get_u64(u8_p + 20*FRAME_SIZE + byte_off)
 					& ~XC6_MI20_LOGIC_MASK);
 			last_minor = l_col ? 29 : 30;
 			for (i = 21; i <= last_minor; i++)
 				frame_set_u64(u8_p + i*FRAME_SIZE + byte_off, 0);
+			if (cfg_ml.a2d[LUT_A].ram_mode
+			    || cfg_ml.a2d[LUT_B].ram_mode
+			    || cfg_ml.a2d[LUT_C].ram_mode
+			    || cfg_ml.a2d[LUT_D].ram_mode) {
+				int clock_word[4];
+
+				// check whether all 4 clock bits in minors 16-19 are on
+				for (i = XC6_ROW_RAM_MI16; i <= XC6_ROW_RAM_MI19; i++) {
+					clock_word[i-XC6_ROW_RAM_MI16] =
+						frame_get_pinword(u8_p + i*FRAME_SIZE + XC6_HCLK_POS);
+					if (!(clock_word[i-XC6_ROW_RAM_MI16] & (1<<XC6_ROW_RAM_ENABLE_CLOCK_PIN)))
+						break;
+				}
+				// if they are all on, clear them
+				if (i > XC6_ROW_RAM_MI19) {
+					for (i = XC6_ROW_RAM_MI16; i <= XC6_ROW_RAM_MI19; i++) {
+						frame_set_pinword(u8_p + i*FRAME_SIZE + XC6_HCLK_POS,
+						clock_word[i-XC6_ROW_RAM_MI16] & ~(1<<XC6_ROW_RAM_ENABLE_CLOCK_PIN));
+					}
+				}
+			}
 		
 			//
 			// Step 9:

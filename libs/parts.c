@@ -1582,25 +1582,25 @@ uint64_t xc6_lut_value(int lut_pos, int lutw_tl, int lutw_tr, int lutw_bl, int l
 
 	// assemble bits
 	v = 0;
-	for (i = 0; i < 16; i++) {
+	for (i = 0; i < 16; i+=2) {
 		// top side
-		if (lutw_tr & 1<<full_word_positions[i])
+		if (lutw_tr & (1<<full_word_positions[i]))
 			v |= 1ULL << (i*2);
-		if (lutw_tr & 1<<full_word_positions[i+1])
+		if (lutw_tr & (1<<full_word_positions[i+1]))
 			v |= 1ULL << (i*2+1);
-		if (lutw_tl & 1<<full_word_positions[i])
+		if (lutw_tl & (1<<full_word_positions[i]))
 			v |= 1ULL << (i*2+2);
-		if (lutw_tl & 1<<full_word_positions[i+1])
+		if (lutw_tl & (1<<full_word_positions[i+1]))
 			v |= 1ULL << (i*2+3);
 
 		// bottom side
-		if (lutw_br & 1<<full_word_positions[i])
+		if (lutw_br & (1<<full_word_positions[i]))
 			v |= 1ULL << (32+i*2);
-		if (lutw_br & 1<<full_word_positions[i+1])
+		if (lutw_br & (1<<full_word_positions[i+1]))
 			v |= 1ULL << (32+i*2+1);
-		if (lutw_bl & 1<<full_word_positions[i])
+		if (lutw_bl & (1<<full_word_positions[i]))
 			v |= 1ULL << (32+i*2+2);
-		if (lutw_bl & 1<<full_word_positions[i+1])
+		if (lutw_bl & (1<<full_word_positions[i+1]))
 			v |= 1ULL << (32+i*2+3);
 	}
 	return v;

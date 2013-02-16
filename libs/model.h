@@ -473,6 +473,8 @@ struct fpgadev_logic_a2d
 	//   of the 4 luts, the lut-D must be one of them.
 	// - With WA7 or WA8 used, all other luts should be either
 	//   unused or in DPRAM64 or SPRAM64 mode.
+	// - In x2 mode (RAM32/SRL16), both A6 and WA6 must be driven
+	//   high to keep O5 and O6 independent.
 	int ram_mode;	// if set, the lut is in RAM mode
 		// DPRAM64, DPRAM32, SPRAM64, SPRAM32, SRL32, SRL16
 	int di_mux; // only for A-C
