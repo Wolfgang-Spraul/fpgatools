@@ -37,7 +37,6 @@
 #define OUT_OF_U16(val)	((val) < 0 || (val) > 0xFFFF)
 
 const char* bitstr(uint32_t value, int digits);
-void hexdump(int indent, const uint8_t* data, int len);
 
 uint16_t __swab16(uint16_t x);
 uint32_t __swab32(uint32_t x);
@@ -78,7 +77,7 @@ void printf_type2(uint8_t* d, int len, int inpos, int num_entries);
 void printf_ramb16_data(uint8_t* bits, int inpos);
 
 int is_empty(const uint8_t* d, int l);
-int count_bits(const uint8_t* d, int l);
+int count_set_bits(const uint8_t* d, int l);
 
 int frame_get_bit(const uint8_t* frame_d, int bit);
 void frame_clear_bit(uint8_t* frame_d, int bit);
@@ -113,7 +112,7 @@ void write_lut64(uint8_t* two_minors, int off_in_frame, uint64_t u64);
 void printf_routing_2minors(const uint8_t* bits, int row, int major,
 	int even_minor);
 void printf_v64_mi20(const uint8_t* bits, int row, int major);
-void printf_word(int word, int row, int major, int minor, int v16_i);
+void printf_word(const char *prefix, int word);
 void printf_lut_words(const uint8_t *major_bits, int row, int major,
 	int minor, int v16_i);
 

@@ -227,6 +227,11 @@ const char *xc6_find_pkg_pin(const struct xc6_pkg_info *pkg_info, const char *de
 #define XC6_IOB_SUSP_3STATE_PULLDOWN		0x0000000000000008
 #define XC6_IOB_SUSP_LAST_VAL			0x0000000000000010
 
+#define XC6_BRAM_DATA_DEVS_PER_ROW	8
+#define XC6_BRAM_DATA_FRAMES_PER_DEV	18
+#define XC6_BRAM_DATA_PREFIX_LEN 18
+#define XC6_BRAM_DATA_SUFFIX_LEN 18
+
 int get_major_minors(int idcode, int major);
 
 enum major_type { MAJ_ZERO, MAJ_LEFT, MAJ_RIGHT, MAJ_CENTER,

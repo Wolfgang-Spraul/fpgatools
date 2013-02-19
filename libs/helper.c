@@ -22,10 +22,10 @@ const char *bitstr(uint32_t value, int digits)
         return str;
 }
 
-void hexdump(int indent, const uint8_t *data, int len)
+static void dump_data(int indent, const uint8_t *data, int len, int base)
 {
-	int i, j;
-	char fmt_str[16] = "%s@%05x %02x";
+	int i, j, k;
+	char fmt_str[16] = "%s@%05x";
 	char indent_str[16];
 
 	if (indent > 15)
@@ -43,14 +43,52 @@ void hexdump(int indent, const uint8_t *data, int len)
 		fmt_str[5] = '6';
 
 	while (i < len) {
-		printf(fmt_str, indent_str, i, data[i]);
-		for (j = 1; (j < 8) && (i + j < len); j++) {
+		printf(fmt_str, indent_str, i);
+		for (j = 0; (j < 8) && (i + j < len); j++) {
 			if (i + j >= len) break;
-			printf(" %02x", data[i+j]);
+			if (base == 16)
+				printf(" %02x", data[i+j]);
+			else if (base == 2) {
+				printf(" ");
+				for (k = 0; k < 8; k++)
+					printf(data[i+j] & (1<<(7-k)) ? "1" : "0");
+			} else {
+				printf(" #E");
+				break;
+			}
 		}
 		printf("\n");
 		i += 8;
 	}
+}
+
+// returns a 16-bit word (0:15) plus 2 bits parity in bits 16 & 17
+static int get_ramb_word_with_parity(void *d, int word_idx)
+{
+	int w, i, bit_pos;
+
+	w = 0;
+	for (i = 0; i < 16; i++) {
+		bit_pos = word_idx * 18 + 2 + 15-i;
+		if (((uint8_t *)d)[bit_pos/8] & (1<<((7-(bit_pos%8)))))
+			w |= 1<<i;
+	}
+	// parity bit 0 (pos +1)
+	if (((uint8_t *)d)[(word_idx*18+1)/8] & (1<<(7-((word_idx*18+1)%8))))
+		w |= 1<<16;
+	// parity bit 1 (pos +0)
+	if (((uint8_t *)d)[(word_idx*18+0)/8] & (1<<(7-((word_idx*18+0)%8))))
+		w |= 1<<17;
+	return w;
+}
+
+// src points to 16+2 (=18) bit words, dest must hold enough space
+// for num_words words.
+static void ramb_data_to_words(int *dest, void *src, int num_words)
+{
+	int i;
+	for (i = 0; i < num_words; i++)
+		dest[i] = get_ramb_word_with_parity(src, i);
 }
 
 uint16_t __swab16(uint16_t x)
@@ -419,22 +457,21 @@ void printf_type2(uint8_t *d, int len, int inpos, int num_entries)
 
 void printf_ramb16_data(uint8_t *bits, int inpos)
 {
-	int nonzero_head, nonzero_tail;
-	uint8_t init_byte;
-	char init_str[65];
-	int i, j, k, bit_off;
+	int nonzero_head, nonzero_tail, ramb_words[1024];
+	uint16_t init_data16[64][16], init_parity16[8][16];
+	int i, j, init_i;
 
 	// check head and tail
 	nonzero_head = 0;
-	for (i = 0; i < 18; i++) {
+	for (i = 0; i < XC6_BRAM_DATA_PREFIX_LEN; i++) {
 		if (bits[inpos + i]) {
 			nonzero_head = 1;
 			break;
 		}
 	}
 	nonzero_tail = 0;
-	for (i = 0; i < 18; i++) {
-		if (bits[inpos + 18*130-18 + i]) {
+	for (i = 0; i < XC6_BRAM_DATA_SUFFIX_LEN; i++) {
+		if (bits[inpos + XC6_BRAM_DATA_FRAMES_PER_DEV*FRAME_SIZE-XC6_BRAM_DATA_SUFFIX_LEN + i]) {
 			nonzero_tail = 1;
 			break;
 		}
@@ -443,55 +480,64 @@ void printf_ramb16_data(uint8_t *bits, int inpos)
 		printf(" #W Unexpected data.\n");
 	if (nonzero_head) {
 		printf(" head");
-		for (i = 0; i < 18; i++)
+		for (i = 0; i < XC6_BRAM_DATA_PREFIX_LEN; i++)
 			printf(" %02X", bits[inpos + i]);
 		printf("\n");
 	}
 	if (nonzero_tail) {
 		printf(" tail");
-		for (i = 0; i < 18; i++)
-			printf(" %02X", bits[inpos + 18*130-18 + i]);
+		for (i = 0; i < XC6_BRAM_DATA_SUFFIX_LEN; i++)
+			printf(" %02X", bits[inpos + XC6_BRAM_DATA_FRAMES_PER_DEV*FRAME_SIZE-XC6_BRAM_DATA_SUFFIX_LEN + i]);
 		printf("\n");
 	}
 
-	// 8 parity configs
-	for (i = 0; i < 8; i++) {
-		// 32 bytes per config
-		for (j = 0; j < 32; j++) {
-			init_byte = 0;
-			for (k = 0; k < 8; k++) {
-				bit_off = (i*(2048+256)) + (31-j)*4*18;
-				bit_off += 1+(k/2)*18-(k&1);
-				if (bits[inpos+18+bit_off/8]
-				    & (1<<(7-(bit_off%8))))
-					init_byte |= 1<<k;
+	ramb_data_to_words(ramb_words, &bits[inpos+18], sizeof(ramb_words)/sizeof(*ramb_words));
+
+	// prepare parity words for string printf
+	for (init_i = 0; init_i < 8; init_i++) {
+		for (i = 0; i < 16; i++) { // 16 uint16_t words in one ramb16 parity string
+			init_parity16[init_i][i] = 0;
+			// 2 parity bits from each word, so 2*4=8 words have
+			// to be processed for 16 parity bits
+			for (j = 0; j < 4; j++) {
+				if (ramb_words[64*init_i + 4*i + j] & (1<<16))
+					init_parity16[init_i][i] |= 1<<(j*4+0);
+				if (ramb_words[64*init_i + 4*i + j] & (1<<17))
+					init_parity16[init_i][i] |= 1<<(j*4+1);
+				if (ramb_words[512 + 64*init_i + 4*i + j] & (1<<16))
+					init_parity16[init_i][i] |= 1<<(j*4+2);
+				if (ramb_words[512 + 64*init_i + 4*i + j] & (1<<17))
+					init_parity16[init_i][i] |= 1<<(j*4+3);
 			}
-			sprintf(&init_str[j*2], "%02X", init_byte);
 		}
-		for (j = 0; j < 64; j++) {
-			if (init_str[j] != '0') {
-				printf(" parity 0x%02X \"%s\"\n", i, init_str);
+	}
+	// prepare data words for string printf
+	for (init_i = 0; init_i < 64; init_i++) {
+		for (i = 0; i < 8; i++) {
+			init_data16[init_i][i*2] = ramb_words[init_i*8 + i];
+			init_data16[init_i][i*2+1] = ramb_words[512 + init_i*8 + i];
+		}
+	}
+	// print parity strings
+	for (init_i = 0; init_i < 8; init_i++) {
+		for (i = 0; i < 16; i++) {
+			if (init_parity16[init_i][i]) {
+				printf(" parity 0x%02X \"", init_i);
+				for (i = 0; i < 16; i++)
+					printf("%04X", init_parity16[init_i][15-i]);
+				printf("\"\n");
 				break;
 			}
 		}
 	}
-
-	for (i = 0; i < 64; i++) {
-		// 32 bytes per config
-		for (j = 0; j < 32; j++) {
-			init_byte = 0;
-			for (k = 0; k < 8; k++) {
-				bit_off = (i*(256+32)) + ((31-j)/2)*18;
-				bit_off += (8-((31-j)&1)*8) + 2 + k;
-				if (bits[inpos+18+bit_off/8]
-				    & (1<<(7-(bit_off%8))))
-					init_byte |= 1<<(7-k);
-			}
-			sprintf(&init_str[j*2], "%02X", init_byte);
-		}
-		for (j = 0; j < 64; j++) {
-			if (init_str[j] != '0') {
-				printf(" init 0x%02X \"%s\"\n", i, init_str);
+	// print data strings
+	for (init_i = 0; init_i < 64; init_i++) {
+		for (i = 0; i < 16; i++) {
+			if (init_data16[init_i][i]) {
+				printf(" init 0x%02X \"", init_i);
+				for (i = 0; i < 16; i++)
+					printf("%04X", init_data16[init_i][15-i]);
+				printf("\"\n");
 				break;
 			}
 		}
@@ -505,7 +551,7 @@ int is_empty(const uint8_t *d, int l)
 	return 1;
 }
 
-int count_bits(const uint8_t *d, int l)
+int count_set_bits(const uint8_t *d, int l)
 {
 	int bits = 0;
 	while (--l >= 0) {
@@ -690,7 +736,7 @@ int printf_frames(const uint8_t* bits, int max_frames,
 	}
 	// value 128 chosen randomly for readability to decide
 	// between printing individual bits or a hex block.
-	if (count_bits(bits, 130) <= 128) {
+	if (count_set_bits(bits, 130) <= 128) {
 		for (i = 0; i < FRAME_SIZE*8; i++) {
 			if (!frame_get_bit(bits, i)) continue;
 			if (i >= 512 && i < 528) { // hclk
@@ -711,7 +757,7 @@ int printf_frames(const uint8_t* bits, int max_frames,
 	}
 	printf("%shex\n", prefix);
 	printf("{\n");
-	hexdump(1, bits, 130);
+	dump_data(1, bits, /*len*/ FRAME_SIZE, /*base*/ 16);
 	printf("}\n");
 	return 1;
 }
@@ -840,51 +886,64 @@ void printf_v64_mi20(const uint8_t* bits, int row, int major)
 	}
 }
 
-void printf_word(int word, int row, int major, int minor, int v16_i)
+void printf_word(const char *prefix, int word)
 {
 	char bit_str[XC6_WORD_BITS];
-	int i, num_bits_on;
+	int i, num_bits_printed;
 
-	num_bits_on = 0;
+	for (i = 0; i < XC6_WORD_BITS; i++)
+		bit_str[i] = (word & (1ULL << (XC6_WORD_BITS-i-1))) ? '1' : '0';
+	printf("%s 0b%.*s 0x%.*X", prefix, XC6_WORD_BITS, bit_str, XC6_WORD_BITS/4, word);
+	num_bits_printed = 0;
 	for (i = 0; i < XC6_WORD_BITS; i++) {
-		if (word & (1ULL << i))
-			num_bits_on++;
-	}
-	if (num_bits_on >= 1 && num_bits_on <= 4) {
-		printf("r%i ma%i v%i_%i mi%i", row,
-			major, XC6_WORD_BITS, v16_i, minor);
-		for (i = 0; i < XC6_WORD_BITS; i++) {
-			if (word & (1ULL << i))
-				printf(" b%i", i);
+		if (word & (1 << i)) {
+			if (num_bits_printed >= 4) {
+				printf(" ...");
+				break;
+			}
+			printf(" %i", i);
+			num_bits_printed++;
 		}
-		printf("\n");
-	} else {
-		for (i = 0; i < XC6_WORD_BITS; i++)
-			bit_str[i] = (word & (1ULL << i)) ? '1' : '0';
-		printf("r%i ma%i v%i_%i mi%i %.*s\n", row,
-			major, XC6_WORD_BITS, v16_i, minor, XC6_WORD_BITS, bit_str);
 	}
+	printf("\n");
 }
 
 void printf_lut_words(const uint8_t *major_bits, int row, int major, int minor, int v16_i)
 {
 	int off_in_frame, w;
+	char prefix[64];
 
 	off_in_frame = v16_i*XC6_WORD_BYTES;
 	if (off_in_frame >= XC6_HCLK_POS)
 		off_in_frame += XC6_HCLK_BYTES;
 
 	w = frame_get_pinword(&major_bits[minor*FRAME_SIZE + off_in_frame]);
-	if (w) printf_word(w, row, major, minor, v16_i);
+	if (w) {
+		sprintf(prefix, "r%i ma%i v%i_%i mi%i pin", row, major, XC6_WORD_BITS,
+			v16_i, minor);
+		printf_word(prefix, w);
+	}
 
 	w = frame_get_pinword(&major_bits[minor*FRAME_SIZE + off_in_frame + XC6_WORD_BYTES]);
-	if (w) printf_word(w, row, major, minor, v16_i+1);
+	if (w) {
+		sprintf(prefix, "r%i ma%i v%i_%i mi%i pin", row, major, XC6_WORD_BITS,
+			v16_i+1, minor);
+		printf_word(prefix, w);
+	}
 
 	w = frame_get_pinword(&major_bits[(minor+1)*FRAME_SIZE + off_in_frame]);
-	if (w) printf_word(w, row, major, minor+1, v16_i);
+	if (w) {
+		sprintf(prefix, "r%i ma%i v%i_%i mi%i pin", row, major, XC6_WORD_BITS,
+			v16_i, minor+1);
+		printf_word(prefix, w);
+	}
 
 	w = frame_get_pinword(&major_bits[(minor+1)*FRAME_SIZE + off_in_frame + XC6_WORD_BYTES]);
-	if (w) printf_word(w, row, major, minor+1, v16_i+1);
+	if (w) {
+		sprintf(prefix, "r%i ma%i v%i_%i mi%i pin", row, major, XC6_WORD_BITS,
+			v16_i+1, minor+1);
+		printf_word(prefix, w);
+	}
 }
 	
 int get_vm_mb(void)

@@ -663,6 +663,10 @@ enum {
 	BO_LAST = BO_DOPB3
 };
 
+struct fpgadev_bram
+{
+};
+
 //
 // DEV_MACC
 //
@@ -749,6 +753,7 @@ struct fpga_device
 		struct fpgadev_bufgmux bufgmux;
 		struct fpgadev_bufio bufio;
 		struct fpgadev_bscan bscan;
+		struct fpgadev_bram bram;
 	} u;
 };
 
