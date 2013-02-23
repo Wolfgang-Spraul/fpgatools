@@ -665,6 +665,7 @@ enum {
 
 struct fpgadev_bram
 {
+	// rstram and rst_priority must be set for A and B.
 };
 
 //

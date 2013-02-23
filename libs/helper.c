@@ -9,6 +9,22 @@
 #include <errno.h>
 #include "model.h"
 
+void printf_stdout(const char* fmt, ...)
+{
+	va_list arg_list;
+	va_start(arg_list, fmt);
+	vfprintf(stdout, fmt, arg_list);
+	va_end(arg_list);
+}
+
+void printf_stderr(const char* fmt, ...)
+{
+	va_list arg_list;
+	va_start(arg_list, fmt);
+	vfprintf(stderr, fmt, arg_list);
+	va_end(arg_list);
+}
+
 const char *bitstr(uint32_t value, int digits)
 {
         static char str[2 /* "0b" */ + 32 + 1 /* '\0' */];
@@ -22,7 +38,7 @@ const char *bitstr(uint32_t value, int digits)
         return str;
 }
 
-static void dump_data(int indent, const uint8_t *data, int len, int base)
+void dump_data(int indent, const uint8_t *data, int len, int base)
 {
 	int i, j, k;
 	char fmt_str[16] = "%s@%05x";
@@ -886,64 +902,62 @@ void printf_v64_mi20(const uint8_t* bits, int row, int major)
 	}
 }
 
-void printf_word(const char *prefix, int word)
+const char *fmt_word(int word)
 {
+	enum { NUM_BUFS = 16, BUF_SIZE = 64 };
+	static char buf[NUM_BUFS][BUF_SIZE];
+	static int last_buf = 0;
 	char bit_str[XC6_WORD_BITS];
 	int i, num_bits_printed;
 
+	last_buf = (last_buf+1)%NUM_BUFS;
+
 	for (i = 0; i < XC6_WORD_BITS; i++)
 		bit_str[i] = (word & (1ULL << (XC6_WORD_BITS-i-1))) ? '1' : '0';
-	printf("%s 0b%.*s 0x%.*X", prefix, XC6_WORD_BITS, bit_str, XC6_WORD_BITS/4, word);
+	snprintf(buf[last_buf], sizeof(*buf), "0b%.*s 0x%.*X", XC6_WORD_BITS, bit_str, XC6_WORD_BITS/4, word);
+
 	num_bits_printed = 0;
 	for (i = 0; i < XC6_WORD_BITS; i++) {
 		if (word & (1 << i)) {
 			if (num_bits_printed >= 4) {
-				printf(" ...");
+				sprintf(&buf[last_buf][strlen(buf[last_buf])], " ...");
 				break;
 			}
-			printf(" %i", i);
+			sprintf(&buf[last_buf][strlen(buf[last_buf])], " %i", i);
 			num_bits_printed++;
 		}
 	}
-	printf("\n");
+	strcat(buf[last_buf], "\n");
+	return buf[last_buf];
 }
 
 void printf_lut_words(const uint8_t *major_bits, int row, int major, int minor, int v16_i)
 {
 	int off_in_frame, w;
-	char prefix[64];
 
 	off_in_frame = v16_i*XC6_WORD_BYTES;
 	if (off_in_frame >= XC6_HCLK_POS)
 		off_in_frame += XC6_HCLK_BYTES;
 
 	w = frame_get_pinword(&major_bits[minor*FRAME_SIZE + off_in_frame]);
-	if (w) {
-		sprintf(prefix, "r%i ma%i v%i_%i mi%i pin", row, major, XC6_WORD_BITS,
-			v16_i, minor);
-		printf_word(prefix, w);
-	}
+	if (w)
+		printf("r%i ma%i v%i_%i mi%i pin %s", row, major, XC6_WORD_BITS,
+			v16_i, minor, fmt_word(w));
 
 	w = frame_get_pinword(&major_bits[minor*FRAME_SIZE + off_in_frame + XC6_WORD_BYTES]);
-	if (w) {
-		sprintf(prefix, "r%i ma%i v%i_%i mi%i pin", row, major, XC6_WORD_BITS,
-			v16_i+1, minor);
-		printf_word(prefix, w);
-	}
+	if (w)
+		printf("r%i ma%i v%i_%i mi%i pin %s", row, major, XC6_WORD_BITS,
+			v16_i+1, minor, fmt_word(w));
 
 	w = frame_get_pinword(&major_bits[(minor+1)*FRAME_SIZE + off_in_frame]);
-	if (w) {
-		sprintf(prefix, "r%i ma%i v%i_%i mi%i pin", row, major, XC6_WORD_BITS,
-			v16_i, minor+1);
-		printf_word(prefix, w);
-	}
+	if (w)
+		printf("r%i ma%i v%i_%i mi%i pin %s", row, major, XC6_WORD_BITS,
+			v16_i, minor+1, fmt_word(w));
 
 	w = frame_get_pinword(&major_bits[(minor+1)*FRAME_SIZE + off_in_frame + XC6_WORD_BYTES]);
-	if (w) {
-		sprintf(prefix, "r%i ma%i v%i_%i mi%i pin", row, major, XC6_WORD_BITS,
-			v16_i+1, minor+1);
-		printf_word(prefix, w);
-	}
+	if (w)
+		printf("r%i ma%i v%i_%i mi%i pin %s", row, major, XC6_WORD_BITS,
+			v16_i+1, minor+1, fmt_word(w));
 }
 	
 int get_vm_mb(void)

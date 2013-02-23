@@ -130,7 +130,9 @@ const struct xc6_pkg_info *xc6_pkg_info(enum xc6_pkg pkg);
 // returns 0 if description not found
 const char *xc6_find_pkg_pin(const struct xc6_pkg_info *pkg_info, const char *description);
 
-#define FRAME_SIZE		130
+#define XC6_FRAME_WORDS		65
+#define XC6_WORD_BYTES		2
+#define FRAME_SIZE		(XC6_FRAME_WORDS*XC6_WORD_BYTES)
 #define FRAMES_PER_ROW		505 // for slx4 and slx9
 #define PADDING_FRAMES_PER_ROW	2
 #define NUM_ROWS		4 // for slx9 and slx9

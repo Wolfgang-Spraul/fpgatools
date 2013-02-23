@@ -29,12 +29,13 @@ static int parse_commands(struct fpga_config* config, uint8_t* d,
 
 #define BITSTREAM_READ_PAGESIZE		4096
 
-int read_bitfile(struct fpga_config* cfg, FILE* f)
+int read_bitfile(struct fpga_config* cfg, FILE* f, int verbose_read)
 {
 	uint8_t* bit_data = 0;
 	int rc, file_len, bit_len, bit_cur;
 
 	memset(cfg, 0, sizeof(*cfg));
+	cfg->verbose_read = verbose_read;
 	cfg->num_regs_before_bits = -1;
 	cfg->idcode_reg = -1;
 	cfg->FLR_reg = -1;
@@ -851,10 +852,45 @@ static void print_ramb16_cfg(ramb16_cfg_t* cfg)
 	printf("}\n");
 }
 
-static void printf_minors(int row, int major, int minor, int num_minors, const uint8_t *major_bits)
+static void printf_minor_diff(int row, int major, int minor,
+	const uint8_t *old_minor_bits, const uint8_t *new_minor_bits)
+{
+	int word_i, w_old, w_new;
+	char v16_str[32];
+
+	// print words as pins (fpga bit ordering)
+	for (word_i = 0; word_i < FRAME_SIZE/XC6_WORD_BYTES; word_i++) {
+		if (word_i == XC6_HCLK_POS/XC6_WORD_BYTES)
+			sprintf(v16_str, "v16_clk");
+		else
+			sprintf(v16_str, "v16_%i",
+				word_i<XC6_HCLK_POS/XC6_WORD_BYTES ? word_i : word_i - 1);
+		w_old = frame_get_pinword(&old_minor_bits[word_i*XC6_WORD_BYTES]);
+		w_new = frame_get_pinword(&new_minor_bits[word_i*XC6_WORD_BYTES]);
+		if (w_old == w_new) continue;
+		printf("#I <r%i ma%i %s mi%i pin %s", row, major, v16_str, minor, fmt_word(w_old));
+		printf("#I >r%i ma%i %s mi%i pin %s", row, major, v16_str, minor, fmt_word(w_new));
+	}
+	// print words as bits (cpu bit ordering)
+	for (word_i = 0; word_i < FRAME_SIZE/XC6_WORD_BYTES; word_i++) {
+		if (word_i == XC6_HCLK_POS/XC6_WORD_BYTES)
+			sprintf(v16_str, "v16_clk");
+		else
+			sprintf(v16_str, "v16_%i",
+				word_i<XC6_HCLK_POS/XC6_WORD_BYTES ? word_i : word_i - 1);
+		w_old = frame_get_pinword(&old_minor_bits[word_i*XC6_WORD_BYTES]);
+		w_new = frame_get_pinword(&new_minor_bits[word_i*XC6_WORD_BYTES]);
+		if (w_old == w_new) continue;
+		printf("#I <r%i ma%i %s mi%i cpu %s", row, major, v16_str, minor, fmt_word(pinword_to_cpu(w_old)));
+		printf("#I >r%i ma%i %s mi%i cpu %s", row, major, v16_str, minor, fmt_word(pinword_to_cpu(w_new)));
+	}
+}
+
+static void printf_minors(int row, int major, int minor, int num_minors,
+	const uint8_t *major_bits)
 {
 	int word_i, minor_i, w;
-	char v16_str[32], prefix[128];
+	char v16_str[32];
 
 	// print words as pins (fpga bit ordering)
 	for (word_i = 0; word_i < FRAME_SIZE/XC6_WORD_BYTES; word_i++) {
@@ -867,8 +903,7 @@ static void printf_minors(int row, int major, int minor, int num_minors, const u
 			w = frame_get_pinword(&major_bits[minor_i*FRAME_SIZE
 				+ word_i*XC6_WORD_BYTES]);
 			if (!w) continue;
-			sprintf(prefix, "r%i ma%i %s mi%i pin", row, major, v16_str, minor_i);
-			printf_word(prefix, w);
+			printf("r%i ma%i %s mi%i pin %s", row, major, v16_str, minor_i, fmt_word(w));
 		}
 	}
 	// print words as bits (cpu bit ordering)
@@ -882,8 +917,7 @@ static void printf_minors(int row, int major, int minor, int num_minors, const u
 			w = frame_get_pinword(&major_bits[minor_i*FRAME_SIZE
 				+ word_i*XC6_WORD_BYTES]);
 			if (!w) continue;
-			sprintf(prefix, "r%i ma%i %s mi%i cpu", row, major, v16_str, minor_i);
-			printf_word(prefix, pinword_to_cpu(w));
+			printf("r%i ma%i %s mi%i cpu %s", row, major, v16_str, minor_i, fmt_word(pinword_to_cpu(w)));
 		}
 	}
 }
@@ -1055,7 +1089,7 @@ int dump_config(struct fpga_config* cfg, int flags)
 		rc = dump_bram(cfg);
 		if (rc) FAIL(rc);
 		printf_type2(cfg->bits.d, cfg->bits.len,
-			BRAM_DATA_START + BRAM_DATA_LEN, 896*2/8);
+			BRAM_DATA_START + BRAM_DATA_LEN, IOB_WORDS*2/8);
 		if (flags & DUMP_CRC)
 			printf("auto-crc 0x%X\n", cfg->auto_crc);
 	}
@@ -1138,10 +1172,10 @@ static int FAR_pos(int FAR_row, int FAR_major, int FAR_minor)
 	if (FAR_row > 3 || FAR_major > 17
 	    || FAR_minor >= get_major_minors(XC6SLX9, FAR_major))
 		return -1;
-	result = FAR_row * 505*130;
+	result = FAR_row * 505*FRAME_SIZE;
 	for (i = 0; i < FAR_major; i++)
-		result += get_major_minors(XC6SLX9, i)*130;
-	return result + FAR_minor*130;
+		result += get_major_minors(XC6SLX9, i)*FRAME_SIZE;
+	return result + FAR_minor*FRAME_SIZE;
 }
 
 static int read_bits(struct fpga_config* cfg, uint8_t* d, int len,
@@ -1159,13 +1193,14 @@ static int read_bits(struct fpga_config* cfg, uint8_t* d, int len,
 	if (cfg->idcode_reg == -1 || cfg->FLR_reg == -1
 	    || (cfg->reg[cfg->idcode_reg].int_v != XC6SLX4
 	        && cfg->reg[cfg->idcode_reg].int_v != XC6SLX9)
-	    || cfg->reg[cfg->FLR_reg].int_v != 896)
+	    || cfg->reg[cfg->FLR_reg].int_v != IOB_WORDS)
 		FAIL(EINVAL);
 
-	cfg->bits.len = (4*505 + 4*144) * FRAME_SIZE + 896*2;
+	cfg->bits.len = (4*505 + 4*144) * FRAME_SIZE + IOB_WORDS*2;
 	cfg->bits.d = calloc(cfg->bits.len, 1 /* elsize */);
 	if (!cfg->bits.d) FAIL(ENOMEM);
 	cfg->auto_crc = 0;
+	POUT(cfg->verbose_read, ("#D expected bits length is %i bytes\n", cfg->bits.len));
 
 	FAR_block = -1;
 	FAR_row = -1;
@@ -1269,6 +1304,8 @@ static int read_bits(struct fpga_config* cfg, uint8_t* d, int len,
 		if (2*u32 < 130) FAIL(EINVAL);
 
 		last_FDRI_pos = src_off+u32*2+/*auto-crc*/4;
+		POUT(cfg->verbose_read, ("#D src 0x%X: %i fdri words, last_FDRI_pos %i\n",
+			src_off-4, u32, last_FDRI_pos));
 
 		// fdri words u32
 		if (FAR_block == -1 || FAR_block > 1 || FAR_row == -1
@@ -1280,17 +1317,22 @@ static int read_bits(struct fpga_config* cfg, uint8_t* d, int len,
 
 			offset_in_bits = FAR_pos(FAR_row, FAR_major, FAR_minor);
 			if (offset_in_bits == -1) FAIL(EINVAL);
+			POUT(cfg->verbose_read,
+				("#D FAR_pos r%i ma%i mi%i = %i bytes\n",
+				 FAR_row, FAR_major, FAR_minor, offset_in_bits));
+
 			if (!FAR_row && !FAR_major && !FAR_minor
-			    && u32 > 4*(505+2)*65)
-				block0_words = 4*(505+2)*65;
+			    && u32 > 4*(505+2)*XC6_FRAME_WORDS)
+				block0_words = 4*(505+2)*XC6_FRAME_WORDS;
 			else {
 				block0_words = u32;
-				if (block0_words % 65) FAIL(EINVAL);
+				if (block0_words % XC6_FRAME_WORDS) FAIL(EINVAL);
 			}
+			POUT(cfg->verbose_read, ("#D %i block0 words\n", block0_words));
 			padding_frames = 0;
-			for (i = 0; i < block0_words/65; i++) {
-				if (i && i+1 == block0_words/65) {
-					for (j = 0; j < 130; j++) {
+			for (i = 0; i < block0_words/XC6_FRAME_WORDS; i++) {
+				if (i && i+1 == block0_words/XC6_FRAME_WORDS) {
+					for (j = 0; j < FRAME_SIZE; j++) {
 						if (d[src_off+i*130+j]
 						    != 0xFF) break;
 					}
@@ -1313,13 +1355,40 @@ static int read_bits(struct fpga_config* cfg, uint8_t* d, int len,
 					padding_frames += 2;
 					continue;
 				}
+				if (cfg->verbose_read && offset_in_bits) {
+					printf("#D copying %i bytes from file_off 0x%X to bits_off %i\n",
+						FRAME_SIZE, src_off+i*FRAME_SIZE,
+						offset_in_bits + (i-padding_frames)*FRAME_SIZE);
+
+					for (j = 0; j < FRAME_SIZE; j++) {
+						if (cfg->bits.d[offset_in_bits + (i-padding_frames)*FRAME_SIZE + j])
+							break;
+					}
+					if (j >= FRAME_SIZE)
+						printf("dest all-0\n");
+					else {
+						printf("dest {\n");
+						dump_data(1, &cfg->bits.d[offset_in_bits + (i-padding_frames)*FRAME_SIZE],
+							FRAME_SIZE, 16);
+						printf("}\n");
+					}
+					printf("src {\n");
+					dump_data(1, &d[src_off + i*FRAME_SIZE], FRAME_SIZE, 16);
+					printf("}\n");
+				}
+				if (offset_in_bits)
+					printf_minor_diff(FAR_row, FAR_major, FAR_minor,
+						&cfg->bits.d[offset_in_bits + (i-padding_frames)*FRAME_SIZE],
+						&d[src_off + i*FRAME_SIZE]);
 				memcpy(&cfg->bits.d[offset_in_bits
 					+ (i-padding_frames)*FRAME_SIZE],
 					&d[src_off + i*FRAME_SIZE], FRAME_SIZE);
 			}
 		}
 		if (u32 - block0_words > 0) {
-			int bram_data_words = 4*144*65 + 896;
+			int bram_data_words = 4*144*XC6_FRAME_WORDS + IOB_WORDS;
+			POUT(cfg->verbose_read, ("#D block0 words: %i bram_data words: %i fdri words: %i\n",
+				block0_words, bram_data_words, u32));
 			if (u32 - block0_words != bram_data_words + 1) FAIL(EINVAL);
 			offset_in_bits = BRAM_DATA_START;
 			memcpy(&cfg->bits.d[offset_in_bits],
@@ -1327,7 +1396,15 @@ static int read_bits(struct fpga_config* cfg, uint8_t* d, int len,
 				bram_data_words*2);
 			u16 = __be16_to_cpu(*(uint16_t*)&d[
 			  (src_off+block0_words+bram_data_words)*2]);
-			if (u16) FAIL(EINVAL);
+			if (u16) {
+				if (u16 != 0xFFFF) {
+					PERR(("#E %s:%i post-bram word 0x%Xh (expected 0 or 0xFFFF).\n",
+						__FILE__, __LINE__, u16));
+					rc = EINVAL;
+					goto fail;
+				}
+				POUT(cfg->verbose_read, ("#D post-bram word 0xFFFF\n"));
+			}
 		}
 		src_off += 2*u32;
 		cfg->auto_crc = __be32_to_cpu(*(uint32_t*)&d[src_off]);
@@ -1450,7 +1527,7 @@ static int parse_commands(struct fpga_config* cfg, uint8_t* d,
 
 			if ((cfg->reg[cfg->idcode_reg].int_v == XC6SLX4
 			     || cfg->reg[cfg->idcode_reg].int_v == XC6SLX9)
-			    && cfg->reg[cfg->FLR_reg].int_v != 896)
+			    && cfg->reg[cfg->FLR_reg].int_v != IOB_WORDS)
 				printf("#W Unexpected FLR value %i on "
 					"idcode 0x%X.\n",
 					cfg->reg[cfg->FLR_reg].int_v,
@@ -1598,7 +1675,7 @@ fail:
 static struct fpga_config_reg_rw s_defregs_before_bits[] =
 	{{ CMD,		.int_v = CMD_RCRC },
 	 { REG_NOOP },
-	 { FLR,		.int_v = 896 }, 
+	 { FLR,		.int_v = IOB_WORDS }, 
 	 { COR1,	.int_v = COR1_DEF | COR1_CRC_BYPASS }, 
 	 { COR2,	.int_v = COR2_DEF }, 
 	 { IDCODE,	.int_v = XC6SLX9 }, 

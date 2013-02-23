@@ -12,17 +12,18 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/types.h>
+#include <stdarg.h>
 
-#define PROGRAM_REVISION "2012-06-27"
 #define MACRO_STR(arg)	#arg
 
-#define OUT_OF_MEM()	{ fprintf(stderr, \
-	"#E Out of memory in %s:%i\n", __FILE__, __LINE__); }
-#define EXIT(expr)	if (expr) { fprintf(stderr, \
-	"#E Internal error in %s:%i\n", __FILE__, __LINE__); exit(1); }
+#define POUT(on, varfmt)	(on) ? printf_stdout varfmt : (void) 0
+#define PERR(varfmt)		do { fflush(stdout); printf_stderr varfmt; } while (0)
+#define PHERE()			PERR(("#E Internal error in %s:%i\n", __FILE__, __LINE__))
 
-#define HERE() fprintf(stderr, "#E Internal error in %s:%i\n", \
-		__FILE__, __LINE__)
+#define OUT_OF_MEM()	PERR(("#E Out of memory in %s:%i\n", __FILE__, __LINE__))
+#define EXIT(expr)	if (expr) { PERR(("#E Internal error in %s:%i\n", __FILE__, __LINE__)); exit(1); }
+
+#define HERE() do { PERR(("#E Internal error in %s:%i\n", __FILE__, __LINE__)); } while (0)
 #define FAIL(code)	do { HERE(); rc = (code); goto fail; } while (0)
 #define XOUT()		do { HERE(); goto xout; } while (0)
 #define ASSERT(what)	do { if (!(what)) FAIL(EINVAL); } while (0)
@@ -36,7 +37,10 @@
 
 #define OUT_OF_U16(val)	((val) < 0 || (val) > 0xFFFF)
 
+void printf_stdout(const char* fmt, ...);
+void printf_stderr(const char* fmt, ...);
 const char* bitstr(uint32_t value, int digits);
+void dump_data(int indent, const uint8_t *data, int len, int base);
 
 uint16_t __swab16(uint16_t x);
 uint32_t __swab32(uint32_t x);
@@ -112,7 +116,7 @@ void write_lut64(uint8_t* two_minors, int off_in_frame, uint64_t u64);
 void printf_routing_2minors(const uint8_t* bits, int row, int major,
 	int even_minor);
 void printf_v64_mi20(const uint8_t* bits, int row, int major);
-void printf_word(const char *prefix, int word);
+const char *fmt_word(int word);
 void printf_lut_words(const uint8_t *major_bits, int row, int major,
 	int minor, int v16_i);
 

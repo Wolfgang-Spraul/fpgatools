@@ -74,6 +74,8 @@ struct fpga_bits
 
 struct fpga_config
 {
+	int verbose_read;
+
 	char header_str[4][MAX_HEADER_STR_LEN];
 
 	int num_regs;
@@ -87,7 +89,7 @@ struct fpga_config
 	uint32_t auto_crc;
 };
 
-int read_bitfile(struct fpga_config* cfg, FILE* f);
+int read_bitfile(struct fpga_config* cfg, FILE* f, int verbose_read);
 
 #define DUMP_HEADER_STR		0x0001
 #define DUMP_REGS		0x0002

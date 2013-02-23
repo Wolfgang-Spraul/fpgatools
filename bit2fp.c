@@ -9,32 +9,40 @@
 #include "floorplan.h"
 #include "bit.h"
 
+static void help_exit(int argc, char **argv)
+{
+	fprintf(stderr,
+		"\n"
+		"%s - bitstream to floorplan\n"
+		"Usage: %s [--help] [--verbose] [--bit-header] [--bit-regs] [--bit-crc]\n"
+		"       %*s [--no-model] [--no-fp-header] <bitstream_file>\n"
+		"\n", argv[0], argv[0], (int) strlen(argv[0]), "");
+	exit(EXIT_SUCCESS);
+}
+
 int main(int argc, char** argv)
 {
 	struct fpga_model model;
-	int bit_header, bit_regs, bit_crc, fp_header, pull_model, file_arg, flags;
-	int rc = -1;
+	int bit_header, bit_regs, bit_crc, fp_header, pull_model, file_arg;
+	int verbose, flags, rc = -1;
 	struct fpga_config config;
 
 	// parameters
-	if (argc < 2) {
-		fprintf(stderr,
-			"\n"
-			"%s - bitstream to floorplan\n"
-			"Usage: %s [--bit-header] [--bit-regs] [--bit-crc] [--no-model]\n"
-			"       %*s [--no-fp-header] <bitstream_file>\n"
-			"\n", argv[0], argv[0], (int) strlen(argv[0]), "");
-		goto fail;
-	}
+	if (argc < 2) help_exit(argc, argv);
+	verbose = 0;
    	bit_header = 0;
 	bit_regs = 0;
 	bit_crc = 0;
 	pull_model = 1;
 	fp_header = 1;
 	file_arg = 1;
-	while (file_arg < argc
-	       && !strncmp(argv[file_arg], "--", 2)) {
-		if (!strcmp(argv[file_arg], "--bit-header"))
+	while (file_arg < argc && !strncmp(argv[file_arg], "--", 2)) {
+		if (!strcmp(argv[file_arg], "--help"))
+			help_exit(argc, argv);
+
+		if (!strcmp(argv[file_arg], "--verbose"))
+			verbose = 1;
+		else if (!strcmp(argv[file_arg], "--bit-header"))
 			bit_header = 1;
 		else if (!strcmp(argv[file_arg], "--bit-regs"))
 			bit_regs = 1;
@@ -55,7 +63,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "Error opening %s.\n", argv[file_arg]);
 			goto fail;
 		}
-		rc = read_bitfile(&config, fbits);
+		rc = read_bitfile(&config, fbits, verbose);
 		fclose(fbits);
 		if (rc) FAIL(rc);
 	}
