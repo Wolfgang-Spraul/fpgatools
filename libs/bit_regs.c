@@ -1043,31 +1043,14 @@ fail:
 
 static int dump_bram(struct fpga_config *cfg)
 {
-	int row, i, j, off, newline;
+	int row, i;
 
-	newline = 0;
-	for (row = 0; row < 4; row++) {
-		for (i = 0; i < XC6_BRAM_DATA_DEVS_PER_ROW; i++) {
-			for (j = 0; j < XC6_BRAM_DATA_FRAMES_PER_DEV*FRAME_SIZE; j++) {
-				if (cfg->bits.d[BRAM_DATA_START
-					+ (row*XC6_BRAM_DATA_DEVS_PER_ROW+i)
-						*XC6_BRAM_DATA_FRAMES_PER_DEV*FRAME_SIZE
-					+ j])
-					break;
-			}
-			if (j >= XC6_BRAM_DATA_FRAMES_PER_DEV*FRAME_SIZE)
-				continue;
-			if (!newline) {
-				newline = 1;
-				printf("\n");
-			}
-			printf("br%i ramb16 i%i\n", row, i);
-			printf("{\n");
-			off = BRAM_DATA_START
-				+ (row*XC6_BRAM_DATA_DEVS_PER_ROW+i)
-					*XC6_BRAM_DATA_FRAMES_PER_DEV*FRAME_SIZE;
-			printf_ramb16_data(cfg->bits.d, off);
-			printf("}\n");
+	for (row = 3; row >= 0; row--) {
+		for (i = XC6_BRAM16_DEVS_PER_ROW-1; i >= 0; i--) {
+			printf_ramb_data(&cfg->bits.d[BRAM_DATA_START
+				+ (row*XC6_BRAM16_DEVS_PER_ROW+i)
+				  *XC6_BRAM_DATA_FRAMES_PER_DEV*FRAME_SIZE],
+				row, i);
 		}
 	}
 	return 0;

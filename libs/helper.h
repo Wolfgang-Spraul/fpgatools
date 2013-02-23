@@ -78,7 +78,7 @@ const char* bool_bits2str(uint64_t u64, int num_bits);
 int bool_req_pins(uint64_t u64, int num_bits);
 
 void printf_type2(uint8_t* d, int len, int inpos, int num_entries);
-void printf_ramb16_data(uint8_t* bits, int inpos);
+void printf_ramb_data(const uint8_t *bits, int row, int bram_idx);
 
 int is_empty(const uint8_t* d, int l);
 int count_set_bits(const uint8_t* d, int l);

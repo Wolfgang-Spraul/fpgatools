@@ -79,7 +79,7 @@ void dump_data(int indent, const uint8_t *data, int len, int base)
 }
 
 // returns a 16-bit word (0:15) plus 2 bits parity in bits 16 & 17
-static int get_ramb_word_with_parity(void *d, int word_idx)
+static int get_ramb_word_with_parity(const void *d, int word_idx)
 {
 	int w, i, bit_pos;
 
@@ -100,7 +100,7 @@ static int get_ramb_word_with_parity(void *d, int word_idx)
 
 // src points to 16+2 (=18) bit words, dest must hold enough space
 // for num_words words.
-static void ramb_data_to_words(int *dest, void *src, int num_words)
+static void ramb_data_to_words(int *dest, const void *src, int num_words)
 {
 	int i;
 	for (i = 0; i < num_words; i++)
@@ -471,92 +471,209 @@ void printf_type2(uint8_t *d, int len, int inpos, int num_entries)
 	}
 }
 
-void printf_ramb16_data(uint8_t *bits, int inpos)
+static int ramb_words_to_bram16(uint16_t (*init_data)[64][16], uint16_t (*init_parity)[8][16], int (*ramb_words)[1024])
+{
+	int init_i, i, j, bits_set;
+
+	bits_set = 0;
+	// prepare parity words for string printf
+	for (init_i = 0; init_i < 8; init_i++) {
+		for (i = 0; i < 16; i++) { // 16 uint16_t words in one ramb16 parity string
+			(*init_parity)[init_i][i] = 0;
+			// 2 parity bits from each word, so 2*4=8 words have
+			// to be processed for 16 parity bits
+			for (j = 0; j < 4; j++) {
+				if ((*ramb_words)[64*init_i + 4*i + j] & (1<<16))
+					(*init_parity)[init_i][i] |= 1<<(j*4+0);
+				if ((*ramb_words)[64*init_i + 4*i + j] & (1<<17))
+					(*init_parity)[init_i][i] |= 1<<(j*4+1);
+				if ((*ramb_words)[512 + 64*init_i + 4*i + j] & (1<<16))
+					(*init_parity)[init_i][i] |= 1<<(j*4+2);
+				if ((*ramb_words)[512 + 64*init_i + 4*i + j] & (1<<17))
+					(*init_parity)[init_i][i] |= 1<<(j*4+3);
+			}
+			if ((*init_parity)[init_i][i])
+				bits_set = 1;
+		}
+	}
+	// prepare data words for string printf
+	for (init_i = 0; init_i < 64; init_i++) {
+		for (i = 0; i < 8; i++) {
+			(*init_data)[init_i][i*2] = (*ramb_words)[init_i*8 + i];
+			(*init_data)[init_i][i*2+1] = (*ramb_words)[512 + init_i*8 + i];
+
+			if ((*init_data)[init_i][i*2]
+			    || (*init_data)[init_i][i*2+1])
+				bits_set = 1;
+		}
+	}
+	return bits_set;
+}
+
+static int ramb_words_to_bram8(uint16_t (*init_data)[64][16], uint16_t (*init_parity)[8][16], int (*ramb_words)[1024])
+{
+	int init_i, i, j, devs_used;
+
+	devs_used = 0; // bit1 = dev0, bit2 = dev1
+	// prepare parity words (0:3 are for the first bram8 device, 4:7 for the second one)
+	for (init_i = 0; init_i < 8; init_i++) {
+		for (i = 0; i < 16; i++) { // 16 uint16_t words in one ramb16 parity string
+			(*init_parity)[init_i][i] = 0;
+			// 2 parity bits from each word, so 2*4=8 words have
+			// to be processed for 16 parity bits
+			for (j = 0; j < 8; j++) {
+				if ((*ramb_words)[128*init_i + 8*i + j] & (1<<16))
+					(*init_parity)[init_i][i] |= 1<<(j*2+0);
+				if ((*ramb_words)[128*init_i + 8*i + j] & (1<<17))
+					(*init_parity)[init_i][i] |= 1<<(j*2+1);
+			}
+			if ((*init_parity)[init_i][i])
+				devs_used |= (init_i < 4) ? 0x01 : 0x02;
+		}
+	}
+	// prepare data words (0:31 are for the first bram8 device, 32:63 for the second one)
+	for (init_i = 0; init_i < 64; init_i++) {
+		for (i = 0; i < 16; i++) {
+			(*init_data)[init_i][i] = (*ramb_words)[init_i*16 + i];
+			if ((*init_data)[init_i][i])
+				devs_used |= (init_i < 32) ? 0x01 : 0x02;
+		}
+	}
+	return devs_used;
+}
+
+void printf_ramb_data(const uint8_t *bits, int row, int bram_idx)
 {
 	int nonzero_head, nonzero_tail, ramb_words[1024];
-	uint16_t init_data16[64][16], init_parity16[8][16];
-	int i, j, init_i;
+	uint16_t init_data[64][16], init_parity[8][16];
+	int i, j, devs_used;
 
 	// check head and tail
 	nonzero_head = 0;
 	for (i = 0; i < XC6_BRAM_DATA_PREFIX_LEN; i++) {
-		if (bits[inpos + i]) {
+		if (bits[i]) {
 			nonzero_head = 1;
 			break;
 		}
 	}
 	nonzero_tail = 0;
 	for (i = 0; i < XC6_BRAM_DATA_SUFFIX_LEN; i++) {
-		if (bits[inpos + XC6_BRAM_DATA_FRAMES_PER_DEV*FRAME_SIZE-XC6_BRAM_DATA_SUFFIX_LEN + i]) {
+		if (bits[XC6_BRAM_DATA_FRAMES_PER_DEV*FRAME_SIZE-XC6_BRAM_DATA_SUFFIX_LEN + i]) {
 			nonzero_tail = 1;
 			break;
 		}
 	}
-	if (nonzero_head || nonzero_tail)
-		printf(" #W Unexpected data.\n");
-	if (nonzero_head) {
-		printf(" head");
-		for (i = 0; i < XC6_BRAM_DATA_PREFIX_LEN; i++)
-			printf(" %02X", bits[inpos + i]);
-		printf("\n");
-	}
-	if (nonzero_tail) {
-		printf(" tail");
-		for (i = 0; i < XC6_BRAM_DATA_SUFFIX_LEN; i++)
-			printf(" %02X", bits[inpos + XC6_BRAM_DATA_FRAMES_PER_DEV*FRAME_SIZE-XC6_BRAM_DATA_SUFFIX_LEN + i]);
-		printf("\n");
-	}
-
-	ramb_data_to_words(ramb_words, &bits[inpos+18], sizeof(ramb_words)/sizeof(*ramb_words));
-
-	// prepare parity words for string printf
-	for (init_i = 0; init_i < 8; init_i++) {
-		for (i = 0; i < 16; i++) { // 16 uint16_t words in one ramb16 parity string
-			init_parity16[init_i][i] = 0;
-			// 2 parity bits from each word, so 2*4=8 words have
-			// to be processed for 16 parity bits
-			for (j = 0; j < 4; j++) {
-				if (ramb_words[64*init_i + 4*i + j] & (1<<16))
-					init_parity16[init_i][i] |= 1<<(j*4+0);
-				if (ramb_words[64*init_i + 4*i + j] & (1<<17))
-					init_parity16[init_i][i] |= 1<<(j*4+1);
-				if (ramb_words[512 + 64*init_i + 4*i + j] & (1<<16))
-					init_parity16[init_i][i] |= 1<<(j*4+2);
-				if (ramb_words[512 + 64*init_i + 4*i + j] & (1<<17))
-					init_parity16[init_i][i] |= 1<<(j*4+3);
-			}
+	if (nonzero_head || nonzero_tail) {
+		PHERE();
+		if (nonzero_head) {
+			printf(" head");
+			for (i = 0; i < XC6_BRAM_DATA_PREFIX_LEN; i++)
+				printf(" %02X", bits[i]);
+			printf("\n");
+		}
+		if (nonzero_tail) {
+			printf(" tail");
+			for (i = 0; i < XC6_BRAM_DATA_SUFFIX_LEN; i++)
+				printf(" %02X", bits[XC6_BRAM_DATA_FRAMES_PER_DEV*FRAME_SIZE-XC6_BRAM_DATA_SUFFIX_LEN + i]);
+			printf("\n");
 		}
 	}
-	// prepare data words for string printf
-	for (init_i = 0; init_i < 64; init_i++) {
+
+	ramb_data_to_words(ramb_words, &bits[18], sizeof(ramb_words)/sizeof(*ramb_words));
+
+	// ramb16
+	devs_used = ramb_words_to_bram16(&init_data, &init_parity, &ramb_words);
+	if (devs_used) {
+		printf("br%i maj_i %i dev_i %i/16\n", row,
+			bram_idx/XC6_BRAM16_DEVS_PER_MAJOR,
+			bram_idx%XC6_BRAM16_DEVS_PER_MAJOR);
+		printf("{\n");
 		for (i = 0; i < 8; i++) {
-			init_data16[init_i][i*2] = ramb_words[init_i*8 + i];
-			init_data16[init_i][i*2+1] = ramb_words[512 + init_i*8 + i];
-		}
-	}
-	// print parity strings
-	for (init_i = 0; init_i < 8; init_i++) {
-		for (i = 0; i < 16; i++) {
-			if (init_parity16[init_i][i]) {
-				printf(" parity 0x%02X \"", init_i);
-				for (i = 0; i < 16; i++)
-					printf("%04X", init_parity16[init_i][15-i]);
-				printf("\"\n");
-				break;
+			for (j = 0; j < 16; j++) {
+				if (init_parity[i][j]) {
+					printf(" parity 0x%02X \"", i);
+					for (j = 0; j < 16; j++)
+						printf("%04X", init_parity[i][15-j]);
+					printf("\"\n");
+					break;
+				}
 			}
 		}
-	}
-	// print data strings
-	for (init_i = 0; init_i < 64; init_i++) {
-		for (i = 0; i < 16; i++) {
-			if (init_data16[init_i][i]) {
-				printf(" init 0x%02X \"", init_i);
-				for (i = 0; i < 16; i++)
-					printf("%04X", init_data16[init_i][15-i]);
-				printf("\"\n");
-				break;
+		for (i = 0; i < 64; i++) {
+			for (j = 0; j < 16; j++) {
+				if (init_data[i][j]) {
+					printf(" init 0x%02X \"", i);
+					for (j = 0; j < 16; j++)
+						printf("%04X", init_data[i][15-j]);
+					printf("\"\n");
+					break;
+				}
 			}
 		}
+		printf("}\n");
+	}
+
+	devs_used = ramb_words_to_bram8(&init_data, &init_parity, &ramb_words);
+	// ramb8,0
+	if (devs_used & 0x01) {
+		printf("br%i maj_i %i dev_i %i,0/8\n", row,
+			bram_idx/XC6_BRAM16_DEVS_PER_MAJOR,
+			bram_idx%XC6_BRAM16_DEVS_PER_MAJOR);
+		printf("{\n");
+		for (i = 0; i < 4; i++) {
+			for (j = 0; j < 16; j++) {
+				if (init_parity[i][j]) {
+					printf(" parity 0x%02X \"", i);
+					for (j = 0; j < 16; j++)
+						printf("%04X", init_parity[i][15-j]);
+					printf("\"\n");
+					break;
+				}
+			}
+		}
+		for (i = 0; i < 32; i++) {
+			for (j = 0; j < 16; j++) {
+				if (init_data[i][j]) {
+					printf(" init 0x%02X \"", i);
+					for (j = 0; j < 16; j++)
+						printf("%04X", init_data[i][15-j]);
+					printf("\"\n");
+					break;
+				}
+			}
+		}
+		printf("}\n");
+	}
+
+	// ramb8,1
+	if (devs_used & 0x02) {
+		printf("br%i maj_i %i dev_i %i,1/8\n", row,
+			bram_idx/XC6_BRAM16_DEVS_PER_MAJOR,
+			bram_idx%XC6_BRAM16_DEVS_PER_MAJOR);
+		printf("{\n");
+		for (i = 4; i < 8; i++) {
+			for (j = 0; j < 16; j++) {
+				if (init_parity[i][j]) {
+					printf(" parity 0x%02X \"", i-4);
+					for (j = 0; j < 16; j++)
+						printf("%04X", init_parity[i][15-j]);
+					printf("\"\n");
+					break;
+				}
+			}
+		}
+		for (i = 32; i < 64; i++) {
+			for (j = 0; j < 16; j++) {
+				if (init_data[i][j]) {
+					printf(" init 0x%02X \"", i-32);
+					for (j = 0; j < 16; j++)
+						printf("%04X", init_data[i][15-j]);
+					printf("\"\n");
+					break;
+				}
+			}
+		}
+		printf("}\n");
 	}
 }
 
@@ -1083,8 +1200,7 @@ int all_zero(const void* d, int num_bytes)
 	return 1;
 }
 
-void printf_wrap(FILE* f, char* line, int prefix_len,
-	const char* fmt, ...)
+void printf_wrap(FILE* f, char* line, int prefix_len, const char* fmt, ...)
 {
 	va_list list;
 	int i;
