@@ -663,9 +663,16 @@ enum {
 	BO_LAST = BO_DOPB3
 };
 
-struct fpgadev_bram
+// requirements for valid bram
+//  rstram and rst_priority must be set for A and B.
+// todo: haven't decided whether dev_bram should be one structure
+//       for 8+16 or two separate structures
+struct fpgadev_bram16
 {
-	// rstram and rst_priority must be set for A and B.
+};
+
+struct fpgadev_bram8
+{
 };
 
 //
@@ -754,7 +761,8 @@ struct fpga_device
 		struct fpgadev_bufgmux bufgmux;
 		struct fpgadev_bufio bufio;
 		struct fpgadev_bscan bscan;
-		struct fpgadev_bram bram;
+		struct fpgadev_bram16 bram16;
+		struct fpgadev_bram8 bram8;
 	} u;
 };
 
@@ -1191,3 +1199,55 @@ struct w_net
 #define ADD_PREF 1
 
 int add_conn_net(struct fpga_model* model, int add_pref, const struct w_net *net);
+
+#if 0
+bram16:
+int *data; // points to 1024 words (each 16+2=18 bits)
+int clka_inv; // DEVCFG_INV_Y, DEVCFG_INV_N
+int clkb_inv;
+int data_width_a; // 0,1,2,4,9,18,36
+int data_width_b; // 0,1,2,4,9,18,36
+int doa_reg; // BRAM_OUTREG_ON, BRAM_OUTREG_OFF
+int dob_reg;
+int ena_inv;
+int enb_inv; // BRAM_ENB_INV_Y, BRAM_ENB_INV_N
+int reg_cea_inv;
+int reg_ceb_inv;
+int rsta_inv;
+int rstb_inv;
+int wea_inv[4];
+int web_inv[4];
+int rst_type; // BRAM_RST_SYNC, BRAM_RST_ASYNC
+int write_mode_a; // BRAM_WRITE_FIRST, BRAM_READ_FIRST, BRAM_NO_CHANGE
+int write_mode_b;
+int ram_mode; // BRAM_TDP, BRAM_SDP, BRAM_SP
+int rst_priority_a; // BRAM_RST_PRIORITY_SR, BRAM_RST_PRIORITY_CE
+int rst_priority_b; // BRAM_RST_PRIORITY_SR, BRAM_RST_PRIORITY_CE
+int en_rstram_a; // DEVCFG_FALSE, DEVCFG_TRUE
+int en_rstram_b; // DEVCFG_FALSE, DEVCFG_TRUE
+
+bram8:
+int *data; // points to 512 words (each 16+2=18 bits)
+int clk_awr_inv; // DEVCFG_INV_Y, DEVCFG_INV_N
+int clk_brd_inv;
+int data_width_a; // 0,1,2,4,9,18,36
+int data_width_b; // 0,1,2,4,9,18,36
+int doa_reg; // BRAM_OUTREG_ON, BRAM_OUTREG_OFF
+int dob_reg;
+int en_awr_inv;
+int en_brd_inv; // BRAM_ENB_INV_Y, BRAM_ENB_INV_N
+int reg_cea_inv;
+int reg_ceb_reg_ce_inv;
+int rsta_inv;
+int rstb_rst_inv;
+int wea_wel_inv[2];
+int web_weu_inv[2];
+int rst_type; // BRAM_RST_SYNC, BRAM_RST_ASYNC
+int write_mode_a; // BRAM_WRITE_FIRST, BRAM_READ_FIRST, BRAM_NO_CHANGE
+int write_mode_b;
+int ram_mode; // BRAM_TDP, BRAM_SDP, BRAM_SP
+int rst_priority_a; // BRAM_RST_PRIORITY_SR, BRAM_RST_PRIORITY_CE
+int rst_priority_b; // BRAM_RST_PRIORITY_SR, BRAM_RST_PRIORITY_CE
+int en_rstram_a; // DEVCFG_FALSE, DEVCFG_TRUE
+int en_rstram_b; // DEVCFG_FALSE, DEVCFG_TRUE
+#endif

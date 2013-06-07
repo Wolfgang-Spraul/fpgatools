@@ -471,7 +471,7 @@ void printf_type2(uint8_t *d, int len, int inpos, int num_entries)
 	}
 }
 
-static int ramb_words_to_bram16(uint16_t (*init_data)[64][16], uint16_t (*init_parity)[8][16], int (*ramb_words)[1024])
+static int ramb_words_to_bram16(int (*init_data)[64][16], int (*init_parity)[8][16], int (*ramb_words)[1024])
 {
 	int init_i, i, j, bits_set;
 
@@ -499,8 +499,8 @@ static int ramb_words_to_bram16(uint16_t (*init_data)[64][16], uint16_t (*init_p
 	// prepare data words for string printf
 	for (init_i = 0; init_i < 64; init_i++) {
 		for (i = 0; i < 8; i++) {
-			(*init_data)[init_i][i*2] = (*ramb_words)[init_i*8 + i];
-			(*init_data)[init_i][i*2+1] = (*ramb_words)[512 + init_i*8 + i];
+			(*init_data)[init_i][i*2] = (*ramb_words)[init_i*8 + i] & 0xFFFF;
+			(*init_data)[init_i][i*2+1] = (*ramb_words)[512 + init_i*8 + i] & 0xFFFF;
 
 			if ((*init_data)[init_i][i*2]
 			    || (*init_data)[init_i][i*2+1])
@@ -510,7 +510,7 @@ static int ramb_words_to_bram16(uint16_t (*init_data)[64][16], uint16_t (*init_p
 	return bits_set;
 }
 
-static int ramb_words_to_bram8(uint16_t (*init_data)[64][16], uint16_t (*init_parity)[8][16], int (*ramb_words)[1024])
+static int ramb_words_to_bram8(int (*init_data)[64][16], int (*init_parity)[8][16], int (*ramb_words)[1024])
 {
 	int init_i, i, j, devs_used;
 
@@ -534,7 +534,7 @@ static int ramb_words_to_bram8(uint16_t (*init_data)[64][16], uint16_t (*init_pa
 	// prepare data words (0:31 are for the first bram8 device, 32:63 for the second one)
 	for (init_i = 0; init_i < 64; init_i++) {
 		for (i = 0; i < 16; i++) {
-			(*init_data)[init_i][i] = (*ramb_words)[init_i*16 + i];
+			(*init_data)[init_i][i] = (*ramb_words)[init_i*16 + i] & 0xFFFF;
 			if ((*init_data)[init_i][i])
 				devs_used |= (init_i < 32) ? 0x01 : 0x02;
 		}
@@ -545,7 +545,7 @@ static int ramb_words_to_bram8(uint16_t (*init_data)[64][16], uint16_t (*init_pa
 void printf_ramb_data(const uint8_t *bits, int row, int bram_idx)
 {
 	int nonzero_head, nonzero_tail, ramb_words[1024];
-	uint16_t init_data[64][16], init_parity[8][16];
+	int init_data[64][16], init_parity[8][16];
 	int i, j, devs_used;
 
 	// check head and tail

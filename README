@@ -1,15 +1,22 @@
+**** NOTE - JUNE 2013 ****
+ I would L O V E to do continue with fpgatools but each day is
+ short so I have to postpone fpgatools development probably
+ until 2014. Maybe I can switch directly to Artix then :-)
+ If you want to contact me please email wspraul@q-ag.de
+****
+ 
 Introduction
  fpgatools is a toolchain to program field-programmable gate arrays
  (FPGAs). The only supported chip at this time is the xc6slx9, a
- 7 USD 45nm-generation fpga with 5720 6-input LUTs, block ram and
+ 45nm-generation fpga with 5720 6-input LUTs, block ram and
  multiply-accumulate devices.
 
  *) maximize chip performance
  *) fast development cycles
- *) independent toolchain that only depends on other free software
+ *) independent toolchain that only depends on free software
  *) reconfigure on-chip
  *) include get-started tools such as jtag, debugging, parts data
-    and designs for prototyping hardware
+    and hardware designs
  *) design flow that includes asic manufacturing
  *) lightweight C implementation without GUI
  *) supported platform: Linux
@@ -63,22 +70,21 @@ Design Principles
 TODO (as of February, 2013)
 
 short-term (1 month):
-* finish dist_mem test
 * support block memory
+  -> develop structure of dev_bram16/8
+  -> write block_mem autotest
 * example: counter (including clock, jtag)
 
 mid-term (6 months):
 * example: j1 soc
-* llvm backend
+* hls: llvm backend
 * maybe fp2bit should natively write ieee1532 and separate tools convert
   from ieee1532 to .bit and other formats
 * macc
 * more cases in logic block configuration
 * autotest: fix bugs in lut_encoding, logic_cfg, routing_sw, io_sw tests
 * autotest: protect stderr of diff executable in autotest log
-* 3 Debian packages: libfpga, libfpga-doc, fpgatools
-* support chips other than xc6slx9, maybe an ftg256 or fgg484-packaged
-  xc6 or the xc7a100
+* support chips other than xc6slx9, maybe xc7a20
 * write standard design elements for libfpga-stdlib library
 * several places might benefit from a bison parser:
   - switchbox description into bit parser/generator (bit_frames.c)
