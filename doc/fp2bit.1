@@ -1,19 +1,30 @@
 .\" Process this file with
-.\" groff -man -Tascii bit2fp.1
-
-.TH FPGATOOLS: "1" "September 2012"
-
-.SH NAME
-fp2bit \- floorplan to bitstream
-
-.SH SYNOPSIS
-.B fp2bit
-.RB <floorplan_file|- for stdin>
-.RB <bits_file>
-
-.SH AUTHORS
+.\" groff -mandoc -Tascii bit2fp.1
+.Dd "July 3, 2013"
+.Dt FPGATOOLS 1
+.Os
+.Sh NAME
+.Nm fp2bit
+.Nd floorplan to bitstream
+.Sh SYNOPSIS
+.Nm fp2bit
+.Ar floorplan_file
+.Ar bits_file
+.Sh DESCRIPTION
+The
+.Nm
+program converts a floorplan file to a bitstream.
+.Bl -tag -width Ds
+.It Ar floorplan_file
+An input floorplan file.
+If specified as
+.Dq - ,
+then the floorplan is read from standard input.
+.It Ar bits_file
+The output file.
+.El
+.Sh AUTHORS
 Wolfgang Spraul
-
-.PP
+.Sh LICENSE
 This is free and unencumbered software released into the public domain.
-for details see the UNLICENSE file at the root of the source tree.
+For details see the UNLICENSE file at the root of the source tree.

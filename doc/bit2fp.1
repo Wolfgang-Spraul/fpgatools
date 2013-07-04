@@ -1,23 +1,45 @@
 .\" Process this file with
-.\" groff -man -Tascii bit2fp.1
-
-.TH FPGATOOLS: "1" "September 2012"
-
-.SH NAME
-bit2fp \- bitstream to floorplan
-
-.SH SYNOPSIS
-.B bit2fp
-.RB [--bit-header]
-.RB [--bit-regs]
-.RB [--no-model]
-.RB [--no-fp-header]
-.RB [--dump-routing-mips]
-.RB <bitstream_file>
-
-.SH AUTHORS
+.\" groff -mandoc -Tascii bit2fp.1
+.Dd "July 3, 2013"
+.Dt FPGATOOLS 1
+.Os
+.Sh NAME
+.Nm bit2fp
+.Nd bitstream to floorplan
+.Sh SYNOPSIS
+.Nm bit2fp
+.Op Fl -bit-crc
+.Op Fl -bit-header
+.Op Fl -bit-regs
+.Op Fl -no-fp-header
+.Op Fl -no-model
+.Op Fl -verbose
+.Ar bitstream_file
+.Sh DESCRIPTION
+The
+.Nm
+program converts a bitstream file to a floorplan.
+The floorplan is printed to standard output.
+.Pp
+The arguments are as follows:
+.Bl -tag -width Ds
+.It Fl -bit-crc
+Print the values of CRCs as they are encountered in the bitstream.
+.It Fl -bit-header
+Dump the bitstream header string.
+.It Fl -bit-regs
+Print the contents of registers as they are encountered in the bitstream.
+.It Fl -no-fp-header
+Don't include the floorplan version number in the output.
+.It Fl -no-model
+Fill the model from binary configuration.
+.It Fl -verbose
+Print extra debugging information.
+.It Ar bitstream_file
+The input file.
+.El
+.Sh AUTHORS
 Wolfgang Spraul
-
-.PP
+.Sh LICENSE
 This is free and unencumbered software released into the public domain.
-for details see the UNLICENSE file at the root of the source tree.
+For details see the UNLICENSE file at the root of the source tree.
