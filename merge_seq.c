@@ -32,7 +32,7 @@ static int print_line(const struct line_buf* line)
 
 	if (!line->buf[0]) return 0;
 	if (!line->sequence_size || line->left_digit_start_o < 0) {
-		printf(line->buf);
+		printf("%s", line->buf);
 		return 0;
 	}
 	if (line->right_digit_start_o < 0)
@@ -53,7 +53,7 @@ static int print_line(const struct line_buf* line)
 			line->right_digit_base,
 			line->right_digit_base+line->sequence_size,
 			&line->buf[line->right_digit_end_o]);
-	printf(buf);
+	printf("%s", buf);
 	return 0;
 }
 
