@@ -34,7 +34,7 @@ include Makefile.common
 	$(MKDEP)
 
 libs/%.so: FAKE
-	@${MAKE} -C libs $(notdir $@)
+	@$(MAKE) -C libs $(notdir $@)
 
 #
 # Testing section - there are three types of tests:
@@ -226,7 +226,7 @@ xc6slx9.svg: draw_svg_tiles
 	./draw_svg_tiles | xmllint --pretty 1 - > $@
 
 clean:
-	@${MAKE} -C libs clean
+	@$(MAKE) -C libs clean
 	rm -f $(OBJS) *.d
 	rm -f 	draw_svg_tiles new_fp hstrrep sort_seq merge_seq autotest
 	rm -f	fp2bit bit2fp printf_swbits pair2net hello_world blinking_led
@@ -249,7 +249,7 @@ clean:
 	rm -rf test.out test.gold
 
 install: fp2bit bit2fp
-	@${MAKE} -C libs install
+	@$(MAKE) -C libs install
 	mkdir -p $(DESTDIR)/$(PREFIX)/bin/
 	install -m 755 fp2bit $(DESTDIR)/$(PREFIX)/bin/
 	install -m 755 bit2fp $(DESTDIR)/$(PREFIX)/bin/
@@ -257,5 +257,5 @@ install: fp2bit bit2fp
 	chrpath -d $(DESTDIR)/$(PREFIX)/bin/bit2fp
 
 uninstall:
-	@${MAKE} -C libs uninstall
+	@$(MAKE) -C libs uninstall
 	rm -f $(DESTDIR)/$(PREFIX)/bin/{fp2bit,bit2fp}
