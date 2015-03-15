@@ -171,7 +171,7 @@ static const char* dev_str[] = FPGA_DEV_STR;
 
 const char* fdev_type2str(enum fpgadev_type type)
 {
-	if (type < 0 || type >= sizeof(dev_str)/sizeof(*dev_str))
+	if (type >= sizeof(dev_str)/sizeof(*dev_str))
 		{ HERE(); return 0; }
 	return dev_str[type];
 }
@@ -1310,6 +1310,24 @@ const char* fpga_switch_print(struct fpga_model* model, int y, int x,
 	return buf[last_buf];
 }
 
+const char* fpga_switch_print_json(struct fpga_model* model, int y, int x,
+	swidx_t swidx)
+{
+ 	enum { NUM_BUFS = 16, BUF_SIZE = 128 };
+	static char buf[NUM_BUFS][BUF_SIZE];
+	static int last_buf = 0;
+	uint32_t sw;
+
+	sw = YX_TILE(model, y, x)->switches[swidx];
+	last_buf = (last_buf+1)%NUM_BUFS;
+
+	snprintf(buf[last_buf], sizeof(*buf), ", \"from\" : \"%s\", \"to\" : \"%s\"%s",
+		connpt_str(model, y, x, SW_FROM_I(sw)),
+		connpt_str(model, y, x, SW_TO_I(sw)),
+		sw & SWITCH_BIDIRECTIONAL ? ", \"bidir\" : true" : "");
+	return buf[last_buf];
+}
+
 int fpga_switch_is_bidir(struct fpga_model* model, int y, int x,
 	swidx_t swidx)
 {
@@ -2148,6 +2166,7 @@ int fnet_add_port(struct fpga_model* model, net_idx_t net_i,
 	pinw_idx_t pinw_idx)
 {
 	struct fpga_net* net;
+	dev_idx_t dev_idx;
 
 	fnet_useidx(model, net_i);
 	RC_CHECK(model);
@@ -2158,8 +2177,9 @@ int fnet_add_port(struct fpga_model* model, net_idx_t net_i,
 	net->el[net->len].y = y;
 	net->el[net->len].x = x;
 	net->el[net->len].idx = pinw_idx | NET_IDX_IS_PINW;
-	net->el[net->len].dev_idx = fpga_dev_idx(model, y, x, type, type_idx);
-	RC_ASSERT(model, net->el[net->len].dev_idx != NO_DEV);
+	dev_idx = fpga_dev_idx(model, y, x, type, type_idx);
+	RC_ASSERT(model, dev_idx != NO_DEV);
+	net->el[net->len].dev_idx = dev_idx;
 
 	net->len++;
 	RC_RETURN(model);
@@ -2290,8 +2310,9 @@ static void fprintf_inout_pin(FILE* f, struct fpga_model* model,
    	pin_str = fdev_pinw_idx2str(tile->devs[dev_idx].type, pinw_i);
 	if (!pin_str) { HERE(); return; }
 
-	snprintf(buf, sizeof(buf), "net %i %s y%i x%i %s %i pin %s\n",
-		net_i, in_pin ? "in" : "out", el->y, el->x,
+	snprintf(buf, sizeof(buf), "      { \"type\" : \"%s\", \"y\" : %i, \"x\" : %i, "
+				   "\"dev\" : \"%s\", \"dev_idx\" : %i, \"pin\" : \"%s\" }",
+		in_pin ? "in" : "out", el->y, el->x,
 		fdev_type2str(tile->devs[dev_idx].type),
 		fdev_typeidx(model, el->y, el->x, dev_idx),
 		pin_str);
@@ -2301,21 +2322,27 @@ static void fprintf_inout_pin(FILE* f, struct fpga_model* model,
 void fnet_printf(FILE* f, struct fpga_model* model, net_idx_t net_i)
 {
 	struct fpga_net* net;
-	int i;
+	int i, first_line;
 
 	net = fnet_get(model, net_i);
 	if (!net) { HERE(); return; }
+	fprintf(f, "[\n");
+	first_line = 1;
 	for (i = 0; i < net->len; i++) {
+		if (!first_line)
+			fprintf(f, ",\n");
+		first_line = 0;
 		if (net->el[i].idx & NET_IDX_IS_PINW) {
 			fprintf_inout_pin(f, model, net_i, &net->el[i]);
 			continue;
 		}
 		// switch
-		fprintf(f, "net %i sw y%i x%i %s\n",
-			net_i, net->el[i].y, net->el[i].x,
-			fpga_switch_print(model, net->el[i].y,
+		fprintf(f, "      { \"type\" : \"sw\", \"y\" : %i, \"x\" : %i%s }",
+			net->el[i].y, net->el[i].x,
+			fpga_switch_print_json(model, net->el[i].y,
 				net->el[i].x, net->el[i].idx));
 	}
+	fprintf(f, "\n    ]");
 }
 
 //

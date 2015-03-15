@@ -5,6 +5,7 @@
 # For details see the UNLICENSE file at the root of the source tree.
 #
 
+CC = clang-3.6
 LDLIBS += `pkg-config libftdi --libs`
 OBJS := mini-jtag.o load-bits.o jtag.o
 

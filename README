@@ -1,36 +1,31 @@
-**** NOTE - JUNE 2013 ****
- I would L O V E to do continue with fpgatools but each day is
- short so I have to postpone fpgatools development probably
- until 2014. Maybe I can switch directly to Artix then :-)
- If you want to contact me please email wspraul@q-ag.de
-****
- 
 Introduction
- fpgatools is a toolchain to program field-programmable gate arrays
- (FPGAs). The only supported chip at this time is the xc6slx9, a
- 45nm-generation fpga with 5720 6-input LUTs, block ram and
- multiply-accumulate devices.
+ fpgatools converts the configuration of an FPGA between
+ JSON and bitstream representation.
 
- *) maximize chip performance
- *) fast development cycles
- *) independent toolchain that only depends on free software
- *) reconfigure on-chip
- *) include get-started tools such as jtag, debugging, parts data
-    and hardware designs
- *) design flow that includes asic manufacturing
- *) lightweight C implementation without GUI
+ The only supported chips at this time is the xc6slx9, a 45nm-generation
+ FPGA with 5720 6-input LUTs, block ram and multiply-accumulate
+ resources.
+
+ Also not included are place and route tools or other higher-level
+ logic optimization, synthesis, Verilog, HLS, etc.
+ Future work on integrating with graywolf or yosys might be an option.
+ If you have ideas in that direction, please email the author at
+ wspraul@q-ag.de
+
+ *) educational resource
+ *) have fun and experiment with every feature of the chip
+ *) command-line tools, text-based file formats
  *) supported platform: Linux
- *) license: public domain
+ *) free software, released into the public domain (see
+    UNLICENSE for details)
 
 FAQ
  todo
 
 Libraries
 
-- libfpga-cores      reusable cores
-- libfpga-stdlib     standard design elements on top of libfpga-control
 - libfpga-control    programmatic access to libfpga-model
-- libfpga-model      memory-only representation of an FPGA
+- libfpga-model      in-memory representation of the FPGA
 - libfpga-floorplan  reads and writes .fp floorplan files
 - libfpga-bit        reads and writes .bit bitstream files
 
@@ -58,34 +53,27 @@ Profiling
 ~# perf annotate
 ~# perf report
 
-Design Principles
+How to Help
+ - use fpgatools, email author for free support
+ - fund electron microscope photos
+ - want bigger or newer chips? email the author
+ - timing analysis, temperature analysis, visualizations
 
-- small independent command line utilities, no GUI
-- plain C, no C++
-- simple Makefiles
-- text-based file formats
-- automatic test suite
-- public domain software
+TODO (as of 2015-03)
 
-TODO (as of February, 2013)
-
-short-term (1 month):
+short-term (3 months):
 * support block memory
-  -> develop structure of dev_bram16/8
   -> write block_mem autotest
-* example: counter (including clock, jtag)
+* support macc
+* support pll_adv
+* support dcm
+* support ilogic2/ologic2
 
-mid-term (6 months):
-* example: j1 soc
-* hls: llvm backend
-* maybe fp2bit should natively write ieee1532 and separate tools convert
-  from ieee1532 to .bit and other formats
-* macc
+mid-term (12 months):
+* example: counter (including clock, jtag)
 * more cases in logic block configuration
 * autotest: fix bugs in lut_encoding, logic_cfg, routing_sw, io_sw tests
 * autotest: protect stderr of diff executable in autotest log
-* support chips other than xc6slx9, maybe xc7a20
-* write standard design elements for libfpga-stdlib library
 * several places might benefit from a bison parser:
   - switchbox description into bit parser/generator (bit_frames.c)
   - inter-tile wire connections (model_conns.c)
@@ -97,13 +85,14 @@ cleanup (whenever convenient):
 * describe more wire names/meanings with integers instead of strings
 * move all part-specific static data into xc_info()
 
-long-term (>6 months):
+long-term (>12 months):
 * auto-crc calculation in .bit file
 * MCB switches and connections
-* support lm32 or openrisc core, either via libfpga or iverilog backend
-* ipv6 or vnc in hardware?
-* iverilog fpga backend
+* maybe fp2bit should natively write ieee1532 and separate tools convert
+  from ieee1532 to .bit and other formats
 * design fpga core that uses high-speed icap/reconfig to process data
+* example: j1 soc
+* support chips other than xc6slx9, maybe xc7a35 or xc7a100
 
 ChangeLog
 

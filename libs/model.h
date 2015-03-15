@@ -320,7 +320,7 @@ const char* logicin_s(int wire, int routing_io);
 enum fpgadev_type
 	{ DEV_NONE = 0,
 	DEV_LOGIC, DEV_TIEOFF, DEV_MACC, DEV_IOB,
-	DEV_ILOGIC, DEV_OLOGIC, DEV_IODELAY, DEV_BRAM16, DEV_BRAM8,
+	DEV_ILOGIC, DEV_OLOGIC, DEV_IODELAY, DEV_BRAM,
 	DEV_BUFH, DEV_BUFIO, DEV_BUFIO_FB, DEV_BUFPLL, DEV_BUFPLL_MCB,
 	DEV_BUFGMUX, DEV_BSCAN, DEV_DCM, DEV_PLL, DEV_ICAP,
 	DEV_POST_CRC_INTERNAL, DEV_STARTUP, DEV_SLAVE_SPI,
@@ -329,7 +329,7 @@ enum fpgadev_type
 #define FPGA_DEV_STR \
 	{ 0, \
 	  "LOGIC", "TIEOFF", "MACC", "IOB", \
-	  "ILOGIC", "OLOGIC", "IODELAY", "BRAM16", "BRAM8", \
+	  "ILOGIC", "OLOGIC", "IODELAY", "BRAM", \
 	  "BUFH", "BUFIO", "BUFIO_FB", "BUFPLL", "BUFPLL_MCB", \
 	  "BUFGMUX", "BSCAN", "DCM", "PLL", "ICAP", \
 	  "POST_CRC_INTERNAL", "STARTUP", "SLAVE_SPI", \
@@ -350,7 +350,9 @@ typedef int dev_type_idx_t;
 
 #define NO_DEV -1
 #define FPGA_DEV(model, y, x, dev_idx) \
-		(((dev_idx) == NO_DEV) ? 0 : (&YX_TILE(model, y, x)->devs[dev_idx]))
+		(((int) (dev_idx) == NO_DEV) ? 0 : (&YX_TILE(model, y, x)->devs[dev_idx]))
+
+enum { DEVCFG_FALSE = 1, DEVCFG_TRUE };
 
 //
 // DEV_LOGIC
@@ -664,15 +666,45 @@ enum {
 };
 
 // requirements for valid bram
-//  rstram and rst_priority must be set for A and B.
-// todo: haven't decided whether dev_bram should be one structure
-//       for 8+16 or two separate structures
-struct fpgadev_bram16
-{
-};
+// - rstram and rst_priority must be set for A and B.
 
-struct fpgadev_bram8
+enum { BRAM16 = 1, BRAM8 }; // subtype
+enum { BRAM_TDP = 1, BRAM_SDP, BRAM_SP };
+enum { BRAM_RST_SYNC = 1, BRAM_RST_ASYNC };
+enum { BRAM_WIDTH_0 = 1, BRAM_WIDTH_1, BRAM_WIDTH_2, BRAM_WIDTH_4, BRAM_WIDTH_9, BRAM_WIDTH_18, BRAM_WIDTH_36 };
+enum { BRAM_WRITE_FIRST = 1, BRAM_READ_FIRST, BRAM_NO_CHANGE };
+enum { BRAM_OUTREG_ON = 1, BRAM_OUTREG_OFF };
+enum { BRAM_RST_PRIORITY_SR = 1, BRAM_RST_PRIORITY_CE };
+
+// fpgadev_bram configures either a bram16 or a bram8 device.
+// see ug383
+struct fpgadev_bram
 {
+	int *data; // points to 1024 (BRAM16) or 512 (BRAM8) words (each 16+2=18 bits)
+	int ram_mode; // BRAM8 only: BRAM_TDP, BRAM_SDP, BRAM_SP (?)
+	int rst_type; // BRAM_RST_SYNC, BRAM_RST_ASYNC
+
+	// Output latch/register init value after configuration:
+	int out_init_a, out_init_b;
+
+	// Output latch/register value after reset:
+	int srval_a, srval_b;
+
+	int data_width_a, data_width_b;		// BRAM_WIDTH_0..36
+	int write_mode_a, write_mode_b;		// BRAM_WRITE_FIRST, BRAM_READ_FIRST, BRAM_NO_CHANGE
+	int doa_reg, dob_reg;			// BRAM_OUTREG_ON, BRAM_OUTREG_OFF
+	int rst_priority_a, rst_priority_b;	// BRAM_RST_PRIORITY_SR, BRAM_RST_PRIORITY_CE
+	int en_rstram_a, en_rstram_b;		// DEVCFG_FALSE, DEVCFG_TRUE
+
+	// inverter bits (DEVCFG_FALSE, DEVCFG_TRUE)
+	// Default polarity is active high (rising edge for clka/clkb).
+	// With invert = true this will change to active low (falling
+	// edge for clka/clkb).
+	int clka_inv, clkb_inv;
+	int ena_inv, enb_inv;
+	int reg_cea_inv, reg_ceb_inv;
+	int rsta_inv, rstb_inv;
+	int wea_inv[4], web_inv[4]; // only 2 used for BRAM8 (wea-wel, web-weu)
 };
 
 //
@@ -739,8 +771,10 @@ struct fpga_device
 {
 	enum fpgadev_type type;
 	// subtypes:
+	// --- todo: wouldn't it be better to have the subtype inside the fpgadev structures?
 	// IOB:   IOBM, IOBS
 	// LOGIC: LOGIC_M, LOGIC_L, LOGIC_X
+	// BRAM:  BRAM16, BRAM8
 	int subtype;
 	int instantiated;
 
@@ -761,8 +795,7 @@ struct fpga_device
 		struct fpgadev_bufgmux bufgmux;
 		struct fpgadev_bufio bufio;
 		struct fpgadev_bscan bscan;
-		struct fpgadev_bram16 bram16;
-		struct fpgadev_bram8 bram8;
+		struct fpgadev_bram bram;
 	} u;
 };
 
@@ -1200,54 +1233,3 @@ struct w_net
 
 int add_conn_net(struct fpga_model* model, int add_pref, const struct w_net *net);
 
-#if 0
-bram16:
-int *data; // points to 1024 words (each 16+2=18 bits)
-int clka_inv; // DEVCFG_INV_Y, DEVCFG_INV_N
-int clkb_inv;
-int data_width_a; // 0,1,2,4,9,18,36
-int data_width_b; // 0,1,2,4,9,18,36
-int doa_reg; // BRAM_OUTREG_ON, BRAM_OUTREG_OFF
-int dob_reg;
-int ena_inv;
-int enb_inv; // BRAM_ENB_INV_Y, BRAM_ENB_INV_N
-int reg_cea_inv;
-int reg_ceb_inv;
-int rsta_inv;
-int rstb_inv;
-int wea_inv[4];
-int web_inv[4];
-int rst_type; // BRAM_RST_SYNC, BRAM_RST_ASYNC
-int write_mode_a; // BRAM_WRITE_FIRST, BRAM_READ_FIRST, BRAM_NO_CHANGE
-int write_mode_b;
-int ram_mode; // BRAM_TDP, BRAM_SDP, BRAM_SP
-int rst_priority_a; // BRAM_RST_PRIORITY_SR, BRAM_RST_PRIORITY_CE
-int rst_priority_b; // BRAM_RST_PRIORITY_SR, BRAM_RST_PRIORITY_CE
-int en_rstram_a; // DEVCFG_FALSE, DEVCFG_TRUE
-int en_rstram_b; // DEVCFG_FALSE, DEVCFG_TRUE
-
-bram8:
-int *data; // points to 512 words (each 16+2=18 bits)
-int clk_awr_inv; // DEVCFG_INV_Y, DEVCFG_INV_N
-int clk_brd_inv;
-int data_width_a; // 0,1,2,4,9,18,36
-int data_width_b; // 0,1,2,4,9,18,36
-int doa_reg; // BRAM_OUTREG_ON, BRAM_OUTREG_OFF
-int dob_reg;
-int en_awr_inv;
-int en_brd_inv; // BRAM_ENB_INV_Y, BRAM_ENB_INV_N
-int reg_cea_inv;
-int reg_ceb_reg_ce_inv;
-int rsta_inv;
-int rstb_rst_inv;
-int wea_wel_inv[2];
-int web_weu_inv[2];
-int rst_type; // BRAM_RST_SYNC, BRAM_RST_ASYNC
-int write_mode_a; // BRAM_WRITE_FIRST, BRAM_READ_FIRST, BRAM_NO_CHANGE
-int write_mode_b;
-int ram_mode; // BRAM_TDP, BRAM_SDP, BRAM_SP
-int rst_priority_a; // BRAM_RST_PRIORITY_SR, BRAM_RST_PRIORITY_CE
-int rst_priority_b; // BRAM_RST_PRIORITY_SR, BRAM_RST_PRIORITY_CE
-int en_rstram_a; // DEVCFG_FALSE, DEVCFG_TRUE
-int en_rstram_b; // DEVCFG_FALSE, DEVCFG_TRUE
-#endif

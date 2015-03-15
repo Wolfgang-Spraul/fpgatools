@@ -6,6 +6,8 @@
 # For details see the UNLICENSE file at the root of the source tree.
 #
 
+CC = clang-3.6
+
 LIBS_VERSION_MAJOR = 0
 LIBS_VERSION = $(LIBS_VERSION_MAJOR).0.0
 
@@ -13,10 +15,9 @@ LIBFPGA_BIT_OBJS       = bit_frames.o bit_regs.o
 LIBFPGA_MODEL_OBJS     = model_main.o model_tiles.o model_devices.o \
 	model_ports.o model_conns.o model_switches.o model_helper.o
 LIBFPGA_FLOORPLAN_OBJS = floorplan.o
-LIBFPGA_CONTROL_OBJS   = control.o
-LIBFPGA_CORES_OBJS     = parts.o helper.o
+LIBFPGA_CONTROL_OBJS   = control.o parts.o helper.o
 
-OBJS := $(LIBFPGA_CORES_OBJS) $(LIBFPGA_BIT_OBJS) $(LIBFPGA_MODEL_OBJS) \
+OBJS := $(LIBFPGA_BIT_OBJS) $(LIBFPGA_MODEL_OBJS) \
 	$(LIBFPGA_FLOORPLAN_OBJS) $(LIBFPGA_CONTROL_OBJS)
 
 DYNAMIC_LIBS = libfpga-model.so libfpga-bit.so libfpga-floorplan.so \
@@ -31,8 +32,6 @@ all: $(DYNAMIC_LIBS) $(DYNAMIC_LIBS:.so=.a)
 
 include ../Makefile.common
 
-libfpga-cores.a: $(LIBFPGA_CORES_OBJS)
-
 libfpga-bit.a: $(LIBFPGA_BIT_OBJS)
 
 libfpga-model.a: $(LIBFPGA_MODEL_OBJS)
@@ -44,8 +43,6 @@ libfpga-control.a: $(LIBFPGA_CONTROL_OBJS)
 %.a:
 	$(AR) $@ $^
 	$(RANLIB) $@
-
-libfpga-cores.so: $(LIBFPGA_CORES_OBJS)
 
 libfpga-bit.so: $(LIBFPGA_BIT_OBJS)
 

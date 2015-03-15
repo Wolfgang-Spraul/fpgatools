@@ -285,6 +285,7 @@ const struct xc_die *xc_die_info(int idcode)
 		case XC6SLX9: return &xc6slx9_info;
 	}
 	HERE();
+	fprintf(stderr, "#E unknown id_code %i\n", idcode);
 	return 0;
 }
 

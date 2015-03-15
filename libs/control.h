@@ -190,6 +190,8 @@ const char* fpga_switch_str(struct fpga_model* model, int y, int x,
 	swidx_t swidx, int from_to);
 str16_t fpga_switch_str_i(struct fpga_model* model, int y, int x,
 	swidx_t swidx, int from_to);
+const char* fpga_switch_print_json(struct fpga_model* model, int y, int x,
+	swidx_t swidx);
 const char* fpga_switch_print(struct fpga_model* model, int y, int x,
 	swidx_t swidx);
 int fpga_switch_is_bidir(struct fpga_model* model, int y, int x,

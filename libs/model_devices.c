@@ -146,11 +146,9 @@ int init_devices(struct fpga_model* model)
 		for (y = TOP_IO_TILES; y < model->y_height-BOT_IO_TILES; y++) {
 			if (!(YX_TILE(model, y, x)->flags & TF_BRAM_DEV))
 				continue;
-			if ((rc = add_dev(model, y, x, DEV_BRAM16, 0)))
+			if ((rc = add_dev(model, y, x, DEV_BRAM, 0)))
 				goto fail;
-			if ((rc = add_dev(model, y, x, DEV_BRAM8, 0)))
-				goto fail;
-			if ((rc = add_dev(model, y, x, DEV_BRAM8, 0)))
+			if ((rc = add_dev(model, y, x, DEV_BRAM, 0)))
 				goto fail;
 		}
 	}

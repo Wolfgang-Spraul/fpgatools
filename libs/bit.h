@@ -7,14 +7,13 @@
 
 // xc6 configuration registers, documentation in ug380, page90
 enum fpga_config_reg {
-	CRC = 0, FAR_MAJ, FAR_MIN, FDRI, FDRO, CMD, CTL, MASK, STAT, LOUT, COR1,
+	REG_NOOP = -1, // pseudo register for noops
+	CRC, FAR_MAJ, FAR_MIN, FDRI, FDRO, CMD, CTL, MASK, STAT, LOUT, COR1,
 	COR2, PWRDN_REG, FLR, IDCODE, CWDT, HC_OPT_REG, CSBO = 18,
 	GENERAL1, GENERAL2, GENERAL3, GENERAL4, GENERAL5, MODE_REG, PU_GWE,
 	PU_GTS, MFWR, CCLK_FREQ, SEU_OPT, EXP_SIGN, RDBK_SIGN, BOOTSTS,
 	EYE_MASK, CBC_REG
 };
-
-#define REG_NOOP -1 // pseudo register for noops
 
 #define COR1_DEF		0x3D00
 #define COR1_CRC_BYPASS		0x0010

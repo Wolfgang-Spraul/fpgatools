@@ -1722,7 +1722,7 @@ static int init_bram(struct fpga_model *model)
 		if (!is_atx(X_FABRIC_BRAM_COL, model, x))
 			continue;
 		for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
-			if (!has_device(model, y, x, DEV_BRAM16))
+			if (!has_device(model, y, x, DEV_BRAM))
 				continue;
 			{ const char* pairs[] = {
 				"BRAM_CLK%c_INT1", "RAMB16BWER_CLK%c",

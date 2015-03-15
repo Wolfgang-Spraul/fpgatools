@@ -3197,7 +3197,7 @@ static int connect_clk_sr(struct fpga_model* model, const char* clk_sr)
 	for (x = LEFT_SIDE_WIDTH; x < model->x_width - RIGHT_SIDE_WIDTH; x++) {
 		if (is_atx(X_FABRIC_BRAM_ROUTING_COL, model, x)) {
 			for (y = TOP_IO_TILES; y < model->y_height - BOT_IO_TILES; y++) {
-				if (has_device(model, y, x+2, DEV_BRAM16)) {
+				if (has_device(model, y, x+2, DEV_BRAM)) {
 					for (i = 0; i <= 3; i++) {
 						struct w_net n = {
 							.last_inc = 1, .num_pts = 3, .pt =

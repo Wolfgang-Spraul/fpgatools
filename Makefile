@@ -6,6 +6,7 @@
 # For details see the UNLICENSE file at the root of the source tree.
 #
 
+CC = clang-3.6
 
 CFLAGS  += -I$(CURDIR)/libs
 

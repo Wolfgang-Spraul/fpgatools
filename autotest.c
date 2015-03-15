@@ -49,7 +49,7 @@ static int dump_file(const char* path)
 			    || !strncmp(line, "+++ ", 4)
 			    || !strncmp(line, "@@ ", 3))
 				continue;
-			printf(line);
+			printf("%s", line);
 		}
 		fclose(f);
 	}

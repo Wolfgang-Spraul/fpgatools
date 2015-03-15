@@ -409,7 +409,7 @@ int main(int argc, char** argv)
 		// print first 800 lines
 		for (i = 0; i < 800; i++) {
 			if (i >= s_numlines) break;
-			printf(s_lines[i]);
+			printf("%s", s_lines[i]);
 		}
 		// move up last 200 lines to beginning of buffer
 		if (s_numlines > i) {

@@ -680,6 +680,8 @@ static int dump_maj_logic(const uint8_t* bits, int row, int major)
 	return 0;
 }
 
+#if 0
+
 typedef struct ramb16_cfg
 {
 	uint8_t byte[64];
@@ -851,6 +853,7 @@ static void print_ramb16_cfg(ramb16_cfg_t* cfg)
 	}
 	printf("}\n");
 }
+#endif
 
 static void printf_minor_diff(int row, int major, int minor,
 	const uint8_t *old_minor_bits, const uint8_t *new_minor_bits)
@@ -924,8 +927,9 @@ static void printf_minors(int row, int major, int minor, int num_minors,
 
 static int dump_maj_bram(const uint8_t *bits, int row, int major)
 {
-	ramb16_cfg_t ramb16_cfg[4];
-	int minor, i, j, offset_in_frame;
+//	ramb16_cfg_t ramb16_cfg[4];
+//	int j, offset_in_frame;
+	int minor, i;
 
 	for (minor = 0; minor < get_major_minors(XC6SLX9, major); minor++)
 		printf_clock(&bits[minor*FRAME_SIZE], row, major, minor);
