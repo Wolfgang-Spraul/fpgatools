@@ -57,16 +57,13 @@ uint32_t __swab32(uint32_t x);
 
 #define ATOM_MAX_BITS	32+1 // -1 signals end of array
 
-typedef struct _cfg_atom
+typedef struct _cfg_bits
 {
-	int must_0[ATOM_MAX_BITS];
-	int must_1[ATOM_MAX_BITS];
-	const char* str;
-	int flag; // used to remember a state such as 'found'
-} cfg_atom_t;
-
-int atom_found(char* bits, const cfg_atom_t* atom);
-void atom_remove(char* bits, const cfg_atom_t* atom);
+	int minor; // -1 is illegal and can be used to signal end-of-array
+	int rel_v16; // vertical 16 from top, relative to start of device
+	int bits; // 1 or more bits set
+	int name; // enum value
+} cfg_bits_t;
 
 uint64_t map_bits(uint64_t u64, int num_bits, int* src_pos);
 
@@ -80,6 +77,13 @@ int bool_req_pins(uint64_t u64, int num_bits);
 void printf_type2(uint8_t* d, int len, int inpos, int num_entries);
 void printf_ramb_data(const uint8_t *bits, int row, int bram_idx);
 
+typedef struct _bram_init // only first half of array used for bram8
+{
+	int data[64][16];
+	int parity[8][16];
+} bram_init_t;
+void bram_extract_init(bram_init_t *init, const uint8_t *bits);
+
 int is_empty(const uint8_t* d, int l);
 int count_set_bits(const uint8_t* d, int l);
 
@@ -87,11 +91,17 @@ int frame_get_bit(const uint8_t* frame_d, int bit);
 void frame_clear_bit(uint8_t* frame_d, int bit);
 void frame_set_bit(uint8_t* frame_d, int bit);
 
+// cpuword returns the word in such a way that a bit
+// index (cpuword & (1<<i)) corresponds to the same bit
+// position as presented to the FPGA.
+int frame_get_cpuword(const void *bits);
+void frame_set_cpuword(void* bits, int v);
+
 int frame_get_pinword(const void *bits);
 void frame_set_pinword(void* bits, int v);
 
 uint8_t mirror_bits(uint8_t v);
-int pinword_to_cpu(int pinword);
+int mirror_2bytes(int pinword);
 
 uint16_t frame_get_u16(const uint8_t* frame_d);
 uint64_t frame_get_u64(const uint8_t* frame_d);

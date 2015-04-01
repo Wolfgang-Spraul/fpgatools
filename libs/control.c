@@ -2319,19 +2319,20 @@ static void fprintf_inout_pin(FILE* f, struct fpga_model* model,
 	fprintf(f, "%s", buf);
 }
 
-void fnet_printf(FILE* f, struct fpga_model* model, net_idx_t net_i)
+void fnet_printf(FILE* f, struct fpga_model* model, net_idx_t net_i, int no_json)
 {
 	struct fpga_net* net;
 	int i, first_line;
 
 	net = fnet_get(model, net_i);
 	if (!net) { HERE(); return; }
-	fprintf(f, "[\n");
+	if (!no_json) fprintf(f, "[\n");
 	first_line = 1;
 	for (i = 0; i < net->len; i++) {
 		if (!first_line)
 			fprintf(f, ",\n");
 		first_line = 0;
+		if (no_json) fprintf(f, "net_i %i:", net_i);
 		if (net->el[i].idx & NET_IDX_IS_PINW) {
 			fprintf_inout_pin(f, model, net_i, &net->el[i]);
 			continue;
@@ -2342,7 +2343,8 @@ void fnet_printf(FILE* f, struct fpga_model* model, net_idx_t net_i)
 			fpga_switch_print_json(model, net->el[i].y,
 				net->el[i].x, net->el[i].idx));
 	}
-	fprintf(f, "\n    ]");
+	fprintf(f, "\n");
+	if (!no_json) fprintf(f, "    ]");
 }
 
 //

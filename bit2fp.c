@@ -15,7 +15,7 @@ static void help_exit(int argc, char **argv)
 		"\n"
 		"%s - bitstream to floorplan\n"
 		"Usage: %s [--help] [--verbose] [--bit-header] [--bit-regs] [--bit-crc]\n"
-		"       %*s [--no-model] [--no-fp-header] <bitstream_file>\n"
+		"       %*s [--no-model] [--no-json] <bitstream_file>\n"
 		"\n", argv[0], argv[0], (int) strlen(argv[0]), "");
 	exit(EXIT_SUCCESS);
 }
@@ -23,7 +23,7 @@ static void help_exit(int argc, char **argv)
 int main(int argc, char** argv)
 {
 	struct fpga_model model;
-	int bit_header, bit_regs, bit_crc, fp_header, pull_model, file_arg;
+	int bit_header, bit_regs, bit_crc, json, pull_model, file_arg;
 	int verbose, flags, rc = -1;
 	struct fpga_config config;
 
@@ -34,7 +34,7 @@ int main(int argc, char** argv)
 	bit_regs = 0;
 	bit_crc = 0;
 	pull_model = 1;
-	fp_header = 1;
+	json = 1;
 	file_arg = 1;
 	while (file_arg < argc && !strncmp(argv[file_arg], "--", 2)) {
 		if (!strcmp(argv[file_arg], "--help"))
@@ -50,8 +50,8 @@ int main(int argc, char** argv)
 			bit_crc = 1;
 		else if (!strcmp(argv[file_arg], "--no-model"))
 			pull_model = 0;
-		else if (!strcmp(argv[file_arg], "--no-fp-header"))
-			fp_header = 0;
+		else if (!strcmp(argv[file_arg], "--no-json"))
+			json = 0;
 		else break;
 		file_arg++;
 	}
@@ -83,7 +83,7 @@ int main(int argc, char** argv)
 
 	// dump model
 	flags = FP_DEFAULT;
-	if (!fp_header) flags |= FP_NO_HEADER;
+	if (!json) flags |= FP_NO_JSON;
 	if ((rc = write_floorplan(stdout, &model, flags))) FAIL(rc);
 
 	// dump what doesn't fit into the model

@@ -668,7 +668,7 @@ enum {
 // requirements for valid bram
 // - rstram and rst_priority must be set for A and B.
 
-enum { BRAM16 = 1, BRAM8 }; // subtype
+enum { BRAM16 = 1, BRAM8 }; // subtype, bram8 not currently supported
 enum { BRAM_TDP = 1, BRAM_SDP, BRAM_SP };
 enum { BRAM_RST_SYNC = 1, BRAM_RST_ASYNC };
 enum { BRAM_WIDTH_0 = 1, BRAM_WIDTH_1, BRAM_WIDTH_2, BRAM_WIDTH_4, BRAM_WIDTH_9, BRAM_WIDTH_18, BRAM_WIDTH_36 };
@@ -676,11 +676,11 @@ enum { BRAM_WRITE_FIRST = 1, BRAM_READ_FIRST, BRAM_NO_CHANGE };
 enum { BRAM_OUTREG_ON = 1, BRAM_OUTREG_OFF };
 enum { BRAM_RST_PRIORITY_SR = 1, BRAM_RST_PRIORITY_CE };
 
-// fpgadev_bram configures either a bram16 or a bram8 device.
+// fpgadev_bram configures a bram16 device (bram8 is not currently supported)
 // see ug383
 struct fpgadev_bram
 {
-	int *data; // points to 1024 (BRAM16) or 512 (BRAM8) words (each 16+2=18 bits)
+	struct bram_init *init;
 	int ram_mode; // BRAM8 only: BRAM_TDP, BRAM_SDP, BRAM_SP (?)
 	int rst_type; // BRAM_RST_SYNC, BRAM_RST_ASYNC
 
@@ -1232,4 +1232,3 @@ struct w_net
 #define ADD_PREF 1
 
 int add_conn_net(struct fpga_model* model, int add_pref, const struct w_net *net);
-

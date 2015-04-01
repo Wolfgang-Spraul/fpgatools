@@ -103,9 +103,9 @@ static int diff_printf(struct test_state* tstate)
 	dest_f = fopen(path, "w");
 	if (!dest_f) FAIL(errno);
 
-	rc = printf_devices(dest_f, tstate->model, /*config_only*/ 1);
+	rc = printf_devices(dest_f, tstate->model, /*config_only*/ 1, /*no_json*/ 1);
 	if (rc) FAIL(rc);
-	rc = printf_nets(dest_f, tstate->model);
+	rc = printf_nets(dest_f, tstate->model, /*no_json*/ 1);
 	if (rc) FAIL(rc);
 
 	fclose(dest_f);
@@ -382,7 +382,7 @@ static int test_switches(struct test_state* tstate, int y, int x,
 		if (switch_str[2] == '4') {
 			// base for len-4 wire
 			if (tstate->dry_run)
-				fnet_printf(stdout, tstate->model, net);
+				fnet_printf(stdout, tstate->model, net, /*no_json*/ 1);
 			rc = diff_printf(tstate);
 			if (rc) FAIL(rc);
 
@@ -420,7 +420,7 @@ static int test_switches(struct test_state* tstate, int y, int x,
 
 				// base for len-4 target
 				if (tstate->dry_run)
-					fnet_printf(stdout, tstate->model, net);
+					fnet_printf(stdout, tstate->model, net, /*no_json*/ 1);
 				rc = diff_printf(tstate);
 				if (rc) FAIL(rc);
 
@@ -430,7 +430,7 @@ static int test_switches(struct test_state* tstate, int y, int x,
 				if (rc) FAIL(rc);
 
 				if (tstate->dry_run)
-					fnet_printf(stdout, tstate->model, net);
+					fnet_printf(stdout, tstate->model, net, /*no_json*/ 1);
 				rc = diff_printf(tstate);
 				if (rc) FAIL(rc);
 
@@ -605,7 +605,7 @@ static int test_routing_sw_from_logic(struct test_state *tstate,
 					swto.dest_x, conns.chain.set.sw, conns.chain.set.len);
 				if (rc) FAIL(rc);
 				if (tstate->dry_run)
-					fnet_printf(stdout, tstate->model, net);
+					fnet_printf(stdout, tstate->model, net, /*no_json*/ 1);
 		
 				rc = test_switches(tstate, conns.dest_y, conns.dest_x,
 					conns.dest_str_i, net, done_list, done_list_len);

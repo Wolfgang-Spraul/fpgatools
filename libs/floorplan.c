@@ -11,8 +11,8 @@
 #include "control.h"
 #include "floorplan.h"
 
-#define PRINT_FLAG(fp, flag)	if ((tf) & (flag)) \
-				  { fprintf (fp, " %s", #flag); tf &= ~(flag); }
+#define PRINT_FLAG(fp, flag, firstp)	if ((tf) & (flag)) \
+				 	 { fprintf (fp, "%s\"%s\"", firstp ? "" : ", ", #flag); tf &= ~(flag); firstp = 0; }
 
 void printf_version(FILE* f)
 {
@@ -22,43 +22,53 @@ void printf_version(FILE* f)
 int printf_tiles(FILE* f, struct fpga_model* model)
 {
 	struct fpga_tile* tile;
-	int x, y;
+	int x, y, first_line;
 
 	RC_CHECK(model);
+	fprintf(f, "  \"tiles\" : [\n");
 	for (x = 0; x < model->x_width; x++) {
-		fprintf(f, "\n");
+		if (x) fprintf(f, ",\n\n");
+		first_line = 1;
 		for (y = 0; y < model->y_height; y++) {
 			tile = &model->tiles[y*model->x_width + x];
 
-			if (tile->type != NA)
-				fprintf(f, "tile y%i x%i name %s\n", y, x,
+			if (tile->type != NA) {
+				fprintf(f, "%s    { \"y\" : %i, \"x\" : %i, \"name\" : \"%s\" }",
+					first_line ? "" : ",\n", y, x,
 					fpga_tiletype_str(tile->type));
+				first_line = 0;
+			}
 			if (tile->flags) {
-				int tf = tile->flags;
-				fprintf(f, "tile y%i x%i flags", y, x);
+				int tf = tile->flags, first_flag = 1;
+				
+				fprintf(f, "%s    { \"y\" : %i, \"x\" : %i, \"flags\" : [ ",
+					first_line ? "" : ",\n", y, x);
+				first_line = 0;
 
-				PRINT_FLAG(f, TF_FABRIC_ROUTING_COL);
-				PRINT_FLAG(f, TF_FABRIC_LOGIC_XM_COL);
-				PRINT_FLAG(f, TF_FABRIC_LOGIC_XL_COL);
-				PRINT_FLAG(f, TF_FABRIC_BRAM_VIA_COL);
-				PRINT_FLAG(f, TF_FABRIC_MACC_VIA_COL);
-				PRINT_FLAG(f, TF_FABRIC_BRAM_COL);
-				PRINT_FLAG(f, TF_FABRIC_MACC_COL);
-				PRINT_FLAG(f, TF_ROUTING_NO_IO);
-				PRINT_FLAG(f, TF_BRAM_DEV);
-				PRINT_FLAG(f, TF_MACC_DEV);
-				PRINT_FLAG(f, TF_LOGIC_XL_DEV);
-				PRINT_FLAG(f, TF_LOGIC_XM_DEV);
-				PRINT_FLAG(f, TF_IOLOGIC_DELAY_DEV);
-				PRINT_FLAG(f, TF_DCM_DEV);
-				PRINT_FLAG(f, TF_PLL_DEV);
-				PRINT_FLAG(f, TF_WIRED);
+				PRINT_FLAG(f, TF_FABRIC_ROUTING_COL, first_flag);
+				PRINT_FLAG(f, TF_FABRIC_LOGIC_XM_COL, first_flag);
+				PRINT_FLAG(f, TF_FABRIC_LOGIC_XL_COL, first_flag);
+				PRINT_FLAG(f, TF_FABRIC_BRAM_VIA_COL, first_flag);
+				PRINT_FLAG(f, TF_FABRIC_MACC_VIA_COL, first_flag);
+				PRINT_FLAG(f, TF_FABRIC_BRAM_COL, first_flag);
+				PRINT_FLAG(f, TF_FABRIC_MACC_COL, first_flag);
+				PRINT_FLAG(f, TF_ROUTING_NO_IO, first_flag);
+				PRINT_FLAG(f, TF_BRAM_DEV, first_flag);
+				PRINT_FLAG(f, TF_MACC_DEV, first_flag);
+				PRINT_FLAG(f, TF_LOGIC_XL_DEV, first_flag);
+				PRINT_FLAG(f, TF_LOGIC_XM_DEV, first_flag);
+				PRINT_FLAG(f, TF_IOLOGIC_DELAY_DEV, first_flag);
+				PRINT_FLAG(f, TF_DCM_DEV, first_flag);
+				PRINT_FLAG(f, TF_PLL_DEV, first_flag);
+				PRINT_FLAG(f, TF_WIRED, first_flag);
+				PRINT_FLAG(f, TF_CENTER_MIDBUF, first_flag);
 
-				if (tf) fprintf(f, " 0x%x", tf);
-				fprintf(f, "\n");
+				if (tf) fprintf(f, "%s\"0x%x\"", first_flag ? "" : ", ", tf);
+				fprintf(f, " ] }");
 			}
 		}
 	}
+	fprintf(f, "\n  ]");
 	return 0;
 }
 
@@ -907,42 +917,51 @@ int printf_BUFGMUX(FILE *f, struct fpga_model *model,
 	struct fpga_tile *tile;
 	struct fpgadev_bufgmux *cfg;
 	char pref[256];
-	int dev_i;
+	int dev_i, first_line;
 
 	dev_i = fpga_dev_idx(model, y, x, DEV_BUFGMUX, type_idx);
 	RC_ASSERT(model, dev_i != NO_DEV);
 	tile = YX_TILE(model, y, x);
 	if (config_only && !(tile->devs[dev_i].instantiated))
 		RC_RETURN(model);
-	snprintf(pref, sizeof(pref), "dev y%i x%i BUFGMUX %i", y, x, type_idx);
+	snprintf(pref, sizeof(pref), "    { \"y\" : %i, \"x\" : %i, \"dev\" : \"BUFGMUX\", \"dev_idx\" : %i", y, x, type_idx);
+	first_line = 1;
 
-	if (!config_only)
-		fprintf(f, "%s\n", pref);
+	if (!config_only) {
+		fprintf(f, "%s }", pref);
+		first_line = 0;
+	}
 	cfg = &tile->devs[dev_i].u.bufgmux;
 	switch (cfg->clk) {
 		case BUFG_CLK_ASYNC:
-			fprintf(f, "%s clk ASYNC\n", pref);
+			fprintf(f, "%s%s, \"clk\" : \"ASYNC\" }", first_line ? "" : ",\n", pref);
+			first_line = 0;
 			break;
 		case BUFG_CLK_SYNC:
-			fprintf(f, "%s clk SYNC\n", pref);
+			fprintf(f, "%s%s, \"clk\" : \"SYNC\" }", first_line ? "" : ",\n", pref);
+			first_line = 0;
 			break;
 		case 0: break; default: RC_FAIL(model, EINVAL);
 	}
 	switch (cfg->disable_attr) {
 		case BUFG_DISATTR_LOW:
-			fprintf(f, "%s disable_attr LOW\n", pref);
+			fprintf(f, "%s%s, \"disable_attr\" : \"LOW\" }", first_line ? "" : ",\n", pref);
+			first_line = 0;
 			break;
 		case BUFG_DISATTR_HIGH:
-			fprintf(f, "%s disable_attr HIGH\n", pref);
+			fprintf(f, "%s%s, \"disable_attr\" : \"HIGH\" }", first_line ? "" : ",\n", pref);
+			first_line = 0;
 			break;
 		case 0: break; default: RC_FAIL(model, EINVAL);
 	}
 	switch (cfg->s_inv) {
 		case BUFG_SINV_N:
-			fprintf(f, "%s s_inv NO\n", pref);
+			fprintf(f, "%s%s, \"s_inv\" : false }", first_line ? "" : ",\n", pref);
+			first_line = 0;
 			break;
 		case BUFG_SINV_Y:
-			fprintf(f, "%s s_inv YES\n", pref);
+			fprintf(f, "%s%s, \"s_inv\" : true }", first_line ? "" : ",\n", pref);
+			first_line = 0;
 			break;
 		case 0: break; default: RC_FAIL(model, EINVAL);
 	}
@@ -990,35 +1009,44 @@ int printf_BUFIO(FILE *f, struct fpga_model *model,
 	struct fpga_tile *tile;
 	struct fpgadev_bufio *cfg;
 	char pref[256];
-	int dev_i;
+	int dev_i, first_line;
 
 	dev_i = fpga_dev_idx(model, y, x, DEV_BUFIO, type_idx);
 	RC_ASSERT(model, dev_i != NO_DEV);
 	tile = YX_TILE(model, y, x);
 	if (config_only && !(tile->devs[dev_i].instantiated))
 		RC_RETURN(model);
-	snprintf(pref, sizeof(pref), "dev y%i x%i BUFIO %i", y, x, type_idx);
+	snprintf(pref, sizeof(pref), "    { \"y\" : %i, \"x\" : %i, \"dev\" : \"BUFIO\", \"dev_idx\" : %i", y, x, type_idx);
+	first_line = 1;
 
-	if (!config_only)
-		fprintf(f, "%s\n", pref);
+	if (!config_only) {
+		fprintf(f, "%s }", pref);
+		first_line = 0;
+	}
 	cfg = &tile->devs[dev_i].u.bufio;
-	if (cfg->divide)
-		fprintf(f, "%s divide %i\n", pref, cfg->divide);
+	if (cfg->divide) {
+		fprintf(f, "%s%s, \"divide\" : %i\n", first_line ? "" : ",\n", pref, cfg->divide);
+		first_line = 0;
+	}
 	switch (cfg->divide_bypass) {
 		case BUFIO_DIVIDEBP_N:
-			fprintf(f, "%s divide_bypass NO\n", pref);
+			fprintf(f, "%s%s, \"divide_bypass\" : false }", first_line ? "" : ",\n", pref);
+			first_line = 0;
 			break;
 		case BUFIO_DIVIDEBP_Y:
-			fprintf(f, "%s divide_bypass YES\n", pref);
+			fprintf(f, "%s%s, \"divide_bypass\" : true }", first_line ? "" : ",\n", pref);
+			first_line = 0;
 			break;
 		case 0: break; default: RC_FAIL(model, EINVAL);
 	}
 	switch (cfg->i_inv) {
 		case BUFIO_IINV_N:
-			fprintf(f, "%s i_inv NO\n", pref);
+			fprintf(f, "%s%s, \"i_inv\" : false }", first_line ? "" : ",\n", pref);
+			first_line = 0;
 			break;
 		case BUFIO_IINV_Y:
-			fprintf(f, "%s i_inv YES\n", pref);
+			fprintf(f, "%s%s, \"i_inv\" : true }", first_line ? "" : ",\n", pref);
+			first_line = 0;
 			break;
 		case 0: break; default: RC_FAIL(model, EINVAL);
 	}
@@ -1062,26 +1090,33 @@ int printf_BSCAN(FILE *f, struct fpga_model *model,
 	struct fpga_tile *tile;
 	struct fpgadev_bscan *cfg;
 	char pref[256];
-	int dev_i;
+	int dev_i, first_line;
 
 	dev_i = fpga_dev_idx(model, y, x, DEV_BSCAN, type_idx);
 	RC_ASSERT(model, dev_i != NO_DEV);
 	tile = YX_TILE(model, y, x);
 	if (config_only && !(tile->devs[dev_i].instantiated))
 		RC_RETURN(model);
-	snprintf(pref, sizeof(pref), "dev y%i x%i BSCAN %i", y, x, type_idx);
+	snprintf(pref, sizeof(pref), "    { \"y\" : %i, \"x\" : %i, \"dev\" : \"BSCAN\", \"dev_idx\" : %i", y, x, type_idx);
+	first_line = 1;
 
-	if (!config_only)
-		fprintf(f, "%s\n", pref);
+	if (!config_only) {
+		fprintf(f, "%s }", pref);
+		first_line = 0;
+	}
 	cfg = &tile->devs[dev_i].u.bscan;
-	if (cfg->jtag_chain)
-		fprintf(f, "%s jtag_chain %i\n", pref, cfg->jtag_chain);
+	if (cfg->jtag_chain) {
+		fprintf(f, "%s%s, \"jtag_chain\" : %i }", first_line ? "" : ",\n", pref, cfg->jtag_chain);
+		first_line = 0;
+	}
 	switch (cfg->jtag_test) {
 		case BSCAN_JTAG_TEST_N:
-			fprintf(f, "%s jtag_test NO\n", pref);
+			fprintf(f, "%s%s, \"jtag_test\" : false }", first_line ? "" : ",\n", pref);
+			first_line = 0;
 			break;
 		case BSCAN_JTAG_TEST_Y:
-			fprintf(f, "%s jtag_test YES\n", pref);
+			fprintf(f, "%s%s, \"jtag_test\" : true }", first_line ? "" : ",\n", pref);
+			first_line = 0;
 			break;
 		case 0: break; default: RC_FAIL(model, EINVAL);
 	}
@@ -1111,13 +1146,13 @@ inst:
 	return 2;
 }
 
-int printf_devices(FILE* f, struct fpga_model* model, int config_only)
+int printf_devices(FILE* f, struct fpga_model* model, int config_only, int no_json)
 {
 	int x, y, i, first_dev;
 	struct fpga_tile* tile;
 
 	RC_CHECK(model);
-	fprintf(f, "  \"devices\" : [\n");
+	if (!no_json) fprintf(f, "  \"devices\" : [\n");
 	first_dev = 1;
 	for (x = 0; x < model->x_width; x++) {
 		for (y = 0; y < model->y_height; y++) {
@@ -1163,7 +1198,7 @@ int printf_devices(FILE* f, struct fpga_model* model, int config_only)
 		}
 	}
 	if (!first_dev) fprintf(f, "\n");
-	fprintf(f, "  ]");
+	if (!no_json) fprintf(f, "  ]");
 	RC_RETURN(model);
 }
 
@@ -1172,14 +1207,16 @@ int printf_ports(FILE* f, struct fpga_model* model)
 	struct fpga_tile* tile;
 	const char* conn_point_name_src;
 	int x, y, i, conn_point_dests_o, num_dests_for_this_conn_point;
-	int first_port_printed;
+	int first_in_tile, first_tile;
 
 	RC_CHECK(model);
+	fprintf(f, "  \"ports\" : [\n");
+	first_tile = 1;
 	for (x = 0; x < model->x_width; x++) {
 		for (y = 0; y < model->y_height; y++) {
 			tile = &model->tiles[y*model->x_width + x];
 
-			first_port_printed = 0;
+			first_in_tile = 1;
 			for (i = 0; i < tile->num_conn_point_names; i++) {
 				conn_point_dests_o = tile->conn_point_names[i*2];
 				if (i < tile->num_conn_point_names-1)
@@ -1195,16 +1232,17 @@ int printf_ports(FILE* f, struct fpga_model* model)
 						tile->conn_point_names[i*2+1], x, y, i);
 					continue;
 				}
-				if (!first_port_printed) {
-					first_port_printed = 1;
-					fprintf(f, "\n");
-				}
-				fprintf(f, "port y%i x%i %s\n",
-					y, x, conn_point_name_src);
+				if (first_in_tile && !first_tile)
+					fprintf(f, ",\n\n");
+				fprintf(f, "%s    { \"y\" : %i, \"x\" : %i, \"name\" : \"%s\" }",
+					first_in_tile ? "" : ",\n", y, x, conn_point_name_src);
+				first_in_tile = 0;
+				first_tile = 0;
 			}
 		}
 	}
-	return 0;
+	fprintf(f, "\n  ]");
+	RC_RETURN(model);
 }
 
 int printf_conns(FILE* f, struct fpga_model* model)
@@ -1214,14 +1252,16 @@ int printf_conns(FILE* f, struct fpga_model* model)
 	const char* conn_point_name_src, *other_tile_connpt_str;
 	uint16_t other_tile_connpt_str_i;
 	int x, y, i, j, k, conn_point_dests_o, num_dests_for_this_conn_point;
-	int other_tile_x, other_tile_y, first_conn_printed;
+	int other_tile_x, other_tile_y, first_tile, first_in_tile;
 
 	RC_CHECK(model);
+	fprintf(f, "  \"connections\" : [\n");
+	first_tile = 1;
 	for (x = 0; x < model->x_width; x++) {
 		for (y = 0; y < model->y_height; y++) {
 			tile = &model->tiles[y*model->x_width + x];
 
-			first_conn_printed = 0;
+			first_in_tile = 1;
 			for (i = 0; i < tile->num_conn_point_names; i++) {
 				conn_point_dests_o = tile->conn_point_names[i*2];
 				if (i < tile->num_conn_point_names-1)
@@ -1248,66 +1288,73 @@ int printf_conns(FILE* f, struct fpga_model* model)
 						continue;
 					}
 
-					if (!first_conn_printed) {
-						first_conn_printed = 1;
-						fprintf(f, "\n");
-					}
-					sprintf(tmp_line, "conn y%i x%i %s ",
+					if (first_in_tile && !first_tile)
+						fprintf(f, ",\n\n");
+					sprintf(tmp_line, "\"y1\" : %i, \"x1\" : %i, \"name1\" : \"%s\", ",
 						y, x, conn_point_name_src);
 					k = strlen(tmp_line);
-					while (k < 45)
+					while (k < 60)
 						tmp_line[k++] = ' ';
-					sprintf(&tmp_line[k], "y%i x%i %s\n",
+					sprintf(&tmp_line[k], "\"y2\" : %i, \"x2\" : %i, \"name2\" : \"%s\"",
 						other_tile_y, other_tile_x, other_tile_connpt_str);
-					fprintf(f, "%s", tmp_line);
+					fprintf(f, "%s    { %s }",
+						first_in_tile ? "" : ",\n", tmp_line);
+					first_in_tile = 0;
+					first_tile = 0;
 				}
 			}
 		}
 	}
-	return 0;
+	fprintf(f, "\n  ]");
+	RC_RETURN(model);
 }
 
-int printf_switches(FILE* f, struct fpga_model* model)
+int printf_switches(FILE *f, struct fpga_model *model)
 {
-	struct fpga_tile* tile;
-	int x, y, i, first_switch_printed;
+	struct fpga_tile *tile;
+	int x, y, i, first_in_tile, first_tile;
 
 	RC_CHECK(model);
+	fprintf(f, "  \"switches\" : [\n");
+	first_tile = 1;
 	for (x = 0; x < model->x_width; x++) {
 		for (y = 0; y < model->y_height; y++) {
 			tile = YX_TILE(model, y, x);
-			first_switch_printed = 0;
+			first_in_tile = 1;
 			for (i = 0; i < tile->num_switches; i++) {
-				if (!first_switch_printed) {
-					first_switch_printed = 1;	
-					fprintf(f, "\n");
-				}
-				fprintf(f, "sw y%i x%i %s\n",
-					y, x, fpga_switch_print(model, y, x, i));
+				if (first_in_tile && !first_tile)
+					fprintf(f, ",\n\n");
+				fprintf(f, "%s    { \"y\" : %i, \"x\" : %i%s }",
+					first_in_tile ? "" : ",\n", y, x,
+					fpga_switch_print_json(model, y, x, i));
+				first_in_tile = 0;
+				first_tile = 0;
 			}
 		}
 	}
-	return 0;
+	fprintf(f, "\n  ]");
+	RC_RETURN(model);
 }
 
-int printf_nets(FILE* f, struct fpga_model* model)
+int printf_nets(FILE* f, struct fpga_model* model, int no_json)
 {
 	net_idx_t net_i;
 	int rc, first_line;
 
 	RC_CHECK(model);
-	fprintf(f, "  \"nets\" : [\n");
+	if (!no_json) fprintf(f, "  \"nets\" : [\n");
 	first_line = 1;
 	net_i = NO_NET;
 	while (!(rc = fnet_enum(model, net_i, &net_i)) && net_i != NO_NET) {
-		if (!first_line)
-			fprintf(f, ",");
+		if (!no_json) fprintf(f, first_line ? "    " : ",");
 		first_line = 0;
-		fnet_printf(f, model, net_i);
+		fnet_printf(f, model, net_i, no_json);
 	}
 	if (rc) FAIL(rc);
-	if (!first_line) fprintf(f, "\n");
-	fprintf(f, "  ]");
+	if (!no_json) {
+		if (!first_line) fprintf(f, "\n");
+		fprintf(f, "  ]");
+	}
 	return 0;
 fail:
 	return rc;
@@ -1555,19 +1602,24 @@ int read_floorplan(struct fpga_model* model, FILE* f)
 
 int write_floorplan(FILE* f, struct fpga_model* model, int flags)
 {
-	fprintf(f, "{\n");
-	printf_version(f);
+	if (!(flags & FP_NO_JSON)) {
+		fprintf(f, "{\n");
+		printf_version(f);
+	}
 
 	if (model->rc)
 		fprintf(f, "rc %i\n", model->rc);
 	else {
-		fprintf(f, ",\n");
-		printf_devices(f, model, /*config_only*/ 1);
+		if (!(flags & FP_NO_JSON))
+			fprintf(f, ",\n");
+		printf_devices(f, model, /*config_only*/ 1, flags & FP_NO_JSON);
 
-		fprintf(f, ",\n");
-		printf_nets(f, model);
+		if (!(flags & FP_NO_JSON))
+			fprintf(f, ",\n");
+		printf_nets(f, model, flags & FP_NO_JSON);
 	}
 
-	fprintf(f, "\n}\n");
+	if (!(flags & FP_NO_JSON))
+		fprintf(f, "\n}\n");
 	RC_RETURN(model);
 }

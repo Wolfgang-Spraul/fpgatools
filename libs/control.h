@@ -410,7 +410,7 @@ int fnet_add_sw(struct fpga_model* model, net_idx_t net_i,
 int fnet_remove_sw(struct fpga_model* model, net_idx_t net_i,
 	int y, int x, const swidx_t* switches, int num_sw);
 int fnet_remove_all_sw(struct fpga_model* model, net_idx_t net_i);
-void fnet_printf(FILE* f, struct fpga_model* model, net_idx_t net_i);
+void fnet_printf(FILE* f, struct fpga_model* model, net_idx_t net_i, int no_json);
 
 int fnet_route(struct fpga_model* model, net_idx_t net_i);
 // is_vcc == 1 for a vcc net, is_vcc == 0 for a gnd net

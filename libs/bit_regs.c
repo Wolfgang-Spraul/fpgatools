@@ -680,200 +680,12 @@ static int dump_maj_logic(const uint8_t* bits, int row, int major)
 	return 0;
 }
 
-#if 0
-
-typedef struct ramb16_cfg
-{
-	uint8_t byte[64];
-} __attribute((packed)) ramb16_cfg_t;
-
-static const cfg_atom_t ramb16_instance =
-{
-	{-1}, {12,13, 274,275,276,277,316,317,318,319,
-	       420,421,422,423,-1}, "default_bits"
-};
-
-static cfg_atom_t ramb16_atoms[] =
-{
-  // data_width_a
-  {{264,265,260,261,256,257,-1},{                        -1},"data_width_a 1"},
-  {{264,265,260,261,        -1},{                256,257,-1},"data_width_a 2"},
-  {{264,265,        256,257,-1},{        260,261,        -1},"data_width_a 4"},
-  {{264,265,                -1},{        260,261,256,257,-1},"data_width_a 9"},
-  {{        260,261,256,257,-1},{264,265,                -1},"data_width_a 18"},
-  {{        260,261,        -1},{264,265,        256,257,-1},"data_width_a 36"},
-  {{                        -1},{264,265,260,261,256,257,-1},"data_width_a 0"},
-
-  // data_width_b
-  {{262,263,286,287,258,259,-1},{                        -1},"data_width_b 1"},
-  {{262,263,286,287,        -1},{                258,259,-1},"data_width_b 2"},
-  {{262,263,        258,259,-1},{        286,287,        -1},"data_width_b 4"},
-  {{262,263,                -1},{        286,287,258,259,-1},"data_width_b 9"},
-  {{        286,287,258,259,-1},{262,263,                -1},"data_width_b 18"},
-  {{        286,287,        -1},{262,263,        258,259,-1},"data_width_b 36"},
-  {{                        -1},{262,263,286,287,258,259,-1},"data_width_b 0"},
-
-	// required
-	{ {           -1}, {266, 267, -1}, "RST_PRIORITY_B:CE"  },
-	{ {266, 267,  -1}, {          -1}, "RST_PRIORITY_B:SR"  },
-	{ {           -1}, {268, 269, -1}, "RST_PRIORITY_A:CE"  },
-	{ {268, 269,  -1}, {          -1}, "RST_PRIORITY_A:SR"  },
-	{ {           -1}, {290, 291, -1}, "EN_RSTRAM_A:TRUE"  },
-	{ {290, 291,  -1}, {          -1}, "EN_RSTRAM_A:FALSE"  },
-	{ {           -1}, {444, 445, -1}, "EN_RSTRAM_B:TRUE" },
-	{ {444, 445,  -1}, {          -1}, "EN_RSTRAM_B:FALSE" },
-
-	// optional
-	{ {           -1}, { 26,  27, -1}, "CLKAINV:CLKA" },
-	{ { 26,  27,  -1}, {          -1}, "CLKAINV:CLKA_B" }, // def
-	{ {           -1}, { 30,  31, -1}, "CLKBINV:CLKB"  },
-	{ { 30,  31,  -1}, {          -1}, "CLKBINV:CLKB_B" }, // def
-	{ {           -1}, {270, 271, -1}, "RSTTYPE:ASYNC"  },
-	{ {270, 271,  -1}, {          -1}, "RSTTYPE:SYNC"  }, // def
-	{ {           -1}, {278, 279, -1}, "WRITE_MODE_B:READ_FIRST"  },
-	{ {           -1}, {280, 281, -1}, "WRITE_MODE_A:READ_FIRST"  },
-	{ {           -1}, {282, 283, -1}, "WRITE_MODE_B:NO_CHANGE"  },
-	{ {           -1}, {284, 285, -1}, "WRITE_MODE_A:NO_CHANGE"  },
-	{ {278, 279, 282, 283, -1},  {-1}, "WRITE_MODE_B:WRITE_FIRST"  }, //def
-	{ {280, 281, 284, 285, -1},  {-1}, "WRITE_MODE_A:WRITE_FIRST"  }, //def
-	{ {           -1}, {306, 307, -1}, "DOB_REG:1"  },
-	{ {306, 306,  -1}, {          -1}, "DOB_REG:0"  }, // def
-	{ {           -1}, {308, 309, -1}, "DOA_REG:1"  },
-	{ {308, 309,  -1}, {          -1}, "DOA_REG:0"  }, // def
-	{ {431, 467,  -1}, {430, 466, -1}, "ENAINV:ENA" }, // def
-	{ {430, 431, 466, 467, -1},  {-1}, "ENAINV:ENA_B" },
-	{ {465, 469,  -1}, {464, 468, -1}, "ENBINV:ENB" }, // def
-	{ {464, 465, 468, 469, -1},  {-1}, "ENBINV:ENB_B" },
-	{ {           -1}, { 20,  21, -1}, "REGCEAINV:REGCEA" }, // def
-	{ { 20,  21,  -1}, {          -1}, "REGCEAINV:REGCEA_B" },
-	{ {           -1}, {  8,   9, -1}, "REGCEBINV:REGCEB" },
-	{ {  8,   9,  -1}, {          -1}, "REGCEBINV:REGCEB_B" }, // def
-	{ { 24,  25,  -1}, {          -1}, "RSTAINV:RSTA" }, // def
-	{ {           -1}, { 24,  25, -1}, "RSTAINV:RSTA_B" },
-	{ {           -1}, {  4,   5, -1}, "RSTBINV:RSTB" }, // def
-	{ {  4,   5,  -1}, {          -1}, "RSTBINV:RSTB_B" },
-	{ {           -1}, {      19, -1}, "WEA0INV:WEA0" }, // def
-	{ { 19,       -1}, {          -1}, "WEA0INV:WEA0_B" },
-	{ {           -1}, {      23, -1}, "WEA2INV:WEA1" }, // def
-	{ { 23,       -1}, {          -1}, "WEA2INV:WEA1_B" },
-	{ {           -1}, {      18, -1}, "WEA2INV:WEA2" }, // def
-	{ { 18,       -1}, {          -1}, "WEA2INV:WEA2_B" },
-	{ {           -1}, {      22, -1}, "WEA2INV:WEA3" }, // def
-	{ { 22,       -1}, {          -1}, "WEA2INV:WEA3_B" },
-	{ {           -1}, {       7, -1}, "WEB0INV:WEB0" }, // def
-	{ {  7,       -1}, {          -1}, "WEB0INV:WEB0_B" },
-	{ {           -1}, {       3, -1}, "WEB1INV:WEB1" }, // def
-	{ {  3,       -1}, {          -1}, "WEB1INV:WEB1_B" },
-	{ {           -1}, {       6, -1}, "WEB2INV:WEB2" }, // def
-	{ {  6,       -1}, {          -1}, "WEB2INV:WEB2_B" },
-	{ {           -1}, {       2, -1}, "WEB3INV:WEB3" }, // def
-	{ {  2,       -1}, {          -1}, "WEB3INV:WEB3_B" },
-};
-
-static void print_ramb16_cfg(ramb16_cfg_t* cfg)
-{
-	char bits[512];
-	uint8_t u8;
-	int i, first_extra;
-
-	for (i = 0; i < 32; i++) {
-		u8 = cfg->byte[i*2];
-		cfg->byte[i*2] = cfg->byte[i*2+1];
-		cfg->byte[i*2+1] = u8;
-	}
-	for (i = 0; i < 64; i++) {
-		u8 = 0;
-		if (cfg->byte[i] & 0x01) u8 |= 0x80;
-		if (cfg->byte[i] & 0x02) u8 |= 0x40;
-		if (cfg->byte[i] & 0x04) u8 |= 0x20;
-		if (cfg->byte[i] & 0x08) u8 |= 0x10;
-		if (cfg->byte[i] & 0x10) u8 |= 0x08;
-		if (cfg->byte[i] & 0x20) u8 |= 0x04;
-		if (cfg->byte[i] & 0x40) u8 |= 0x02;
-		if (cfg->byte[i] & 0x80) u8 |= 0x01;
-		cfg->byte[i] = u8;
-	}
-
-	//
-	// Bits 0..255 come from minor 23, Bits 256..511 from minor 24.
-	// Each set of 256 bits is divided into two halfs of 128 bits
-	// that are swept forward and backward to form 2-bit pairs,
-	// pairs 0..127 are formed out of bits 0..127 and 255..128,
-	// p128..p255 are formed out of b256..b383 and b511..b384.
-	// Since so much bit twiddling is already happening, we are sorting
-	// the bits so that pairs are next to each other.
-	// The notation for a pair is "p8=01".
-
-	// minor 23
-	for (i = 0; i < 128; i++) {
-		bits[i*2] = (cfg->byte[i/8] & (1<<(i%8))) != 0;
-		bits[i*2+1] = (cfg->byte[(255-i)/8]
-			& (1<<(7-(i%8)))) != 0;
-	}
-	// minor 24
-	for (i = 0; i < 128; i++) {
-		bits[256+i*2] = (cfg->byte[32+i/8] & (1<<(i%8))) != 0;
-		bits[256+i*2+1] = (cfg->byte[32+(255-i)/8]
-			& (1<<(7-(i%8)))) != 0;
-	}
-
-	printf("{\n");
-	// hexdump(1 /* indent */, &cfg->byte[0], 64 /* len */);
-	for (i = 0; i < sizeof(ramb16_atoms)/sizeof(ramb16_atoms[0]); i++) {
-		if (atom_found(bits, &ramb16_atoms[i])
-		    && ramb16_atoms[i].must_1[0] != -1) {
-			printf("  %s\n", ramb16_atoms[i].str);
-			ramb16_atoms[i].flag = 1;
-		} else
-			ramb16_atoms[i].flag = 0;
-	}
-	for (i = 0; i < sizeof(ramb16_atoms)/sizeof(ramb16_atoms[0]); i++) {
-		if (ramb16_atoms[i].flag)
-			atom_remove(bits, &ramb16_atoms[i]);
-	}
-	// instantiation bits
-	if (ramb16_instance.must_1[0] != -1) {
-		if (atom_found(bits, &ramb16_instance)) {
-			for (i = 0; ramb16_instance.must_1[i] != -1; i++)
-				printf("  b%i\n", ramb16_instance.must_1[i]);
-			atom_remove(bits, &ramb16_instance);
-		} else
-			printf("  #W Not all instantiation bits set.\n");
-	}
-	// extra bits
-	first_extra = 1;
-	for (i = 0; i < 512; i++) {
-		if (bits[i]) {
-			if (first_extra) {
-				printf("  #W Extra bits set.\n");
-				first_extra = 0;
-			}
-			printf("  b%i\n", i);
-		}
-	}
-	printf("}\n");
-}
-#endif
-
 static void printf_minor_diff(int row, int major, int minor,
 	const uint8_t *old_minor_bits, const uint8_t *new_minor_bits)
 {
 	int word_i, w_old, w_new;
 	char v16_str[32];
 
-	// print words as pins (fpga bit ordering)
-	for (word_i = 0; word_i < FRAME_SIZE/XC6_WORD_BYTES; word_i++) {
-		if (word_i == XC6_HCLK_POS/XC6_WORD_BYTES)
-			sprintf(v16_str, "v16_clk");
-		else
-			sprintf(v16_str, "v16_%i",
-				word_i<XC6_HCLK_POS/XC6_WORD_BYTES ? word_i : word_i - 1);
-		w_old = frame_get_pinword(&old_minor_bits[word_i*XC6_WORD_BYTES]);
-		w_new = frame_get_pinword(&new_minor_bits[word_i*XC6_WORD_BYTES]);
-		if (w_old == w_new) continue;
-		printf("#I <r%i ma%i %s mi%i pin %s", row, major, v16_str, minor, fmt_word(w_old));
-		printf("#I >r%i ma%i %s mi%i pin %s", row, major, v16_str, minor, fmt_word(w_new));
-	}
 	// print words as bits (cpu bit ordering)
 	for (word_i = 0; word_i < FRAME_SIZE/XC6_WORD_BYTES; word_i++) {
 		if (word_i == XC6_HCLK_POS/XC6_WORD_BYTES)
@@ -881,11 +693,11 @@ static void printf_minor_diff(int row, int major, int minor,
 		else
 			sprintf(v16_str, "v16_%i",
 				word_i<XC6_HCLK_POS/XC6_WORD_BYTES ? word_i : word_i - 1);
-		w_old = frame_get_pinword(&old_minor_bits[word_i*XC6_WORD_BYTES]);
-		w_new = frame_get_pinword(&new_minor_bits[word_i*XC6_WORD_BYTES]);
+		w_old = frame_get_cpuword(&old_minor_bits[word_i*XC6_WORD_BYTES]);
+		w_new = frame_get_cpuword(&new_minor_bits[word_i*XC6_WORD_BYTES]);
 		if (w_old == w_new) continue;
-		printf("#I <r%i ma%i %s mi%i cpu %s", row, major, v16_str, minor, fmt_word(pinword_to_cpu(w_old)));
-		printf("#I >r%i ma%i %s mi%i cpu %s", row, major, v16_str, minor, fmt_word(pinword_to_cpu(w_new)));
+		printf("#I <r%i ma%i %s mi%i %s", row, major, v16_str, minor, fmt_word(w_old));
+		printf("#I >r%i ma%i %s mi%i %s", row, major, v16_str, minor, fmt_word(w_new));
 	}
 }
 
@@ -895,20 +707,6 @@ static void printf_minors(int row, int major, int minor, int num_minors,
 	int word_i, minor_i, w;
 	char v16_str[32];
 
-	// print words as pins (fpga bit ordering)
-	for (word_i = 0; word_i < FRAME_SIZE/XC6_WORD_BYTES; word_i++) {
-		if (word_i == XC6_HCLK_POS/XC6_WORD_BYTES)
-			sprintf(v16_str, "v16_clk");
-		else
-			sprintf(v16_str, "v16_%i",
-				word_i<XC6_HCLK_POS/XC6_WORD_BYTES ? word_i : word_i - 1);
-		for (minor_i = minor; minor_i < minor + num_minors; minor_i++) {
-			w = frame_get_pinword(&major_bits[minor_i*FRAME_SIZE
-				+ word_i*XC6_WORD_BYTES]);
-			if (!w) continue;
-			printf("r%i ma%i %s mi%i pin %s", row, major, v16_str, minor_i, fmt_word(w));
-		}
-	}
 	// print words as bits (cpu bit ordering)
 	for (word_i = 0; word_i < FRAME_SIZE/XC6_WORD_BYTES; word_i++) {
 		if (word_i == XC6_HCLK_POS/XC6_WORD_BYTES)
@@ -917,18 +715,16 @@ static void printf_minors(int row, int major, int minor, int num_minors,
 			sprintf(v16_str, "v16_%i",
 				word_i<XC6_HCLK_POS/XC6_WORD_BYTES ? word_i : word_i - 1);
 		for (minor_i = minor; minor_i < minor + num_minors; minor_i++) {
-			w = frame_get_pinword(&major_bits[minor_i*FRAME_SIZE
+			w = frame_get_cpuword(&major_bits[minor_i*FRAME_SIZE
 				+ word_i*XC6_WORD_BYTES]);
 			if (!w) continue;
-			printf("r%i ma%i %s mi%i cpu %s", row, major, v16_str, minor_i, fmt_word(pinword_to_cpu(w)));
+			printf("r%i ma%i %s mi%i %s", row, major, v16_str, minor_i, fmt_word(w));
 		}
 	}
 }
 
 static int dump_maj_bram(const uint8_t *bits, int row, int major)
 {
-//	ramb16_cfg_t ramb16_cfg[4];
-//	int j, offset_in_frame;
 	int minor, i;
 
 	for (minor = 0; minor < get_major_minors(XC6SLX9, major); minor++)
@@ -942,35 +738,6 @@ static int dump_maj_bram(const uint8_t *bits, int row, int major)
 	printf_v64_mi20(&bits[20*FRAME_SIZE], row, major);
 
 	printf_minors(row, major, /*minor*/ 21, /*num_minors*/ 4, bits);
-
-#if 0
-	printf_frames(&bits[21*FRAME_SIZE], /*max_frames*/ 1,
-		row, major, 21, /*print_empty*/ 0, /*no_clock*/ 1);
-	printf_frames(&bits[22*FRAME_SIZE], /*max_frames*/ 1,
-		row, major, 22, /*print_empty*/ 0, /*no_clock*/ 1);
-
-	// minors 23&24
-	for (i = 0; i < 4; i++) {
-		offset_in_frame = i*32;
-		if (offset_in_frame >= 64)
-			offset_in_frame += 2;
-		for (j = 0; j < 32; j++) {
-			ramb16_cfg[i].byte[j] = bits[23*130+offset_in_frame+j];
-			ramb16_cfg[i].byte[j+32] = bits[24*130+offset_in_frame+j];
-		}
-	}
-	for (i = 0; i < 4; i++) {
-		for (j = 0; j < 64; j++) {
-			if (ramb16_cfg[i].byte[j])
-				break;
-		}
-		if (j >= 64)
-			continue;
-		printf("r%i ma%i ramb16 i%i\n",
-			row, major, i);
-		print_ramb16_cfg(&ramb16_cfg[i]);
-	}
-#endif
 	return 0;
 }
 

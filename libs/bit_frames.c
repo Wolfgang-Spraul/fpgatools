@@ -2315,6 +2315,10 @@ static void destruct_extract_state(struct extract_state *es)
 	es->yx_pos = 0;
 }
 
+//
+// bscan
+//
+
 static int extract_bscan(struct extract_state *es)
 {
 	int enum_i, bscan_y, bscan_x, bscan_type_idx;
@@ -2389,6 +2393,245 @@ static int write_bscan(struct fpga_bits *bits, struct fpga_model *model)
 	RC_RETURN(model);
 }
 
+//
+// bram
+//
+
+// Each RAMB16 stores configuration in 3 minors (22-24) and 16 vertical
+// 16-bit words, for a total of 3*16*16 = 768 configuration bits per RAMB16.
+// This does not include parity and initial data values which are stored
+// in the data section.
+// Minor 22 is for INIT and SRVAL A+B bits only (36*4=144 bits).
+
+enum bram_cfg_names { BRAM_ENABLED_TOP, BRAM_ENABLED_BOTTOM,
+	BRAM_ENA_HIGH, BRAM_ENB_HIGH,
+	BRAM_REGCEA_HIGH, BRAM_REGCEB_HIGH,
+	BRAM_RSTA_LOW, BRAM_RSTB_HIGH,
+	BRAM_WEA0_HIGH, BRAM_WEA1_HIGH, BRAM_WEA2_HIGH,
+	BRAM_WEA3_HIGH,
+	BRAM_WEB0_HIGH, BRAM_WEB1_HIGH, BRAM_WEB2_HIGH,
+	BRAM_WEB3_HIGH,
+	BRAM_RSTTYPE_ASYNC,
+	BRAM_DOA_REG, BRAM_DOB_REG,
+	BRAM_READ_FIRST_A, BRAM_NO_CHANGE_A,
+	BRAM_READ_FIRST_B, BRAM_NO_CHANGE_B,
+	BRAM_EN_RSTRAM_A, BRAM_EN_RSTRAM_B,
+	BRAM_RST_PRIORITY_A_CE, BRAM_RST_PRIORITY_B_CE,
+	BRAM_DATA_WIDTH_A_0, BRAM_DATA_WIDTH_A_2, BRAM_DATA_WIDTH_A_4,
+		BRAM_DATA_WIDTH_A_9, BRAM_DATA_WIDTH_A_18,
+		BRAM_DATA_WIDTH_A_36,
+	BRAM_DATA_WIDTH_B_0, BRAM_DATA_WIDTH_B_2, BRAM_DATA_WIDTH_B_4,
+		BRAM_DATA_WIDTH_B_9, BRAM_DATA_WIDTH_B_18,
+		BRAM_DATA_WIDTH_B_36,
+        BRAM_RAM_MODE_TDP, BRAM_RAM_MODE_SDP };
+
+static const cfg_bits_t bram_bits[] =
+{
+	// minor  v16  bits            name
+	{     23,   0, 0x0040,         BRAM_ENABLED_TOP },
+	{     24,   0,         0x0600, BRAM_ENABLED_TOP },
+	{     24,   1,         0xC000, BRAM_ENABLED_TOP },
+	{     24,   5,         0x000C, BRAM_ENABLED_TOP },
+
+	{     24,  10,         0x3000, BRAM_ENABLED_BOTTOM },
+	{     24,  14,         0x0003, BRAM_ENABLED_BOTTOM },
+	{     23,  15, 0x0200,         BRAM_ENABLED_BOTTOM },
+	{     24,  15,         0x0060, BRAM_ENABLED_BOTTOM },
+
+	{     24,   5,         0x0080, BRAM_ENA_HIGH },
+	{     24,   6,         0x0200, BRAM_ENA_HIGH },
+	{     24,   6,         0x0500, BRAM_ENB_HIGH },
+	{     23,   0, 0x0400,         BRAM_REGCEA_HIGH },
+	{     23,  15, 0x0020,         BRAM_REGCEA_HIGH },
+	{     23,   0, 0x0010,         BRAM_REGCEB_HIGH },
+	{     23,  15, 0x0800,         BRAM_REGCEB_HIGH },
+	{     23,   0, 0x1000,         BRAM_RSTA_LOW },
+	{     23,  15, 0x0008,         BRAM_RSTA_LOW },
+	{     23,   0, 0x0004,         BRAM_RSTB_HIGH },
+	{     23,  15, 0x2000,         BRAM_RSTB_HIGH },
+
+	{     23,  15, 0x0040,         BRAM_WEA0_HIGH },
+	{     23,  15, 0x0010,         BRAM_WEA1_HIGH },
+	{     23,   0, 0x0200,         BRAM_WEA2_HIGH },
+	{     23,   0, 0x0800,         BRAM_WEA3_HIGH },
+
+	{     23,  15, 0x1000,         BRAM_WEB0_HIGH },
+	{     23,  15, 0x4000,         BRAM_WEB1_HIGH },
+	{     23,   0, 0x0008,         BRAM_WEB2_HIGH },
+	{     23,   0, 0x0002,         BRAM_WEB3_HIGH },
+
+	{     24,   0,         0x0080, BRAM_RSTTYPE_ASYNC },
+	{     24,   1,         0x0100, BRAM_RSTTYPE_ASYNC },
+	{     24,  14,         0x0080, BRAM_RSTTYPE_ASYNC },
+	{     24,  15,         0x0100, BRAM_RSTTYPE_ASYNC },
+
+	{     24,   1,         0x0400, BRAM_DOA_REG },
+	{     24,  14,         0x0020, BRAM_DOA_REG },
+	{     24,   1,         0x0200, BRAM_DOB_REG },
+	{     24,  14,         0x0040, BRAM_DOB_REG },
+
+	{     24,   0,         0x1000, BRAM_READ_FIRST_A },
+	{     24,  15,         0x0008, BRAM_READ_FIRST_A },
+	{     24,   0,         0x4000, BRAM_NO_CHANGE_A  },
+	{     24,  15,         0x0002, BRAM_NO_CHANGE_A  },
+	{     24,   0,         0x0800, BRAM_READ_FIRST_B },
+	{     24,  15,         0x0010, BRAM_READ_FIRST_B },
+	{     24,   0,         0x2000, BRAM_NO_CHANGE_B  },
+	{     24,  15,         0x0004, BRAM_NO_CHANGE_B  },
+	{     24,   1,         0x0002, BRAM_EN_RSTRAM_A  },
+	{     24,  14,         0x4000, BRAM_EN_RSTRAM_A  },
+	{     24,   5,         0x4000, BRAM_EN_RSTRAM_B  },
+	{     24,  10,         0x0002, BRAM_EN_RSTRAM_B  },
+	{     24,   0,         0x0040, BRAM_RST_PRIORITY_A_CE },
+	{     24,  15,         0x0200, BRAM_RST_PRIORITY_A_CE },
+	{     24,   0,         0x0020, BRAM_RST_PRIORITY_B_CE },
+	{     24,  15,         0x0400, BRAM_RST_PRIORITY_B_CE },
+	{     24,   0,         0x0015, BRAM_DATA_WIDTH_A_0 },
+	{     24,  15,         0xA800, BRAM_DATA_WIDTH_A_0 },
+	{     24,   0,         0x0001, BRAM_DATA_WIDTH_A_2 },
+	{     24,  15,         0x8000, BRAM_DATA_WIDTH_A_2 },
+	{     24,   0,         0x0004, BRAM_DATA_WIDTH_A_4 },
+	{     24,  15,         0x2000, BRAM_DATA_WIDTH_A_4 },
+	{     24,   0,         0x0005, BRAM_DATA_WIDTH_A_9 },
+	{     24,  15,         0xA000, BRAM_DATA_WIDTH_A_9 },
+	{     24,   0,         0x0010, BRAM_DATA_WIDTH_A_18 },
+	{     24,  15,         0x0800, BRAM_DATA_WIDTH_A_18 },
+	{     24,   0,         0x0011, BRAM_DATA_WIDTH_A_36 },
+	{     24,  15,         0x8800, BRAM_DATA_WIDTH_A_36 },
+	{     24,   0,         0x800A, BRAM_DATA_WIDTH_B_0 },
+	{     24,  15,         0x5001, BRAM_DATA_WIDTH_B_0 },
+	{     24,   0,         0x0002, BRAM_DATA_WIDTH_B_2 },
+	{     24,  15,         0x4000, BRAM_DATA_WIDTH_B_2 },
+	{     24,   0,         0x8000, BRAM_DATA_WIDTH_B_4 },
+	{     24,  15,         0x0001, BRAM_DATA_WIDTH_B_4 },
+	{     24,   0,         0x8002, BRAM_DATA_WIDTH_B_9 },
+	{     24,  15,         0x4001, BRAM_DATA_WIDTH_B_9 },
+	{     24,   0,         0x0008, BRAM_DATA_WIDTH_B_18 },
+	{     24,  15,         0x1000, BRAM_DATA_WIDTH_B_18 },
+	{     24,   0,         0x000A, BRAM_DATA_WIDTH_B_36 },
+	{     24,  15,         0x5000, BRAM_DATA_WIDTH_B_36 },
+	{     23,   0, 0x0080,         BRAM_RAM_MODE_TDP },
+	{     23,  15, 0x0200,         BRAM_RAM_MODE_TDP },
+	{     23,   1, 0x0100,         BRAM_RAM_MODE_SDP },
+	{     23,  15, 0x0080,         BRAM_RAM_MODE_SDP },
+
+	{ -1 }
+};
+
+// Use struct to avoid warnings/casts compared to pointer to array of int.
+struct eight_words
+{
+	int w[8];
+};
+
+static void extract_init_srval_18(struct eight_words* eight_words, int *init_a,
+	int *init_b, int *srval_a, int *srval_b);
+static void extract_init_srval_36(struct eight_words* eight_top_words,
+	struct eight_words* eight_bot_words, int64_t *init_a,
+	int64_t *init_b, int64_t *srval_a, int64_t *srval_b);
+
+#define INIT_A			0x40000000
+#define SRVAL_A			0x20000000
+#define INIT_B			0x10000000
+#define SRVAL_B			0x08000000
+#define INIT_SRVAL_BITMASK	0x0000001F // max 17 (16-bit word plus 2 parity bits)
+
+static void extract_init_srval_18(struct eight_words* eight_words, int *init_a,
+	int *init_b, int *srval_a, int *srval_b)
+{
+	static const int bits[] = {
+	/* 0*/	SRVAL_B|14, INIT_A|14, 0, SRVAL_A|14, INIT_B|13, 0, SRVAL_B|13, INIT_A|13,
+		INIT_B|15, 0, SRVAL_B|15, INIT_A|15, 0, SRVAL_A|15, INIT_B|14, 0,
+	/*16*/  INIT_B|17, 0, SRVAL_B|17, INIT_A|17,  0, SRVAL_A|17, INIT_B|11, 0,
+		SRVAL_A|13, 0, INIT_B|12, 0, SRVAL_B|12, 0, INIT_A|12, SRVAL_A|12,
+	/*32*/	INIT_A|10, SRVAL_A|10, INIT_B|9, 0, 0, SRVAL_B|9, INIT_A|9, SRVAL_A|9,
+		SRVAL_B|11, INIT_A|11, 0, SRVAL_A|11, 0, INIT_B|10, 0, SRVAL_B|10,
+	/*48*/	0, 0, 0, 0, 0, 0, 0, 0,
+		INIT_B|8, 0, SRVAL_B|8, INIT_A|8, 0, SRVAL_A|8, 0, 0,
+	/*64*/	0, INIT_B|7, SRVAL_B|7, INIT_A|7, 0, SRVAL_A|7, 0, INIT_B|6,
+		0, 0, 0, 0, 0, 0, 0, 0,
+	/*80*/	0, SRVAL_A|5, INIT_B|4, 0, 0, SRVAL_B|4, INIT_A|4, SRVAL_A|4,
+		SRVAL_B|6, INIT_A|6, 0, SRVAL_A|6, INIT_B|5, 0, SRVAL_B|5, INIT_A|5,
+	/*96*/	SRVAL_B|3, INIT_A|3, 0, SRVAL_A|3, 0, INIT_B|2, 0, SRVAL_B|2,
+		INIT_B|16, 0, SRVAL_B|16, INIT_A|16, 0, SRVAL_A|16, 0, INIT_B|3,
+	/*112*/	INIT_B|0, 0, SRVAL_B|0, INIT_A|0, 0, 0, SRVAL_A|0, 0,
+		INIT_A|2, SRVAL_A|2, 0, INIT_B|1, 0, SRVAL_B|1, INIT_A|1, SRVAL_A|1 };
+
+	int i, j, bit_set;
+
+	*init_a = 0; *srval_a = 0;
+	*init_b = 0; *srval_b = 0;
+	for (i = 0; i < 8; i++) {
+		for (j = 0; j < 16; j++) {
+			if (!(eight_words->w[i] & (1<<j))) continue;
+			if ((bits[i*16+j] & INIT_SRVAL_BITMASK) > 17)
+				HERE();
+			bit_set = 1<<(bits[i*16+j]&INIT_SRVAL_BITMASK);
+			if (bits[i*16+j] & INIT_A) {
+				*init_a |= bit_set;
+			} else if (bits[i*16+j] & SRVAL_A) {
+				*srval_a |= bit_set;
+			} else if (bits[i*16+j] & INIT_B) {
+				*init_b |= bit_set;
+			} else if (bits[i*16+j] & SRVAL_B) {
+				*srval_b |= bit_set;
+			} else {
+				HERE();
+			}
+		}
+	}
+}
+
+static void extract_init_srval_36(struct eight_words* eight_top_words,
+	struct eight_words* eight_bot_words, int64_t *init_a,
+	int64_t *init_b, int64_t *srval_a, int64_t *srval_b)
+{
+	int init_a_top, init_a_bot, srval_a_top, srval_a_bot,
+		init_b_top, init_b_bot, srval_b_top, srval_b_bot;
+
+	extract_init_srval_18(eight_top_words, &init_a_top, &init_b_top, &srval_a_top, &srval_b_top);
+	extract_init_srval_18(eight_bot_words, &init_a_bot, &init_b_bot, &srval_a_bot, &srval_b_bot);
+
+	*init_a = ((int64_t) init_a_top & 0xFFFF) | (((int64_t) init_a_bot & 0xFFFF) << 16)
+		  | (((int64_t) init_a_top & 0x3000) << 32) | (( (int64_t) init_a_bot & 0x3000) << 34);
+	*init_b = ((int64_t) init_b_top & 0xFFFF) | (((int64_t) init_b_bot & 0xFFFF) << 16)
+		  | (((int64_t) init_b_top & 0x3000) << 32) | (( (int64_t) init_b_bot & 0x3000) << 34);
+	*srval_a = ((int64_t) srval_a_top & 0xFFFF) | (((int64_t) srval_a_bot & 0xFFFF) << 16)
+		  | (((int64_t) srval_a_top & 0x3000) << 32) | (( (int64_t) srval_a_bot & 0x3000) << 34);
+	*srval_b = ((int64_t) srval_b_top & 0xFFFF) | (((int64_t) srval_b_bot & 0xFFFF) << 16)
+		  | (((int64_t) srval_b_top & 0x3000) << 32) | (( (int64_t) srval_b_bot & 0x3000) << 34);
+}
+
+static int extract_bram(struct extract_state *es)
+{
+	RC_CHECK(es->model);
+/*
+typedef struct _bram_init // only first half of array used for bram8
+{
+	int data[64][16];
+	int parity[8][16];
+} bram_init_t;
+void bram_extract_init(bram_init_t *init, const uint8_t *bits);
+	for (row = 3; row >= 0; row--) {
+		for (i = XC6_BRAM16_DEVS_PER_ROW-1; i >= 0; i--) {
+			printf_ramb_data(&cfg->bits.d[BRAM_DATA_START
+				+ (row*XC6_BRAM16_DEVS_PER_ROW+i)
+				  *XC6_BRAM_DATA_FRAMES_PER_DEV*FRAME_SIZE],
+				row, i);
+		}
+	}
+*/
+	// todo
+	RC_RETURN(es->model);
+}
+
+static int write_bram(struct fpga_bits *bits, struct fpga_model *model)
+{
+	RC_CHECK(model);
+	// todo
+	RC_RETURN(model);
+}
+
 int extract_model(struct fpga_model* model, struct fpga_bits* bits)
 {
 	struct extract_state es;
@@ -2414,6 +2657,8 @@ int extract_model(struct fpga_model* model, struct fpga_bits* bits)
 	rc = extract_logic(&es);
 	if (rc) { RC_SET(model, rc); goto out; }
 	rc = extract_bscan(&es);
+	if (rc) { RC_SET(model, rc); goto out; }
+	rc = extract_bram(&es);
 	if (rc) { RC_SET(model, rc); goto out; }
 
 	// turn switches into nets
@@ -3188,6 +3433,7 @@ int write_model(struct fpga_bits *bits, struct fpga_model *model)
 	write_type2(bits, model);
 	write_logic(bits, model);
 	write_bscan(bits, model);
+	write_bram(bits, model);
 
 	RC_RETURN(model);
 }

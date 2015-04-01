@@ -2,7 +2,7 @@ Introduction
  fpgatools converts the configuration of an FPGA between
  JSON and bitstream representation.
 
- The only supported chips at this time is the xc6slx9, a 45nm-generation
+ The only supported chip at this time is the xc6slx9, a 45nm-generation
  FPGA with 5720 6-input LUTs, block ram and multiply-accumulate
  resources.
 
@@ -33,7 +33,8 @@ Design Utilities
 
 - hello_world        outputs an AND gate floorplan to stdout
 - blinking_led       outputs blinking led design to stdout
-- new_fp             creates empty .fp floorplan file
+- fpinfo             outputs information about tiles, devices, ports,
+                     connections and switches in a floorplan
 - fp2bit             converts .fp floorplan into .bit bitstream
 - bit2fp             converts .bit bitstream into .fp floorplan
 - draw_svg_tiles     draws a simple .svg showing tile types
@@ -52,12 +53,6 @@ Profiling
 ~# perf record ./hello_world
 ~# perf annotate
 ~# perf report
-
-How to Help
- - use fpgatools, email author for free support
- - fund electron microscope photos
- - want bigger or newer chips? email the author
- - timing analysis, temperature analysis, visualizations
 
 TODO (as of 2015-03)
 

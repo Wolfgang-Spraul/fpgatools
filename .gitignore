@@ -20,7 +20,7 @@
 # binaries
 #
 draw_svg_tiles
-new_fp
+fpinfo
 hstrrep
 sort_seq
 merge_seq
