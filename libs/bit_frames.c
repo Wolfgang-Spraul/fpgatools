@@ -1204,20 +1204,20 @@ static int extract_logic(struct extract_state* es)
 
 		   	if (mi20) {
 				fprintf(stderr, "#E %s:%i y%i x%i l%i "
-				  "mi20 0x%016lX\n",
-				  __FILE__, __LINE__, y, x, l_col, mi20);
+				  "mi20 0x%016llx\n",
+				  __FILE__, __LINE__, y, x, l_col, (unsigned long long)mi20);
 				continue;
 			}
 		   	if (mi23_M) {
 				fprintf(stderr, "#E %s:%i y%i x%i l%i "
-				  "mi23_M 0x%016lX\n",
-				  __FILE__, __LINE__, y, x, l_col, mi23_M);
+				  "mi23_M 0x%016llx\n",
+				  __FILE__, __LINE__, y, x, l_col, (unsigned long long)mi23_M);
 				continue;
 			}
 		   	if (mi2526) {
 				fprintf(stderr, "#E %s:%i y%i x%i l%i "
-				  "mi2526 0x%016lX\n",
-				  __FILE__, __LINE__, y, x, l_col, mi2526);
+				  "mi2526 0x%016llx\n",
+				  __FILE__, __LINE__, y, x, l_col, (unsigned long long)mi2526);
 				continue;
 			}
 
