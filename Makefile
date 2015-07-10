@@ -247,7 +247,7 @@ clean:
 	rm -f	$(foreach f, $(COMPARE_TESTS), test.out/compare_$(f).fcd)
 	rm -f	$(foreach f, $(COMPARE_TESTS), test.out/compare_$(f).fce)
 	rm -f	test.out/compare_xc6slx9.fp
-	rm -rf test.out test.gold
+	rmdir --ignore-fail-on-non-empty test.out test.gold
 
 install: fp2bit bit2fp
 	@$(MAKE) -C libs install
