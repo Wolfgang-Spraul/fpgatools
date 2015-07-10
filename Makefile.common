@@ -8,7 +8,7 @@
 
 PREFIX ?= /usr/local
 
-SHELL = /bin/bash
+SHELL = bash
 
 # -fno-omit-frame-pointer and -ggdb add almost nothing to execution
 # time right now, so we can leave them in all the time.
